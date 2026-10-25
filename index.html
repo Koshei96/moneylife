@@ -367,9 +367,11 @@ input[type=date]{color-scheme:dark;min-height:46px}
 .cc-back::before{left:auto;right:0}
 .cc.flip .cc-front,.cc:not(.flip) .cc-back{pointer-events:none}
 .cc-top{display:flex;align-items:center;gap:11px;min-width:0}
-.cc-top .badge{width:42px;height:42px;animation:ccPulse 2.8s ease-in-out infinite}
+.cc-top .badge{width:42px;height:42px;position:relative;animation:ccPulse 2.8s ease-in-out infinite;will-change:opacity}
+.cc-top .badge::after{content:"";position:absolute;inset:0;border-radius:50%;pointer-events:none;box-shadow:0 0 22px 3px color-mix(in srgb,var(--c) 65%,transparent);opacity:0;animation:ccGlow 2.8s ease-in-out infinite;will-change:opacity}
 .cc-top .badge.g{font-size:20px}
-@keyframes ccPulse{0%,100%{opacity:1;box-shadow:0 0 6px -2px var(--c)}50%{opacity:.78;box-shadow:0 0 22px 3px color-mix(in srgb,var(--c) 65%,transparent)}}
+@keyframes ccPulse{0%,100%{opacity:1}50%{opacity:.78}}
+@keyframes ccGlow{0%,100%{opacity:0}50%{opacity:1}}
 .cc-id{flex:1;min-width:0;display:flex;flex-direction:column;line-height:1.2}
 .cc-id b{font-size:17px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .cc-id span{font-size:12px;color:#a1a1aa;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -399,7 +401,7 @@ input[type=date]{color-scheme:dark;min-height:46px}
 .cv-hint .tap{color:var(--lav);flex-basis:100%}
 #cvNote:empty{display:none}
 @media (max-width:360px){.cc-cell b{font-size:14.5px}.cc-cell span{font-size:11px}.cc-pl .cc-cell:first-child b{font-size:19px}.cc-price .cv-price{font-size:25px}.cc-grid{gap:7px 10px}}
-@media (prefers-reduced-motion:reduce){.cc-in{transition:none}.cc-top .badge{animation:none}}
+@media (prefers-reduced-motion:reduce){.cc-in{transition:none}.cc-top .badge,.cc-top .badge::after{animation:none}}
 .movers{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .mv{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:14px;background:var(--surface);border:1px solid var(--line);cursor:pointer;min-width:0;text-align:left}
 .mv .badge{width:32px;height:32px;font-size:10px}
@@ -706,9 +708,9 @@ button:focus-visible{outline:2px solid var(--pink);outline-offset:2px}
 
 <div class="toast" id="toast" role="status"><span id="toastMsg"></span><button type="button" id="toastBtn" hidden></button></div>
 
-<script src="config.js?v=20261025191408"></script>
+<script src="config.js?v=20261025192655"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="shim.js?v=20261025191408"></script>
+<script src="shim.js?v=20261025192655"></script>
 <script>
 /* ===== основа ===== */
 const $=id=>document.getElementById(id);
@@ -1273,8 +1275,8 @@ function cvHead(){const sym=cvSym;if(!sym)return;const D=derive(),c=D.h[sym]||{q
   $('cvSub').innerHTML=ch!=null?`<span class="${ch>=0?'pos':'neg'}">${pct(ch)}</span> за 24 часа`:'&nbsp;';
   $('cvMeta').textContent=v&&D.total?nf(v/D.total*100,1)+'% портфеля':'';}
 let CVT0=0,CVAVG=[];
-function cvReadSet(t,pt){const sym=cvSym,p=+derive().prices[sym]||0;
-  if(t==null){cvHead();const id=cgMap()[sym],s=MK[id+'|'+cvRange];let sub='';if(s&&s.length&&p){const f=s.find(q=>q.t>=CVT0)||s[0];if(f&&f.v){const ch=(p/f.v-1)*100;sub=`<span class="${ch>=0?'pos':'neg'}">${pct(ch)}</span> ${RLBL[cvRange]}`;}}
+function cvReadSet(t,pt){const sym=cvSym;
+  if(t==null){const p=+derive().prices[sym]||0;cvHead();const id=cgMap()[sym],s=MK[id+'|'+cvRange];let sub='';if(s&&s.length&&p){const f=s.find(q=>q.t>=CVT0)||s[0];if(f&&f.v){const ch=(p/f.v-1)*100;sub=`<span class="${ch>=0?'pos':'neg'}">${pct(ch)}</span> ${RLBL[cvRange]}`;}}
     $('cvRead').innerHTML=sub;return;}
   const a=CVAVG.length?at(CVAVG,t,'v'):0;
   $('cvPrice').textContent=money(pt.v,{price:true,show:true});
@@ -1295,9 +1297,13 @@ function renderCoinChart(){const sym=cvSym;if(!sym)return;$('cvRanges').innerHTM
   cvReadSet(null);}
 function loadCoinChart(){const sym=cvSym,id=cgMap()[sym],r=cvRange;$('cvNote').textContent='';
   if(!id){$('cvNote').textContent='Для этой монеты нет данных CoinGecko — показаны цены твоих сделок.';return;}
-  if(MK[id+'|'+r])return;if(!mcp){$('cvNote').textContent='История цены недоступна — показаны цены твоих сделок.';return;}
+  if(MK[id+'|'+r]){cvPrefetch();return;}if(!mcp){$('cvNote').textContent='История цены недоступна — показаны цены твоих сделок.';return;}
   $('cvNote').textContent='Загружаю историю цены…';
-  fetchMarket(id,r).then(s=>{if(cvSym!==sym||cvRange!==r)return;$('cvNote').textContent=s?'':'История цены не загрузилась — показаны цены твоих сделок.';renderCoinChart();});}
+  fetchMarket(id,r).then(s=>{if(cvSym!==sym||cvRange!==r)return;$('cvNote').textContent=s?'':'История цены не загрузилась — показаны цены твоих сделок.';renderCoinChart();if(s)cvPrefetch();});}
+/* заранее подгружаем графики соседних монет, чтобы свайп открывал их сразу */
+let cvPfT=[];
+function cvPrefetch(){if(!mcp)return;cvPfT.forEach(clearTimeout);cvPfT=[];const l=coinOrder(),i=l.indexOf(cvSym),r=cvRange,m=cgMap();if(i<0)return;
+  [1,-1].forEach((d,k)=>{const s=l[i+d],id=s&&m[s];if(id&&!MK[id+'|'+r])cvPfT.push(setTimeout(()=>{if(cvRange===r&&$('coinSheet').classList.contains('open'))fetchMarket(id,r);},600+k*900));});}
 $('cvRanges').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;cvRange=b.dataset.r;drawn.cv=0;play('tick');renderCoinChart();loadCoinChart();});
 $('cvBuy').addEventListener('click',()=>{const s=cvSym;openAct('buy',{sym:s});});
 $('cvSell').addEventListener('click',()=>{const s=cvSym;openAct('sell',{sym:s});});

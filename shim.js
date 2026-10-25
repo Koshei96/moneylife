@@ -132,20 +132,41 @@
   /* ---------- CoinGecko напрямую ---------- */
   const CG = 'https://api.coingecko.com/api/v3';
   const hdr = () => (CFG.coingeckoKey ? { 'x-cg-demo-api-key': CFG.coingeckoKey } : {});
-  const mem = new Map();
-  async function cgFetch(url, ttl) {
-    const now = Date.now(), m = mem.get(url);
-    if (m && now - m.at < ttl) return { body: m.body, at: m.at };
-    try {
-      const ls = JSON.parse(localStorage.getItem('cg:' + url) || 'null');
-      if (ls && now - ls.at < ttl) { mem.set(url, ls); return ls; }
-    } catch (e) {}
-    const r = await fetch(url, { headers: hdr() });
-    if (!r.ok) { const e = new Error('CoinGecko ' + r.status); e.code = r.status === 429 ? 'rate_limited' : 'tool_error'; e.retryable = r.status === 429 || r.status >= 500; throw e; }
-    const body = await r.json(), rec = { body, at: now };
-    mem.set(url, rec);
-    try { localStorage.setItem('cg:' + url, JSON.stringify(rec)); } catch (e) {}
-    return rec;
+  const mem = new Map(), inflight = new Map(), LS = 'cg2:';
+  /* старый кэш хранил сырые ответы (сотни КБ) — убираем */
+  try { for (let i = localStorage.length - 1; i >= 0; i--) { const k = localStorage.key(i); if (k && k.startsWith('cg:')) localStorage.removeItem(k); } } catch (e) {}
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  async function getJson(url) {
+    for (let a = 0; ; a++) {
+      const ac = typeof AbortController === 'function' ? new AbortController() : null;
+      const tm = ac ? setTimeout(() => ac.abort(), 15000) : 0;
+      let err;
+      try {
+        const r = await fetch(url, { headers: hdr(), signal: ac ? ac.signal : undefined });
+        if (r.ok) return await r.json();
+        err = new Error('CoinGecko ' + r.status); err.code = r.status === 429 ? 'rate_limited' : 'tool_error'; err.retryable = r.status === 429 || r.status >= 500;
+      } catch (e) { err = e; err.retryable = true; }
+      finally { clearTimeout(tm); }
+      if (a >= 1 || !err.retryable) throw err;
+      await sleep(2500);
+    }
+  }
+  /* map — во что превратить ответ перед кэшированием (графики храним уже прорежёнными) */
+  function cgFetch(url, ttl, map, staleOk) {
+    const now = Date.now();
+    let m = mem.get(url);
+    if (!m) { try { m = JSON.parse(localStorage.getItem(LS + url) || 'null'); if (m) mem.set(url, m); } catch (e) {} }
+    if (m && now - m.at < ttl) return Promise.resolve(m);
+    if (inflight.has(url)) return inflight.get(url);
+    const p = getJson(url).then(raw => {
+      const rec = { body: map ? map(raw) : raw, at: Date.now() };
+      mem.set(url, rec);
+      try { localStorage.setItem(LS + url, JSON.stringify(rec)); } catch (e) {}
+      return rec;
+    }, err => { if (staleOk && m) return m; throw err; })   /* график: если CoinGecko не ответил — показываем прошлые данные */
+      .finally(() => inflight.delete(url));
+    inflight.set(url, p);
+    return p;
   }
   async function markets(input, ttl) {
     const ids = (input.ids || []).join(',');
@@ -160,11 +181,22 @@
     }));
     return { payload: { coins }, cache: { storedAt: at } };
   }
+  /* как в Claude: не больше 120 равномерных точек — иначе телефону тяжело рисовать график */
+  const CH_N = 120;
+  function thin(p) {
+    const n = p.length; if (n <= CH_N) return p;
+    const out = []; for (let i = 0; i < CH_N; i++) out.push(p[Math.round(i * (n - 1) / (CH_N - 1))]);
+    return out;
+  }
   async function chart(input) {
-    const url = CG + '/coins/' + encodeURIComponent(input.id) + '/market_chart?vs_currency=usd&days=' + encodeURIComponent(input.days || '365');
-    const { body, at } = await cgFetch(url, 3600000);
-    const p = body.prices || [];
-    return { payload: { prices: p.map(x => x[1]), startTs: p.length ? p[0][0] : null, endTs: p.length ? p[p.length - 1][0] : null }, cache: { storedAt: at } };
+    const days = String(input.days || '365');
+    const url = CG + '/coins/' + encodeURIComponent(input.id) + '/market_chart?vs_currency=usd&days=' + encodeURIComponent(days);
+    const ttl = days === '365' || days === 'max' ? 6 * 3600000 : 3600000;   /* текущая цена всё равно дорисовывается вживую */
+    const { body, at } = await cgFetch(url, ttl, raw => {
+      const p = thin((raw && raw.prices) || []);
+      return { prices: p.map(x => x[1]), startTs: p.length ? p[0][0] : null, endTs: p.length ? p[p.length - 1][0] : null };
+    }, true);
+    return { payload: body, cache: { storedAt: at } };
   }
   const watches = new Set();
   const mcpApi = {
