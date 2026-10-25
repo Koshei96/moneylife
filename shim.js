@@ -129,49 +129,64 @@
   }
   const dbApi = { doc: docRef, collection: c => collRef(c) };
 
-  /* ---------- CoinGecko напрямую ---------- */
+  /* ---------- цены — CoinGecko, история цены — Binance (запасной вариант — CoinGecko) ---------- */
   const CG = 'https://api.coingecko.com/api/v3';
   const hdr = () => (CFG.coingeckoKey ? { 'x-cg-demo-api-key': CFG.coingeckoKey } : {});
-  const mem = new Map(), inflight = new Map(), LS = 'cg2:';
-  /* старый кэш хранил сырые ответы (сотни КБ) — убираем */
-  try { for (let i = localStorage.length - 1; i >= 0; i--) { const k = localStorage.key(i); if (k && k.startsWith('cg:')) localStorage.removeItem(k); } } catch (e) {}
+  const mem = new Map(), inflight = new Map(), LS = 'cg3:';
+  /* прошлые версии кэша — убираем */
+  try { for (let i = localStorage.length - 1; i >= 0; i--) { const k = localStorage.key(i); if (k && (k.startsWith('cg:') || k.startsWith('cg2:'))) localStorage.removeItem(k); } } catch (e) {}
   const sleep = ms => new Promise(r => setTimeout(r, ms));
-  async function getJson(url) {
+  async function fetchT(url, ms, opts) {
+    const ac = typeof AbortController === 'function' ? new AbortController() : null;
+    const tm = ac ? setTimeout(() => ac.abort(), ms) : 0;
+    try { return await fetch(url, Object.assign({}, opts || {}, { signal: ac ? ac.signal : undefined })); }
+    finally { clearTimeout(tm); }
+  }
+  /* CoinGecko без ключа даёт ~10–30 запросов в минуту на адрес — запросы идут по очереди с паузой */
+  let cgLast = 0, cgChain = Promise.resolve();
+  function cgSlot(gap) {
+    const p = cgChain.then(async () => { const w = cgLast + gap - Date.now(); if (w > 0) await sleep(w); cgLast = Date.now(); });
+    cgChain = p.catch(() => {});
+    return p;
+  }
+  async function cgJson(url) {
     for (let a = 0; ; a++) {
-      const ac = typeof AbortController === 'function' ? new AbortController() : null;
-      const tm = ac ? setTimeout(() => ac.abort(), 15000) : 0;
+      await cgSlot(a ? 6000 : 1500);
       let err;
       try {
-        const r = await fetch(url, { headers: hdr(), signal: ac ? ac.signal : undefined });
+        const r = await fetchT(url, 15000, { headers: hdr() });
         if (r.ok) return await r.json();
         err = new Error('CoinGecko ' + r.status); err.code = r.status === 429 ? 'rate_limited' : 'tool_error'; err.retryable = r.status === 429 || r.status >= 500;
       } catch (e) { err = e; err.retryable = true; }
-      finally { clearTimeout(tm); }
       if (a >= 1 || !err.retryable) throw err;
-      await sleep(2500);
     }
   }
-  /* map — во что превратить ответ перед кэшированием (графики храним уже прорежёнными) */
-  function cgFetch(url, ttl, map, staleOk) {
+  /* кэш в памяти и на телефоне; staleOk — при сбое отдать прошлые данные */
+  function cached(key, ttl, load, staleOk) {
     const now = Date.now();
-    let m = mem.get(url);
-    if (!m) { try { m = JSON.parse(localStorage.getItem(LS + url) || 'null'); if (m) mem.set(url, m); } catch (e) {} }
+    let m = mem.get(key);
+    if (!m) { try { m = JSON.parse(localStorage.getItem(LS + key) || 'null'); if (m) mem.set(key, m); } catch (e) {} }
     if (m && now - m.at < ttl) return Promise.resolve(m);
-    if (inflight.has(url)) return inflight.get(url);
-    const p = getJson(url).then(raw => {
-      const rec = { body: map ? map(raw) : raw, at: Date.now() };
-      mem.set(url, rec);
-      try { localStorage.setItem(LS + url, JSON.stringify(rec)); } catch (e) {}
+    if (inflight.has(key)) return inflight.get(key);
+    const p = Promise.resolve().then(load).then(body => {
+      const rec = { body, at: Date.now() };
+      mem.set(key, rec);
+      try { localStorage.setItem(LS + key, JSON.stringify(rec)); } catch (e) {}
       return rec;
-    }, err => { if (staleOk && m) return m; throw err; })   /* график: если CoinGecko не ответил — показываем прошлые данные */
-      .finally(() => inflight.delete(url));
-    inflight.set(url, p);
+    }, err => { if (staleOk && m) return m; throw err; })
+      .finally(() => inflight.delete(key));
+    inflight.set(key, p);
     return p;
   }
+  /* из ответа CoinGecko запоминаем тикер и текущую цену монеты — для запроса к Binance и сверки */
+  const SYM = { bitcoin: 'BTC', ethereum: 'ETH' }, PRICE = {};
+  let symReady; const symP = new Promise(r => { symReady = r; });
   async function markets(input, ttl) {
     const ids = (input.ids || []).join(',');
     const url = CG + '/coins/markets?vs_currency=usd&ids=' + encodeURIComponent(ids) + '&sparkline=true&price_change_percentage=24h&per_page=250';
-    const { body, at } = await cgFetch(url, ttl == null ? 60000 : ttl);
+    const { body, at } = await cached(url, ttl == null ? 60000 : ttl, () => cgJson(url));
+    for (const c of body) { if (c.symbol) SYM[c.id] = String(c.symbol).toUpperCase(); if (typeof c.current_price === 'number') PRICE[c.id] = c.current_price; }
+    symReady();
     const coins = body.map(c => ({
       id: c.id, symbol: c.symbol, name: c.name, image: c.image,
       currentPrice: c.current_price, marketCap: c.market_cap, marketCapRank: c.market_cap_rank,
@@ -188,14 +203,49 @@
     const out = []; for (let i = 0; i < CH_N; i++) out.push(p[Math.round(i * (n - 1) / (CH_N - 1))]);
     return out;
   }
+  /* Binance: открытые рыночные данные без ключа, история с 2017 года, лимиты намного выше */
+  const BN = ['https://data-api.binance.vision', 'https://api.binance.com'];
+  const BN_PLAN = { '1': ['15m', 96], '7': ['1h', 168], '14': ['2h', 168], '30': ['6h', 120], '90': ['12h', 180], '180': ['1d', 180], '365': ['1d', 365], 'max': ['1w', 1000] };
+  const NOT_BN = new Set(['USDT', 'USDC', 'DAI', 'FDUSD', 'TUSD', 'USDE', 'BUSD', 'USD1', 'PYUSD']);
+  let bnSkip = {}; try { bnSkip = JSON.parse(localStorage.getItem('bnSkip') || '{}') || {}; } catch (e) {}
+  const skipPair = pair => { bnSkip[pair] = Date.now(); try { localStorage.setItem('bnSkip', JSON.stringify(bnSkip)); } catch (e) {} };
+  let bnDownUntil = 0;
+  async function fromBinance(id, days) {
+    if (!SYM[id]) await Promise.race([symP, sleep(4000)]);
+    const s = SYM[id];
+    if (!s || NOT_BN.has(s) || Date.now() < bnDownUntil) return null;
+    const pair = s + 'USDT';
+    if (bnSkip[pair] && Date.now() - bnSkip[pair] < 7 * 864e5) return null;   /* этой пары на Binance нет — проверим снова через неделю */
+    const plan = BN_PLAN[days] || ['1d', Math.max(2, Math.min(1000, Math.round(+days) || 365))];
+    let reached = false;
+    for (const h of BN) {
+      let r;
+      try { r = await fetchT(h + '/api/v3/klines?symbol=' + pair + '&interval=' + plan[0] + '&limit=' + plan[1], 10000); }
+      catch (e) { continue; }
+      reached = true;
+      if (r.status === 400) { skipPair(pair); return null; }
+      if (!r.ok) continue;
+      const k = await r.json();
+      if (!Array.isArray(k) || k.length < 2) return null;
+      const last = +k[k.length - 1][4], ref = PRICE[id];
+      if (ref && last && Math.abs(last / ref - 1) > 0.2) { skipPair(pair); return null; }   /* тот же тикер, но другая монета */
+      const p = thin(k.map(x => [+x[0], +x[4]]));
+      return { prices: p.map(x => x[1]), startTs: p[0][0], endTs: Math.min(Date.now(), +k[k.length - 1][6] || Date.now()), src: 'binance' };
+    }
+    if (!reached) bnDownUntil = Date.now() + 10 * 60000;   /* Binance не отвечает — 10 минут берём CoinGecko */
+    return null;
+  }
+  async function fromCoinGecko(id, days) {
+    const d = days === 'max' || +days > 365 ? '365' : days;   /* без ключа CoinGecko отдаёт историю только за 365 дней */
+    const raw = await cgJson(CG + '/coins/' + encodeURIComponent(id) + '/market_chart?vs_currency=usd&days=' + encodeURIComponent(d));
+    const p = thin((raw && raw.prices) || []);
+    if (p.length < 2) { const e = new Error('Нет истории цены'); e.code = 'tool_error'; throw e; }
+    return { prices: p.map(x => x[1]), startTs: p[0][0], endTs: p[p.length - 1][0], src: 'coingecko' };
+  }
   async function chart(input) {
-    const days = String(input.days || '365');
-    const url = CG + '/coins/' + encodeURIComponent(input.id) + '/market_chart?vs_currency=usd&days=' + encodeURIComponent(days);
+    const id = String(input.id || ''), days = String(input.days || '365');
     const ttl = days === '365' || days === 'max' ? 6 * 3600000 : 3600000;   /* текущая цена всё равно дорисовывается вживую */
-    const { body, at } = await cgFetch(url, ttl, raw => {
-      const p = thin((raw && raw.prices) || []);
-      return { prices: p.map(x => x[1]), startTs: p.length ? p[0][0] : null, endTs: p.length ? p[p.length - 1][0] : null };
-    }, true);
+    const { body, at } = await cached('ch:' + id + '|' + days, ttl, async () => (await fromBinance(id, days)) || fromCoinGecko(id, days), true);
     return { payload: body, cache: { storedAt: at } };
   }
   const watches = new Set();

@@ -1,5 +1,5 @@
 /* MoneyLife service worker — версия подставляется при сборке */
-const V='ml-20261025192655';
+const V='ml-20261025193553';
 const SHELL=['./','index.html','shim.js','config.js','manifest.webmanifest','icons/icon-192.png','icons/icon-512.png','icons/apple-touch-icon.png','https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(V).then(c=>c.addAll(SHELL)).catch(()=>{}));});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(ks=>Promise.all(ks.filter(k=>k!==V).map(k=>caches.delete(k)))).then(()=>self.clients.claim()));});
@@ -7,7 +7,7 @@ self.addEventListener('message',e=>{if(e.data==='skip')self.skipWaiting();});
 self.addEventListener('fetch',e=>{
   const u=new URL(e.request.url);
   if(e.request.method!=='GET')return;
-  if(u.hostname.endsWith('supabase.co')||u.hostname.endsWith('coingecko.com'))return; // данные и цены — только из сети
+  if(/(^|\.)(supabase\.co|coingecko\.com|binance\.com|binance\.vision)$/.test(u.hostname))return; // данные и цены — только из сети
   if(e.request.mode==='navigate'){
     e.respondWith(fetch(e.request).then(r=>{const c=r.clone();caches.open(V).then(x=>x.put('index.html',c));return r;}).catch(()=>caches.match('index.html')));
     return;}
