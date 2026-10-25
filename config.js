@@ -1,0 +1,1 @@
+window.ML_CONFIG={"supabaseUrl": "https://axypsnzhunhnapdvuecu.supabase.co", "supabaseKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF4eXBzbnpodW5obmFwZHZ1ZWN1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTI5NDc3ODYsImV4cCI6MjEwODUyMzc4Nn0.YVBTyaKtDOH25X5J6udkZTHw-sMCaeKu0gtqm_X4vTk", "coingeckoKey": "", "allowSignup": true};
