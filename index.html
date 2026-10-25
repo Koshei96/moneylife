@@ -708,9 +708,9 @@ button:focus-visible{outline:2px solid var(--pink);outline-offset:2px}
 
 <div class="toast" id="toast" role="status"><span id="toastMsg"></span><button type="button" id="toastBtn" hidden></button></div>
 
-<script src="config.js?v=20261025193553"></script>
+<script src="config.js?v=20261025200214"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="shim.js?v=20261025193553"></script>
+<script src="shim.js?v=20261025200214"></script>
 <script>
 /* ===== основа ===== */
 const $=id=>document.getElementById(id);
@@ -1305,6 +1305,8 @@ let cvPfT=[];
 function cvPrefetch(){if(!mcp)return;cvPfT.forEach(clearTimeout);cvPfT=[];const l=coinOrder(),i=l.indexOf(cvSym),r=cvRange,m=cgMap();if(i<0)return;
   [1,-1].forEach((d,k)=>{const s=l[i+d],id=s&&m[s];if(id&&!MK[id+'|'+r])cvPfT.push(setTimeout(()=>{if(cvRange===r&&$('coinSheet').classList.contains('open'))fetchMarket(id,r);},600+k*900));});}
 $('cvRanges').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;cvRange=b.dataset.r;drawn.cv=0;play('tick');renderCoinChart();loadCoinChart();});
+/* вернулись в приложение — догружаем график, если он не успел загрузиться */
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&cvSym&&$('coinSheet').classList.contains('open'))loadCoinChart();});
 $('cvBuy').addEventListener('click',()=>{const s=cvSym;openAct('buy',{sym:s});});
 $('cvSell').addEventListener('click',()=>{const s=cvSym;openAct('sell',{sym:s});});
 
@@ -1503,7 +1505,10 @@ function onLive(ev){const L=S.live;
   if(AUTHZ.includes(code)){L.prices={};L.change={};L.spark={};L.peak={};L.status='off';L.code=code;}else{L.status=Object.keys(L.prices).length?'stale':'off';L.code=null;}
   render();}
 function liveIds(){const m=cgMap();return [...new Set(['BTC','ETH',...derive().syms,altNow()].filter(s=>m[s]).map(s=>m[s]))].sort();}
-function startLive(force){if(!mcp)return;const ids=liveIds(),key=ids.join(',');
+/* пока данные догружаются, список монет меняется несколько раз — запускаем обновление цен один раз, когда всё пришло */
+let liveT=0;
+function startLive(force){if(!mcp)return;clearTimeout(liveT);if(force)return startLiveNow(true);liveT=setTimeout(()=>startLiveNow(false),400);}
+function startLiveNow(force){if(!mcp)return;const ids=liveIds(),key=ids.join(',');
   if(!force&&key===liveKey)return;liveKey=key;liveUnsubs.forEach(u=>{try{u();}catch(e){}});liveUnsubs=[];
   for(let i=0;i<ids.length;i+=20){try{liveUnsubs.push(mcp.watchTool('CoinGecko','get-coin-markets',{ids:ids.slice(i,i+20)},onLive,{cache:{staleTime:60000,gcTime:900000},refetchInterval:300000}));}catch(e){}}}
 async function allowLive(){if(!mcp)return;const ids=liveIds();
