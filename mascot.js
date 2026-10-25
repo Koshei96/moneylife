@@ -94,116 +94,162 @@
   }
 
   /* ---------- материалы ---------- */
-  function materials() {
+  function materials(cfg) {
     const std = (c, r, m, x) => new T.MeshStandardMaterial(Object.assign({ color: col(c), roughness: r, metalness: m }, x || {}));
     const basic = (c, x) => new T.MeshBasicMaterial(Object.assign({ color: col(c) }, x || {}));
     return {
-      gold: std(0xf4b740, 0.3, 0.62), goldDeep: std(0xdc922e, 0.34, 0.6),
-      helmet: std(0x2d3f7c, 0.3, 0.05), helmetRim: std(0x223062, 0.38, 0.05),
-      lampBody: std(0x9aa3b6, 0.32, 0.75), lens: basic(0xfff3c4),
-      white: std(0xffffff, 0.16, 0), pupil: std(0x1b1426, 0.22, 0.1), glint: basic(0xffffff),
-      dark: std(0x3b1a0f, 0.45, 0), tongue: std(0xff6f7d, 0.4, 0), brow: std(0x6b3a12, 0.5, 0),
-      cheek: basic(0xff8f7d, { transparent: true, opacity: 0.45, depthWrite: false }),
-      wood: std(0x8f5c2c, 0.6, 0), woodDark: std(0x6b4220, 0.6, 0), steel: std(0xc9d1db, 0.22, 0.9),
-      star: basic(0xfff0a8), cap: std(0x4560db, 0.55, 0), capTrim: std(0xf6f2ff, 0.75, 0), red: basic(0xff4d5e),
-      gift: std(0xff5d8f, 0.38, 0), ribbon: std(0xffd34d, 0.32, 0.25), cloth: std(0x86d6ff, 0.85, 0),
-      tablet: std(0x1e2233, 0.28, 0.35), shades: std(0x15111f, 0.1, 0.35),
-      shadow: new T.MeshBasicMaterial({ map: radialTex('rgba(12,6,32,0.6)', 'rgba(12,6,32,0)'), transparent: true, depthWrite: false })
+      helmet: std(cfg.helmet, 0.4, 0.22), bezel: std(0x3a3d47, 0.45, 0.35), accent: std(cfg.accent, 0.36, 0.12),
+      jacket: std(cfg.jacket, 0.66, 0), ribIn: std(cfg.rib, 0.85, 0, { side: T.DoubleSide }), rib: std(cfg.rib, 0.9, 0), pants: std(cfg.pants, 0.88, 0),
+      glove: std(0x15161b, 0.5, 0.08), shoe: std(cfg.shoe, 0.48, 0.06), sole: std(0xeee6d8, 0.62, 0), lace: std(0xf3f0e8, 0.72, 0),
+      gold: std(0xf2b43c, 0.24, 0.85), goldDeep: std(0xdc922e, 0.32, 0.7), steel: std(0xa3abb6, 0.28, 0.85), handle: std(0x2b2724, 0.55, 0.05),
+      lampBody: std(0x8c94a6, 0.3, 0.75), lens: basic(0xfff3c4), red: basic(0xff4d5e),
+      woodBox: std(0x8f5c2c, 0.6, 0), woodDark: std(0x6b4220, 0.6, 0),
+      gift: std(0xff5d8f, 0.38, 0), ribbon: std(0xffd34d, 0.32, 0.25), cloth: std(0x86d6ff, 0.85, 0), tablet: std(0x1e2233, 0.28, 0.35),
+      shadow: new T.MeshBasicMaterial({ map: radialTex('rgba(6,3,20,0.75)', 'rgba(6,3,20,0)'), transparent: true, depthWrite: false })
     };
   }
 
-  /* ---------- «Слиток»: золотой слиток в шахтёрской каске ---------- */
-  function buildSlitok(M) {
-    const R = {}, W = 1.36, H = 0.98, D = 0.92, TX = 0.82, TZ = 0.88, BY = 0.18;
-    R.root = new T.Group();
-    R.hop = new T.Group(); R.root.add(R.hop);
-    R.shadow = new T.Mesh(new T.PlaneGeometry(1.9, 1.15), M.shadow); R.shadow.rotation.x = -PI / 2; R.shadow.position.y = 0.004; R.root.add(R.shadow);
-    const sph = new T.SphereGeometry(1, 28, 20);
-    for (const sx of [-1, 1]) { const f = new T.Mesh(sph, M.goldDeep); f.scale.set(0.2, 0.12, 0.25); f.position.set(sx * 0.33, 0.1, 0.07); R.hop.add(f); }
-    R.bodyG = new T.Group(); R.bodyG.position.y = BY; R.hop.add(R.bodyG);
-    R.goldMats = [M.gold, M.goldDeep];
-    const body = new T.Mesh(ingotGeo(W, H, D, 0.2, TX, TZ, 14), M.gold); body.position.y = H / 2; R.bodyG.add(body);
-
-    /* лицо на передней грани, с учётом её наклона */
-    const zf = yl => (D / 2) * lerp(1, TZ, (yl + H / 2) / H);
-    const face = new T.Group(); face.position.set(0, H / 2 + 0.02, zf(0.02)); face.rotation.x = -Math.atan((D / 2) * (1 - TZ) / H); R.bodyG.add(face); R.face = face;
-    R.eyes = [];
-    const happyGeo = new T.TorusGeometry(0.1, 0.026, 8, 20, PI), starG = starGeo(0.085, 0.036, 5);
-    for (const sx of [-1, 1]) {
-      const e = new T.Group(); e.position.set(sx * 0.245, 0.1, 0); face.add(e);
-      const scl = new T.Mesh(sph, M.white); scl.scale.set(0.155, 0.172, 0.07); e.add(scl);
-      const pup = new T.Group(); pup.position.z = 0.055; e.add(pup);
-      const pm = new T.Mesh(sph, M.pupil); pm.scale.set(0.088, 0.098, 0.03); pup.add(pm);
-      const g1 = new T.Mesh(sph, M.glint); g1.scale.set(0.027, 0.027, 0.01); g1.position.set(0.03, 0.04, 0.029); pup.add(g1);
-      const g2 = new T.Mesh(sph, M.glint); g2.scale.set(0.012, 0.012, 0.006); g2.position.set(-0.026, -0.03, 0.029); pup.add(g2);
-      const star = new T.Mesh(starG, M.star); star.position.z = 0.034; star.visible = false; pup.add(star);
-      const happy = new T.Mesh(happyGeo, M.dark); happy.position.set(0, -0.035, 0.03); happy.visible = false; face.add(happy); happy.position.x = sx * 0.245; happy.position.y = 0.065;
-      const closed = new T.Mesh(happyGeo, M.dark); closed.rotation.z = PI; closed.position.set(sx * 0.245, 0.13, 0.03); closed.visible = false; face.add(closed);
-      R.eyes.push({ e, scl, pup, pm, g1, g2, star, happy, closed });
+  /* ---------- светящееся лицо на визоре: рисуем глаза на холсте, обновляем только при изменении ---------- */
+  function Face() {
+    const W = 512, H = 120, cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+    const g = cv.getContext('2d'), tex = new T.CanvasTexture(cv); tex.encoding = T.sRGBEncoding;
+    let key = '';
+    const rr = (x, y, w, h, r) => { r = Math.max(0, Math.min(r, w / 2, h / 2)); g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); };
+    const starP = (ro, ri) => { g.beginPath(); for (let i = 0; i < 10; i++) { const a = -PI / 2 + (i * PI) / 5, r = i % 2 ? ri : ro; g.lineTo(Math.cos(a) * r, Math.sin(a) * r); } g.closePath(); g.fill(); };
+    const text = (s, x, y, size) => { g.font = '900 ' + size + 'px system-ui,-apple-system,"Segoe UI",sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(s, x, y); };
+    function eye(mode, x, y, open, tilt) {
+      g.save(); g.translate(x, y); g.rotate(tilt);
+      const w = 88, h = 52 * open;
+      if (mode === 'happy') { g.lineWidth = 13; g.lineCap = 'round'; g.beginPath(); g.arc(0, 16, 30, PI * 1.15, PI * 1.85); g.stroke(); }
+      else if (mode === 'grin') { g.beginPath(); g.ellipse(0, 12, 38, 34 * Math.max(open, 0.3), 0, PI, TAU); g.closePath(); g.fill(); }
+      else if (mode === 'closed') { g.lineWidth = 10; g.lineCap = 'round'; g.beginPath(); g.arc(0, -16, 30, PI * 0.18, PI * 0.82); g.stroke(); }
+      else if (mode === 'sad') { rr(-w / 2, -h * 0.3, w, Math.max(6, h * 0.62), 14); g.fill(); }
+      else if (mode === 'O') { g.lineWidth = 11; g.beginPath(); g.arc(0, 0, 25, 0, TAU); g.stroke(); }
+      else if (mode === 'flat') { rr(-w / 2, -6, w, 12, 6); g.fill(); }
+      else if (mode === 'star') starP(36, 15);
+      else if (mode === 'wide') { rr(-w * 0.56, -h * 0.64, w * 1.12, Math.max(6, h * 1.28), 18); g.fill(); }
+      else { rr(-w / 2, -h / 2, w, Math.max(5, h), 17); g.fill(); }
+      g.restore();
     }
-    R.shades = new T.Group(); R.shades.visible = false; R.shades.position.set(0, 0.1, 0.1); face.add(R.shades);
-    const lensG = roundBox(0.36, 0.24, 0.04, 0.08);
-    for (const sx of [-1, 1]) { const l = new T.Mesh(lensG, M.shades); l.position.x = sx * 0.245; R.shades.add(l); }
-    const bridge = new T.Mesh(new T.BoxGeometry(0.14, 0.035, 0.03), M.shades); bridge.position.y = 0.05; R.shades.add(bridge);
-    R.brows = [];
-    for (const sx of [-1, 1]) { const b = new T.Mesh(sph, M.brow); b.scale.set(0.1, 0.026, 0.03); b.position.set(sx * 0.245, 0.31, 0.02); face.add(b); R.brows.push(b); }
-    for (const sx of [-1, 1]) { const c = new T.Mesh(new T.CircleGeometry(0.075, 20), M.cheek); c.scale.set(1.2, 0.78, 1); c.position.set(sx * 0.39, -0.08, 0.006); face.add(c); }
-    const mouth = new T.Group(); mouth.position.set(0, -0.17, 0.012); face.add(mouth);
-    const mk = (geo, mat, f) => { const m = new T.Mesh(geo, mat); if (f) f(m); m.visible = false; mouth.add(m); return m; };
-    const grin = new T.Group(); grin.visible = false; grin.position.y = 0.05; mouth.add(grin);
-    grin.add(new T.Mesh(new T.CircleGeometry(0.13, 28, PI, PI), M.dark));
-    const tg = new T.Mesh(new T.CircleGeometry(0.06, 20), M.tongue); tg.scale.set(1.25, 0.7, 1); tg.position.set(0, -0.085, 0.002); grin.add(tg);
-    R.mouth = {
-      smile: mk(new T.TorusGeometry(0.12, 0.026, 8, 24, PI), M.dark, m => { m.rotation.z = PI; m.position.y = 0.06; }),
-      frown: mk(new T.TorusGeometry(0.1, 0.026, 8, 24, PI), M.dark, m => { m.position.y = -0.07; }),
-      grin,
-      o: mk(new T.CircleGeometry(0.055, 20), M.dark, m => m.scale.set(1, 1.25, 1)),
-      O: mk(new T.CircleGeometry(0.095, 24), M.dark, m => m.scale.set(1, 1.2, 1)),
-      flat: mk(new T.BoxGeometry(0.17, 0.03, 0.01), M.dark)
+    function draw(st, cfg, t) {
+      g.fillStyle = '#000'; g.fillRect(0, 0, W, H);
+      g.save(); g.shadowColor = cfg.glowCss; g.shadowBlur = 26; g.fillStyle = cfg.glowCore; g.strokeStyle = cfg.glowCore;
+      const cx = W / 2 + st.ex * 900, cy = H * 0.5 + st.ey * -700, dx = 100;
+      if (st.glyph === 'dots') text('• • • •', cx, cy + 4, 60);
+      else if (st.glyph === 'scan') { const p = (Math.sin(t * 2.6) + 1) / 2; rr(W * 0.2 + p * W * 0.44, cy - 7, 92, 14, 7); g.fill(); }
+      else if (st.glyph) { text(st.glyph, cx - dx, cy + 3, 86); text(st.glyph, cx + dx, cy + 3, 86); }
+      else { eye(st.mode, cx - dx, cy, st.open, -st.tilt); eye(st.mode, cx + dx, cy, st.open, st.tilt); }
+      if (st.z) { const ph = (t * 0.7) % 1; g.shadowBlur = 10; g.globalAlpha = 1 - ph; text('z', W * 0.8 + ph * 26, H * 0.36 - ph * 24, 26 + ph * 14); g.globalAlpha = 1; }
+      g.restore();
+      g.fillStyle = 'rgba(0,0,0,0.28)';                 /* сетка светодиодов */
+      for (let x = 0; x < W; x += 5) g.fillRect(x, 0, 1.2, H);
+      for (let y = 0; y < H; y += 5) g.fillRect(0, y, W, 1.2);
+      tex.needsUpdate = true;
+    }
+    return {
+      tex,
+      update(st, cfg, t) {
+        const k = [st.mode, st.glyph, Math.round(st.open * 14), Math.round(st.ex * 500), Math.round(st.ey * 500), Math.round(st.tilt * 24), st.z ? Math.floor(t * 7) : 0, st.glyph === 'scan' ? Math.floor(t * 24) : 0].join('|');
+        if (k !== key) { key = k; draw(st, cfg, t); }
+      }
     };
+  }
 
-    /* каска */
-    R.helmY = H - 0.01;
-    R.helm = new T.Group(); R.helm.position.y = R.helmY; R.bodyG.add(R.helm);
-    R.hat = new T.Group(); R.helm.add(R.hat);
-    const dome = new T.Mesh(new T.SphereGeometry(0.5, 40, 20, 0, TAU, 0, PI / 2), M.helmet); dome.scale.set(1.1, 0.8, 0.88); R.hat.add(dome);
-    const brim = new T.Mesh(new T.CylinderGeometry(0.6, 0.62, 0.05, 48), M.helmetRim); brim.scale.z = 0.86; brim.position.y = 0.01; R.hat.add(brim);
-    const ridge = new T.Mesh(new T.TorusGeometry(0.44, 0.032, 8, 32, PI), M.helmetRim); ridge.rotation.y = PI / 2; ridge.scale.y = 0.9; R.hat.add(ridge);
-    const lamp = new T.Group(); lamp.position.set(0, 0.2, 0.37); lamp.rotation.x = -0.3; R.hat.add(lamp);
-    const lb = new T.Mesh(new T.CylinderGeometry(0.095, 0.11, 0.1, 24), M.lampBody); lb.rotation.x = PI / 2; lamp.add(lb);
-    R.lensMat = M.lens.clone(); const lens = new T.Mesh(new T.CircleGeometry(0.08, 24), R.lensMat); lens.position.z = 0.052; lamp.add(lens);
-    R.glow = new T.Sprite(new T.SpriteMaterial({ map: radialTex('rgba(255,244,210,1)', 'rgba(255,200,120,0)'), color: 0xffe2a0, transparent: true, blending: T.AdditiveBlending, depthWrite: false, opacity: 0 }));
-    R.glow.position.z = 0.12; R.glow.scale.set(0.6, 0.6, 1); lamp.add(R.glow);
-    /* антенна (нет связи) */
-    R.ant = new T.Group(); R.ant.visible = false; R.ant.position.set(0.2, 0.33, 0); R.hat.add(R.ant);
-    const rod = new T.Mesh(new T.CylinderGeometry(0.012, 0.016, 0.3, 8), M.steel); rod.position.y = 0.15; R.ant.add(rod);
-    R.antMat = M.red.clone(); const ball = new T.Mesh(new T.SphereGeometry(0.045, 14, 10), R.antMat); ball.position.y = 0.32; R.ant.add(ball);
-    /* ночной колпак */
-    R.cap = new T.Group(); R.cap.visible = false; R.helm.add(R.cap);
-    const cone = new T.Mesh(new T.CylinderGeometry(0.035, 0.5, 0.8, 32), M.cap); cone.position.set(0.08, 0.38, -0.02); cone.rotation.z = -0.35; R.cap.add(cone);
-    const trim = new T.Mesh(new T.TorusGeometry(0.5, 0.075, 10, 40), M.capTrim); trim.rotation.x = PI / 2; trim.scale.set(1.08, 0.88, 1); trim.position.y = 0.03; R.cap.add(trim);
-    const pom = new T.Mesh(new T.SphereGeometry(0.1, 16, 12), M.capTrim); pom.position.set(0.22, 0.76, -0.02); R.cap.add(pom);
-
-    /* руки и кирка */
-    const armGeo = capsuleGeo(0.085, 0.3, 14), handGeo = new T.SphereGeometry(0.115, 20, 14);
+  /* ---------- персонажи в стиле дизайнерских игрушек: шлем с визором, наушники, бомбер, кроссовки ---------- */
+  const CFG = {
+    slitok: { name: 'Слиток', helmet: 0x2b2d35, accent: 0xff9a1f, glow: 0xff9a1f, glowCss: '#ff8a00', glowCore: '#ffc46a', jacket: 0xb4440f, rib: 0x18191e, pants: 0x1f2026, shoe: 0x1c1e24 }
+  };
+  function buildStreet(M, cfg) {
+    const R = { kind: 'street', cfg };
+    R.glowC = col(cfg.glow); R.ringMat = new T.MeshBasicMaterial({ color: R.glowC.clone() });
+    R.root = new T.Group(); R.hop = new T.Group(); R.root.add(R.hop);
+    R.shadow = new T.Mesh(new T.PlaneGeometry(1.7, 1.05), M.shadow); R.shadow.rotation.x = -PI / 2; R.shadow.position.y = 0.004; R.root.add(R.shadow);
+    const sph = new T.SphereGeometry(1, 32, 22);
+    /* кроссовки */
+    for (const sx of [-1, 1]) {
+      const s = new T.Group(); s.position.set(sx * 0.215, 0, 0.05); s.rotation.y = sx * 0.07; R.hop.add(s);
+      const sole = new T.Mesh(ingotGeo(0.35, 0.11, 0.58, 0.05, 1, 1, 6), M.sole); sole.position.y = 0.055; s.add(sole);
+      const up = new T.Mesh(ingotGeo(0.32, 0.2, 0.5, 0.085, 0.86, 0.8, 8), M.shoe); up.position.set(0, 0.2, -0.02); s.add(up);
+      const stripe = new T.Mesh(roundBox(0.016, 0.06, 0.28, 0.007), M.accent); stripe.position.set(sx * 0.157, 0.18, 0.01); s.add(stripe);
+      const toe = new T.Mesh(ingotGeo(0.29, 0.07, 0.13, 0.033, 1, 1, 6), M.sole); toe.position.set(0, 0.13, 0.22); s.add(toe);
+      for (let i = 0; i < 3; i++) { const l = new T.Mesh(roundBox(0.14, 0.02, 0.03, 0.009), M.lace); l.position.set(0, 0.29 - i * 0.016, 0.085 + i * 0.056); l.rotation.x = -0.38; s.add(l); }
+    }
+    /* штаны-джоггеры */
+    const legGeo = capsuleGeo(0.135, 0.2, 14);
+    for (const sx of [-1, 1]) {
+      const l = new T.Mesh(legGeo, M.pants); l.position.set(sx * 0.19, 0.46, 0.02); R.hop.add(l);
+      const cuff = new T.Mesh(new T.TorusGeometry(0.12, 0.042, 8, 20), M.rib); cuff.rotation.x = PI / 2; cuff.position.set(sx * 0.19, 0.31, 0.025); R.hop.add(cuff);
+      const pk = new T.Mesh(roundBox(0.035, 0.15, 0.17, 0.014), M.pants); pk.position.set(sx * 0.325, 0.48, 0.02); R.hop.add(pk);
+      const lam = new T.Mesh(roundBox(0.02, 0.36, 0.035, 0.008), M.accent); lam.position.set(sx * 0.32, 0.46, -0.07); R.hop.add(lam);
+    }
+    /* корпус: бомбер */
+    R.bodyG = new T.Group(); R.bodyG.position.y = 0.58; R.hop.add(R.bodyG);
+    const hips = new T.Mesh(roundBox(0.66, 0.2, 0.46, 0.09), M.pants); hips.position.y = 0.04; R.bodyG.add(hips);
+    const torso = new T.Mesh(ingotGeo(0.94, 0.6, 0.62, 0.22, 0.9, 0.94, 12), M.jacket); torso.position.y = 0.36; R.bodyG.add(torso);
+    const hem = new T.Mesh(ingotGeo(0.97, 0.09, 0.645, 0.045, 1, 1, 6), M.rib); hem.position.y = 0.1; R.bodyG.add(hem);
+    const zip = new T.Mesh(new T.BoxGeometry(0.022, 0.5, 0.012), M.gold); zip.position.set(0, 0.37, 0.309); zip.rotation.x = -0.035; R.bodyG.add(zip);
+    const collar = new T.Mesh(new T.TorusGeometry(0.21, 0.07, 10, 28), M.rib); collar.rotation.x = PI / 2; collar.position.y = 0.66; R.bodyG.add(collar);
+    R.hoodDown = new T.Mesh(new T.TorusGeometry(0.3, 0.11, 10, 24, PI * 1.25), M.rib); R.hoodDown.rotation.set(-PI / 2, 0, -PI * 0.125); R.hoodDown.position.set(0, 0.66, -0.05); R.bodyG.add(R.hoodDown);
+    const chain = new T.Mesh(new T.TorusGeometry(0.17, 0.02, 8, 36, PI), M.gold); chain.rotation.z = PI; chain.position.set(0, 0.6, 0.318); chain.rotation.x = -0.04; R.bodyG.add(chain);
+    const pend = new T.Mesh(ingotGeo(0.13, 0.08, 0.045, 0.016, 0.8, 0.9, 4), M.gold); pend.position.set(0, 0.4, 0.325); R.bodyG.add(pend);
+    for (const sx of [-1, 1]) { const st = new T.Mesh(roundBox(0.03, 0.42, 0.012, 0.006), M.rib); st.position.set(sx * 0.475, 0.36, 0.0); st.rotation.z = sx * 0.05; R.bodyG.add(st); }
+    /* руки в рукавах и перчатках */
+    const sleeveGeo = capsuleGeo(0.125, 0.24, 14);
     const arm = sx => {
-      const p = new T.Group(); p.position.set(sx * 0.6, H / 2 + 0.04, 0.04); R.bodyG.add(p);
-      const a = new T.Mesh(armGeo, M.gold); a.position.y = -0.2; p.add(a);
-      const h = new T.Group(); h.position.y = -0.4; p.add(h); h.add(new T.Mesh(handGeo, M.goldDeep));
+      const p = new T.Group(); p.position.set(sx * 0.5, 0.58, 0); R.bodyG.add(p);
+      const a = new T.Mesh(sleeveGeo, M.jacket); a.position.y = -0.2; p.add(a);
+      const cf = new T.Mesh(new T.TorusGeometry(0.105, 0.036, 8, 20), M.rib); cf.rotation.x = PI / 2; cf.position.y = -0.4; p.add(cf);
+      if (sx < 0) { const patch = new T.Mesh(roundBox(0.03, 0.11, 0.14, 0.012), M.rib); patch.position.set(sx * 0.118, -0.12, 0.02); p.add(patch); const dot = new T.Mesh(new T.CircleGeometry(0.028, 16), R.ringMat); dot.rotation.y = -PI / 2; dot.position.set(sx * 0.135, -0.12, 0.02); p.add(dot); }
+      const h = new T.Group(); h.position.y = -0.47; p.add(h);
+      const gl = new T.Mesh(sph, M.glove); gl.scale.set(0.11, 0.105, 0.11); h.add(gl);
+      const th = new T.Mesh(sph, M.glove); th.scale.set(0.045, 0.06, 0.045); th.position.set(-sx * 0.08, 0.03, 0.05); h.add(th);
       return { p, h };
     };
     R.armL = arm(-1); R.armR = arm(1);
+    /* голова: шлем с визором */
+    R.head = new T.Group(); R.head.position.y = 1.13; R.bodyG.add(R.head);
+    const HS = new T.Vector3(1.04, 0.97, 1);
+    const helm = new T.Mesh(new T.SphereGeometry(0.56, 48, 32), M.helmet); helm.scale.copy(HS); R.head.add(helm);
+    const ridge = new T.Mesh(new T.TorusGeometry(0.578, 0.036, 8, 48, 2.3), M.accent); ridge.rotation.set(0, PI / 2, 0.25); ridge.scale.set(1, 0.97, 1); R.head.add(ridge);
+    const VPH = 2.5, VT0 = 1.36, VTL = 0.62;
+    const bez = new T.Mesh(new T.SphereGeometry(0.574, 48, 16, PI / 2 - (VPH + 0.14) / 2, VPH + 0.14, VT0 - 0.06, VTL + 0.12), M.bezel); bez.scale.copy(HS); R.head.add(bez);
+    R.face = Face();
+    R.visorMat = new T.MeshStandardMaterial({ color: col(0x050608), roughness: 0.05, metalness: 0.55, emissive: 0xffffff, emissiveMap: R.face.tex, emissiveIntensity: 1.25 });
+    const vis = new T.Mesh(new T.SphereGeometry(0.584, 64, 20, PI / 2 - VPH / 2, VPH, VT0, VTL), R.visorMat); vis.scale.copy(HS); R.head.add(vis);
+    const seam = new T.Mesh(new T.SphereGeometry(0.566, 48, 4, PI / 2 - 1.1, 2.2, VT0 + VTL + 0.2, 0.025), M.bezel); seam.scale.copy(HS); R.head.add(seam);
+    /* налобный фонарь */
+    const lamp = new T.Group(); const LT = 0.92; lamp.position.set(0, 0.56 * 0.97 * Math.cos(LT), 0.56 * Math.sin(LT) + 0.01); lamp.rotation.x = -0.4; R.head.add(lamp);
+    const lb = new T.Mesh(new T.CylinderGeometry(0.075, 0.088, 0.08, 24), M.lampBody); lb.rotation.x = PI / 2; lamp.add(lb);
+    R.lensMat = M.lens.clone(); const lens = new T.Mesh(new T.CircleGeometry(0.064, 24), R.lensMat); lens.position.z = 0.042; lamp.add(lens);
+    R.glow = new T.Sprite(new T.SpriteMaterial({ map: radialTex('rgba(255,244,210,1)', 'rgba(255,200,120,0)'), color: 0xffe2a0, transparent: true, blending: T.AdditiveBlending, depthWrite: false, opacity: 0 }));
+    R.glow.position.z = 0.1; R.glow.scale.set(0.4, 0.4, 1); lamp.add(R.glow);
+    /* наушники */
+    R.phones = new T.Group(); R.head.add(R.phones);
+    const band = new T.Mesh(new T.TorusGeometry(0.61, 0.034, 10, 48, PI), M.helmet); band.position.y = 0.0; band.scale.set(1, 0.98, 1); R.phones.add(band);
+    for (const sx of [-1, 1]) {
+      const cup = new T.Mesh(new T.CylinderGeometry(0.165, 0.165, 0.13, 30), M.helmet); cup.rotation.z = PI / 2; cup.position.set(sx * 0.605, -0.04, 0); R.phones.add(cup);
+      const cush = new T.Mesh(new T.TorusGeometry(0.13, 0.05, 10, 24), M.rib); cush.rotation.y = PI / 2; cush.position.set(sx * 0.55, -0.04, 0); R.phones.add(cush);
+      const ring = new T.Mesh(new T.TorusGeometry(0.118, 0.017, 8, 32), R.ringMat); ring.rotation.y = PI / 2; ring.position.set(sx * 0.672, -0.04, 0); R.phones.add(ring);
+      const cap = new T.Mesh(new T.CircleGeometry(0.1, 28), M.bezel); cap.rotation.y = sx * PI / 2; cap.position.set(sx * 0.671, -0.04, 0); R.phones.add(cap);
+    }
+    /* антенна (нет связи) */
+    R.ant = new T.Group(); R.ant.visible = false; R.ant.position.set(-0.24, 0.47, -0.05); R.ant.rotation.z = 0.25; R.head.add(R.ant);
+    const rod = new T.Mesh(new T.CylinderGeometry(0.012, 0.016, 0.3, 8), M.steel); rod.position.y = 0.15; R.ant.add(rod);
+    R.antMat = M.red.clone(); const ball = new T.Mesh(new T.SphereGeometry(0.045, 14, 10), R.antMat); ball.position.y = 0.32; R.ant.add(ball);
+    /* капюшон на голове: ночь, сон, скрытые суммы */
+    R.hoodUp = new T.Mesh(new T.SphereGeometry(0.67, 40, 24, PI / 2 + 0.92, TAU - 1.84, 0, 2.2), M.ribIn); R.hoodUp.scale.set(1.04, 1.0, 1.02); R.hoodUp.position.set(0, 0.04, -0.03); R.hoodUp.visible = false; R.head.add(R.hoodUp);
+    /* кирка */
     R.pick = new T.Group(); R.armR.h.add(R.pick);
-    const handle = new T.Mesh(new T.CylinderGeometry(0.034, 0.042, 0.8, 12), M.wood); handle.position.y = 0.3; R.pick.add(handle);
-    const ph = new T.Group(); ph.position.y = 0.66; R.pick.add(ph);
+    const handle = new T.Mesh(new T.CylinderGeometry(0.032, 0.04, 0.82, 12), M.handle); handle.position.y = 0.3; R.pick.add(handle);
+    for (let i = 0; i < 3; i++) { const w = new T.Mesh(new T.TorusGeometry(0.041, 0.012, 6, 14), M.accent); w.rotation.x = PI / 2; w.position.y = 0.02 + i * 0.07; R.pick.add(w); }
+    const ph = new T.Group(); ph.position.y = 0.67; R.pick.add(ph);
     const PR_ = 0.25, PA = 1.0;
     const bar = new T.Mesh(new T.TorusGeometry(PR_, 0.05, 10, 24, PA * 2), M.steel); bar.rotation.z = PI / 2 - PA; bar.position.y = -PR_; ph.add(bar);
     const tipG = new T.ConeGeometry(0.05, 0.14, 12);
     for (const sx of [-1, 1]) { const tip = new T.Mesh(tipG, M.steel); const ex = sx * PR_ * Math.sin(PA), ey = PR_ * Math.cos(PA) - PR_; tip.position.set(ex + sx * Math.cos(PA) * 0.06, ey - Math.sin(PA) * 0.06, 0); tip.rotation.z = sx < 0 ? PI - 0.571 : -(PI - 0.571); ph.add(tip); }
-    const collar = new T.Mesh(new T.CylinderGeometry(0.06, 0.06, 0.1, 12), M.steel); collar.position.y = 0; ph.add(collar);
-    /* тряпочка для полировки — в левой руке */
-    R.cloth = new T.Mesh(roundBox(0.22, 0.06, 0.17, 0.025), M.cloth); R.cloth.position.set(0, -0.06, 0.08); R.cloth.visible = false; R.armL.h.add(R.cloth);
-    /* планшет — в правой руке */
+    const collarP = new T.Mesh(new T.CylinderGeometry(0.058, 0.058, 0.1, 12), M.accent); ph.add(collarP);
+    /* тряпочка (полирует визор) и планшет */
+    R.cloth = new T.Mesh(roundBox(0.22, 0.06, 0.17, 0.025), M.cloth); R.cloth.position.set(0, 0.02, 0.1); R.cloth.visible = false; R.armL.h.add(R.cloth);
     R.tablet = new T.Group(); R.tablet.visible = false; R.tablet.position.set(-0.1, 0.14, 0.14); R.armR.h.add(R.tablet);
     R.tablet.add(new T.Mesh(roundBox(0.46, 0.32, 0.035, 0.03), M.tablet));
     const scr = new T.Mesh(new T.PlaneGeometry(0.4, 0.26), new T.MeshBasicMaterial({ map: canvasTex(128, (g, s) => {
@@ -212,7 +258,7 @@
       g.fillStyle = '#ffd34d'; g.beginPath(); g.arc(118, 22, 7, 0, TAU); g.fill();
     }, true) }));
     scr.position.z = 0.019; R.tablet.add(scr);
-    R.H = H; R.BY = BY;
+    R.topY = 0.58 + 1.13 + 0.62;
     return R;
   }
 
@@ -223,7 +269,7 @@
     const cd = new T.Mesh(new T.CylinderGeometry(0.17, 0.17, 0.045, 28), M.gold); cd.rotation.x = PI / 2; coin.add(cd);
     const cr = new T.Mesh(new T.TorusGeometry(0.13, 0.014, 6, 28), M.goldDeep); cr.position.z = 0.024; coin.add(cr);
     const chest = new T.Group(); chest.visible = false; parent.add(chest); P.chest = chest;
-    const cb = new T.Mesh(roundBox(0.52, 0.3, 0.36, 0.05), M.wood); cb.position.y = 0.15; chest.add(cb);
+    const cb = new T.Mesh(roundBox(0.52, 0.3, 0.36, 0.05), M.woodBox); cb.position.y = 0.15; chest.add(cb);
     for (const x of [-0.17, 0.17]) { const b = new T.Mesh(new T.BoxGeometry(0.06, 0.31, 0.37), M.gold); b.position.set(x, 0.15, 0); chest.add(b); }
     const lock = new T.Mesh(roundBox(0.09, 0.1, 0.03, 0.012), M.gold); lock.position.set(0, 0.26, 0.19); chest.add(lock);
     P.lid = new T.Group(); P.lid.position.set(0, 0.3, -0.18); chest.add(P.lid);
@@ -356,7 +402,7 @@
   let ui = {};
 
   /* ---------- поза ---------- */
-  const BASE = () => ({ y: 0, sq: 1, tz: 0, tx: 0, yaw: 0, laZ: -0.3, laX: -0.05, raZ: 0.32, raX: -0.05, eo: 1, ex: 0, ey: 0, brow: 0, browY: 0, lamp: 0.15, tarn: 0, hl: 0, hr: 0, pickV: 1, pickX: 0, pickZ: 0, eye: 'round', mouth: 'smile', gaze: false, cap: false, ant: false, cloth: 0, tablet: 0, shades: 0, shadesY: 0 });
+  const BASE = () => ({ y: 0, sq: 1, tz: 0, tx: 0, yaw: -0.24, laZ: -0.3, laX: -0.05, raZ: 0.32, raX: -0.05, eo: 1, ex: 0, ey: 0, brow: 0, browY: 0, lamp: 0.15, tarn: 0, hl: 0, hr: 0, pickV: 1, pickX: 0, pickZ: 0, eye: 'round', mouth: 'smile', gaze: false, cap: false, ant: false, cloth: 0, tablet: 0, shades: 0, shadesY: 0, hx: 0, hy: 0, hz: 0, glyph: '', zz: false });
   const RATE = { tarn: 3, lamp: 10, pickV: 9, cloth: 12, tablet: 12, shades: 10 };
   function smooth(P, dt) {
     for (const k in P) {
@@ -369,34 +415,34 @@
 
   function moodPose(P, m, t, I) {
     const br = Math.sin(t * 2.2);
-    P.sq = 1 + 0.014 * br;
+    P.sq = 1 + 0.012 * br;
     P.laZ += 0.03 * Math.sin(t * 1.4); P.raZ -= 0.03 * Math.sin(t * 1.4 + 0.6);
+    P.hz = 0.035 * Math.sin(t * 0.9);
     if (m === 'up') {
       const c = (t % 3.4) / 3.4; P.y = 0.1 * I * bell(c, 0, 0.16); P.sq -= 0.05 * bell(c, 0.15, 0.24);
-      P.mouth = c < 0.3 ? 'grin' : 'smile'; P.eye = c > 0.02 && c < 0.2 ? 'happy' : 'round'; P.brow = -0.1; P.browY = 0.012;
+      P.mouth = c < 0.3 ? 'grin' : 'smile'; P.eye = c > 0.02 && c < 0.2 ? 'happy' : 'round'; P.brow = -0.1; P.hz = 0.09 * bell(c, 0, 0.3);
     } else if (m === 'rocket') {
-      const w = t * 5.2; P.y = Math.abs(Math.sin(w)) * 0.11 * I; P.tz = Math.sin(w) * 0.13 * I;
-      P.laZ = -1.5 - 0.45 * Math.sin(w); P.raZ = 1.5 - 0.45 * Math.sin(w + PI); P.mouth = 'grin'; P.eye = 'happy';
+      const w = t * 5.2; P.y = Math.abs(Math.sin(w)) * 0.11 * I; P.tz = Math.sin(w) * 0.13 * I; P.hz = Math.sin(w) * 0.12;
+      P.laZ = -1.5 - 0.45 * Math.sin(w); P.raZ = 1.5 - 0.45 * Math.sin(w + PI); P.mouth = 'grin'; P.eye = 'happy'; P.pickV = 0;
     } else if (m === 'down' || m === 'crash') {
       const deep = m === 'crash';
-      P.tarn = deep ? 0.75 : 0.45; P.mouth = 'frown'; P.brow = deep ? 0.6 : 0.45; P.eo = deep ? 0.72 : 0.82; P.ey = -0.02;
-      P.laZ = -0.12; P.raZ = 0.14; P.tx = (deep ? 0.09 : 0.05) * (I + 0.3); P.sq = 1 + 0.01 * Math.sin(t * 1.4);
-      const c = (t % (deep ? 5 : 7)) / (deep ? 5 : 7); P.sq -= 0.045 * bell(c, 0, 0.25); P.y -= 0.0;
-      P.lamp = 0.05;
+      P.tarn = deep ? 0.75 : 0.45; P.mouth = 'frown'; P.brow = deep ? 0.6 : 0.45; P.eo = deep ? 0.72 : 0.82; P.ey = -0.012;
+      P.laZ = -0.12; P.raZ = 0.14; P.tx = (deep ? 0.08 : 0.04) * (I + 0.3); P.hx = deep ? 0.2 : 0.12; P.sq = 1 + 0.01 * Math.sin(t * 1.4);
+      const c = (t % (deep ? 5 : 7)) / (deep ? 5 : 7); P.sq -= 0.045 * bell(c, 0, 0.25); P.lamp = 0.05;
     } else if (m === 'hunter') {
-      P.mouth = 'grin'; P.eye = 'star'; P.lamp = 0.85 + 0.15 * Math.sin(t * 6); P.brow = -0.25;
       const w = t * 4.4, pump = Math.max(0, Math.sin(w));
+      P.mouth = 'grin'; P.eye = 'star'; P.lamp = 0.85 + 0.15 * Math.sin(t * 6); P.brow = -0.25;
       P.raZ = 2.25 + 0.18 * Math.sin(w); P.raX = -0.2; P.pickZ = 0.3; P.laZ = -1.2 - 0.9 * pump; P.laX = -0.25;
-      P.y = 0.06 * I * pump; P.sq = 1 - 0.04 * Math.max(0, -Math.sin(w));
+      P.y = 0.06 * I * pump; P.sq = 1 - 0.04 * Math.max(0, -Math.sin(w)); P.hz = 0.06 * Math.sin(w);
     } else if (m === 'sleep') {
-      P.eye = 'closed'; P.mouth = 'o'; P.sq = 1 + 0.03 * Math.sin(t * 1.2); P.tz = 0.07; P.tx = 0.06; P.laZ = -0.15; P.raZ = 0.2; P.lamp = 0; P.gaze = true;
+      P.eye = 'closed'; P.zz = true; P.cap = true; P.sq = 1 + 0.03 * Math.sin(t * 1.2); P.tz = 0.07; P.tx = 0.05; P.hx = 0.16; P.hz = 0.12; P.laZ = -0.15; P.raZ = 0.2; P.lamp = 0; P.gaze = true; P.pickV = 0;
     } else if (m === 'night') {
-      P.cap = true; P.eo = 0.62; P.sq = 1 + 0.02 * Math.sin(t * 1.5); P.lamp = 0; P.pickV = 0; P.tz = 0.03;
+      P.cap = true; P.eo = 0.6; P.sq = 1 + 0.02 * Math.sin(t * 1.5); P.lamp = 0; P.pickV = 0; P.tz = 0.03; P.hx = 0.06;
     } else if (m === 'hide') {
       const c = (t % 6) / 6, peek = bell(c, 0.62, 0.86);
-      P.shades = 1; P.shadesY = -0.13 * peek; P.mouth = peek > 0.3 ? 'o' : 'smile'; P.brow = -0.15; P.browY = 0.03 * peek; P.tz = 0.05; P.gaze = true; P.ey = 0.02;
+      P.cap = true; P.glyph = peek > 0.25 ? '' : 'dots'; P.gaze = true; P.ex = 0.035 * peek; P.mouth = peek > 0.25 ? 'o' : 'smile'; P.hz = 0.06; P.pickV = 0;
     } else if (m === 'offline') {
-      P.ant = true; P.gaze = true; P.ex = 0.04 * Math.sin(t * 1.7); P.ey = 0.01; P.brow = -0.1; P.browY = 0.02; P.mouth = 'flat';
+      P.ant = true; P.glyph = 'scan'; P.gaze = true; P.hy = 0.3 * Math.sin(t * 1.7); P.brow = -0.1;
     }
   }
 
@@ -405,7 +451,7 @@
     hello: { dur: 2.4, pri: 2, run(P, k) { P.raZ = 2.45 + 0.35 * Math.sin(k * TAU * 3); P.raX = -0.25; P.mouth = 'grin'; P.eye = k > 0.25 && k < 0.75 ? 'happy' : 'round'; P.y = 0.08 * bell(k, 0, 0.18); P.pickV = 0; } },
     tap: { dur: 0.9, pri: 2, run(P, k) { P.y = 0.11 * bell(k, 0, 0.55); P.sq = 1 - 0.1 * bell(k, 0, 0.14) + 0.06 * bell(k, 0.14, 0.5); P.eye = 'happy'; P.mouth = 'grin'; } },
     dance: { dur: 3, pri: 2, run(P, k) { const w = k * TAU * 3; P.y = Math.abs(Math.sin(w)) * 0.12; P.tz = Math.sin(w) * 0.16; P.laZ = -1.6 - 0.5 * Math.sin(w); P.raZ = 1.6 - 0.5 * Math.sin(w + PI); P.eye = 'happy'; P.mouth = 'grin'; P.pickV = 0; } },
-    wake: { dur: 1.6, pri: 3, run(P, k) { P.eo = 1.15; P.browY = 0.05 * bell(k, 0, 0.6); P.mouth = k < 0.45 ? 'O' : 'smile'; P.y = 0.07 * bell(k, 0, 0.3); } },
+    wake: { dur: 1.6, pri: 3, run(P, k) { P.eo = 1.15; P.glyph = k < 0.35 ? '!' : ''; P.mouth = k < 0.6 ? 'O' : 'smile'; P.y = 0.07 * bell(k, 0, 0.3); } },
     deposit: {
       dur: 4, pri: 3, sfx: 'coin',
       start(a) { PR.chest.visible = true; PR.coin.visible = true; a.burst = false; },
@@ -419,8 +465,8 @@
         else c.scale.setScalar(Math.max(0.001, 1 - seg(k, 0.66, 0.7)));
         const up = seg(k, 0.18, 0.36) - seg(k, 0.6, 0.75);
         P.laZ = lerp(-0.3, 0.55, up); P.raZ = lerp(0.32, -0.55, up); P.laX = lerp(-0.05, -1.35, up); P.raX = lerp(-0.05, -1.35, up);
-        P.pickV = 1 - seg(k, 0.08, 0.16) + seg(k, 0.8, 0.9); P.yaw = -0.35 * bell(k, 0.42, 0.78);
-        P.sq = 1 - 0.08 * bell(k, 0.37, 0.45); P.eye = k > 0.38 ? 'happy' : 'round'; P.mouth = k > 0.38 ? 'grin' : 'o';
+        P.pickV = 1 - seg(k, 0.08, 0.16) + seg(k, 0.8, 0.9); P.yaw += -0.35 * bell(k, 0.42, 0.78);
+        P.sq = 1 - 0.08 * bell(k, 0.37, 0.45); P.eye = k > 0.72 ? 'happy' : 'round'; P.mouth = k > 0.38 ? 'grin' : 'o'; P.glyph = k > 0.38 && k < 0.72 ? '$' : '';
         P.gaze = true; P.ey = k < 0.38 ? 0.03 : 0; P.ex = k > 0.42 && k < 0.7 ? -0.035 : 0;
       },
       at: [[0.66, a => { emitAt(PR.chest.position, 0.45, 18, { colors: ['#ffd36b', '#fff1b8', '#ffb547'], up: true, speed: 1.3 }); snd('coin'); }]],
@@ -439,12 +485,12 @@
         const up = seg(k, 0, 0.12) - seg(k, 0.45, 0.6);
         P.raX = lerp(-0.05, -1.25, up); P.raZ = lerp(0.32, -0.1, up); P.pickV = 1 - seg(k, 0, 0.1) + seg(k, 0.8, 0.9);
         P.tx = 0.12 * bell(k, 0.7, 0.85); P.gaze = true; P.ex = k < 0.45 ? 0.03 : -0.03; P.ey = k < 0.45 ? 0.02 : 0;
-        P.mouth = k > 0.6 ? 'grin' : 'smile'; P.eye = k > 0.66 ? 'happy' : 'round';
+        P.mouth = k > 0.6 ? 'grin' : 'smile'; P.eye = k > 0.85 ? 'happy' : 'round'; P.glyph = k > 0.6 && k < 0.85 ? '$' : '';
       },
       at: [[0.64, () => { emitAt(PR.chest.position, 0.45, 12, { colors: ['#ffd36b', '#fff1b8'], up: true }); snd('coin'); }]],
       end() { PR.chest.visible = false; PR.coin.visible = false; }
     },
-    sellProfit: { dur: 3, pri: 3, run(P, k) { const b = bell(k, 0.1, 0.8); P.laZ = lerp(-0.3, -2.1, b); P.laX = lerp(-0.05, -0.5, b); P.hl = 0.32 * b; P.hr = -0.35 * b; P.tx = 0.18 * bell(k, 0.25, 0.65); P.eye = 'happy'; P.mouth = 'grin'; }, at: [[0.3, () => snd('fanfare')]] },
+    sellProfit: { dur: 3, pri: 3, run(P, k) { const b = bell(k, 0.1, 0.8); P.raZ = lerp(0.32, 2.55, b); P.raX = lerp(-0.05, -0.8, b); P.pickV = 1 - b; P.tx = 0.15 * bell(k, 0.25, 0.65); P.hx = 0.1 * bell(k, 0.25, 0.65); P.eye = 'happy'; P.mouth = 'grin'; }, at: [[0.3, () => snd('fanfare')]] },
     sellLoss: { dur: 3, pri: 3, run(P, k) { P.brow = 0.4; P.mouth = 'flat'; P.tx = 0.08 * Math.max(0, Math.sin(k * TAU * 2)); P.raX = -0.6; P.raZ = -0.35; P.pickV = 0; P.eo = 0.9; } },
     airdrop: {
       dur: 4.2, pri: 3,
@@ -465,7 +511,7 @@
     signal: {
       dur: 2.6, pri: 2,
       start() { floatOn('alert', true); },
-      run(P, k) { P.lamp = 0.45 + 0.55 * Math.abs(Math.sin(k * PI * 6)); P.raX = -1.25 * bell(k, 0, 0.9); P.raZ = 0.2; P.pickX = -0.6 * bell(k, 0, 0.9); P.eo = 1.12; P.browY = 0.04; P.mouth = 'o'; P.y = 0.06 * bell(k, 0, 0.15); P.gaze = true; P.ey = -0.02; },
+      run(P, k) { P.lamp = 0.45 + 0.55 * Math.abs(Math.sin(k * PI * 6)); P.raX = -1.25 * bell(k, 0, 0.9); P.raZ = 0.2; P.pickX = -0.6 * bell(k, 0, 0.9); P.eo = 1.12; P.glyph = Math.floor(k * 10) % 2 ? '!' : ''; P.y = 0.06 * bell(k, 0, 0.15); P.gaze = true; P.ey = -0.01; P.hz = 0.1 * bell(k, 0, 0.9); },
       at: [[0.05, () => snd('alert')]],
       end() { floatOn('alert', false); }
     },
@@ -478,16 +524,16 @@
       dur: 5, pri: 3,
       start() { PR.trophy.visible = true; floatOn('sign', true); },
       run(P, k) {
-        const t = PR.trophy; t.position.set(0, lerp(-0.9, 2.08, backOut(seg(k, 0.05, 0.35))), 0.12); t.rotation.y = k * TAU; t.scale.setScalar(Math.max(0.001, 1 - seg(k, 0.88, 1)));
+        const t = PR.trophy; t.position.set(0, lerp(-0.9, R.topY + 0.12, backOut(seg(k, 0.05, 0.35))), 0.12); t.rotation.y = k * TAU; t.scale.setScalar(Math.max(0.001, 1 - seg(k, 0.88, 1)));
         const up = seg(k, 0.1, 0.32) - seg(k, 0.86, 0.96); P.laZ = lerp(-0.3, -2.6, up); P.raZ = lerp(0.32, 2.6, up); P.laX = -0.3 * up; P.raX = -0.3 * up; P.pickV = 1 - up; P.eye = 'star'; P.mouth = 'grin';
       },
-      at: [[0.36, () => { emit({ x: 0, y: 2.3, z: 0.12 }, 26, { colors: ['#ffd36b', '#fff1b8', '#ffffff'], speed: 1.1, gravity: 1.2 }); snd('fanfare'); }]],
+      at: [[0.36, () => { emit({ x: 0, y: R.topY + 0.35, z: 0.12 }, 26, { colors: ['#ffd36b', '#fff1b8', '#ffffff'], speed: 1.1, gravity: 1.2 }); snd('fanfare'); }]],
       end() { PR.trophy.visible = false; floatOn('sign', false); }
     },
     coinMove: {
       dur: 4.2, pri: 2,
       start() { floatOn('sign', true); },
-      run(P, k) { const up = seg(k, 0, 0.15) - seg(k, 0.85, 1); P.laZ = lerp(-0.3, -2.25, up); P.raZ = lerp(0.32, 2.25, up); P.pickV = 1 - up; P.mouth = ST.signNeg ? 'frown' : 'grin'; P.brow = ST.signNeg ? 0.35 : -0.1; P.gaze = true; P.ey = 0.03; },
+      run(P, k) { const up = seg(k, 0, 0.15) - seg(k, 0.85, 1); P.laZ = lerp(-0.3, -2.25, up); P.raZ = lerp(0.32, 2.25, up); P.pickV = 1 - up; P.glyph = up > 0.5 ? (ST.signNeg ? '▼' : '▲') : ''; P.gaze = true; P.ey = 0.02; },
       end() { floatOn('sign', false); }
     },
     screen: {
@@ -496,15 +542,15 @@
     },
     polish: {
       dur: 4.5, pri: 1,
-      run(P, k) { const up = seg(k, 0, 0.12) - seg(k, 0.85, 1), w = k * TAU * 4; P.cloth = up; P.laX = lerp(-0.05, -1.05 + 0.15 * Math.cos(w), up); P.laZ = lerp(-0.3, 0.55 + 0.22 * Math.sin(w), up); P.eye = k > 0.2 && k < 0.8 ? 'happy' : 'round'; P.mouth = 'smile'; P.tarn = Math.max(0, (P.tarn || 0) - 0.4); P.gaze = true; P.ey = -0.02; },
-      at: [[0.84, () => emitAt({ x: 0, y: 0.6, z: 0.5 }, 0, 10, { colors: ['#ffffff', '#fff1b8'], speed: 0.6, gravity: 0, life: 0.8 })]]
+      run(P, k) { const up = seg(k, 0, 0.12) - seg(k, 0.85, 1), w = k * TAU * 4; P.cloth = up; P.laX = lerp(-0.05, -0.4 + 0.12 * Math.cos(w), up); P.laZ = lerp(-0.3, -2.7 + 0.14 * Math.sin(w), up); P.hz = -0.12 * up; P.eye = k > 0.2 && k < 0.8 ? 'happy' : 'round'; P.mouth = 'smile'; P.tarn = Math.max(0, (P.tarn || 0) - 0.4); P.gaze = true; P.ex = -0.02; },
+      at: [[0.84, () => emitAt({ x: -0.45, y: 1.85, z: 0.3 }, 0, 10, { colors: ['#ffffff', '#fff1b8'], speed: 0.6, gravity: 0, life: 0.8 })]]
     },
     blocks: {
       dur: 5, pri: 1,
       start() { PR.blocks.forEach(b => { b.visible = true; b.scale.setScalar(0.001); }); },
       run(P, k) {
         PR.blocks.forEach((b, i) => { const s = backOut(seg(k, 0.12 + i * 0.2, 0.24 + i * 0.2)) * (1 - seg(k, 0.88, 0.98)); b.scale.setScalar(Math.max(0.001, s)); b.position.set(1.02 + 0.03 * Math.sin(k * 30) * bell(k, 0.7, 0.86) * i, 0.09 + i * 0.175, 0.2); b.rotation.y = i * 0.25; });
-        P.yaw = 0.22; P.gaze = true; P.ex = 0.035; P.pickV = 0; P.raX = -0.75 * Math.max(bell(k, 0.08, 0.26), bell(k, 0.28, 0.46), bell(k, 0.48, 0.66)); P.raZ = 0.55; P.mouth = k > 0.7 ? 'grin' : 'smile';
+        P.yaw += 0.46; P.gaze = true; P.ex = 0.035; P.pickV = 0; P.raX = -0.75 * Math.max(bell(k, 0.08, 0.26), bell(k, 0.28, 0.46), bell(k, 0.48, 0.66)); P.raZ = 0.55; P.mouth = k > 0.7 ? 'grin' : 'smile';
       },
       end() { PR.blocks.forEach(b => (b.visible = false)); }
     },
@@ -523,7 +569,7 @@
   function hands() { handPos(R.armL.h, HA); handPos(R.armR.h, HB); return HM.copy(HA).add(HB).multiplyScalar(0.5); }
   function emit(o, n, opt) { if (PT && !ST.reduced) PT.emit(o, n, opt); }
   function emitAt(p, dy, n, opt) { emit({ x: p.x, y: p.y + dy, z: p.z }, n, opt); }
-  function fireworks(x) { emit({ x, y: 2.35 + rnd(-0.1, 0.15), z: 0 }, 30, { colors: [pick(['#ffd36b', '#ff5d8f', '#5be0c4', '#a98bff']), '#ffffff'], speed: 1.4, gravity: 0.9, life: 1.1 }); }
+  function fireworks(x) { emit({ x, y: R.topY + 0.35 + rnd(-0.1, 0.15), z: 0 }, 30, { colors: [pick(['#ffd36b', '#ff5d8f', '#5be0c4', '#a98bff']), '#ffffff'], speed: 1.4, gravity: 0.9, life: 1.1 }); }
   function dust() { emit({ x: 0.95, y: 0.05, z: 0.3 }, 8, { colors: ['#c9b48a', '#8a7a5a'], up: true, speed: 0.5, gravity: 1.5, life: 0.6 }); snd('tick'); }
 
   /* ---------- проигрывание сценок ---------- */
@@ -737,34 +783,30 @@
     if (PT) PT.update(dt);
     overlays();
   }
-  const goldA = col(0xf4b740), goldB = col(0xdc922e), dullA = col(0xb39663), dullB = col(0x9a7d4d), lensOn = col(0xfff3c4), lensOff = col(0x7a6646);
+  const lensOn = col(0xfff3c4), lensOff = col(0x7a6646), antOn = col(0xff4d5e), antOff = col(0x5a1820);
+  function faceState(c, blink) {
+    let mode = 'calm';
+    if (c.eye === 'closed') mode = 'closed'; else if (c.eye === 'happy') mode = 'happy'; else if (c.eye === 'star') mode = 'star';
+    else if (c.mouth === 'O' || c.mouth === 'o') mode = 'O'; else if (c.mouth === 'frown') mode = 'sad'; else if (c.mouth === 'flat') mode = 'flat'; else if (c.mouth === 'grin') mode = 'grin';
+    if (mode === 'calm' && c.eo > 1.05) mode = 'wide';
+    const bl = mode === 'calm' || mode === 'wide' || mode === 'sad' || mode === 'grin';
+    return { mode, glyph: c.glyph || '', open: clamp(c.eo, 0.08, 1.2) * (bl ? blink : 1), ex: c.ex, ey: c.ey, tilt: clamp(c.brow, -1, 1) * 0.32, z: !!c.zz };
+  }
   function apply(c, blink, t) {
     R.root.rotation.y = c.yaw + ST.spin;
     R.hop.position.y = Math.max(0, c.y);
     const sq = c.sq, inv = 1 / Math.sqrt(sq); R.hop.scale.set(inv, sq, inv);
     R.bodyG.rotation.set(c.tx, 0, c.tz);
+    R.head.rotation.set(c.hx - c.ey * 2.2, c.hy + c.ex * 2.4, c.hz);
     R.armL.p.rotation.set(c.laX, 0, c.laZ); R.armR.p.rotation.set(c.raX, 0, c.raZ);
-    const mode = c.eye, open = clamp(c.eo, 0.05, 1.2) * blink;
-    for (const e of R.eyes) {
-      const round = mode === 'round' || mode === 'star';
-      e.scl.visible = round; e.pup.visible = round; e.happy.visible = mode === 'happy'; e.closed.visible = mode === 'closed';
-      e.e.scale.set(1, round ? open : 1, 1);
-      e.pup.position.x = c.ex; e.pup.position.y = c.ey;
-      e.star.visible = mode === 'star'; e.pm.visible = mode !== 'star'; e.g1.visible = mode !== 'star'; e.g2.visible = mode !== 'star';
-      if (mode === 'star') e.star.rotation.z = t * 1.5;
-    }
-    R.brows[0].rotation.z = c.brow * 0.55; R.brows[1].rotation.z = -c.brow * 0.55;
-    const by = 0.31 + c.browY - (1 - clamp(c.eo, 0, 1)) * 0.05; R.brows[0].position.y = by; R.brows[1].position.y = by;
-    for (const k in R.mouth) R.mouth[k].visible = k === c.mouth;
-    R.helm.position.y = R.helmY + c.hl; R.helm.rotation.x = c.hr;
-    R.hat.visible = !c.cap; R.cap.visible = !!c.cap; R.ant.visible = !!c.ant;
-    if (c.ant) R.antMat.color.copy(Math.sin(t * 6) > 0 ? col(0xff4d5e) : col(0x5a1820));
-    const L = clamp(c.lamp, 0, 1); R.lensMat.color.copy(lensOff).lerp(lensOn, L); R.glow.material.opacity = L * L * 0.75; R.glow.scale.setScalar(0.22 + 0.3 * L);
-    const tn = clamp(c.tarn, 0, 1);
-    M.gold.color.copy(goldA).lerp(dullA, tn); M.goldDeep.color.copy(goldB).lerp(dullB, tn);
-    M.gold.roughness = lerp(0.3, 0.62, tn); M.gold.metalness = lerp(0.62, 0.35, tn); M.goldDeep.roughness = M.gold.roughness; M.goldDeep.metalness = M.gold.metalness;
+    R.face.update(faceState(c, blink), R.cfg, t);
+    const dim = 1 - 0.42 * clamp(c.tarn, 0, 1);
+    R.visorMat.emissiveIntensity = 1.25 * dim;
+    R.ringMat.color.copy(R.glowC).multiplyScalar(dim * (0.8 + 0.2 * Math.sin(t * 2.1)));
+    R.hoodUp.visible = !!c.cap; R.hoodDown.visible = !c.cap; R.phones.visible = !c.cap;
+    R.ant.visible = !!c.ant; if (c.ant) R.antMat.color.copy(Math.sin(t * 6) > 0 ? antOn : antOff);
+    const L = clamp(c.lamp, 0, 1); R.lensMat.color.copy(lensOff).lerp(lensOn, L); R.glow.material.opacity = L * L * 0.75; R.glow.scale.setScalar(0.2 + 0.28 * L);
     const pv = clamp(c.pickV, 0, 1); R.pick.visible = pv > 0.02; R.pick.scale.setScalar(Math.max(0.001, pv)); R.pick.rotation.set(0.25 + c.pickX, 0, -0.62 + c.pickZ);
-    R.shades.visible = c.shades > 0.02; R.shades.scale.setScalar(Math.max(0.001, c.shades)); R.shades.position.y = 0.1 + c.shadesY;
     R.cloth.visible = c.cloth > 0.02; R.cloth.scale.setScalar(Math.max(0.001, c.cloth));
     R.tablet.visible = c.tablet > 0.02; R.tablet.scale.setScalar(Math.max(0.001, c.tablet * 1.3)); R.tablet.rotation.x = -c.raX;
     const lift = Math.max(0, c.y); R.shadow.scale.setScalar(1 - lift * 0.9); R.shadow.material.opacity = 1 - lift * 1.6;
@@ -772,7 +814,7 @@
   function overlays() {
     const any = ['alert', 'sign', 'zzz'].some(k => ui[k] && ui[k].classList.contains('on'));
     if (!any) return;
-    V.set(0, R.BY + R.H + 0.62, 0); R.hop.localToWorld(V); V.project(camera);
+    V.set(0, R.topY + 0.1, 0); R.hop.localToWorld(V); V.project(camera);
     const w = host.clientWidth, h = host.clientHeight, x = (V.x + 1) / 2 * w, y = (1 - V.y) / 2 * h;
     for (const k of ['alert', 'sign']) { const el = ui[k]; if (el && el.classList.contains('on')) { el.style.left = x + 'px'; el.style.top = Math.max(18, y) + 'px'; } }
     if (ui.zzz) { ui.zzz.style.left = (x + w * 0.16) + 'px'; ui.zzz.style.top = Math.max(16, y + 8) + 'px'; }
@@ -844,21 +886,22 @@
     if (!document.getElementById('ms-css')) { const st = document.createElement('style'); st.id = 'ms-css'; st.textContent = CSS; document.head.appendChild(st); }
     ST.reduced = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2.5));
-    renderer.outputEncoding = T.sRGBEncoding; renderer.toneMapping = T.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.02;
+    renderer.outputEncoding = T.sRGBEncoding; renderer.toneMapping = T.ACESFilmicToneMapping; renderer.toneMappingExposure = 0.92;
     renderer.setClearColor(0x000000, 0);
     const cv = renderer.domElement; cv.className = 'ms-cv'; cv.setAttribute('role', 'img'); cv.setAttribute('aria-label', 'Слиток — персонаж портфеля'); host.appendChild(cv);
     scene = new T.Scene(); scene.environment = envMap(renderer);
     camera = new T.PerspectiveCamera(28, 1, 0.1, 50);
-    scene.add(new T.HemisphereLight(col(0xfff6e8), col(0x2a1d4a), 0.55));
-    const key = new T.DirectionalLight(0xffffff, 1.15); key.position.set(2.5, 4, 5); scene.add(key);
+    scene.add(new T.HemisphereLight(col(0xfff6e8), col(0x2a1d4a), 0.45));
+    const key = new T.DirectionalLight(0xffffff, 1.3); key.position.set(2.5, 4, 5); scene.add(key);
+    const front = new T.DirectionalLight(0xffffff, 0.32); front.position.set(0, 1.5, 6); scene.add(front);
     const rim = new T.DirectionalLight(col(0xc58bff), 0.9); rim.position.set(-4, 2.5, -3); scene.add(rim);
     const fill = new T.DirectionalLight(col(0xffd9a8), 0.35); fill.position.set(-3, 1, 3); scene.add(fill);
-    M = materials(); R = buildSlitok(M); scene.add(R.root);
+    const cfg = CFG.slitok; M = materials(cfg); R = buildStreet(M, cfg); scene.add(R.root);
     PR = buildProps(M, R.root); PT = Particles(R.root, sparkTex());
     const mk = (cls, txt) => { const d = document.createElement('div'); d.className = cls; if (txt) d.textContent = txt; host.appendChild(d); return d; };
     ui.bubble = mk('ms-bubble'); ui.alert = mk('ms-float ms-alert', '!'); ui.sign = mk('ms-float ms-sign'); ui.zzz = mk('ms-float ms-zzz', 'Хррр');
     ui.bubble.addEventListener('click', () => ui.bubble.classList.remove('on'));
-    const size = () => { const w = host.clientWidth || 140, h = host.clientHeight || 150; renderer.setSize(w, h, false); camera.aspect = w / h; camera.position.set(-0.3, 1.3, 5.9); camera.lookAt(-0.11, 1.03, 0); camera.updateProjectionMatrix(); };
+    const size = () => { const w = host.clientWidth || 140, h = host.clientHeight || 150; renderer.setSize(w, h, false); camera.aspect = w / h; camera.position.set(-0.3, 1.25, 6.6); camera.lookAt(-0.1, 1.17, 0); camera.updateProjectionMatrix(); };
     size();
     if (window.ResizeObserver) new ResizeObserver(size).observe(host);
     if (window.IntersectionObserver) new IntersectionObserver(es => { inView = es[0].isIntersecting; if (inView) wakeLoop(); }).observe(host);
