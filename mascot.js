@@ -150,14 +150,21 @@
     const n4 = vnoise(N, 4, 11), n8 = vnoise(N, 8, 12), n16 = vnoise(N, 16, 15), n32 = vnoise(N, 32, 13), n64 = vnoise(N, 64, 14);
     for (let i = 0; i < N * N; i++) H[i] = 0.45 * n64[i] + 0.35 * n32[i] + 0.2 * n8[i];
     TX.fleece = nrmTex(H, N, 2.2);
+    for (let i = 0; i < N * N; i++) H[i] = 0.75 * n64[i] + 0.25 * n32[i];
+    TX.fine = nrmTex(H, N, 1.5);
     for (let i = 0; i < N * N; i++) { const v = n64[i]; H[i] = v * v * 0.8 + 0.2 * n32[i]; }
     TX.leather = nrmTex(H, N, 2.8);
     for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) H[y * N + x] = Math.pow(Math.abs(Math.sin(PI * x / N * 8)), 0.6) + 0.06 * n32[y * N + x];
     TX.rib = nrmTex(H, N, 1.7);
-    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) H[y * N + x] = 0.5 + 0.5 * Math.tanh(4 * Math.sin(2 * PI * y / N * 3)) + 0.04 * n32[y * N + x];
-    TX.groove = nrmTex(H, N, 1.3);
-    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) { const u = x / N, v = y / N; H[y * N + x] = 0.5 + 0.5 * Math.tanh(5 * Math.sin(2 * PI * (v * 6 + Math.abs(u - 0.5) * 2))); }
-    TX.tread = nrmTex(H, N, 1.2);
+    /* бороздки на боковине подошвы: две тонкие линии на каждом боку (u — по кругу сечения) */
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) { const u = x / N; let h = 0.04 * n32[y * N + x]; for (const c of [0.205, 0.255, 0.745, 0.795]) h -= Math.exp(-Math.pow((u - c) / 0.006, 2)); H[y * N + x] = h; }
+    TX.groove = nrmTex(H, N, 3.2);
+    /* протектор: «ёлочка» вдоль стопы, симметрично от центра подошвы */
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) { const u = x / N, v = y / N; H[y * N + x] = 0.5 + 0.5 * Math.tanh(5 * Math.sin(2 * PI * (v * 6 + Math.abs(u - 0.5) * 3))) + 0.05 * n64[y * N + x]; }
+    TX.tread = nrmTex(H, N, 1.6);
+    /* вязаная сетка верха кроссовка */
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) { const a = Math.sin(2 * PI * (x + y) / N * 12), b = Math.sin(2 * PI * (x - y) / N * 12); H[y * N + x] = 0.5 * Math.pow(Math.abs(a * b), 0.5) + 0.08 * n64[y * N + x]; }
+    TX.knit = nrmTex(H, N, 2.2);
     for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) H[y * N + x] = 0.5 + 0.25 * Math.sin(2 * PI * x / N * 16) * Math.sin(2 * PI * y / N * 16);
     TX.weave = nrmTex(H, N, 1.4);
     for (let i = 0; i < N * N; i++) H[i] = 0.6 * n4[i] + 0.3 * n8[i] + 0.1 * n16[i];
@@ -166,6 +173,8 @@
     TX.sleeve = seamTex(N, { seed: 5, lineU: 0.5, alongK: 2, k: 2.4, amp: 0.8, quilt: [0.34, 0.5, 0.66] });
     TX.pants = seamTex(N, { seed: 7, lineU: 0.5, alongK: 2, g1: 16, g2: 48, amp: 0.7, k: 2.2 });
     TX.shoe = seamTex(N, { seed: 9, g1: 32, g2: 64, amp: 0.6, inset: 0.09, k: 2.6 });
+    TX.panel = seamTex(N, { seed: 17, g1: 48, g2: 96, amp: 0.5, inset: 0.06, dash: 0.022, gap: 0.014, w: 0.009, k: 2.4 });
+    TX.hood = seamTex(N, { seed: 21, g1: 64, g2: 128, amp: 0.28, inset: 0.035, dash: 0.02, gap: 0.013, w: 0.008, k: 2.0 });
     return TX;
   }
   const rep = (t, x, y) => { const c = t.clone(); c.needsUpdate = true; c.repeat.set(x, y == null ? x : y); return c; };
@@ -254,16 +263,20 @@
       sleeve: phys(cfg.jacket, 0.55, 0, { map: rep(TX.sleeve.map, 1, 1), normalMap: rep(TX.sleeve.nrm, 1, 1), normalScale: v2(1.1), sheen: col(0xffb07a).multiplyScalar(0.15) }),
       jacketDark: std(0x2a1306, 0.8, 0),
       ribCuff: rib(5, 1), ribCuff2: rib(4, 1), ribCollar: rib(7, 1), ribHem: rib(5.5, 1), rib: rib(1, 1),
-      hood: std(cfg.rib, 0.9, 0, { normalMap: rep(TX.fleece, 3, 2), normalScale: v2(0.6) }),
-      hoodIn: std(cfg.rib, 0.9, 0, { side: T.DoubleSide, normalMap: rep(TX.fleece, 4, 3), normalScale: v2(0.6) }),
+      hood: phys(0x2a2c33, 0.92, 0, { normalMap: rep(TX.fine, 6, 5), normalScale: v2(0.45), sheen: col(0x9aa2bc).multiplyScalar(0.4) }),
+      hoodLin: std(0x50535d, 0.95, 0, { normalMap: rep(TX.fleece, 5, 4), normalScale: v2(0.7) }),
+      ribHood: phys(0x2a2c33, 0.9, 0, { normalMap: rep(TX.rib, 40, 1), normalScale: v2(1.4), sheen: col(0x9aa2bc).multiplyScalar(0.3) }),
       pants: phys(cfg.pants, 0.88, 0, { map: TX.pants.map, normalMap: TX.pants.nrm, normalScale: v2(0.6), sheen: col(0x8890a8).multiplyScalar(0.25) }),
       pantsFlat: std(cfg.pants, 0.9, 0, { normalMap: rep(TX.fleece, 2, 2), normalScale: v2(0.5) }),
       glove: std(0x2a2c33, 0.42, 0.05, { normalMap: rep(TX.leather, 3, 2), normalScale: v2(0.5) }),
       pad: std(0x101115, 0.5, 0.05, { normalMap: rep(TX.leather, 6, 2), normalScale: v2(0.5) }),
-      shoe: std(0x26282e, 0.46, 0.04, { map: TX.shoe.map, normalMap: TX.shoe.nrm, normalScale: v2(0.4) }),
-      shoeCap: std(0x34373f, 0.4, 0.05, { map: rep(TX.shoe.map, 1, 1), normalMap: rep(TX.shoe.nrm, 1, 1), normalScale: v2(0.4) }),
-      sole: std(0xf1ebe0, 0.6, 0, { normalMap: rep(TX.groove, 1, 1), normalScale: v2(0.5) }),
-      outsole: std(0x2a2b30, 0.85, 0, { normalMap: rep(TX.tread, 1, 1), normalScale: v2(0.8) }),
+      shoe: phys(0x2b2e35, 0.7, 0, { normalMap: rep(TX.knit, 3, 3), normalScale: v2(0.55), sheen: col(0x8890a8).multiplyScalar(0.3) }),
+      shoeCap: std(0x3a3d46, 0.38, 0.05, { map: TX.panel.map, normalMap: TX.panel.nrm, normalScale: v2(0.6) }),
+      tongue: phys(0x4a4e58, 0.8, 0, { normalMap: rep(TX.knit, 2, 2), normalScale: v2(0.5), sheen: col(0x8890a8).multiplyScalar(0.3) }),
+      heel: std(0x3a3d46, 0.36, 0.05, { normalMap: rep(TX.leather, 4, 2), normalScale: v2(0.45) }),
+      collar: std(0x1d1f24, 0.5, 0.05, { normalMap: rep(TX.leather, 5, 1), normalScale: v2(0.5) }),
+      sole: std(0xf1ebe0, 0.55, 0, { normalMap: rep(TX.groove, 1, 1), normalScale: v2(0.7) }),
+      outsole: std(0x2a2b30, 0.85, 0, { normalMap: rep(TX.tread, 1, 2.6), normalScale: v2(1.0) }),
       lace: std(0xf3f0e8, 0.75, 0, { normalMap: rep(TX.weave, 1, 1), normalScale: v2(0.6) }),
       air: phys(0xbfe6ff, 0.05, 0, { transparent: true, opacity: 0.55, clearcoat: 1 }),
       cord: std(0xeceae4, 0.8, 0, { normalMap: rep(TX.weave, 1, 4), normalScale: v2(0.5) }),
@@ -354,25 +367,154 @@
     const flameMat = new T.SpriteMaterial({ map: flameTex(), transparent: true, blending: T.AdditiveBlending, depthWrite: false, opacity: 0 });
     const eyeletGeo = new T.TorusGeometry(0.011, 0.0045, 6, 12);
 
-    /* --- кроссовок: подошва из двух слоёв с бороздками, окошко «воздуха», носок, пятка, петля, шнуровка, «молнии» по бокам --- */
-    function sneaker(s, sx) {
-      add(s, ingotGeo(0.36, 0.08, 0.6, 0.035, 1, 1, 8), M.sole, 0, 0.076, 0);
-      add(s, ingotGeo(0.37, 0.036, 0.61, 0.016, 1, 1, 6), M.outsole, 0, 0.018, 0);
-      add(s, ingotGeo(0.364, 0.013, 0.604, 0.006, 1, 1, 6), M.accent, 0, 0.115, 0);
-      add(s, roundBox(0.01, 0.034, 0.13, 0.006), M.air, sx * 0.181, 0.075, -0.16);
-      add(s, ingotGeo(0.32, 0.2, 0.5, 0.085, 0.86, 0.8, 12), M.shoe, 0, 0.205, -0.02);
-      add(s, ingotGeo(0.305, 0.115, 0.17, 0.05, 0.9, 0.82, 10), M.shoeCap, 0, 0.165, 0.165);
-      add(s, ingotGeo(0.285, 0.055, 0.11, 0.026, 1, 1, 6), M.sole, 0, 0.13, 0.236);
-      add(s, ingotGeo(0.315, 0.14, 0.15, 0.05, 0.92, 1, 10), M.shoeCap, 0, 0.18, -0.2);
-      add(s, new T.TorusGeometry(0.03, 0.011, 6, 14, PI), M.accent, 0, 0.29, -0.263, 0, PI / 2, PI / 2);
-      add(s, new T.TorusGeometry(0.105, 0.032, 10, 24), M.shoeCap, 0, 0.305, -0.05, PI / 2, 0, 0, [1, 1.25, 1]);
-      add(s, roundBox(0.11, 0.02, 0.13, 0.008), M.shoe, 0, 0.31, 0.04);
-      for (let i = 0; i < 4; i++) {
-        const z = -0.015 + i * 0.045, y = 0.308 - i * 0.007;
-        add(s, roundBox(0.15, 0.014, 0.02, 0.006), M.lace, 0, y + 0.009, z, 0, i % 2 ? 0.32 : -0.32, 0);
-        for (const e of [-1, 1]) add(s, eyeletGeo, M.steel, e * 0.078, y + 0.003, z, PI / 2, 0, 0);
+    /* --- помощники для гладких поверхностей (кроссовки, капюшон) --- */
+    const sp = (x, e) => Math.sign(x) * Math.pow(Math.abs(x), e);
+    const sst = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+    /* одинаковые точки на швах и вершинах — одна общая нормаль, чтобы не было рёбер */
+    function smoothSeams(g) {
+      const p = g.attributes.position, n = g.attributes.normal, m = new Map();
+      for (let i = 0; i < p.count; i++) {
+        const k = Math.round(p.getX(i) * 2e4) + ',' + Math.round(p.getY(i) * 2e4) + ',' + Math.round(p.getZ(i) * 2e4);
+        let e = m.get(k); if (!e) { e = [0, 0, 0, []]; m.set(k, e); }
+        e[0] += n.getX(i); e[1] += n.getY(i); e[2] += n.getZ(i); e[3].push(i);
       }
-      for (const side of [-1, 1]) add(s, zigGeo(side > 0 ? -1 : 1), M.accent, side * 0.151, 0.19, -0.03, 0, side * PI / 2, 0, [1.15, 1.15, 1]);
+      m.forEach(e => { if (e[3].length < 2) return; const l = Math.hypot(e[0], e[1], e[2]) || 1; for (const i of e[3]) n.setXYZ(i, e[0] / l, e[1] / l, e[2] / l); });
+      n.needsUpdate = true;
+    }
+    /* сетка по функции fn(u, v) → [x, y, z]; нормали смотрят от точки ref (или к ней, если inward) */
+    function surfGeo(nu, nv, fn, ref, inward) {
+      const P = [], UV = [], I = [];
+      for (let j = 0; j <= nv; j++) for (let i = 0; i <= nu; i++) { const q = fn(i / nu, j / nv); P.push(q[0], q[1], q[2]); UV.push(i / nu, j / nv); }
+      for (let j = 0; j < nv; j++) for (let i = 0; i < nu; i++) { const a = j * (nu + 1) + i, b = a + 1, c = a + nu + 1, d = c + 1; I.push(a, c, b, b, c, d); }
+      const g = new T.BufferGeometry();
+      g.setAttribute('position', new T.Float32BufferAttribute(P, 3)); g.setAttribute('uv', new T.Float32BufferAttribute(UV, 2)); g.setIndex(I);
+      g.computeVertexNormals();
+      const pa = g.attributes.position, na = g.attributes.normal; let sum = 0;
+      for (let i = 0; i < pa.count; i++) sum += (pa.getX(i) - ref.x) * na.getX(i) + (pa.getY(i) - ref.y) * na.getY(i) + (pa.getZ(i) - ref.z) * na.getZ(i);
+      if ((sum < 0) !== !!inward) { const ix = g.index.array; for (let k = 0; k < ix.length; k += 3) { const t = ix[k + 1]; ix[k + 1] = ix[k + 2]; ix[k + 2] = t; } g.computeVertexNormals(); }
+      smoothSeams(g); return g;
+    }
+    /* точка на поверхности S(u, v), сдвинутая на d по нормали (нормаль — от ref) */
+    function onSurf(S, ref) {
+      const e = 1e-3, A = new T.Vector3(), B1 = new T.Vector3(), C = new T.Vector3(), D = new T.Vector3();
+      return (u, v, d) => {
+        const p = new T.Vector3().fromArray(S(u, v));
+        A.fromArray(S(u + e, v)).sub(B1.fromArray(S(u - e, v))); C.fromArray(S(u, v + e)).sub(D.fromArray(S(u, v - e)));
+        const n = A.clone().cross(C); if (n.lengthSq() < 1e-14) n.copy(p).sub(ref);
+        n.normalize(); if (n.dot(B1.copy(p).sub(ref)) < 0) n.negate();
+        return { p: p.addScaledVector(n, d || 0), n };
+      };
+    }
+    /* накладка-панель: map(i, j) → параметры (u, v) поверхности */
+    const patch = (srf, ref, nu, nv, map, d) => surfGeo(nu, nv, (i, j) => { const q = map(i, j); return srf(q[0], q[1], d).p.toArray(); }, ref);
+    /* плоская фигура (ShapeGeometry), натянутая на поверхность: map(x, y) → (u, v) */
+    function decal(shape, srf, map, d) {
+      const sg = new T.ShapeGeometry(shape), P = sg.attributes.position, I = sg.index.array;
+      let tris = [];
+      for (let k = 0; k < I.length; k += 3) tris.push([0, 1, 2].map(q => [P.getX(I[k + q]), P.getY(I[k + q])]));
+      for (let it = 0; it < 7; it++) {               /* делим длинные треугольники, чтобы фигура легла по изгибу */
+        const out = []; let more = false;
+        for (const [a, b, c] of tris) {
+          const l = [Math.hypot(a[0] - b[0], a[1] - b[1]), Math.hypot(b[0] - c[0], b[1] - c[1]), Math.hypot(c[0] - a[0], c[1] - a[1])], m = Math.max(...l);
+          if (m < 0.022) { out.push([a, b, c]); continue; } more = true;
+          const mid = (x, y) => [(x[0] + y[0]) / 2, (x[1] + y[1]) / 2];
+          if (m === l[0]) { const q = mid(a, b); out.push([a, q, c], [q, b, c]); } else if (m === l[1]) { const q = mid(b, c); out.push([a, b, q], [a, q, c]); } else { const q = mid(c, a); out.push([a, b, q], [q, b, c]); }
+        }
+        tris = out; if (!more) break;
+      }
+      const pos = [], nor = [], uv = [];
+      for (const tr of tris) for (const q of tr) { const r = srf(...map(q[0], q[1]), d); pos.push(r.p.x, r.p.y, r.p.z); nor.push(r.n.x, r.n.y, r.n.z); uv.push(q[0], q[1]); }
+      const a = new T.Vector3(pos[0], pos[1], pos[2]), b = new T.Vector3(pos[3], pos[4], pos[5]), c = new T.Vector3(pos[6], pos[7], pos[8]);
+      if (b.sub(a).cross(c.sub(a)).dot(new T.Vector3(nor[0], nor[1], nor[2])) < 0)
+        for (let k = 0; k < pos.length; k += 9) for (let q = 0; q < 3; q++) { const t = pos[k + 3 + q]; pos[k + 3 + q] = pos[k + 6 + q]; pos[k + 6 + q] = t; const w = nor[k + 3 + q]; nor[k + 3 + q] = nor[k + 6 + q]; nor[k + 6 + q] = w; }
+      const g = new T.BufferGeometry();
+      g.setAttribute('position', new T.Float32BufferAttribute(pos, 3)); g.setAttribute('normal', new T.Float32BufferAttribute(nor, 3)); g.setAttribute('uv', new T.Float32BufferAttribute(uv, 2));
+      return g;
+    }
+    const tube = (pts, r, seg, closed) => new T.TubeGeometry(new T.CatmullRomCurve3(pts, !!closed), seg || 24, r, 8, !!closed);
+
+    /* --- кроссовок: настоящая форма стопы — скруглённый носок, узкая «талия», пятка, подъём носка;
+       подошва из двух слоёв (пена с бороздками + резина с протектором), сетка-верх, кожаные накладки со строчкой,
+       язычок, люверсы и перекрёстная шнуровка с бантиком, мягкий воротник, петля на пятке, «молния» по бокам --- */
+    const ZH = -0.216, LEN = 0.58, SH = new T.Vector3(0, 0.12, ZH + LEN * 0.45);
+    /* полуширина верха на уровне подошвы по длине стопы t (0 — пятка, 1 — носок) */
+    function footW(t) {
+      const rh = 0.2, zc = 0.69, wh = 0.132, ww = 0.124, wc = 0.158;
+      if (t <= rh) return wh * Math.sqrt(Math.max(0, 1 - Math.pow((rh - t) / rh, 2)));
+      if (t >= zc) return wc * Math.sqrt(Math.max(0, 1 - Math.pow((t - zc) / (1 - zc), 2)));
+      return t < 0.43 ? lerp(wh, ww, sst(rh, 0.43, t)) : lerp(ww, wc, sst(0.43, zc, t));
+    }
+    const shoeBot = t => 0.05 * Math.pow(Math.max(0, (t - 0.6) / 0.4), 2) + 0.016 * Math.pow(Math.max(0, 1 - t / 0.08), 2);   /* подъём носка и скруглённая пятка */
+    const shoeTh = t => lerp(0.102, 0.068, sst(0.15, 0.8, t));                                                              /* толщина подошвы: пятка выше */
+    function sneaker(s, sx) {
+      const xoff = t => -sx * 0.014 * sst(0.55, 1, t);                         /* носок чуть смещён к большому пальцу */
+      const upH = t => {
+        let h = t < 0.42 ? 0.198 + 0.022 * sst(0, 0.42, t) : lerp(0.22, 0.098, sst(0.42, 0.86, t));
+        if (t < 0.06) h *= Math.pow(Math.max(0, 1 - Math.pow((0.06 - t) / 0.06, 2)), 0.25);
+        if (t > 0.8) h *= Math.pow(Math.max(0, 1 - Math.pow((t - 0.8) / 0.2, 2)), 0.45);
+        return h;
+      };
+      /* верх: сечение — «суперэллипс», у щиколотки почти прямые стенки, к носку — круглый */
+      const US = (t, a) => {
+        t = clamp(t, 0, 1); a = clamp(a, 0, 1);
+        const W = footW(t), H = upH(t), y0 = shoeBot(t) + shoeTh(t) - 0.012, al = PI * a, e = lerp(0.36, 0.85, sst(0.38, 0.78, t));
+        return [xoff(t) - W * sp(Math.cos(al), e), y0 + H * Math.pow(Math.max(0, Math.sin(al)), e), ZH + t * LEN];
+      };
+      /* подошва: замкнутое сечение-«плитка», шире верха и чуть расширяется книзу */
+      const SOLE = (lo, hi, grow) => (ts, a) => {
+        ts = clamp(ts, 0, 1);
+        const z = ZH - 0.016 + ts * (LEN + 0.03), t = (z - ZH) / LEN, W = footW(ts) * grow, b = shoeBot(clamp(t, 0, 1.02));
+        const ed = ts < 0.08 ? (0.08 - ts) / 0.08 : ts > 0.92 ? (ts - 0.92) / 0.08 : 0, ec = Math.pow(Math.max(0, 1 - ed * ed), 0.3);
+        const be = TAU * a + PI / 2, c = Math.cos(be), si = Math.sin(be), yl = b + lo, yh = b + (typeof hi === 'function' ? hi(t) : hi), yc = (yl + yh) / 2;
+        return [xoff(clamp(t, 0, 1)) + W * sp(c, 0.5) * (1 - 0.05 * si), yc + (yh - yl) / 2 * ec * sp(si, 0.5), z];
+      };
+      const MID = SOLE(0.014, t => shoeTh(clamp(t, 0, 1)), 1.1), OUT = SOLE(0, 0.03, 1.112);
+      const cosT = n => i => 0.5 - 0.5 * Math.cos(PI * i);                    /* гуще к пятке и носку */
+      const ct = cosT();
+      add(s, surfGeo(36, 44, (a, j) => MID(ct(j), a), SH), M.sole);
+      add(s, surfGeo(36, 44, (a, j) => OUT(ct(j), a), SH), M.outsole);
+      add(s, surfGeo(30, 44, (a, j) => US(ct(j), a), SH), M.shoe);
+      const up = onSurf(US, SH), mid = onSurf(MID, SH);
+      /* оранжевый кант по верху пены и «окошко воздуха» на внешней стороне пятки */
+      for (const a0 of [0.148, 0.83]) add(s, patch(mid, SH, 3, 44, (i, j) => [ct(j), a0 + i * 0.022], 0.0015), M.accent);
+      const lat = sx > 0 ? 0.75 : 0.25;
+      add(s, patch(mid, SH, 6, 12, (i, j) => [0.12 + j * 0.2, lat - 0.035 + i * 0.07], 0.0025), M.air);
+      /* носок-накладка (две половинки сходятся на носке) и задник */
+      const ab = t => 0.19 * sst(0.5, 0.64, t) + 0.31 * sst(0.72, 1, t);
+      add(s, patch(up, SH, 8, 22, (i, j) => { const t = lerp(0.5, 1, j); return [t, i * ab(t)]; }, 0.004), M.shoeCap);
+      add(s, patch(up, SH, 8, 22, (i, j) => { const t = lerp(0.5, 1, j); return [t, 1 - i * ab(t)]; }, 0.004), M.shoeCap);
+      add(s, patch(up, SH, 28, 10, (i, j) => [j * lerp(0.36, 0.17, Math.pow(Math.sin(PI * i), 0.7)), i], 0.004), M.heel);
+      /* язычок (под шнуровкой) и две полоски с люверсами */
+      const T0 = 0.5, T1 = 0.82;
+      add(s, patch(up, SH, 8, 14, (i, j) => [lerp(T0, T1, j), lerp(0.405, 0.595, i)], 0.003), M.tongue);
+      for (const [a0, a1] of [[0.29, 0.405], [0.595, 0.71]]) add(s, patch(up, SH, 4, 14, (i, j) => [lerp(T0, T1 - 0.03, j), lerp(a0, a1, i)], 0.006), M.shoeCap);
+      /* язычок торчит из-под шнуровки к штанине, на нём оранжевый ярлычок */
+      { const p = up(0.5, 0.5, 0.0).p; const tg = add(s, ingotGeo(0.15, 0.12, 0.03, 0.014, 1.08, 1, 8), M.tongue, xoff(0.5), p.y + 0.035, p.z - 0.006, -0.42, 0, 0);
+        add(s, roundBox(0.05, 0.026, 0.008, 0.003), M.accent, xoff(0.5), p.y + 0.06, p.z + 0.009, -0.42, 0, 0); }
+      /* люверсы и шнуровка крест-накрест, внизу — прямая перемычка, вверху — бантик */
+      const rows = [0.55, 0.62, 0.69, 0.76], AL = 0.35, AR = 0.65, ZV = new T.Vector3(0, 0, 1);
+      for (const t of rows) for (const a of [AL, AR]) { const r = up(t, a, 0.008), m = add(s, eyeletGeo, M.steel, r.p.x, r.p.y, r.p.z); m.quaternion.setFromUnitVectors(ZV, r.n); }
+      for (let i = 0; i < rows.length - 1; i++) {
+        const t0 = rows[i], t1 = rows[i + 1], tm = (t0 + t1) / 2;
+        add(s, tube([up(t0, AL, 0.012).p, up(tm, 0.5, 0.02).p, up(t1, AR, 0.012).p], 0.0085, 14), M.lace);
+        add(s, tube([up(t0, AR, 0.012).p, up(tm, 0.5, 0.028).p, up(t1, AL, 0.012).p], 0.0085, 14), M.lace);
+      }
+      add(s, tube([up(0.76, AL, 0.012).p, up(0.76, 0.5, 0.018).p, up(0.76, AR, 0.012).p], 0.0085, 12), M.lace);
+      { const k = up(0.55, 0.5, 0.03); add(s, roundBox(0.03, 0.02, 0.022, 0.009), M.lace, k.p.x, k.p.y, k.p.z);
+        for (const d of [-1, 1]) {
+          add(s, new T.TorusGeometry(0.028, 0.0075, 6, 18), M.lace, k.p.x + d * 0.03, k.p.y + 0.006, k.p.z - 0.004, -1.2, d * 0.35, d * 0.25, [1, 0.62, 1]);
+          const e = up(0.6, 0.5 + d * 0.2, 0.012).p, m1 = up(0.575, 0.5 + d * 0.1, 0.026).p;
+          add(s, tube([k.p, m1, e], 0.0075, 10), M.lace);
+          add(s, capsuleGeo(0.0095, 0.022, 8), M.accent, e.x, e.y, e.z, PI / 2 - 0.3, 0, -d * 0.4);
+        }
+      }
+      /* мягкий воротник вокруг щиколотки и петля на пятке */
+      add(s, new T.TorusGeometry(1, 0.03, 10, 40), M.collar, xoff(0.33), 0.292, -0.03, PI / 2 - 0.12, 0, 0, [0.122, 0.142, 1]);
+      { const p = up(0.05, 0.5, 0).p; add(s, new T.TorusGeometry(0.032, 0.0095, 6, 16, PI), M.accent, xoff(0), p.y - 0.036, ZH + 0.006, 0, -PI / 2, PI / 2); }
+      /* «молния» по бокам — натянута по изгибу верха */
+      const zp = [[-0.2, -0.032], [-0.035, 0.008], [-0.065, -0.026], [0.17, 0.032], [0.178, 0.048], [-0.015, 0.03], [0.012, 0.062], [-0.2, -0.004]];
+      const zs = new T.Shape(); zp.forEach((q, i) => (i ? zs.lineTo(q[0], q[1]) : zs.moveTo(q[0], q[1]))); zs.closePath();
+      for (const side of [-1, 1]) add(s, decal(zs, up, (x, y) => { const f = 0.37 + y * 3.1; return [0.5 - x * 0.95, side < 0 ? f * 0.5 : 1 - f * 0.5]; }, 0.0085), M.accent);
     }
 
     /* --- ноги: штанина со швом, манжета-рибана, карго-карман с клапаном и кнопкой, лампас, кроссовок --- */
@@ -388,7 +530,7 @@
       add(lg, roundBox(0.02, 0.36, 0.035, 0.008), M.accent, sx * 0.13, -0.16, -0.09);
       const s = new T.Group(); s.position.set(sx * 0.025, -0.62, 0.03); s.rotation.y = sx * 0.07; lg.add(s);
       sneaker(s, sx); mergeStatic(s);
-      const fl = new T.Sprite(flameMat.clone()); fl.center.set(0.5, 1); fl.position.set(0, 0.0, -0.02); fl.scale.set(0.24, 0.46, 1); fl.visible = false; s.add(fl);
+      const fl = new T.Sprite(flameMat.clone()); fl.center.set(0.5, 1); fl.position.set(0, 0.0, 0.06); fl.scale.set(0.24, 0.46, 1); fl.visible = false; s.add(fl);
       mergeStatic(lg);
       R.legs.push({ g: lg, shoe: s, flame: fl });
     }
@@ -399,7 +541,28 @@
     add(B, ingotGeo(0.94, 0.6, 0.62, 0.22, 0.9, 0.94, 16), M.jacket, 0, 0.36, 0);
     add(B, ingotGeo(0.97, 0.09, 0.645, 0.045, 1, 1, 8), M.ribHem, 0, 0.1, 0);
     add(B, new T.TorusGeometry(0.21, 0.072, 12, 40), M.ribCollar, 0, 0.66, 0, PI / 2, 0, 0);
-    R.hoodDown = keep(add(B, new T.TorusGeometry(0.3, 0.11, 12, 32, PI * 1.25), M.hood, 0, 0.66, -0.05, -PI / 2, 0, -PI * 0.125));
+    /* --- капюшон, сложенный на спине: валик-рибана вокруг шеи с люверсами для шнурков
+       и мягкий «мешок» на спине — две половинки со швом по центру, объём и складки ткани --- */
+    R.hoodDown = new T.Group(); B.add(R.hoodDown);
+    { const HD = R.hoodDown, ref = new T.Vector3(0, 0.45, 0);
+      const rim = f => { const c = Math.cos(f); return new T.Vector3(0.3 * Math.sin(f), 0.634 + 0.012 * c, c > 0 ? -0.37 * c : -0.33 * c); };
+      const rp = []; for (let i = 0; i <= 28; i++) rp.push(rim(lerp(-2.72, 2.72, i / 28)));
+      add(HD, tube(rp, 0.043, 72), M.ribHood, 0, 0, 0, 0, 0, 0);
+      for (const e of [rp[0], rp[28]]) add(HD, sph, M.ribHood, e.x, e.y, e.z, 0, 0, 0, 0.043);
+      /* люверсы, из которых выходят шнурки */
+      for (const sx of [-1, 1]) add(HD, new T.TorusGeometry(0.014, 0.0045, 6, 14), M.steel, sx * 0.115, 0.632, frontZ(0.62) + 0.03, -0.25, 0, 0);
+      const bag = (u, s) => {
+        const top = rim(u * 1.32), k = sst(0, 0.32, s);
+        const W = 0.27 * Math.sqrt(Math.max(0, 1 - Math.pow(s, 3))) * lerp(1, 0.82, s);
+        const y = lerp(top.y - 0.012, 0.27, Math.pow(s, 1.05));
+        const bul = 0.105 * Math.pow(Math.max(0, Math.sin(PI * (0.12 + 0.88 * s))), 0.7) * Math.pow(Math.max(0, 1 - u * u), 0.6);
+        const fold = (0.013 * Math.sin(5.5 * u + 4.5 * s) + 0.008 * Math.sin(11 * u - 3 * s)) * Math.sin(PI * s) * (1 - u * u);
+        return [lerp(top.x, W * Math.sin(u * PI / 2), k), y, lerp(top.z, -frontZ(y) + 0.01, k) - bul - fold];
+      };
+      add(HD, surfGeo(16, 24, (i, j) => bag(-1 + i, j), ref), M.hood);
+      add(HD, surfGeo(16, 24, (i, j) => bag(i, j), ref), M.hood);
+      { const sp2 = []; for (let i = 0; i <= 16; i++) { const q = bag(0, i / 16 * 0.96); sp2.push(new T.Vector3(q[0], q[1], q[2] - 0.004)); } add(HD, tube(sp2, 0.0065, 32), M.hood); }   /* шов по центру */
+      mergeStatic(HD); }
     for (const sx of [-1, 1]) add(B, roundBox(0.03, 0.42, 0.012, 0.006), M.rib, sx * 0.475, 0.36, 0, 0, 0, sx * 0.05);
     /* молния: лента, зубчики, бегунок с язычком */
     { const y0 = 0.13, y1 = 0.6, tilt = -0.031, mid = (y0 + y1) / 2;
@@ -507,9 +670,35 @@
     R.ant = new T.Group(); R.ant.visible = false; R.ant.position.set(-0.24, 0.47, -0.05); R.ant.rotation.z = 0.25; Hd.add(R.ant);
     add(R.ant, new T.CylinderGeometry(0.012, 0.016, 0.3, 10), M.steel, 0, 0.15, 0);
     R.antMat = M.red.clone(); add(R.ant, new T.SphereGeometry(0.045, 16, 12), R.antMat, 0, 0.32, 0);
-    /* капюшон на голове: ночь, сон, скрытые суммы */
-    R.hoodUp = keep(add(Hd, new T.SphereGeometry(0.67, 48, 28, PI / 2 + 0.92, TAU - 1.84, 0, 2.2), M.hoodIn, 0, 0.04, -0.03, 0, 0, 0, [1.04, 1, 1.02]));
-    R.hoodUp.visible = false;
+    /* --- капюшон на голове (ночь, сон, скрытые суммы): толщина ткани, светлая подкладка, валик-рибана вокруг лица,
+       шов по центру от лба до затылка с лёгким «гребнем», мягкий напуск на шее и складки --- */
+    R.hoodUp = new T.Group(); R.hoodUp.visible = false; Hd.add(R.hoodUp);
+    { const HU = R.hoodUp, O = new T.Vector3(0, 0.02, -0.02);
+      const thB = ph => { const d = Math.abs(Math.atan2(Math.sin(ph - PI / 2), Math.cos(ph - PI / 2))); return 0.98 + 1.5 * sst(0.82, 1.48, d) + 0.26 * sst(1.7, PI, d); };
+      const hr = (th, ph, inset) => {
+        const d = Math.abs(Math.atan2(Math.sin(ph - PI / 2), Math.cos(ph - PI / 2))), tb = thB(ph);
+        let r = 0.625 + 0.075 * Math.exp(-Math.pow(PI - d, 2) / 0.1) * Math.exp(-Math.pow(th - 1.15, 2) / 0.3)    /* «уголок» капюшона на затылке */
+          + 0.06 * sst(1.6, 2.6, th) * sst(1.1, 1.7, d) + 0.05 * sst(2.3, 2.85, th) * sst(2.2, PI, d)              /* напуск ткани на шею и спину */
+          + 0.012 * Math.sin(3 * (ph - PI / 2)) * sst(1.9, 2.7, th) * sst(1.2, 1.8, d)                             /* крупные складки у шеи */
+          + 0.022 * Math.exp(-Math.pow((tb - th) / 0.16, 2)) * (1 - sst(1.2, 1.6, d))                               /* край у лица чуть вперёд */
+          + 0.007 * Math.sin(7 * ph + 4 * th) * Math.pow(Math.sin(th), 2) + 0.005 * Math.sin(13 * ph - 6 * th) * sst(1.4, 2.4, th);
+        r -= inset || 0;
+        const st = Math.sin(th);
+        return [O.x - Math.cos(ph) * st * r * 1.04, O.y + Math.cos(th) * r * 0.97, O.z + Math.sin(ph) * st * r];
+      };
+      const half = (p0, inset, inward) => surfGeo(22, 26, (i, j) => { const ph = p0 + i * PI; return hr(j * thB(ph), ph, inset); }, O, inward);
+      for (const p0 of [-PI / 2, PI / 2]) { add(HU, half(p0, 0, false), M.hood); add(HU, half(p0, 0.024, true), M.hoodLin); }
+      /* кромка по всему краю (соединяет ткань и подкладку) и толстый валик вокруг лица */
+      const edge = (ph, ins) => new T.Vector3(...hr(thB(ph), ph, ins));
+      const ep = []; for (let i = 0; i < 72; i++) ep.push(edge(i / 72 * TAU, 0.012));
+      add(HU, tube(ep, 0.015, 144, true), M.hood);
+      { const sp2 = []; for (let i = 0; i <= 12; i++) sp2.push(new T.Vector3(...hr(lerp(thB(PI / 2) - 0.04, 0.001, i / 12), PI / 2, -0.004)));   /* шов от лба через макушку к шее */
+        for (let i = 1; i <= 24; i++) sp2.push(new T.Vector3(...hr(lerp(0.001, thB(-PI / 2) - 0.05, i / 24), -PI / 2, -0.004)));
+        add(HU, tube(sp2, 0.007, 96), M.hood); }
+      const fp = []; for (let i = 0; i <= 40; i++) fp.push(edge(PI / 2 + lerp(-1.5, 1.5, i / 40), 0.006));
+      add(HU, tube(fp, 0.03, 96), M.ribHood);
+      for (const e of [fp[0], fp[40]]) add(HU, sph, M.ribHood, e.x, e.y, e.z, 0, 0, 0, 0.03);
+      mergeStatic(HU); }
     /* тряпочка (полирует шлем и цифры) и планшет */
     R.cloth = add(R.armL.h, roundBox(0.22, 0.06, 0.17, 0.025), M.cloth, 0.03, -0.07, 0.06); R.cloth.visible = false;
     R.tablet = new T.Group(); R.tablet.visible = false; R.tablet.position.set(-0.09, -0.04, 0.13); R.armR.h.add(R.tablet);
