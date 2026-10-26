@@ -726,9 +726,9 @@ button:focus-visible{outline:2px solid var(--pink);outline-offset:2px}
 
 <div class="toast" id="toast" role="status"><span id="toastMsg"></span><button type="button" id="toastBtn" hidden></button></div>
 
-<script src="config.js?v=20261026182117"></script>
+<script src="config.js?v=20261026213500"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="shim.js?v=20261026182117"></script>
+<script src="shim.js?v=20261026213500"></script>
 <script>
 /* ===== основа ===== */
 const $=id=>document.getElementById(id);
@@ -939,7 +939,7 @@ function lineChart(el,cfg){
   const ticks=[0,1,2,3].map(i=>lo+(hi-lo)*i/3),tl=ticks.map(v=>String(cfg.fmtY(v)));
   const R=mini?2:Math.round(Math.min(110,Math.max(40,Math.max(...tl.map(s=>s.length))*6.6+12)));
   const x=t=>L+(t1===t0?.5:(t-t0)/(t1-t0))*(W-L-R),y=v=>T+(1-(v-lo)/(hi-lo))*(H-T-B);
-  let g='';if(!mini)ticks.forEach((v,i)=>{const yy=y(v);g+=`<line x1="${L}" x2="${W-R}" y1="${F(yy)}" y2="${F(yy)}" stroke="#ffffff10"/><text x="${W-R+8}" y="${F(yy+4)}" font-size="11" fill="#8e83b6">${esc(tl[i])}</text>`;});
+  let g='';if(!mini)ticks.forEach((v,i)=>{const yy=y(v);g+=`<line x1="${L}" x2="${W-R}" y1="${F(yy)}" y2="${F(yy)}" stroke="#ffffff10"/>`;/* одинаковые подписи соседних делений не повторяем */if(i&&tl[i]===tl[i-1])return;g+=`<text x="${W-R+8}" y="${F(yy+4)}" font-size="11" fill="#8e83b6">${esc(tl[i])}</text>`;});
   if(!mini)[t0,(t0+t1)/2,t1].forEach((t,i)=>{g+=`<text x="${F(x(t))}" y="${H-6}" font-size="11" fill="#8e83b6" text-anchor="${['start','middle','end'][i]}">${esc((cfg.fmtX||dShort)(t))}</text>`;});
   const stk=s=>s==='grad'?`url(#${id}L)`:s;let body='';
   lines.forEach((l,i)=>{let d='';if(l.step)l.pts.forEach((p,j)=>{d+=j?`H${F(x(p.t))}V${F(y(p.v))}`:`M${F(x(p.t))} ${F(y(p.v))}`;});else d=l.pts.map((p,j)=>(j?'L':'M')+F(x(p.t))+' '+F(y(p.v))).join('');
@@ -989,7 +989,7 @@ function renderGrowth(){const el=$('gChart');
   $('gRanges').innerHTML=RANGES.map(([k,l])=>`<button type="button" data-r="${k}" aria-pressed="${k===gRange}">${l}</button>`).join('');
   if(!S.ready){el.innerHTML='<div class="skel" style="height:180px"></div>';gReadSet(null);return;}
   G=growthData();
-  if(G.val.length<2&&G.inv.length<2){el.innerHTML=S.ready?'<div class="empty">График появится, когда будут записи о покупках.</div>':'';gReadSet(null);$('gNote').textContent='';return;}
+  if((G.val.length<2&&G.inv.length<2)||![...G.val,...G.inv].some(p=>+p.v>0)){/* пустой портфель — без графика из нулей */el.innerHTML=S.ready?'<div class="empty">График появится, когда будут записи о покупках.</div>':'';gReadSet(null);$('gNote').textContent='';return;}
   const long=gRange==='365'||gRange==='max';
   lineChart(el,{id:'g',label:'Рост портфеля',lines:[{pts:G.val,stroke:'grad',w:2.6,area:true,glow:true},{pts:G.inv,stroke:'#cfbaff',w:1.6,dash:'5 5',step:true,op:.75}],fmtY:v=>money(v,{d:0}),fmtX:long?dMonY:dShort,onRead:gReadSet});
   gReadSet(null);
@@ -1001,7 +1001,7 @@ $('gRanges').addEventListener('click',e=>{const b=e.target.closest('button');if(
 function renderHeader(){const L=S.live;let h;
   if(L.status==='ok'||L.status==='stale')h=`<i class="dot ${L.status==='ok'?'live':''}"></i><span>${L.status==='ok'?'Онлайн':'Цены с задержкой'} · ${tHM(L.at)}</span>`;
   else if(S.market&&S.market.updatedAt)h=`<i class="dot"></i><span>Цены на ${dShort(S.market.updatedAt)}, ${tHM(S.market.updatedAt)}</span>`;
-  else h=`<i class="dot"></i><span>${db?'Цены ещё не обновлялись':'Загружаю…'}</span>`;
+  else h=`<i class="dot"></i><span>${db?'Нет свежих цен':'Загружаю…'}</span>`;
   $('status').innerHTML=h;$('eyeBtn').innerHTML=P.hide?I.eyeOff:I.eye;$('eyeBtn').setAttribute('aria-pressed',String(P.hide));$('eyeBtn').setAttribute('aria-label',P.hide?'Показать суммы':'Скрыть суммы');}
 function renderHome(D){
   const btc=+D.prices.BTC||null,ath=S.cycle&&S.cycle.ath,r=rate();
@@ -1588,7 +1588,7 @@ function msPayload(x){let fresh=0;try{fresh=S.alerts.filter(a=>String(a.ts||'')>
 function msSync(x){MSC.last=x;if(!msApply())return;if(window.Mascot){try{window.Mascot.sync(msPayload(x));}catch(e){}}else msLoad();}
 function msLoad(){if(MSC.loading||MSC.failed)return;MSC.loading=true;
   const add=(src,ok)=>{try{const s=document.createElement('script');s.src=src;s.async=true;s.onload=ok;s.onerror=()=>{MSC.failed=true;};document.head.appendChild(s);}catch(e){MSC.failed=true;}};
-  const boot=()=>add('mascot.js?v=20261026182117',()=>{try{if(window.Mascot&&window.Mascot.init({host:$('mascot'),app:{audio:ac,buzz}})&&MSC.last)window.Mascot.sync(msPayload(MSC.last));}catch(e){}});
+  const boot=()=>add('mascot.js?v=20261026213500',()=>{try{if(window.Mascot&&window.Mascot.init({host:$('mascot'),app:{audio:ac,buzz}})&&MSC.last)window.Mascot.sync(msPayload(MSC.last));}catch(e){}});
   setTimeout(()=>{if(window.THREE)boot();else add('three.min.js',boot);},300);}
 function render(){const D=derive();renderHeader();renderHome(D);renderGrowth();renderCoins(D);renderStrategy(D);renderActivity();earnNudge();if(cvSym&&$('coinSheet').classList.contains('open'))renderCoinView();}
 document.body.classList.add('loading');
