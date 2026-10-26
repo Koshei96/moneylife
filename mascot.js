@@ -15,6 +15,7 @@
   if (!T || window.Mascot) return;
   const SELF = (document.currentScript && document.currentScript.src) || '';
   const VOICE_URL = /mascot\.js/.test(SELF) ? SELF.replace(/mascot\.js/, 'voice-slitok.js') : 'voice-slitok.js';
+  const VOICE_N_URL = VOICE_URL.replace(/voice-slitok\.js/, 'voice-slitok-n.js');   /* числа и шаблоны новостей — грузятся только когда нужны */
 
   /* ---------- утилиты ---------- */
   const PI = Math.PI, TAU = PI * 2;
@@ -28,7 +29,8 @@
   const backOut = t => { const c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2); };
   const rnd = (a, b) => a + Math.random() * (b - a);
   const pick = a => a[Math.floor(Math.random() * a.length)];
-  const now = () => performance.now() / 1000;
+  let FZ = null;                                     /* остановка времени — только для проверочных снимков */
+  const now = () => (FZ != null ? FZ : performance.now() / 1000);
   const damp = (a, b, r, dt) => a + (b - a) * (1 - Math.exp(-r * dt));
   const lsGet = (k, d) => { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } };
   const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} };
@@ -321,6 +323,12 @@
       const cx = W / 2 + st.ex * 900 * S, cy = H * 0.5 + st.ey * -700 * S, dx = 100 * S, sp = t * 7;
       if (st.glyph === 'dots') text('• • • •', cx, cy + 4, 60 * S);
       else if (st.glyph === 'scan') { const p = (Math.sin(t * 2.6) + 1) / 2; rr(W * 0.2 + p * W * 0.44, cy - 9, 115, 18, 9); g.fill(); }
+      else if (st.glyph === 'eq') {                     /* эквалайзер вместо глаз — когда музыка «качает» */
+        for (const ex of [cx - dx, cx + dx]) for (let i = 0; i < 5; i++) {
+          const hh = (0.22 + 0.78 * Math.abs(Math.sin(t * (4.6 + i * 1.9) + i * 1.3 + ex))) * 64 * S;
+          rr(ex - 52 * S + i * 22 * S, cy + 32 * S - hh, 15 * S, hh, 4); g.fill();
+        }
+      }
       else if (st.glyph) { text(st.glyph, cx - dx, cy + 3, 86 * S); text(st.glyph, cx + dx, cy + 3, 86 * S); }
       else { eye(st.mode, cx - dx, cy, st.open, -st.tilt, sp); eye(st.mode, cx + dx, cy, st.open, st.tilt, -sp); }
       if (st.z) { const ph = (t * 0.7) % 1; g.shadowBlur = 12; g.globalAlpha = 1 - ph; text('z', W * 0.8 + ph * 32, H * 0.36 - ph * 30, (26 + ph * 14) * S); g.globalAlpha = 1; }
@@ -333,7 +341,7 @@
     return {
       tex,
       update(st, cfg, t) {
-        const k = [st.mode, st.glyph, Math.round(st.open * 14), Math.round(st.ex * 500), Math.round(st.ey * 500), Math.round(st.tilt * 24), st.z ? Math.floor(t * 7) : 0, st.glyph === 'scan' ? Math.floor(t * 24) : 0, st.mode === 'spiral' ? Math.floor(t * 14) : 0].join('|');
+        const k = [st.mode, st.glyph, Math.round(st.open * 14), Math.round(st.ex * 500), Math.round(st.ey * 500), Math.round(st.tilt * 24), st.z ? Math.floor(t * 7) : 0, st.glyph === 'scan' || st.glyph === 'eq' ? Math.floor(t * 24) : 0, st.mode === 'spiral' ? Math.floor(t * 14) : 0].join('|');
         if (k !== key) { key = k; draw(st, cfg, t); }
       }
     };
@@ -742,6 +750,174 @@
     return P;
   }
 
+  /* ---------- вещи для занятий: телефон с игрой, книга, газета, голограмма с графиком, ноты ---------- */
+  function noteTex(double) {
+    return ctex(64, 64, (g, w, h) => {
+      g.shadowColor = '#ff9a1f'; g.shadowBlur = 8; g.fillStyle = '#ffe6bd'; g.strokeStyle = '#ffe6bd'; g.lineWidth = 5; g.lineCap = 'round';
+      const head = (x, y) => { g.save(); g.translate(x, y); g.rotate(-0.45); g.beginPath(); g.ellipse(0, 0, 9, 6.5, 0, 0, TAU); g.fill(); g.restore(); };
+      if (double) {
+        head(18, 48); head(44, 42); g.beginPath(); g.moveTo(26, 46); g.lineTo(26, 14); g.lineTo(52, 8); g.lineTo(52, 40); g.stroke();
+        g.lineWidth = 7; g.beginPath(); g.moveTo(26, 15); g.lineTo(52, 9); g.stroke();
+      } else {
+        head(24, 48); g.beginPath(); g.moveTo(32, 46); g.lineTo(32, 10); g.stroke();
+        g.beginPath(); g.moveTo(32, 10); g.quadraticCurveTo(48, 16, 46, 32); g.stroke();
+      }
+    }, true);
+  }
+  function buildHobbyProps(M, R, scene) {
+    const H = {}, B = R.bodyG;
+    const std = (c, r, m, x) => new T.MeshStandardMaterial(Object.assign({ color: col(c), roughness: r, metalness: m }, x || {}));
+    const mk = (geo, mat, par, x, y, z) => { const m = new T.Mesh(geo, mat); m.position.set(x || 0, y || 0, z || 0); par.add(m); return m; };
+    const cv = (w, h) => { const c = document.createElement('canvas'); c.width = w; c.height = h; const t = new T.CanvasTexture(c); t.encoding = T.sRGBEncoding; t.anisotropy = 4; return [c, t]; };
+    /* телефон: держит двумя руками горизонтально, на экране — маленькая игра-бегалка */
+    H.phone = new T.Group(); H.phone.visible = false; B.add(H.phone);
+    mk(roundBox(0.25, 0.132, 0.022, 0.014), M.tablet, H.phone);
+    [H.phoneCv, H.phoneTex] = cv(160, 84);
+    mk(new T.PlaneGeometry(0.228, 0.112), new T.MeshBasicMaterial({ map: H.phoneTex, toneMapped: false }), H.phone, 0, 0, 0.0116);
+    const lens = mk(new T.CylinderGeometry(0.011, 0.011, 0.006, 14), M.steel, H.phone, -0.095, 0.036, -0.013); lens.rotation.x = PI / 2;
+    /* книга в твёрдой обложке: две половинки на корешке, блоки страниц, одна страница перелистывается */
+    const coverTex = ctex(128, 168, (g, w, h) => {
+      g.fillStyle = '#1d3d63'; g.fillRect(0, 0, w, h); g.strokeStyle = '#e9b350'; g.lineWidth = 3; g.strokeRect(9, 9, w - 18, h - 18);
+      g.fillStyle = '#e9b350'; g.fillRect(30, 34, 68, 7); g.fillRect(40, 48, 48, 4);
+      g.fillStyle = '#f2b43c'; g.beginPath(); g.moveTo(42, 98); g.lineTo(86, 98); g.lineTo(98, 122); g.lineTo(30, 122); g.closePath(); g.fill();
+      g.fillStyle = '#ffd98a'; g.fillRect(46, 101, 36, 4);
+    }, true);
+    const pageTex = ctex(128, 168, (g, w, h) => {
+      g.fillStyle = '#f7f2e6'; g.fillRect(0, 0, w, h); g.fillStyle = 'rgba(55,50,68,.5)';
+      for (let y = 16, i = 0; y < h - 12; y += 7, i++) g.fillRect(13, y, i % 6 === 5 ? 46 : 94 - (i * 37 % 19), 2.2);
+    }, true);
+    const backTex = ctex(128, 168, (g, w, h) => { g.fillStyle = '#1d3d63'; g.fillRect(0, 0, w, h); g.strokeStyle = '#e9b350'; g.lineWidth = 3; g.strokeRect(9, 9, w - 18, h - 18); }, true);
+    const backM = std(0xffffff, 0.5, 0.05, { map: backTex });
+    const coverM = std(0xffffff, 0.5, 0.05, { map: coverTex }), pageM = std(0xffffff, 0.9, 0, { map: pageTex }), edgeM = std(0xefe6d2, 0.95, 0);
+    H.book = new T.Group(); H.book.visible = false; B.add(H.book);
+    H.bookL = new T.Group(); H.bookR = new T.Group(); H.book.add(H.bookL, H.bookR);
+    for (const [g, sx] of [[H.bookL, -1], [H.bookR, 1]]) {
+      mk(roundBox(0.21, 0.28, 0.012, 0.004), sx > 0 ? coverM : backM, g, sx * 0.106, 0, 0);
+      mk(new T.BoxGeometry(0.198, 0.266, 0.02), [edgeM, edgeM, edgeM, edgeM, pageM, edgeM], g, sx * 0.101, 0, 0.016);
+    }
+    mk(new T.CylinderGeometry(0.013, 0.013, 0.28, 10), coverM, H.book);
+    H.bookPage = new T.Group(); H.book.add(H.bookPage);
+    H.bookPageM = mk(new T.PlaneGeometry(0.196, 0.264), std(0xffffff, 0.9, 0, { map: pageTex, side: T.DoubleSide }), H.bookPage, 0.099, 0, 0.0272);
+    /* газета: слегка изогнутый лист со сгибом посередине; первая полоса рисуется из настоящих данных */
+    [H.paperCv, H.paperTex] = cv(512, 336);
+    const pgeo = new T.PlaneGeometry(0.9, 0.59, 18, 2), pp = pgeo.attributes.position;
+    for (let i = 0; i < pp.count; i++) { const x = pp.getX(i), u = x / 0.45; pp.setZ(i, -0.07 * u * u - 0.016 * Math.max(0, 1 - Math.abs(x) / 0.035)); }
+    pgeo.computeVertexNormals();
+    H.paper = new T.Group(); H.paper.visible = false; B.add(H.paper);
+    mk(pgeo, std(0xffffff, 0.92, 0, { map: H.paperTex, side: T.DoubleSide }), H.paper);
+    /* голограмма с графиком над головой и луч проектора от планшета */
+    [H.chartCv, H.chartTex] = cv(340, 200);
+    H.holo = new T.Group(); H.holo.visible = false; R.root.add(H.holo);
+    H.holoMat = new T.MeshBasicMaterial({ map: H.chartTex, transparent: true, depthWrite: false, depthTest: false, blending: T.AdditiveBlending, side: T.DoubleSide, toneMapped: false });
+    mk(new T.PlaneGeometry(1.7, 1.0), H.holoMat, H.holo).renderOrder = 6;
+    const coneTex = ctex(64, 128, (g, w, h) => {
+      const gr = g.createLinearGradient(0, h, 0, 0); gr.addColorStop(0, 'rgba(130,230,255,.7)'); gr.addColorStop(1, 'rgba(130,230,255,0)');
+      g.fillStyle = gr; g.beginPath(); g.moveTo(w * 0.44, h); g.lineTo(w * 0.56, h); g.lineTo(w, 0); g.lineTo(0, 0); g.closePath(); g.fill();
+    });
+    H.cone = new T.Mesh(new T.PlaneGeometry(1, 1), new T.MeshBasicMaterial({ map: coneTex, transparent: true, depthWrite: false, depthTest: false, blending: T.AdditiveBlending, side: T.DoubleSide, toneMapped: false, opacity: 0.4 }));
+    H.cone.visible = false; H.cone.renderOrder = 5; R.root.add(H.cone);
+    /* ноты из наушников */
+    const nt = [noteTex(false), noteTex(true)];
+    H.notes = [];
+    for (let i = 0; i < 6; i++) {
+      const s = new T.Sprite(new T.SpriteMaterial({ map: nt[i % 2], transparent: true, depthWrite: false, opacity: 0, toneMapped: false }));
+      s.visible = false; s.renderOrder = 7; scene.add(s); H.notes.push({ s, life: 0, max: 1, vx: 0, vy: 0, x: 0, y: 0, z: 0 });
+    }
+    H.game = null;
+    return H;
+  }
+  const rrect = (g, x, y, w, h, r) => { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); };
+  /* экран телефона: бегалка — оранжевый кубик прыгает через препятствия, счёт растёт */
+  function drawGame(H) {
+    const c = H.phoneCv, g = c.getContext('2d'), w = c.width, h = c.height, G = H.game; if (!G) return;
+    const sky = g.createLinearGradient(0, 0, 0, h); sky.addColorStop(0, '#1a1347'); sky.addColorStop(1, '#43206e'); g.fillStyle = sky; g.fillRect(0, 0, w, h);
+    g.fillStyle = 'rgba(255,255,255,.7)'; for (let i = 0; i < 14; i++) { const x = ((i * 41 - G.x * 0.25) % w + w) % w; g.fillRect(x, (i * 23) % 44 + 4, 2, 2); }
+    g.fillStyle = '#273a63'; g.fillRect(0, h - 15, w, 15); g.fillStyle = '#5be0c4'; g.fillRect(0, h - 16, w, 3);
+    g.fillStyle = '#ff5d8f'; for (const o of G.obs) { const x = o - G.x; if (x > -14 && x < w) rrect(g, x, h - 31, 11, 15, 2), g.fill(); }
+    g.fillStyle = '#ffd36b'; for (const o of G.coins) { const x = o - G.x; if (x > -8 && x < w) { g.beginPath(); g.arc(x, h - 46, 4, 0, TAU); g.fill(); } }
+    const hy = h - 31 - G.jy; g.fillStyle = '#ff9a1f'; rrect(g, 28, hy, 15, 15, 3); g.fill(); g.fillStyle = '#1a1347'; g.fillRect(37, hy + 4, 3, 4);
+    g.fillStyle = '#ffd36b'; g.font = '800 13px system-ui,-apple-system,sans-serif'; g.textAlign = 'right'; g.fillText(String(G.score), w - 7, 15);
+    if (G.mode === 'win') {
+      g.fillStyle = 'rgba(10,6,30,.55)'; g.fillRect(0, 0, w, h); g.fillStyle = '#ffd36b'; g.textAlign = 'center';
+      g.font = '900 22px system-ui,-apple-system,sans-serif'; g.fillText('★ РЕКОРД ★', w / 2, h / 2 + 8);
+    } else if (G.mode === 'lose') {
+      g.fillStyle = 'rgba(255,40,80,.38)'; g.fillRect(0, 0, w, h); g.fillStyle = '#fff'; g.textAlign = 'center';
+      g.font = '900 20px system-ui,-apple-system,sans-serif'; g.fillText('ЕЩЁ РАЗ', w / 2, h / 2 + 7);
+    }
+    H.phoneTex.needsUpdate = true;
+  }
+  /* голограмма: свечи из настоящих цен (7 дней почасовых точек → 18 свечей), линия тренда, подпись */
+  function chartCandles(series, n) {
+    const out = [], per = series.length / n;
+    for (let i = 0; i < n; i++) {
+      const a = series.slice(Math.floor(i * per), Math.max(Math.floor(i * per) + 1, Math.floor((i + 1) * per)));
+      if (!a.length) continue;
+      out.push({ o: a[0], c: a[a.length - 1], h: Math.max(...a), l: Math.min(...a) });
+    }
+    return out;
+  }
+  function drawChart(H, ch, reveal, trend, t) {
+    const c = H.chartCv, g = c.getContext('2d'), w = c.width, h = c.height;
+    g.clearRect(0, 0, w, h);
+    const bg = g.createLinearGradient(0, 0, 0, h); bg.addColorStop(0, 'rgba(50,150,210,.30)'); bg.addColorStop(1, 'rgba(50,150,210,.10)');
+    g.fillStyle = bg; rrect(g, 4, 4, w - 8, h - 8, 16); g.fill();
+    g.strokeStyle = 'rgba(150,232,255,.55)'; g.lineWidth = 2; rrect(g, 4, 4, w - 8, h - 8, 16); g.stroke();
+    g.strokeStyle = 'rgba(190,245,255,.95)'; g.lineWidth = 4;
+    for (const [x, y, dx, dy] of [[6, 6, 1, 1], [w - 6, 6, -1, 1], [6, h - 6, 1, -1], [w - 6, h - 6, -1, -1]]) { g.beginPath(); g.moveTo(x, y + dy * 22); g.lineTo(x, y); g.lineTo(x + dx * 22, y); g.stroke(); }
+    for (let y = 8; y < h; y += 4) { g.fillStyle = 'rgba(120,220,255,.035)'; g.fillRect(6, y, w - 12, 1.5); }
+    const L = 22, R = w - 22, Tp = 54, Bt = h - 22, cd = ch.candles, n = cd.length;
+    g.strokeStyle = 'rgba(150,232,255,.13)'; g.lineWidth = 1;
+    for (let i = 0; i <= 3; i++) { const y = Tp + (Bt - Tp) * i / 3; g.beginPath(); g.moveTo(L, y); g.lineTo(R, y); g.stroke(); }
+    let lo = Infinity, hi = -Infinity; for (const k of cd) { lo = Math.min(lo, k.l); hi = Math.max(hi, k.h); }
+    if (!(hi > lo)) { hi = lo * 1.01 + 1e-9; lo = lo * 0.99; }
+    const Y = v => Bt - (v - lo) / (hi - lo) * (Bt - Tp), step = (R - L) / n, cw = Math.max(3, step * 0.56);
+    const vis = reveal * n;
+    for (let i = 0; i < n && i < vis; i++) {
+      const k = cd[i], grow = clamp(vis - i, 0, 1), x = L + step * (i + 0.5), up = k.c >= k.o;
+      const mid = (Y(k.o) + Y(k.c)) / 2, s = (v) => mid + (Y(v) - mid) * grow;
+      g.strokeStyle = g.fillStyle = up ? 'rgba(70,255,170,.95)' : 'rgba(255,95,125,.95)'; g.lineWidth = 2;
+      g.beginPath(); g.moveTo(x, s(k.h)); g.lineTo(x, s(k.l)); g.stroke();
+      const y0 = s(Math.max(k.o, k.c)), y1 = s(Math.min(k.o, k.c)); g.fillRect(x - cw / 2, y0, cw, Math.max(2, y1 - y0));
+    }
+    if (reveal >= 1) { const last = cd[n - 1], y = Y(last.c), p = 0.5 + 0.5 * Math.sin(t * 6); g.fillStyle = 'rgba(255,240,200,' + (0.5 + 0.5 * p) + ')'; g.beginPath(); g.arc(L + step * (n - 0.5), y, 3.5 + p * 2, 0, TAU); g.fill(); }
+    ch.tx = (L + step * (n - 0.5)) / w; ch.ty = Y(cd[n - 1].c) / h;
+    if (trend > 0) {
+      const x0 = L + step * 0.5, y0 = Y(cd[0].c), x1 = L + step * (n - 0.5), y1 = Y(cd[n - 1].c);
+      g.strokeStyle = 'rgba(255,214,90,.95)'; g.lineWidth = 3; g.setLineDash([9, 6]);
+      g.beginPath(); g.moveTo(x0, y0); g.lineTo(lerp(x0, x1, trend), lerp(y0, y1, trend)); g.stroke(); g.setLineDash([]);
+      ch.tx = lerp(x0, x1, trend) / w; ch.ty = lerp(y0, y1, trend) / h;
+    }
+    g.textAlign = 'left'; g.fillStyle = 'rgba(225,250,255,.98)'; g.font = '800 23px system-ui,-apple-system,sans-serif'; g.fillText(ch.label, 22, 37);
+    g.textAlign = 'right'; g.fillStyle = ch.chg >= 0 ? 'rgba(90,255,180,1)' : 'rgba(255,120,145,1)';
+    g.fillText((ch.chg >= 0 ? '+' : '−') + Math.abs(ch.chg).toFixed(1).replace('.', ',') + '%', w - 22, 37);
+    H.chartTex.needsUpdate = true;
+  }
+  /* первая полоса газеты: заголовок и мини-график — из настоящих цен */
+  function drawPaper(H, info) {
+    const c = H.paperCv, g = c.getContext('2d'), w = c.width, h = c.height;
+    g.fillStyle = '#f4efe3'; g.fillRect(0, 0, w, h);
+    g.fillStyle = 'rgba(80,60,30,.05)'; for (let i = 0; i < 500; i++) g.fillRect((i * 97) % w, (i * 61) % h, 1.5, 1.5);
+    const serif = 'Georgia,"Times New Roman","DejaVu Serif",serif';
+    g.fillStyle = '#18171d'; g.textAlign = 'center'; g.font = '900 50px ' + serif; g.fillText('КРИПТО ВЕСТИ', w / 2, 54);
+    g.fillRect(18, 66, w - 36, 3); g.fillRect(18, 72, w - 36, 1);
+    g.font = 'italic 600 14px ' + serif; g.fillText(info.date, w / 2, 90);
+    g.font = '900 34px ' + serif; g.fillText(info.head, w / 2, 132);
+    g.font = 'italic 600 16px ' + serif; g.fillStyle = '#3a3640'; g.fillText(info.sub, w / 2, 157);
+    g.fillRect(18, 170, w - 36, 1);
+    const bx = 22, by = 182, bw = 190, bh = 130;
+    g.strokeStyle = '#2a2830'; g.lineWidth = 1.5; g.strokeRect(bx, by, bw, bh);
+    const s = info.spark && info.spark.length > 4 ? info.spark : null;
+    if (s) {
+      let lo = Math.min(...s), hi = Math.max(...s); if (!(hi > lo)) hi = lo + 1;
+      g.strokeStyle = info.up ? '#1f8a55' : '#c23a4f'; g.lineWidth = 2.5; g.beginPath();
+      s.forEach((v, i) => { const x = bx + 8 + (bw - 16) * i / (s.length - 1), y = by + bh - 10 - (v - lo) / (hi - lo) * (bh - 30); i ? g.lineTo(x, y) : g.moveTo(x, y); }); g.stroke();
+    }
+    g.fillStyle = '#2a2830'; g.font = '700 12px ' + serif; g.textAlign = 'left'; g.fillText('БИТКОИН · 7 ДНЕЙ', bx + 8, by + 16);
+    g.fillStyle = 'rgba(40,38,48,.55)';
+    for (let col = 0; col < 2; col++) for (let i = 0; i < 15; i++) { const x = 232 + col * 140, y = 186 + i * 8.4; g.fillRect(x, y, i % 5 === 4 ? 70 : 122 - ((i * 13 + col * 7) % 17), 3); }
+    H.paperTex.needsUpdate = true;
+  }
+
   /* ---------- искры, конфетти, салют, пламя (в мировых координатах) ---------- */
   function Particles(parent, tex) {
     const N = 220, geo = new T.BufferGeometry(), pos = new Float32Array(N * 3), colr = new Float32Array(N * 3);
@@ -783,7 +959,7 @@
   }
 
   /* ---------- фразы для голоса (номер фразы = группа.индекс); на экран не выводятся ---------- */
-  const PHRASES = /*PHRASES*/{"intro":["Привет! Я Слиток, робот-хранитель твоего биткоина. Нажми на меня!"],"tap":["Бип-буп!","Привет!","Щекотно!","Я на посту.","Слиток на связи!","Все системы в норме.","Всё под контролем.","Ой! Кто здесь?"],"tapNight":[{"t":"Тише… ночь.","w":1},{"t":"Я тут. Шепчу, чтобы никого не разбудить.","w":1}],"dizzy":["Ошибка! Голова кружится!","Перегрев! Перегрев!"],"dance":["Па-па-пам!","Танцевальный режим!"],"carry":["Эй! Куда несёшь?","Ух ты, я лечу!"],"drop":["Приземлился!","Мягкая посадка."],"deposit":["Пополнение принято!","Звенит приятно!","Ещё немного в копилку."],"buy":["Взяли. Теперь держим.","Покупка по плану — люблю.","Монета в копилке."],"sellProfit":["Прибыль в кармане!","Зафиксировали. Хорошая работа."],"sellLoss":["Бывает. Главное — остаться в игре.","Опыт — тоже капитал."],"airdrop":["Подарок с неба!","Бесплатно — моё любимое слово."],"signal":["Сигнал на покупку!","Уровень сработал — можно докупить."],"news":["Есть новый сигнал — загляни.","Пришёл сигнал, проверь."],"hunter":["Скидки! Лесенка сработала.","Распродажа, а не трагедия."],"ath":["Новый максимум биткоина!","Вот это высота!"],"athPort":["Портфель на максимуме!"],"milestone":["Новый рубеж взят!"],"coinUp":["Монета разогналась!"],"coinDown":["Монета просела."],"up":["Неплохо идём.","Рынок улыбается."],"rocket":["Ух, полетели!","Вот это день!"],"down":["Видали и хуже. Держим.","Терпение — моя суперсила."],"crash":["Спокойно. Паника — плохой советчик.","Шторм пройдёт. Держим курс."],"bored":["Скучновато…","Пересчитаю-ка блоки.",{"t":"21 миллион — и ни монетой больше.","s":"Двадцать один миллион — и ни монетой больше."}],"night":[{"t":"Ночь. Рынок не спит, а я посплю.","w":1}],"wake":["А? Я не сплю! Я на посту."],"hide":["Ничего не вижу!"],"offline":["Ищу сигнал…"],"screen":["Свежий подбор альткоинов готов!"],"wipe":["Протру цифры — пусть блестят.","Чистота — залог прибыли!"],"wipeDone":["Блестит!","Как новенькие."],"sit":["Посижу тут, посмотрю.","Отличный вид отсюда."],"zap":["Обновляю цифры!","Цена сменилась — переставлю."]}/*/PHRASES*/;
+  const PHRASES = /*PHRASES*/{"intro":["Привет! Я Слиток, робот-хранитель твоего биткоина. Нажми на меня!"],"tap":["Бип-буп!","Привет!","Щекотно!","Я на посту.","Слиток на связи!","Все системы в норме.","Всё под контролем.","Ой! Кто здесь?"],"tapNight":[{"t":"Тише… ночь.","w":1},{"t":"Я тут. Шепчу, чтобы никого не разбудить.","w":1}],"dizzy":["Ошибка! Голова кружится!","Перегрев! Перегрев!"],"dance":["Па-па-пам!","Танцевальный режим!"],"carry":["Эй! Куда несёшь?","Ух ты, я лечу!"],"drop":["Приземлился!","Мягкая посадка."],"deposit":["Пополнение принято!","Звенит приятно!","Ещё немного в копилку."],"buy":["Взяли. Теперь держим.","Покупка по плану — люблю.","Монета в копилке."],"sellProfit":["Прибыль в кармане!","Зафиксировали. Хорошая работа."],"sellLoss":["Бывает. Главное — остаться в игре.","Опыт — тоже капитал."],"airdrop":["Подарок с неба!","Бесплатно — моё любимое слово."],"signal":["Сигнал на покупку!","Уровень сработал — можно докупить."],"news":["Есть новый сигнал — загляни.","Пришёл сигнал, проверь."],"hunter":["Скидки! Лесенка сработала.","Распродажа, а не трагедия."],"ath":["Новый максимум биткоина!","Вот это высота!"],"athPort":["Портфель на максимуме!"],"milestone":["Новый рубеж взят!"],"coinUp":["Монета разогналась!"],"coinDown":["Монета просела."],"up":["Неплохо идём.","Рынок улыбается."],"rocket":["Ух, полетели!","Вот это день!"],"down":["Видали и хуже. Держим.","Терпение — моя суперсила."],"crash":["Спокойно. Паника — плохой советчик.","Шторм пройдёт. Держим курс."],"bored":["Скучновато…","Пересчитаю-ка блоки.",{"t":"21 миллион — и ни монетой больше.","s":"Двадцать один миллион — и ни монетой больше."}],"night":[{"t":"Ночь. Рынок не спит, а я посплю.","w":1}],"wake":["А? Я не сплю! Я на посту."],"hide":["Ничего не вижу!"],"offline":["Ищу сигнал…"],"screen":["Свежий подбор альткоинов готов!"],"wipe":["Протру цифры — пусть блестят.","Чистота — залог прибыли!"],"wipeDone":["Блестит!","Как новенькие."],"sit":["Посижу тут, посмотрю.","Отличный вид отсюда."],"zap":["Обновляю цифры!","Цена сменилась — переставлю."],"musicStart":["Включу любимый трек.","Немного музыки не помешает."],"musicTap":["Классный трек!","Слышишь? Бит качает!","Тут сейчас лучшая часть!"],"danceSolo":["Не могу устоять — танцую!","Это мой трек!"],"phoneStart":["Сыграю пару уровней.","Пять минут в телефоне — и обратно на пост."],"phoneWin":["Есть! Новый рекорд!","Уровень пройден!"],"phoneLose":["Эх, почти!","Опять этот босс…"],"phoneTap":["Секунду, тут босс!","Почти прошёл уровень!"],"bookStart":["Почитаю немного.","Так, где я остановился?"],"bookTap":["Интересная глава!","Дочитаю страницу — и поболтаем."],"bookHm":[{"t":"Хм, любопытно.","w":1},{"t":"Вот это поворот!","w":1}],"chartStart":["Посмотрю графики.","Что там на графиках?"],"chartUp":["Неделя в плюсе — тренд вверх.","Свечи зелёные. Нравится."],"chartDown":["Неделя в минусе. Смотрю уровни.","Красные свечи. Без паники — изучаю."],"chartFlat":["Боковик. Рынок думает.","На графике тишина."],"chartTap":["Смотри, вот тут интересно.","Рисую линию тренда."],"newsStart":["Что пишут в новостях?","Свежая газета!"]}/*/PHRASES*/;
   const MILES = [1000, 2000, 3000, 5000, 7000, 10000, 15000, 20000, 25000, 30000, 40000, 50000, 75000, 100000, 150000, 200000, 250000, 500000, 1000000];
 
   /* ---------- стили: слой поверх карточки, значки, табличка, перекатывание цифр ---------- */
@@ -813,12 +989,12 @@
 @media (prefers-reduced-motion:reduce){.ms-float{transition:none}.ms-alert.on,.ms-zing,.ms-shine{animation:none}}`;
 
   /* ---------- состояние ---------- */
-  let host, hero, A = {}, renderer, scene, camera, keyLight, M, R, PR, PT, raf = 0, inView = true, lastF = 0, inited = false, firstFrame = false;
+  let host, hero, A = {}, renderer, scene, camera, keyLight, M, R, PR, PT, HP = null, raf = 0, inView = true, lastF = 0, inited = false, firstFrame = false;
   const ST = {
     mood: 'calm', moodSince: 0, pct: null, go: false, fresh: 0, offline: false, offSince: 0, hide: false, sound: true,
     lastInput: now(), lastEvent: now(), nextAct: 0, lastJob: '', nextSignal: 0, lastAuto: -1e9, lastEv: -1e9, lastTap: 0, tapTimer: 0, taps: [],
     nextBlink: 0, blinkT: -9, gx: 0, gy: 0, nextGaze: 0, spin: 0, spinV: 0, drag: null, reduced: false, intensity: 0.7, money: null,
-    signText: '', signNeg: false, wiping: 0, talk: 0, lastZap: -1e9, numPend: null, numZap: null, hum: false, nextThr: 0, music: false, noBrain: false, userUntil: 0, introPending: false
+    signText: '', signNeg: false, wiping: 0, talk: 0, lastZap: -1e9, numPend: null, numZap: null, hum: false, nextThr: 0, noBrain: false, S: null, D: null, userUntil: 0, introPending: false
   };
   const BL = { ready: false, tx: new Set(), real: 0, alert: '', ath: 0, screen: '' };
   let act = null, JOB = null; const queue = [];
@@ -936,6 +1112,16 @@
         case 'dizzy': tone(c, { type: 'triangle', f: 900, f2: 300, t, d: 0.9, v: 0.04 * v, lp: 2500, vib: [11, 110] }); break;
         case 'powerup': tone(c, { type: 'triangle', f: 110, f2: 880, t, d: 0.5, v: 0.035 * v, lp: 2200 }); tone(c, { f: 1760, t: t + 0.45, d: 0.12, v: 0.045 * v }); break;
         case 'powerdown': tone(c, { type: 'triangle', f: 700, f2: 80, t, d: 0.7, v: 0.035 * v, lp: 1800 }); break;
+        case 'page': noise(c, { t, d: 0.2, v: 0.05 * v, f: 3200, f2: 1700, q: 0.9 }); noise(c, { t: t + 0.05, d: 0.12, v: 0.025 * v, f: 900, q: 1.2 }); break;
+        case 'paper': noise(c, { t, d: 0.34, v: 0.06 * v, f: 1500, f2: 3200, q: 0.7 }); noise(c, { t: t + 0.2, d: 0.3, v: 0.05 * v, f: 2700, f2: 1300, q: 0.8 }); break;
+        case 'tick': tone(c, { type: 'triangle', f: 2600, t, d: 0.02, v: 0.014 * v, lp: 5000 }); break;
+        case 'gameWin': [1047, 1319, 1568, 2093].forEach((f, i) => tone(c, { type: 'square', f, t: t + i * 0.07, d: 0.08, v: 0.011 * v, lp: 3200 })); break;
+        case 'gameLose': tone(c, { type: 'square', f: 520, f2: 160, t, d: 0.42, v: 0.011 * v, lp: 2400 }); break;
+        case 'holo': tone(c, { f: 320, f2: 1500, t, d: 0.4, v: 0.03 * v }); noise(c, { t, d: 0.45, v: 0.012 * v, f: 6500, q: 1.5, type: 'highpass' }); break;
+        case 'holoOff': tone(c, { f: 1300, f2: 260, t, d: 0.3, v: 0.025 * v }); break;
+        case 'click': tone(c, { type: 'triangle', f: 1900, t, d: 0.025, v: 0.03 * v, lp: 5000 }); break;
+        case 'leakHat': noise(c, { t, d: 0.035, v: 0.006 * v, f: 8000, q: 0.8, type: 'highpass' }); break;
+        case 'leakKick': tone(c, { f: 110, f2: 50, t, d: 0.09, v: 0.012 * v, lp: 400 }); break;
       }
     } catch (e) {}
   }
@@ -974,13 +1160,29 @@
     if (!v || !v.b64) { if (!AU.raw) AU.failed = true; return; }
     try { const bin = atob(v.b64), u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); AU.raw = u; AU.pack = v; v.b64 = ''; } catch (e) { AU.failed = true; }
   }
+  function loadPackN() {
+    if (AU.packN || AU.loadingN || AU.failedN || !ST.sound) return;
+    if (window.MS_VOICE && window.MS_VOICE.slitokN) { prepPackN(); return; }
+    AU.loadingN = true;
+    try {
+      const s = document.createElement('script'); s.src = VOICE_N_URL; s.async = true;
+      s.onload = () => { AU.loadingN = false; prepPackN(); }; s.onerror = () => { AU.loadingN = false; AU.failedN = true; };
+      document.head.appendChild(s);
+    } catch (e) { AU.loadingN = false; AU.failedN = true; }
+  }
+  function prepPackN() {
+    const v = window.MS_VOICE && window.MS_VOICE.slitokN;
+    if (!v || !v.b64) { if (!AU.rawN) AU.failedN = true; return; }
+    try { const bin = atob(v.b64), u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); AU.rawN = u; AU.packN = v; v.b64 = ''; } catch (e) { AU.failedN = true; }
+  }
+  const packOf = id => (AU.pack && AU.pack.idx[id] ? [AU.pack, AU.raw] : AU.packN && AU.packN.idx[id] ? [AU.packN, AU.rawN] : null);
   function vbuf(c, id) {
     let p = AU.cache.get(id); if (p) return p;
-    const e = AU.pack && AU.pack.idx[id]; if (!e) return Promise.reject(new Error('нет фразы ' + id));
-    const ab = AU.raw.slice(e[0], e[0] + e[1]).buffer;
+    const pk = packOf(id); if (!pk) return Promise.reject(new Error('нет фразы ' + id));
+    const e = pk[0].idx[id], ab = pk[1].slice(e[0], e[0] + e[1]).buffer;
     p = new Promise((res, rej) => { try { const r = c.decodeAudioData(ab, res, rej); if (r && r.then) r.then(res, rej); } catch (x) { rej(x); } });
     AU.cache.set(id, p); p.catch(() => AU.cache.delete(id));
-    if (AU.cache.size > 30) AU.cache.delete(AU.cache.keys().next().value);
+    if (AU.cache.size > 48) AU.cache.delete(AU.cache.keys().next().value);
     return p;
   }
   function voice(id, o) {
@@ -998,6 +1200,23 @@
     }).catch(() => {});
   }
   function stopVoice() { if (AU.cur) { try { AU.cur.stop(); } catch (e) {} AU.cur = null; } }
+  /* несколько кусочков подряд (новости: шаблон + число): gap < 0 — стык внутри фразы, > 0 — пауза между фразами */
+  function seqDur(seq) { let d = 0; for (const x of seq) { const pk = packOf(x.id); if (pk) d += pk[0].idx[x.id][2] / 1000 + (x.gap || 0); } return Math.max(0, d); }
+  function voiceSeq(seq, o) {
+    o = o || {}; const c = au(); if (!c) return 0;
+    const list = seq.filter(x => packOf(x.id)); if (!list.length) return 0;
+    const dur = seqDur(list); ST.userUntil = now() + dur + 0.6; ST.lastSay = 'news:' + list.map(x => x.id).join(',');
+    Promise.all(list.map(x => vbuf(c, x.id))).then(bufs => {
+      if (!ST.sound || document.hidden) return;
+      stopVoice();
+      const g = c.createGain(); g.gain.value = o.vol || 1; g.connect(AU.vo);
+      let t0 = c.currentTime + 0.05; const srcs = [];
+      bufs.forEach((b, i) => { const s = c.createBufferSource(); s.buffer = b; s.connect(g); s.start(t0); srcs.push(s); t0 += b.duration + (list[i].gap || 0); });
+      const h = { stop() { srcs.forEach(s => { try { s.stop(); } catch (e) {} }); } };
+      AU.cur = h; srcs[srcs.length - 1].onended = () => { if (AU.cur === h) AU.cur = null; };
+    }).catch(() => {});
+    return dur;
+  }
   /* громкость голоса прямо сейчас — по ней «говорят» глаза на визоре и подсветка наушников */
   function talkLevel() {
     if (!AU.cur || !AU.an) return 0;
@@ -1102,7 +1321,7 @@
     setTimeout(() => {
       if (ST.numPend !== q) return; ST.numPend = null;
       const t = now();
-      if ((act && act.c.pri >= 2) || LOC.mode === 'carry' || ST.wiping || t - ST.lastZap < 12) { roll(q, true); return; }
+      if ((act && act.c.pri >= 2) || LOC.mode === 'carry' || ST.wiping || t - ST.lastZap < 12 || (HS.cur && HS.cur.d.noZap)) { roll(q, true); return; }
       ST.lastZap = t; ST.numZap = q; playClip('zap', q);
       if (!act || act.name !== 'zap') { ST.numZap = null; roll(q, true); }
     }, 0);
@@ -1111,7 +1330,7 @@
 
   /* ---------- поза ---------- */
   /* fl/fr — насколько сжат кулак (0 — ладонь открыта), pl/pr — вытянут указательный палец */
-  const BASE = () => ({ y: 0, sq: 1, tz: 0, tx: 0, yaw: 0, laZ: -0.3, laX: -0.05, raZ: 0.32, raX: -0.05, legL: 0, legR: 0, fl: 0.35, fr: 0.35, pl: 0, pr: 0, eo: 1, ex: 0, ey: 0, brow: 0, tarn: 0, hx: 0, hy: 0, hz: 0, thr: 0, pend: 0, cloth: 0, tablet: 0, eye: 'round', mouth: 'smile', gaze: false, cap: false, ant: false, glyph: '', zz: false });
+  const BASE = () => ({ y: 0, sq: 1, tz: 0, tx: 0, yaw: 0, laZ: -0.3, laX: -0.05, raZ: 0.32, raX: -0.05, legL: 0, legR: 0, fl: 0.35, fr: 0.35, pl: 0, pr: 0, eo: 1, ex: 0, ey: 0, brow: 0, tarn: 0, hx: 0, hy: 0, hz: 0, thr: 0, pend: 0, cloth: 0, tablet: 0, eye: 'round', mouth: 'smile', gaze: false, cap: false, ant: false, glyph: '', zz: false, lean: 0, legLz: 0, legRz: 0, toeL: 0, dx: 0, thL: 0, thR: 0 });
   const RATE = { tarn: 3, cloth: 12, tablet: 12, thr: 9, pend: 6, legL: 16, legR: 16, fl: 12, fr: 12, pl: 12, pr: 12 };
   function smooth(P, dt) {
     for (const k in P) {
@@ -1168,7 +1387,6 @@
       P.legL = lerp(P.legL, 0.95 + 0.26 * sw, sk); P.legR = lerp(P.legR, 0.95 - 0.26 * sw, sk);
       P.laZ = lerp(P.laZ, -0.62, sk); P.raZ = lerp(P.raZ, 0.62, sk); P.laX = lerp(P.laX, 0.18, sk); P.raX = lerp(P.raX, 0.18, sk);
       P.tx = lerp(P.tx, -0.1, sk); P.fl = lerp(P.fl, 0.55, sk); P.fr = lerp(P.fr, 0.55, sk);
-      if (L.mode === 'sit' && ST.music && ST.mood !== 'sleep') { P.hx += 0.07 * Math.max(0, Math.sin(t * 7.4)); P.hz += 0.04 * Math.sin(t * 3.7); }
     }
     if (L.mode === 'hover' || L.mode === 'land') {
       P.thr = L.mode === 'land' ? 0.8 : 1;
@@ -1411,8 +1629,373 @@
   }
   function endClip() { if (!act) return; const a = act; act = null; if (a.c.end) a.c.end(a); if (R) R.tablet.rotation.y = 0; }
 
+  /* ---------- занятия: долгие дела с предметами — музыка, телефон у края карточки, книга, танец, графики, газета ----------
+     Каждое занятие плавно «включается» (вес 0→1): предмет появляется в руках, поза перетекает. Событие или касание
+     ненадолго отвлекает — и он возвращается к делу. Не чаще, чем раз в несколько минут каждое, чтобы не мельтешил. */
+  const BPS = 112 / 60;                              /* темп музыки в наушниках: удары в секунду */
+  const HS = { cur: null, w: {}, lastAt: {}, tapT: -9, noteT: 0, newsPending: false };
+  const mix = (P, k, v, w) => { P[k] = lerp(P[k], v, w); };
+  const leanX = () => LY.heroR - 0.68;
+  function hobbyStart(name, dur, opt) {
+    const d = HOB[name]; if (!d || (d.loc && !d.loc())) return false;
+    const h = { name, d, t0: now(), dur: dur || d.dur, done: false, o: opt || {} };
+    HS.cur = h; HS.lastAt[name] = h.t0;
+    if (d.start && d.start(h) === false) { HS.cur = null; return false; }
+    d.last = h; wakeLoop(); return true;
+  }
+  function hobbyEnd() { const h = HS.cur; if (!h) return; HS.cur = null; if (h.d.end) h.d.end(h); ST.nextAct = Math.max(ST.nextAct, now() + rnd(8, 18)); }   /* после долгого дела — передышка */
+  /* «посмотреть на тебя» после касания: голову к зрителю, улыбка */
+  function lookUser(P, t, w) {
+    const k = t - HS.tapT; if (k > 1.8 || k < 0) return;
+    const a = Math.min(1, k * 6) * Math.min(1, (1.8 - k) * 3) * w;
+    mix(P, 'hx', 0, a); mix(P, 'hy', 0, a); P.ex = lerp(P.ex, 0, a); P.ey = lerp(P.ey, 0.006, a); P.gaze = true;
+    if (a > 0.5) { P.eye = 'happy'; P.mouth = 'grin'; P.glyph = ''; }
+  }
+  /* утечка музыки из наушников: еле слышные «тс-тс» в такт (днём и только со звуком) */
+  function leakBeat(h, t, vol) {
+    if (!ST.sound || isNight() || document.hidden) return;
+    const hb = Math.floor(t * BPS * 2); if (hb === h.hb) return; h.hb = hb;
+    if (hb % 2 === 0) sfx('leakKick', { vol }); sfx('leakHat', { vol: vol * (hb % 2 ? 0.65 : 1) });
+  }
+  function emitNote() {
+    if (!HP || ST.reduced || !R.phones.visible) return;
+    const n = HP.notes.find(q => q.life <= 0); if (!n) return;
+    const side = Math.random() < 0.5 ? -1 : 1; V1.set(side * 0.7, 0.02, 0); R.head.localToWorld(V1);
+    const p = toDepth(V1, V1.z + 0.9);
+    n.x = p.x; n.y = p.y; n.z = p.z; n.vx = side * rnd(0.12, 0.3); n.vy = rnd(0.42, 0.66); n.life = n.max = rnd(1.5, 2.1);
+    n.s.visible = true; n.s.material.rotation = rnd(-0.35, 0.35);
+  }
+  function notesUpdate(dt) {
+    if (!HP) return;
+    for (const n of HP.notes) {
+      if (n.life <= 0) continue; n.life -= dt; n.x += n.vx * dt; n.y += n.vy * dt;
+      const k = 1 - n.life / n.max; n.s.position.set(n.x + 0.07 * Math.sin(k * 8), n.y, n.z);
+      n.s.material.opacity = Math.min(1, k * 5) * clamp(n.life / 0.5, 0, 1) * 0.95; const sc = 0.2 + 0.1 * k; n.s.scale.set(sc, sc, 1);
+      if (n.life <= 0) n.s.visible = false;
+    }
+  }
+  const HOB = {};
+  /* 1. слушает музыку: кивает в такт, притопывает, рука на чашке наушника, ноты, кольца наушников пульсируют */
+  HOB.music = {
+    dur: 22, noZap: false,
+    loc: () => LOC.mode === 'stand' || LOC.mode === 'sit',
+    start(h) { h.mode = 'groove'; h.modeT = now(); h.next = now() + rnd(4, 7); sfx('click'); if (Math.random() < 0.35) say('musicStart'); },
+    tick(h, dt, t) {
+      if (t > HS.noteT) { HS.noteT = t + rnd(1.0, 1.8); emitNote(); }
+      leakBeat(h, t, 0.8);
+      if (t > h.next) { h.next = t + rnd(4, 7); h.mode = pick(['groove', 'eyes', 'eq', 'cup', 'groove']); h.modeT = t; }
+      if (h.dur - (t - h.t0) < 0.3 && !h.off) { h.off = true; sfx('click'); }
+    },
+    pose(P, t, w, h) {
+      const b = t * BPS * TAU, nod = Math.max(0, Math.sin(b)), el = t - h.t0, mk = t - (h.modeT || 0);
+      P.hx += 0.13 * nod * w; P.hz += 0.06 * Math.sin(b / 2) * w; P.tz += 0.03 * Math.sin(b / 2) * w;
+      if (LOC.sitK > 0.5) { mix(P, 'legL', 0.95 + 0.32 * Math.sin(b), w); mix(P, 'legR', 0.95 - 0.32 * Math.sin(b), w); }
+      else { P.sq -= 0.025 * nod * w; P.legR += 0.12 * nod * w; P.y += 0.012 * nod * w; }
+      P.laZ += 0.07 * Math.sin(b) * w; P.raZ -= 0.07 * Math.sin(b + 1) * w; mix(P, 'fl', 0.6, w); mix(P, 'fr', 0.6, w);
+      const cup = Math.max(el < 2.4 ? bell(el / 2.4, 0, 1) : 0, h.mode === 'cup' && mk < 3.2 ? bell(mk / 3.2, 0, 1) : 0);
+      if (cup > 0) { mix(P, 'laZ', -2.85, cup * w); mix(P, 'laX', -0.1, cup * w); mix(P, 'fl', 0.25, cup * w); }
+      if (w > 0.5) { if (h.mode === 'eyes' && mk < 3) P.eye = 'closed'; else if (h.mode === 'eq' && mk < 3) P.glyph = 'eq'; else P.eye = 'happy'; }
+      lookUser(P, t, w);
+    }
+  };
+  /* 2. телефон у правого края карточки: плечом упёрся в рамку, нога за ногу, большие пальцы стучат, рекорд — показывает экран */
+  HOB.phone = {
+    dur: 28, noZap: true,
+    loc: () => LOC.mode === 'stand',
+    start(h) {
+      HP.game = { x: 0, obs: [130, 215, 300, 390], coins: [170, 255, 345], jy: 0, vy: 0, score: 0, mode: 'play', modeT: -9 };
+      h.next = now() + rnd(6, 9); h.draw = 0; h.lean = Math.abs(LOC.x - leanX()) < 0.2; h.show = 0;
+      sfx('pop', { vol: 0.5 }); if (Math.random() < 0.3) say('phoneStart');
+    },
+    tick(h, dt, t) {
+      const G = HP.game; if (!G) return;
+      if (G.mode !== 'play' && t - G.modeT > 2.3) { G.mode = 'play'; if (G.lost) { G.lost = false; G.x = 0; G.score = 0; G.obs = [130, 215, 300, 390]; G.coins = [170, 255, 345]; } }
+      if (G.mode === 'play') {
+        G.x += 74 * dt; G.score = Math.floor(G.x / 6);
+        const nx = Math.min(...G.obs.map(o => o - G.x).filter(x => x > 20));
+        if (G.jy <= 0 && nx < 52) { G.vy = 150; sfx('tick', { vol: 0.8 }); }
+        G.vy -= 520 * dt; G.jy = Math.max(0, G.jy + G.vy * dt);
+        for (let i = 0; i < G.obs.length; i++) if (G.obs[i] - G.x < -16) G.obs[i] = Math.max(...G.obs) + rnd(70, 130);
+        for (let i = 0; i < G.coins.length; i++) if (G.coins[i] - G.x < 36) { if (G.coins[i] - G.x > 28) sfx('tick', { vol: 0.5 }); if (G.coins[i] - G.x < -8) G.coins[i] = Math.max(...G.coins) + rnd(70, 140); }
+      }
+      if (t > h.next && G.mode === 'play' && h.dur - (t - h.t0) > 3) {
+        h.next = t + rnd(8, 12); const r = Math.random(); G.modeT = t;
+        if (r < 0.45) { G.mode = 'win'; sfx('gameWin'); if (Math.random() < 0.45) say('phoneWin'); }
+        else if (r < 0.8) { G.mode = 'lose'; G.lost = true; sfx('gameLose'); if (Math.random() < 0.35) say('phoneLose'); }
+        else { G.mode = 'close'; }
+      }
+      if (t > h.draw) { h.draw = t + 1 / 12; drawGame(HP); }
+    },
+    pose(P, t, w, h) {
+      if (h.lean !== false) { mix(P, 'lean', -0.13, w); mix(P, 'legLz', 0.42, w); mix(P, 'legL', 0.16, w); mix(P, 'toeL', 0.35, w); }
+      mix(P, 'laX', -1.02, w); mix(P, 'laZ', 0.72, w); mix(P, 'raX', -1.02, w); mix(P, 'raZ', -0.72, w); mix(P, 'fl', 0.5, w); mix(P, 'fr', 0.5, w);
+      P.thL = 0.4 * Math.max(0, Math.sin(t * 13)) * w; P.thR = 0.4 * Math.max(0, Math.sin(t * 10.5 + 1.3)) * w;
+      mix(P, 'hx', 0.3, w); P.gaze = true; P.ey = lerp(P.ey, -0.022, w); P.ex = lerp(P.ex, 0, w); mix(P, 'eo', 0.85, w);
+      const G = HP && HP.game, k = G ? t - G.modeT : 9; h.show = 0;
+      if (G && G.mode === 'win' && k < 2.3) {
+        const a = bell(k / 2.3, 0, 1) * w; h.show = a;
+        mix(P, 'laX', -1.9, a); mix(P, 'raX', -1.9, a); mix(P, 'laZ', 0.55, a); mix(P, 'raZ', -0.55, a); mix(P, 'hx', -0.05, a);
+        P.ey = lerp(P.ey, 0.01, a); if (a > 0.3) { P.eye = 'star'; P.mouth = 'grin'; } P.y += 0.06 * bell(k / 2.3, 0.1, 0.5) * w;
+      } else if (G && G.mode === 'lose' && k < 2) {
+        const a = bell(k / 2, 0, 1) * w; mix(P, 'hx', -0.12, a); P.brow += 0.45 * a; P.tx -= 0.05 * a; if (a > 0.3) P.mouth = 'flat';
+      } else if (G && G.mode === 'close' && k < 1.1) { P.mouth = 'O'; P.tz += 0.07 * bell(k / 1.1, 0, 1) * w; }
+      lookUser(P, t, w);
+    }
+  };
+  /* 3. книга, когда сидит на краю: раскрывает, глаза бегут по строчкам, перелистывает, иногда удивляется */
+  HOB.book = {
+    dur: 24, noZap: true,
+    loc: () => LOC.mode === 'sit',
+    start(h) { h.turnT = -9; h.next = now() + rnd(3.5, 6); h.hm = now() + rnd(8, 14); h.react = ''; h.reactT = -9; sfx('page', { vol: 0.6 }); if (Math.random() < 0.35) say('bookStart'); },
+    tick(h, dt, t) {
+      const left = h.dur - (t - h.t0);
+      if (t > h.next && left > 2) { h.turnT = t; h.next = t + rnd(5, 8.5); setTimeout(() => sfx('page'), 120); }
+      if (t > h.hm && left > 3) { h.hm = t + rnd(9, 16); h.react = pick(['happy', 'O', 'nod']); h.reactT = t; if (Math.random() < 0.3) say('bookHm'); }
+    },
+    pose(P, t, w, h) {
+      mix(P, 'laX', -0.9, w); mix(P, 'laZ', 0.66, w); mix(P, 'raX', -0.9, w); mix(P, 'raZ', -0.66, w); mix(P, 'fl', 0.45, w); mix(P, 'fr', 0.45, w);
+      mix(P, 'hx', 0.3, w); P.gaze = true;
+      const sc = (t * 0.42) % 1, line = sc < 0.88 ? sc / 0.88 : 1 - (sc - 0.88) / 0.12;
+      P.ex = lerp(P.ex, lerp(-0.024, 0.024, line), w); P.ey = lerp(P.ey, -0.02, w); mix(P, 'eo', 0.8, w);
+      const tk = t - h.turnT; if (tk < 0.75) { const a = bell(tk / 0.75, 0, 1) * w; mix(P, 'raZ', -0.3, a); mix(P, 'raX', -1.15, a); }
+      const rk = t - h.reactT; if (rk < 1.6) { if (h.react === 'nod') P.hx += 0.1 * (bell(rk / 1.6, 0, 0.5) + bell(rk / 1.6, 0.5, 1)) * w; else if (h.react === 'O') P.mouth = 'O'; else P.eye = 'happy'; }
+      lookUser(P, t, w);
+    }
+  };
+  /* 4. танцует сам по себе: связка из трёх движений (пружинка, «робот», волна, приставной шаг) и финальный поворот */
+  HOB.dance = {
+    dur: 17, noZap: true,
+    loc: () => LOC.mode === 'stand',
+    start(h) {
+      const mv = ['bounce', 'robot', 'sway', 'shuffle'].sort(() => Math.random() - 0.5);
+      h.moves = h.o.moves || mv.slice(0, 3).concat(['spin']); h.dur = h.moves.length * 8 / BPS + 0.5; h.b0 = now() + 0.25; h.beat = -1;
+      LOC.yawT = -0.12; sfx('happy', { vol: 0.5 }); if (Math.random() < 0.4) say('danceSolo');
+    },
+    tick(h, dt, t) {
+      leakBeat(h, t, 1);
+      const bi = Math.floor((t - h.b0) * BPS); if (bi === h.beat || bi < 0) return; h.beat = bi;
+      const mv = h.moves[Math.floor(bi / 8)];
+      if (mv === 'robot') sfx('servo', { vol: 0.3, up: bi % 2 });
+      else if (mv === 'shuffle') sfx('step', { vol: 0.7 });
+      else if (mv === 'spin' && bi % 8 === 2) sfx('spin', { vol: 0.6 });
+      if (bi % 4 === 0) emitNote();
+    },
+    pose(P, t, w, h) {
+      const bt = (t - h.b0) * BPS; if (bt < 0) return;
+      const mi = Math.floor(bt / 8), mv = h.moves[mi] || 'spin', lb = bt - mi * 8, b = bt * PI;
+      P.eye = 'happy'; P.mouth = 'grin';
+      if (mv === 'bounce') {
+        P.y += 0.1 * Math.abs(Math.sin(b)) * w; P.sq -= 0.04 * Math.abs(Math.cos(b)) * w; P.tz += 0.12 * Math.sin(b) * w;
+        mix(P, 'laZ', -1.5 - 0.5 * Math.sin(b), w); mix(P, 'raZ', 1.5 - 0.5 * Math.sin(b + PI), w); mix(P, 'fl', 0.15, w); mix(P, 'fr', 0.15, w);
+        P.legL += 0.25 * Math.max(0, Math.sin(b)) * w; P.legR += 0.25 * Math.max(0, -Math.sin(b)) * w; P.hx += 0.08 * Math.abs(Math.sin(b)) * w;
+      } else if (mv === 'robot') {
+        const POS = [[-1.57, 0, 0.32, 0, 0.35], [-0.3, 0, 1.57, 0, -0.35], [-1.57, -1.2, 1.57, -1.2, 0], [-2.9, 0, 0.32, -0.5, 0.3], [-0.3, -0.5, 2.9, 0, -0.3], [-1.57, 0, 1.57, 0, 0]];
+        const i = Math.floor(lb), p0 = POS[(i + 5) % 6], p1 = POS[i % 6], e = easeOut(Math.min(1, (lb - i) * 5));
+        mix(P, 'laZ', lerp(p0[0], p1[0], e), w); mix(P, 'laX', lerp(p0[1], p1[1], e), w); mix(P, 'raZ', lerp(p0[2], p1[2], e), w); mix(P, 'raX', lerp(p0[3], p1[3], e), w);
+        P.hy += lerp(p0[4], p1[4], e) * w; mix(P, 'fl', 0, w); mix(P, 'fr', 0, w); P.glyph = 'eq'; P.sq -= 0.02 * (1 - e) * w;
+      } else if (mv === 'sway') {
+        const s = Math.sin(b / 2); P.tz += 0.16 * s * w; P.hz += 0.12 * s * w; P.y += 0.04 * Math.abs(Math.sin(b)) * w;
+        mix(P, 'laZ', -2.6 + 0.25 * s, w); mix(P, 'raZ', 2.6 + 0.25 * s, w); mix(P, 'fl', 0.1, w); mix(P, 'fr', 0.1, w);
+      } else if (mv === 'shuffle') {
+        P.dx = 0.2 * Math.sin(bt * PI / 2) * w; const s = Math.sin(b);
+        P.legL += 0.32 * Math.max(0, s) * w; P.legR += 0.32 * Math.max(0, -s) * w; P.y += 0.05 * Math.abs(s) * w;
+        mix(P, 'laX', 0.45 * s, w); mix(P, 'raX', -0.45 * s, w); mix(P, 'laZ', -0.7, w); mix(P, 'raZ', 0.7, w); P.hz += 0.06 * s * w;
+      } else {
+        const sp = easeInOut(seg(lb, 2, 4)), crouch = bell(lb, 1, 2.2), up = seg(lb, 4, 4.6);
+        P.yaw += TAU * sp * w; P.y += (0.32 * bell(lb, 2, 4) + 0.05 * up * Math.abs(Math.sin(b))) * w; P.sq -= 0.1 * crouch * w;
+        mix(P, 'laZ', lerp(-0.9, -2.6, up), w); mix(P, 'raZ', lerp(0.9, 2.6, up), w); mix(P, 'fl', 0, w); mix(P, 'fr', 0, w);
+        if (up > 0.5) P.eye = 'star';
+      }
+      const sk = t - (h.spinT || -9); if (sk < 0.9) P.yaw += TAU * easeInOut(sk / 0.9) * w;
+    }
+  };
+  /* 5. изучает графики: голограмма над головой из настоящих цен, показывает на свечи, рисует линию тренда, смахивает на другую монету */
+  function chartsList() {
+    const S = ST.S, D = ST.D; if (!S || !S.live) return [];
+    const sp = S.live.spark || {}, out = [];
+    const mkc = (sym, label) => {
+      let s = sym === 'PORT' ? (S.history || []).slice().sort((a, b) => String(a.date).localeCompare(String(b.date))).map(x => +x.value).filter(v => v > 0) : (sp[sym] || []).filter(v => isFinite(v) && v > 0);
+      if (s.length < (sym === 'PORT' ? 6 : 12)) return null;
+      return { sym, label, candles: chartCandles(s, sym === 'PORT' ? Math.min(18, s.length) : 18), chg: (s[s.length - 1] / s[0] - 1) * 100 };
+    };
+    const b = mkc('BTC', 'BTC · 7 дн'); if (b) out.push(b);
+    let best = null;
+    for (const s of (D && D.syms) || []) { if (s === 'BTC' || !sp[s]) continue; const v = (+(D.prices && D.prices[s]) || 0) * ((D.h && D.h[s] && D.h[s].qty) || 0); if (!best || v > best.v) best = { s, v }; }
+    const second = best && best.v > 20 ? mkc(best.s, best.s + ' · 7 дн') : (!ST.hide ? mkc('PORT', 'Портфель') : null);
+    if (second) out.push(second);
+    return out;
+  }
+  HOB.charts = {
+    dur: 16, noZap: false,
+    loc: () => LOC.mode === 'stand',
+    start(h) {
+      h.charts = chartsList(); if (!h.charts.length) return false;
+      h.ci = 0; h.cT = now() + 0.8; h.said = false; h.key = ''; h.swipeT = -9; h.off = false;
+      sfx('holo'); if (Math.random() < 0.3) say('chartStart');
+    },
+    tick(h, dt, t) {
+      const left = h.dur - (t - h.t0), ck = t - h.cT, ch = h.charts[h.ci];
+      const rv = clamp(ck / 1.8, 0, 1), tr = clamp((ck - 2.4) / 1.4, 0, 1);
+      if (ck > 4.2 && !h.said && h.ci === 0) { h.said = true; const c = ch.chg; say(c > 1.5 ? 'chartUp' : c < -1.5 ? 'chartDown' : 'chartFlat'); }
+      if (h.ci === 0 && h.charts.length > 1 && ck > 7.2 && left > 6) { h.ci = 1; h.cT = t + 0.45; h.swipeT = t; sfx('pop', { vol: 0.5 }); }
+      const key = h.ci + ':' + Math.round(rv * 36) + ':' + Math.round(tr * 30) + ':' + Math.floor(t * 8);
+      if (key !== h.key) { h.key = key; drawChart(HP, h.charts[h.ci], ck < 0 ? 0 : rv, tr, t); }
+      if (left < 0.6 && !h.off) { h.off = true; sfx('holoOff'); }
+    },
+    pose(P, t, w, h) {
+      P.tablet = Math.max(P.tablet, w); mix(P, 'raX', -1.15, w); mix(P, 'raZ', 0.42, w); mix(P, 'fr', 0.75, w);
+      mix(P, 'hx', -0.2, w); P.gaze = true; P.ey = lerp(P.ey, 0.028, w); P.ex = lerp(P.ex, -0.006, w);
+      const ck = t - h.cT, pt = ck > 2.2 && ck < 5.6 ? bell((ck - 2.2) / 3.4, 0, 1) : 0;
+      if (pt > 0 && h.tgt) aimArm(P, true, h.tgt, pt * w);
+      const sw = t - h.swipeT; if (sw < 0.6) { const a = bell(sw / 0.6, 0, 1) * w; mix(P, 'laZ', -2.5 + 1.3 * (sw / 0.6), a); mix(P, 'laX', -0.7, a); mix(P, 'fl', 0, a); }
+      if (ck > 4.2 && ck < 6) P.hx += 0.08 * (bell((ck - 4.2) / 1.8, 0, 0.5) + bell((ck - 4.2) / 1.8, 0.5, 1)) * w;
+      const ch = h.charts && h.charts[h.ci]; if (ch && ck > 4.2 && ck < 6.5 && w > 0.5) { if (ch.chg > 1.5) P.eye = 'happy'; else if (ch.chg < -1.5) P.brow += 0.3 * w; }
+      lookUser(P, t, w);
+    }
+  };
+  /* 6. читает газету и рассказывает новости: первая полоса — из настоящих данных, рассказ — голосом, числа складываются из кусочков */
+  const NEWS_COINS = ['BTC', 'ETH', 'XRP', 'SOL', 'NEAR', 'BNB', 'AVAX', 'TRX', 'OP', 'ATOM', 'POL', 'DOT', 'XLM', 'ADA', 'TON', 'SUI', 'LINK', 'DOGE', 'RENDER', 'ARB', 'ONDO', 'FET', 'HYPE', 'AAVE', 'LTC', 'ETC', 'MNT', 'QNT'];
+  function pctIds(v) { v = clamp(Math.round(v), 1, 99); if (v <= 30) return ['n.p.' + v]; return ['n.t.' + Math.floor(v / 10), 'n.pu.' + (v % 10)]; }
+  function kIds(K) { K = clamp(Math.round(K), 1, 999); const out = [], hu = Math.floor(K / 100), r = K % 100; if (hu) out.push('n.h.' + hu); if (r >= 20) out.push('n.t.' + Math.floor(r / 10), 'n.k.' + (r % 10)); else out.push('n.k.' + r); return out; }
+  const pctTxt = v => (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(1).replace('.', ',') + '%';
+  function newsCompose() {
+    const S = ST.S, D = ST.D; if (!S || !D) return null;
+    const lv = S.live || {}, btc = +(lv.prices && lv.prices.BTC) || +(D.prices && D.prices.BTC) || 0;
+    if (!(btc > 0)) return null;
+    const ch = lv.change ? lv.change.BTC : null, it = [], hasCh = ch != null && isFinite(ch);
+    const btcIt = hasCh ? (Math.abs(ch) < 0.5 ? ['n.btcFlat'] : [ch > 0 ? 'n.btcUp' : 'n.btcDown'].concat(pctIds(Math.max(1, Math.abs(ch))))) : null;
+    it.push({ k: 'price', s: 1 + Math.random() * 0.5, ids: ['n.price'].concat(kIds(btc / 1000)) });
+    const ath = +(S.cycle && S.cycle.ath) || 0;
+    if (ath > 0) { const d = (1 - btc / ath) * 100; it.push(d <= 0.5 ? { k: 'ath', s: 6, ids: ['n.athNow'] } : { k: 'ath', s: (d < 10 ? 2.2 : 1) + Math.random() * 0.5, ids: ['n.athTo'].concat(pctIds(Math.max(1, d))) }); }
+    const lvl = ((S.cycle && S.cycle.levels) || []).filter(l => l && l.status === 'pending' && l.drop > 0).sort((a, b) => a.n - b.n)[0];
+    if (ath > 0 && lvl) { const tg = ath * (1 - lvl.drop / 100), dist = (1 - tg / btc) * 100; if (dist > 0.5) it.push({ k: 'lvl', s: (dist < 8 ? 3 : 0.9) + Math.random() * 0.5, ids: ['n.lvl'].concat(kIds(tg / 1000), ['n.lvlTo'], pctIds(Math.max(1, dist))) }); }
+    if (!ST.hide && ST.pct != null && isFinite(ST.pct)) { const p = ST.pct; it.push({ k: 'port', s: 1.4 + Math.min(3, Math.abs(p) / 2) + Math.random() * 0.5, ids: Math.abs(p) < 0.5 ? ['n.portFlat'] : [p > 0 ? 'n.portUp' : 'n.portDown'].concat(pctIds(Math.max(1, Math.abs(p)))) }); }
+    let best = null;
+    if (!ST.hide) for (const s of D.syms || []) {
+      if (s === 'BTC' || NEWS_COINS.indexOf(s) < 0) continue;
+      const c = lv.change && lv.change[s], v = (+(D.prices && D.prices[s]) || 0) * ((D.h && D.h[s] && D.h[s].qty) || 0);
+      if (c == null || !isFinite(c) || v < 20 || Math.abs(c) < 3) continue;
+      if (!best || Math.abs(c) > Math.abs(best.c)) best = { s, c };
+    }
+    if (best) it.push({ k: 'coin', s: 1.5 + Math.min(3, Math.abs(best.c) / 4) + Math.random() * 0.5, ids: ['n.c.' + best.s, best.c > 0 ? 'n.coinUp' : 'n.coinDown'].concat(pctIds(Math.abs(best.c))) });
+    it.push(ST.fresh > 0 || ST.go ? { k: 'sig', s: 4, ids: ['n.sig'] } : { k: 'sig', s: 0.6 + Math.random() * 0.4, ids: ['n.noSig'] });
+    it.sort((a, b) => b.s - a.s);
+    const sel = it.slice(0, btcIt ? 2 : 3), hr = new Date().getHours();
+    const intro = hr >= 5 && hr < 12 && lsGet('ms-newsDay', '') !== dayKey() ? 'n.morning' : hr >= 18 ? 'n.evening' : 'n.intro.' + (Math.random() < 0.5 ? 0 : 1);
+    const seq = [{ id: intro, gap: 0.3 }], add = ids => ids.forEach((id, i) => seq.push({ id, gap: i === ids.length - 1 ? 0.34 : -0.07 }));
+    if (btcIt) add(btcIt); sel.forEach(x => add(x.ids)); seq.push({ id: 'n.outro.' + (Math.random() < 0.5 ? 0 : 1), gap: 0 });
+    let date = ''; try { date = new Date().toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' }); } catch (e) {}
+    const price = Math.round(btc).toLocaleString('ru-RU').replace(/ /g, ' ') + ' $';
+    const head = hasCh ? 'БИТКОИН ' + pctTxt(ch) + ' ЗА СУТКИ' : 'БИТКОИН — ' + price;
+    const sub = 'Цена ' + price + (ath > 0 ? (btc >= ath * 0.995 ? ' · исторический максимум!' : ' · до максимума ' + Math.round((1 - btc / ath) * 100) + '%') : '');
+    return { seq, paper: { head, sub, date, spark: lv.spark && lv.spark.BTC, up: !hasCh || ch >= 0 }, keys: [btcIt ? 'btc' : ''].concat(sel.map(x => x.k)) };
+  }
+  const canTalk = () => !!(ST.sound && AU.c && AU.c.state === 'running' && !isNight() && AU.pack && AU.packN && !document.hidden);
+  function newsDue() {
+    if (isNight() || ST.hide || !ST.sound || !ST.S || !(AU.c && AU.c.state === 'running')) return false;
+    return Date.now() - (lsGet('ms-news', 0) || 0) > 3 * 3600e3;
+  }
+  function startTell(h) {
+    const dur = voiceSeq(h.items.seq); if (!dur) return false;
+    h.tell = { t0: now(), dur }; h.dur = now() - h.t0 + dur + 0.9;
+    lsSet('ms-news', Date.now()); lsSet('ms-newsDay', dayKey()); HS.newsPending = false;
+    return true;
+  }
+  HOB.news = {
+    dur: 9, noZap: true,
+    loc: () => LOC.mode === 'stand',
+    start(h) {
+      h.items = newsCompose(); if (!h.items) return false;
+      h.read = h.o.quick ? 0.9 : rnd(6.5, 8.5); h.dur = h.read + 0.8; h.tell = null;
+      drawPaper(HP, h.items.paper); sfx('paper'); loadPackN();
+      if (!h.o.quick && Math.random() < 0.4) say('newsStart');
+    },
+    tick(h, dt, t) {
+      const el = t - h.t0;
+      if (!h.tell && el >= h.read && !h.gave) {
+        if (canTalk()) startTell(h);
+        else if (el < h.read + 4 && ST.sound && !isNight() && AU.c && AU.c.state === 'running' && !AU.failedN) { loadPackN(); h.dur = el + 1; }
+        else { h.gave = true; h.dur = el + 0.8; HS.newsPending = true; }
+      }
+    },
+    pose(P, t, w, h) {
+      const el = t - h.t0, tk = h.tell ? t - h.tell.t0 : -1, lower = tk >= 0 ? easeInOut(clamp(tk / 0.6, 0, 1)) : 0, hold = 1 - lower;
+      h.lower = lower;
+      mix(P, 'laX', -1.35, w * hold); mix(P, 'laZ', 0.1, w * hold); mix(P, 'raX', -1.35, w * hold); mix(P, 'raZ', -0.1, w * hold); mix(P, 'fl', 0.6, w); mix(P, 'fr', 0.6, w * hold);
+      mix(P, 'hx', 0.22, w * hold); P.gaze = true; P.ey = lerp(P.ey, -0.02 * hold + 0.006 * lower, w);
+      P.ex = lerp(P.ex, 0.03 * Math.sin(el * 1.7) * hold, w); P.hy += 0.12 * Math.sin(el * 0.8) * hold * w;
+      if (lower > 0) {
+        mix(P, 'laX', -0.45, w * lower); mix(P, 'laZ', 0.25, w * lower);
+        const g = 0.5 + 0.5 * Math.sin(t * 2.3);
+        mix(P, 'raX', -0.75 - 0.35 * g - 0.3 * ST.talk, w * lower); mix(P, 'raZ', 0.55 + 0.2 * Math.sin(t * 1.7), w * lower); mix(P, 'fr', 0.1, w * lower);
+        P.hz += 0.05 * Math.sin(t * 2.1) * lower * w; P.ex = lerp(P.ex, 0, lower); P.hx -= 0.04 * lower * w;
+      }
+      lookUser(P, t, w);
+    }
+  };
+  /* кадр занятий: веса (плавное появление/исчезание), позы, таймлайны */
+  function hobbyFrame(P, dt, t) {
+    const h = HS.cur;
+    if (h && (ST.mood === 'sleep' || (h.d.loc && !h.d.loc()))) { endJob(false); }
+    const susp = act && act.c.pri >= 1.5;
+    for (const k in HOB) {
+      const on = HS.cur && HS.cur.name === k && !susp ? 1 : 0, w0 = HS.w[k] || 0;
+      let w = damp(w0, on, on > w0 ? 4.5 : 6.5, dt); if (!on && w < 0.004) w = 0; HS.w[k] = w;
+      if (w > 0 && HOB[k].last) HOB[k].pose(P, t, w, HOB[k].last);
+    }
+    if (HS.cur && HS.cur.d.tick) HS.cur.d.tick(HS.cur, dt, t);
+    notesUpdate(dt);
+  }
+  /* предметы в руках — после того, как поза применена */
+  const BOOK_Q = new T.Quaternion().setFromEuler(new T.Euler(0.85, PI, 0));
+  function hobbyAfter(t) {
+    const H = HP; if (!H) return;
+    const sc = w => Math.max(0.001, w < 1 ? backOut(clamp(w, 0, 1)) * Math.min(1, w * 3) : 1);
+    /* телефон */
+    const wp = HS.w.phone || 0, hp = HOB.phone.last; H.phone.visible = wp > 0.02;
+    if (H.phone.visible) { const s = (hp && hp.show) || 0; H.phone.scale.setScalar(sc(wp)); H.phone.position.set(0, lerp(0.42, 0.66, s), lerp(0.42, 0.5, s)); H.phone.rotation.set(lerp(-1.0, -0.15, s), 0, 0); }
+    /* книга: раскрывается, страница перелистывается справа налево */
+    const wb = HS.w.book || 0, hb = HOB.book.last; H.book.visible = wb > 0.02;
+    if (H.book.visible) {
+      H.book.scale.setScalar(sc(wb)); H.book.position.set(0, 0.34, 0.45); H.book.quaternion.copy(BOOK_Q);
+      const open = HS.cur && HS.cur.name === 'book' ? clamp((t - hb.t0 - 0.25) / 0.6, 0, 1) * clamp((hb.dur - (t - hb.t0)) / 0.7, 0, 1) : clamp(wb * 1.5 - 0.5, 0, 1);
+      const a = lerp(PI / 2 - 0.05, 0.3, easeInOut(open)); H.bookL.rotation.y = a; H.bookR.rotation.y = -a;
+      const pk = hb ? clamp((t - hb.turnT) / 0.6, 0, 1) : 1, pe = easeInOut(pk);
+      H.bookPage.visible = pk > 0 && pk < 1; H.bookPage.rotation.y = lerp(-a, a - PI, pe); H.bookPageM.position.z = 0.0272 * (1 - 2 * pe);
+    }
+    /* газета: читает, держа обеими руками, — потом складывает и держит у пояса */
+    const wn = HS.w.news || 0, hn = HOB.news.last; H.paper.visible = wn > 0.02;
+    if (H.paper.visible) {
+      const lo = (hn && hn.lower) || 0; H.paper.scale.set(sc(wn) * lerp(1, 0.5, lo), sc(wn) * lerp(1, 0.75, lo), sc(wn));
+      H.paper.position.set(lerp(0, -0.3, lo), lerp(0.6, 0.3, lo), lerp(0.53, 0.42, lo)); H.paper.rotation.set(lerp(0.06, -0.35, lo), lerp(0, 0.35, lo), lerp(0, 0.25, lo));
+    }
+    /* голограмма над головой, повернута к зрителю, и луч от планшета */
+    const wc = HS.w.charts || 0, hc = HOB.charts.last; H.holo.visible = H.cone.visible = wc > 0.02;
+    if (H.holo.visible) {
+      const s = sc(wc), ry = -R.root.rotation.y;
+      H.holo.position.set(-0.28, R.topY + 0.72, 0.22); H.holo.rotation.set(0, ry, 0); H.holo.scale.set(s, s, s); H.holo.updateWorldMatrix(true, false);
+      H.holoMat.opacity = Math.min(1, wc * 1.4) * (0.88 + 0.12 * Math.sin(t * 23) * Math.sin(t * 7));
+      const ch = hc && hc.charts && hc.charts[hc.ci];
+      if (ch && ch.tx != null) { V2.set((ch.tx - 0.5) * 1.7, (0.5 - ch.ty) * 1.0, 0); H.holo.localToWorld(V2); hc.tgt = { x: V2.x, y: V2.y, z: V2.z }; }
+      R.tablet.getWorldPosition(V1); R.root.worldToLocal(V1); V1.y += 0.12;
+      const tx = H.holo.position.x, ty = H.holo.position.y - 0.5 * s, dx = tx - V1.x, dy = ty - V1.y, len = Math.max(0.05, Math.hypot(dx, dy));
+      H.cone.position.set((V1.x + tx) / 2, (V1.y + ty) / 2, (V1.z + H.holo.position.z) / 2); H.cone.rotation.set(0, ry, Math.atan2(dy, dx) - PI / 2);
+      H.cone.scale.set(1.5 * s, len, 1); H.cone.material.opacity = 0.4 * Math.min(1, wc * 1.4) * (R.tablet.visible ? 1 : 0);
+    }
+  }
+  /* касание во время занятия: смотрит на тебя и отвечает по делу; в газете — сразу рассказывает новости */
+  function hobbyTap() {
+    const h = HS.cur; if (!h || (act && act.c.pri >= 2)) return false;
+    HS.tapT = now();
+    if (h.name === 'news') { if (!h.tell && !(canTalk() && startTell(h))) say(isNight() ? 'tapNight' : 'tap', U_); return true; }
+    if (h.name === 'dance') h.spinT = now();
+    const g = { music: 'musicTap', phone: 'phoneTap', book: 'bookTap', charts: 'chartTap', dance: 'dance' }[h.name];
+    if (g && !AU.cur) say(g, U_);
+    return true;
+  }
+
   /* ---------- передвижение по карточке ---------- */
-  function walkTo(x) { LOC.tx = clamp(x, LY.minX, LY.maxX); if (Math.abs(LOC.tx - LOC.x) < 0.03) return false; LOC.mode = 'walk'; return true; }
+  function walkTo(x, free) { LOC.tx = clamp(x, LY.minX, free ? LY.heroR - 0.6 : LY.maxX); if (Math.abs(LOC.tx - LOC.x) < 0.03) return false; LOC.mode = 'walk'; return true; }
   function hopTo(x, y, mode, dur, h) { LOC.hop = { t0: now(), dur, x0: LOC.x, y0: LOC.y, x1: x, y1: y, h, to: mode, s0: LOC.sitK, s1: mode === 'sit' ? 1 : 0 }; LOC.mode = 'hop'; }
   function sitDown() { if (LOC.mode !== 'stand') return false; LOC.yawT = LOC.x > midX() ? -0.14 : 0.14; hopTo(LOC.x, LY.edge - SEAT, 'sit', 0.55, 0.3); sfx('jump', { vol: 0.5 }); return true; }
   function standUp() { if (LOC.mode !== 'sit') return false; hopTo(LOC.x, LY.ground, 'stand', 0.45, 0.34); sfx('servo', { up: 1 }); return true; }
@@ -1481,7 +2064,8 @@
   function endJob(quiet) { const j = JOB; JOB = null; if (j) { const s = j.steps[j.i]; if (s && s.exit) s.exit(s); } if (!quiet) settle(); }
   const val = v => (typeof v === 'function' ? v() : v);
   const SP = {
-    walk: x => ({ enter: () => { if (LOC.mode === 'stand') walkTo(val(x)); }, upd: s => LOC.mode !== 'walk' && now() - s.t0 > 0.05 }),
+    walk: (x, free) => ({ enter: () => { if (LOC.mode === 'stand') walkTo(val(x), free); }, upd: s => LOC.mode !== 'walk' && now() - s.t0 > 0.05 }),
+    hobby: (n, d, o) => ({ enter: () => (hobbyStart(n, val(d), o) ? undefined : false), upd: () => !HS.cur || HS.cur.name !== n || HS.cur.done || now() - HS.cur.t0 >= HS.cur.dur, exit: () => { if (HS.cur && HS.cur.name === n) hobbyEnd(); } }),
     wait: d => ({ upd: s => now() - s.t0 >= d }),
     face: y => ({ enter: () => { LOC.yawT = val(y); }, upd: s => now() - s.t0 > 0.35 }),
     clip: n => ({ enter: () => { playClip(n); }, upd: s => !act || now() - s.t0 > 9 }),
@@ -1501,9 +2085,18 @@
     if (name === 'stroll') job(name, [SP.walk(rnd(LY.minX + (LY.maxX - LY.minX) * 0.3, LY.maxX)), SP.face(idleYaw), SP.wait(rnd(1.5, 3.5))]);
     else if (name === 'home') job(name, [SP.walk(home), SP.face(idleYaw)]);
     else if (name === 'sit') {
-      const x = Math.random() < 0.7 ? rnd(midX(), LY.maxX) : rnd(LY.minX, LY.maxX); ST.music = Math.random() < 0.5;
-      job(name, [SP.walk(x), SP.sit(), SP.call(() => { if (Math.random() < 0.35) say('sit'); }), SP.wait(rnd(14, 30)), SP.stand()]);
-    } else if (name === 'wipe') {
+      const x = Math.random() < 0.7 ? rnd(midX(), LY.maxX) : rnd(LY.minX, LY.maxX), r = Math.random();
+      const hb = r < 0.5 ? 'book' : r < 0.72 && !isNight() ? 'music' : null;
+      job(name, [SP.walk(x), SP.sit(), SP.call(() => { if (!hb && Math.random() < 0.35) say('sit'); }), hb ? SP.hobby(hb, rnd(18, 30)) : SP.wait(rnd(14, 30)), SP.wait(rnd(1, 2.5)), SP.stand()]);
+    } else if (name === 'music') {
+      const steps = [SP.hobby('music', rnd(16, 26))], m = ST.mood;
+      if (LOC.mode === 'stand' && !isNight() && m !== 'down' && m !== 'crash' && Math.random() < 0.3 && now() - (HS.lastAt.dance || -1e9) > 200) steps.push(SP.hobby('dance'), SP.hobby('music', rnd(5, 9)));
+      job(name, steps);
+    } else if (name === 'dance') job(name, [SP.hobby('dance')]);
+    else if (name === 'phone') job(name, [SP.walk(leanX, true), SP.face(-0.45), SP.hobby('phone', rnd(22, 34)), SP.wait(0.5), SP.walk(() => LY.home - rnd(0.3, 1.4)), SP.face(idleYaw)]);
+    else if (name === 'charts') job(name, [SP.walk(() => LY.home), SP.face(-0.15), SP.hobby('charts', 16)]);
+    else if (name === 'news') job(name, [SP.face(-0.2), SP.hobby('news')]);
+    else if (name === 'wipe') {
       const r = numRect(); if (!r) return;
       const hy = Math.max(LY.ground + 0.4, r.cy - HAND_H), x0 = clamp(r.r + 0.95, LY.minX, LY.maxX), x1 = Math.max(LY.minX - 0.4, r.l + 0.95);
       if (x0 - x1 < 0.3) return;
@@ -1515,7 +2108,7 @@
   function brain(t) {
     if (act || JOB || queue.length || ST.drag || ST.noBrain) return;
     const m = ST.mood;
-    if (LOC.mode === 'sit') { job('sitStay', [SP.wait(m === 'sleep' ? 1e6 : rnd(5, 12)), SP.stand()]); return; }
+    if (LOC.mode === 'sit') { job('sitStay', [m !== 'sleep' && m !== 'hide' && t - (HS.lastAt.book || -1e9) > 120 && Math.random() < 0.45 ? SP.hobby('book', rnd(14, 24)) : SP.wait(m === 'sleep' ? 1e6 : rnd(5, 12)), SP.stand()]); return; }
     if (LOC.mode !== 'stand' || t < ST.nextAct) return;
     if (t - ST.lastInput < 4) { ST.nextAct = t + 2; return; }
     ST.nextAct = t + rnd(7, 15);
@@ -1525,9 +2118,17 @@
     const away = Math.abs(LOC.x - LY.home) > 0.5;
     let opts = [['stroll', 3], ['sit', m === 'night' ? 5 : 3], ['peek', 1.2], ['yawn', m === 'night' ? 2 : 0.6]];
     if (numOK() && m !== 'night' && t - (ST.lastWipe || -1e9) > 120) opts.push(['wipe', 1.6]);
-    if (m !== 'night') opts.push(['polish', 1], ['blocks', 1]);
+    if (m !== 'night') opts.push(['polish', 0.7], ['blocks', 0.7]);
     if (away) opts.push(['home', 3.5]);
-    if (m === 'hunter') opts = [['stroll', 2], ['peek', 1]].concat(away ? [['home', 3]] : []);
+    /* занятия: у каждого своя пауза, чтобы не повторялся и не мельтешил */
+    const cd = (k, s) => t - (HS.lastAt[k] || -1e9) > s, day = m !== 'night';
+    if (day && cd('music', 200)) opts.push(['music', 2.2]);
+    if (day && cd('dance', 280) && m !== 'down' && m !== 'crash') opts.push(['dance', m === 'up' || m === 'rocket' ? 2.6 : 0.8]);
+    if (cd('phone', 300)) opts.push(['phone', 1.6]);
+    const charts = day && !ST.hide && cd('charts', 300) && chartsList().length > 0;
+    if (charts) opts.push(['charts', m === 'down' || m === 'crash' ? 3 : 1.5]);
+    if (newsDue()) opts.push(['news', 5]);
+    if (m === 'hunter') opts = [['stroll', 2], ['peek', 1]].concat(away ? [['home', 3]] : [], charts ? [['charts', 3]] : []);
     let tot = 0; for (const o of opts) if (o[0] !== ST.lastJob) tot += o[1];
     let r = Math.random() * tot, name = 'stroll';
     for (const o of opts) { if (o[0] === ST.lastJob) continue; r -= o[1]; if (r <= 0) { name = o[0]; break; } }
@@ -1613,7 +2214,8 @@
     const S = info.S, D = info.D, P = info.P || {}, wasHide = ST.hide;
     ST.hide = !!P.hide; ST.sound = P.msVoice !== false; ST.go = !!info.go; ST.fresh = info.fresh || 0; ST.money = info.money || ST.money;
     if (!ST.sound) { stopVoice(); hum(false); }
-    if (ST.hide && !wasHide && JOB && JOB.name === 'wipe') endJob(false);
+    if (ST.hide && !wasHide && ((JOB && JOB.name === 'wipe') || (HS.cur && (HS.cur.name === 'charts' || HS.cur.name === 'news')))) endJob(false);
+    ST.S = S; ST.D = D;
     const off = !!info.offline; if (off && !ST.offline) ST.offSince = now(); ST.offline = off;
     ST.pct = info.pct == null || !isFinite(info.pct) ? null : info.pct;
     if (!S.ready) return;
@@ -1666,6 +2268,7 @@
     const P = BASE(), I = ST.reduced ? 0.25 : ST.intensity;
     moodPose(P, m, t, I);
     locPose(P, t);
+    hobbyFrame(P, dt, t);
     if (act) {
       if (act.hold != null) act.t0 = t - act.hold * act.dur;
       const k = clamp((t - act.t0) / act.dur, 0, 1);
@@ -1683,6 +2286,7 @@
     if (t > ST.nextBlink) { ST.blinkT = t; ST.nextBlink = t + rnd(2.4, 5.5); }
     const bk = t - ST.blinkT, blink = bk < 0.16 ? 1 - 0.92 * Math.sin((bk / 0.16) * PI) : 1;
     apply(C, blink, t);
+    hobbyAfter(t);
     if (!(ST.drag && ST.drag.spin)) { ST.spinV *= Math.exp(-3 * dt); ST.spin += ST.spinV * dt; ST.spin += (0 - ST.spin) * (1 - Math.exp(-2.5 * dt)); }
     if (C.thr > 0.3 && !ST.reduced && t > ST.nextThr) {
       ST.nextThr = t + 0.06;
@@ -1709,20 +2313,24 @@
   }
   const KEY_OFF = new T.Vector3(2.5, 4, 5);
   function apply(c, blink, t) {
-    R.root.position.set(LOC.x, LOC.y, 0);
+    R.root.position.set(LOC.x + (c.dx || 0), LOC.y, 0);
     R.root.rotation.y = LOC.yaw + c.yaw + ST.spin;
-    R.hop.position.y = Math.max(0, c.y);
+    R.hop.position.y = Math.max(0, c.y); R.hop.rotation.z = c.lean || 0;
     const sq = c.sq, inv = 1 / Math.sqrt(sq); R.hop.scale.set(inv, sq, inv);
     R.bodyG.rotation.set(c.tx, 0, c.tz);
     R.head.rotation.set(c.hx - c.ey * 2.2, c.hy + c.ex * 2.4, c.hz);
     R.armL.p.rotation.set(c.laX, 0, c.laZ); R.armR.p.rotation.set(c.raX, 0, c.raZ);
     fingers(R.armL, c.fl, c.pl, -1); fingers(R.armR, c.fr, c.pr, 1);
+    R.armL.thumb.rotation.x = 0.55 + (c.thL || 0); R.armR.thumb.rotation.x = 0.55 + (c.thR || 0);
     R.legs[0].g.rotation.x = -c.legL; R.legs[1].g.rotation.x = -c.legR;
+    /* нога за ногу (у края карточки): левая нога заходит за правую, стопа ровно, носок в пол */
+    R.legs[0].g.rotation.z = c.legLz || 0; R.legs[1].g.rotation.z = c.legRz || 0;
+    R.legs[0].shoe.rotation.set(c.toeL || 0, -0.07, -(c.legLz || 0) - (c.lean || 0)); R.legs[1].shoe.rotation.set(0, 0.07, -(c.legRz || 0) - (c.lean || 0));
     for (const g of R.cords) { g.rotation.z = -c.tz * 1.1 + 0.04 * Math.sin(t * 1.7 + g.position.x * 20); g.rotation.x = -c.tx * 1.2 + 0.03 * Math.sin(t * 1.3 + g.position.x * 9); }
     R.face.update(faceState(c, blink), R.cfg, t);
     const dim = 1 - 0.42 * clamp(c.tarn, 0, 1);
     R.visorMat.emissiveIntensity = (1.25 + 0.35 * ST.talk) * dim;
-    const beat = ST.music && LOC.mode === 'sit' ? 0.75 + 0.45 * Math.max(0, Math.sin(t * 7.4)) : 1;
+    const mus = Math.max(HS.w.music || 0, HS.w.dance || 0), beat = 1 + mus * (0.75 * Math.max(0, Math.sin(t * BPS * TAU)) - 0.3);
     R.ringMat.color.copy(R.glowC).multiplyScalar(dim * (0.8 + 0.2 * Math.sin(t * 2.1)) * beat * (1 + 0.7 * ST.talk));
     R.hoodUp.visible = !!c.cap; R.hoodDown.visible = !c.cap; R.phones.visible = !c.cap;
     R.ant.visible = !!c.ant; if (c.ant) R.antMat.color.copy(Math.sin(t * 6) > 0 ? antOn : antOff);
@@ -1831,6 +2439,8 @@
       if (LOC.mode === 'carry' || (act && act.c.pri >= 3)) return;
       if (act) endClip();
       if (ST.introPending && ST.sound) { ST.introPending = false; lsSet('ms-intro2', true); playClip('tapWave'); say('intro', U_); return; }
+      if (hobbyTap()) return;
+      if (HS.newsPending && LOC.mode === 'stand' && !JOB && canTalk()) { job('news', [SP.face(-0.2), SP.hobby('news', 0, { quick: true })]); return; }
       const air = LOC.mode === 'sit' || LOC.mode === 'hop' || LOC.mode === 'hover' || LOC.mode === 'land';
       playClip(air ? 'tapWave' : pick(['tap', 'tapSpin', 'tapWave', 'tapJump']));
       if (!AU.cur) say(isNight() ? 'tapNight' : 'tap', U_);
@@ -1881,7 +2491,7 @@
     const fill = new T.DirectionalLight(col(0xffd9a8), 0.35); fill.position.set(-3, 1, 3); scene.add(fill);
     const top = new T.DirectionalLight(0xffffff, 0.28); top.position.set(0.5, 6, 1.5); scene.add(top);
     const cfg = CFG.slitok, TX = makeTextures(); M = materials(cfg, TX); R = buildStreet(M, cfg); scene.add(R.root);
-    PR = buildProps(M, R, scene); PT = Particles(scene, sparkTex());
+    PR = buildProps(M, R, scene); PT = Particles(scene, sparkTex()); HP = buildHobbyProps(M, R, scene);
     const mk = (cls, txt) => { const d = document.createElement('div'); d.className = cls; if (txt) d.textContent = txt; host.appendChild(d); return d; };
     ui.hit = mk('ms-hit'); ui.hit.setAttribute('role', 'button'); ui.hit.setAttribute('aria-label', 'Слиток — нажми, чтобы поздороваться'); ui.hit.tabIndex = 0;
     ui.alert = mk('ms-float ms-alert', '!'); ui.sign = mk('ms-float ms-sign');
@@ -1914,12 +2524,28 @@
       hour: h => { ST.forceHour = h; },
       mood: m => { if (ST.forceHour == null) ST.forceHour = 12; ST.pct = { calm: 0, up: 3, rocket: 9, down: -3, crash: -9 }[m]; ST.go = m === 'hunter'; ST.hide = m === 'hide'; if (m === 'sleep') { ST.lastInput = ST.lastEvent = now() - 400; } else ST.lastInput = now(); if (m === 'offline') { ST.offline = true; ST.offSince = now() - 120; } else ST.offline = false; },
       say: (g, o) => say(g, Object.assign({ user: true }, o || {})),
-      state: () => ({ mood: ST.mood, act: act && act.name, job: JOB && JOB.name, loc: LOC.mode, x: +LOC.x.toFixed(2), y: +LOC.y.toFixed(2), queue: queue.map(q => q.name), raf: !!raf, frame: firstFrame, voice: !!AU.pack, talk: +ST.talk.toFixed(2), said: ST.lastSay || '', calls: renderer ? renderer.info.render.calls : 0, tris: renderer ? renderer.info.render.triangles : 0, ly: { W: LY.W, H: LY.H, ground: +LY.ground.toFixed(2), edge: +LY.edge.toFixed(2), minX: +LY.minX.toFixed(2), maxX: +LY.maxX.toFixed(2), home: +LY.home.toFixed(2) } }),
+      state: () => ({ mood: ST.mood, act: act && act.name, job: JOB && JOB.name, loc: LOC.mode, x: +LOC.x.toFixed(2), y: +LOC.y.toFixed(2), queue: queue.map(q => q.name), raf: !!raf, frame: firstFrame, voice: !!AU.pack, talk: +ST.talk.toFixed(2), said: ST.lastSay || '', hobby: HS.cur ? HS.cur.name : '', hw: Object.fromEntries(Object.entries(HS.w).filter(e => e[1] > 0).map(e => [e[0], +e[1].toFixed(2)])), calls: renderer ? renderer.info.render.calls : 0, tris: renderer ? renderer.info.render.triangles : 0, ly: { W: LY.W, H: LY.H, ground: +LY.ground.toFixed(2), edge: +LY.edge.toFixed(2), minX: +LY.minX.toFixed(2), maxX: +LY.maxX.toFixed(2), home: +LY.home.toFixed(2), heroR: +LY.heroR.toFixed(2) } }),
       render: () => { if (renderer) { update(1 / 30, now()); renderer.render(scene, camera); } },
       box: () => { const r = host.getBoundingClientRect(); return { x: r.left + pxX(LOC.x) - 1.05 * LY.U, y: r.top + pxY(LOC.y + R.topY + 0.15), w: 2.1 * LY.U, h: pxY(LOC.y - 0.25) - pxY(LOC.y + R.topY + 0.15) }; },
       pr: v => { QG.off = true; renderer.setPixelRatio(v); measure(); },
       quality: () => ({ level: QG.level, ema: +QG.ema.toFixed(3) }),
       job: n => { endJob(true); runJob(n); },
+      hobby: (n, d, o) => { endJob(true); endClip(); job('dbg-' + n, [SP.hobby(n, d || 40, o)]); return !!HS.cur; },
+      hobbyAt: k => { if (HS.cur) { const dt = k - (now() - HS.cur.t0); HS.cur.t0 -= dt; for (const f of ['next', 'hm', 'cT', 'b0', 'modeT', 'turnT', 'reactT']) if (typeof HS.cur[f] === 'number') HS.cur[f] -= dt; } },
+      props: () => HP,
+      nudge: () => { ST.nextAct = 0; ST.lastInput = now() - 10; },
+      due: () => newsDue(),
+      cool: () => { HS.lastAt = {}; },
+      charts: () => chartsList().map(c => c.sym + ':' + c.candles.length),
+      freeze: on => { FZ = null; if (on) FZ = now(); },
+      settle: n => { for (let i = 0; i < (n || 45); i++) update(1 / 30, now()); renderer.render(scene, camera); },
+      game: (m, k) => { if (HP && HP.game) { HP.game.mode = m; HP.game.modeT = now() - (k || 0); } },
+      turn: () => { if (HS.cur) HS.cur.turnT = now(); },
+      news: () => { const x = newsCompose(); return x ? { ids: x.seq.map(q => q.id), keys: x.keys, paper: x.paper.head + ' / ' + x.paper.sub } : null; },
+      tellFake: d => { const h = HS.cur; if (h && h.name === 'news') { h.tell = { t0: now(), dur: d || 8 }; h.dur = now() - h.t0 + (d || 8) + 0.9; } },
+      tell: () => { const h = HS.cur; return !!(h && h.name === 'news' && !h.tell && startTell(h)); },
+      packs: () => ({ main: !!AU.pack, news: !!AU.packN, failedN: !!AU.failedN }),
+      loadNews: () => loadPackN(),
       still: on => { ST.noBrain = on !== false; },
       loc: o => { endJob(true); Object.assign(LOC, o); if (o.mode === 'sit') { LOC.sitK = 1; LOC.y = LY.edge - SEAT; } else if (o.mode === 'stand' || o.mode === 'walk') { LOC.sitK = 0; LOC.y = LY.ground; } if (o.yaw != null) LOC.yawT = o.yaw; },
       voice: id => voice(id, {}),
