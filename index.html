@@ -607,6 +607,14 @@ button:focus-visible{outline:2px solid var(--pink);outline-offset:2px}
       <p class="hint">Поправка — проценты из Earn или исправление ошибки, можно с минусом.</p>
     </div>
 
+    <div id="f-earn" hidden style="display:flex;flex-direction:column;gap:12px">
+      <label class="field"><span>Сейчас в стейкинге, USDT</span><input type="number" id="erBal" step="any" min="0" inputmode="decimal" placeholder="365.09"></label>
+      <div class="calc" id="erCalc"></div>
+      <label class="field"><span>Где лежит</span><input type="text" id="erPlace" maxlength="40" placeholder="Bybit · гибкий" autocomplete="off"></label>
+      <div class="f2"><label class="field"><span>Доход в день, USDT</span><input type="number" id="erDay" step="any" min="0" inputmode="decimal" placeholder="0.023"></label><label class="field"><span>или ставка, % годовых</span><input type="number" id="erApr" step="any" min="0" inputmode="decimal" placeholder="1.9"></label></div>
+      <p class="hint">«Доход в день» — строка «Ожидаемая суточная доходность» на экране биржи: по ней приложение оценивает доход. Разница между суммой в стейкинге и резервом в приложении запишется как «Проценты стейкинга».</p>
+    </div>
+
     <div id="f-income" hidden style="display:flex;flex-direction:column;gap:12px">
       <label class="field"><span>Получил, грн</span><input type="number" id="incUah" step="any" min="0" inputmode="decimal" placeholder="24000"></label>
       <div class="calc" id="incCalc"></div>
@@ -718,9 +726,9 @@ button:focus-visible{outline:2px solid var(--pink);outline-offset:2px}
 
 <div class="toast" id="toast" role="status"><span id="toastMsg"></span><button type="button" id="toastBtn" hidden></button></div>
 
-<script src="config.js?v=20261026100644"></script>
+<script src="config.js?v=20261026182117"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="shim.js?v=20261026100644"></script>
+<script src="shim.js?v=20261026182117"></script>
 <script>
 /* ===== основа ===== */
 const $=id=>document.getElementById(id);
@@ -818,12 +826,12 @@ function countTo(el,to,f){if(to==null||!isFinite(to)){if(S.ready)el.textContent=
 
 /* ===== расчёт портфеля ===== */
 function derive(){
-  const h={};let reserve=0,dcaBudget=0,deposited=0,depositedUah=0,hasDep=false,realized=0;
+  const h={};let reserve=0,dcaBudget=0,deposited=0,depositedUah=0,hasDep=false,realized=0,earned=0;
   const txs=S.tx.slice().sort(byTs),firstDep=(txs.find(t=>t.type==='deposit')||{}).ts||null;
   const C=s=>h[s]||(h[s]={qty:0,usd:0,cq:0,realized:0});
   for(const t of txs){const sym=(t.symbol||'').toUpperCase(),q=+t.qty||0,u=(t.usd==null||t.usd==='')?null:+t.usd;
     if(t.type==='deposit'){hasDep=true;deposited+=+t.usd||0;depositedUah+=+t.uah||0;reserve+=+t.reserveUsd||0;dcaBudget+=+t.dcaUsd||0;continue;}
-    if(t.type==='reserve_in'||t.type==='reserve_adj'){reserve+=u||0;continue;}
+    if(t.type==='reserve_in'||t.type==='reserve_adj'){reserve+=u||0;if(t.earn)earned+=u||0;continue;}
     if(t.type==='dip')reserve-=u||0;
     if(t.type==='dca'&&firstDep&&String(t.ts)>=String(firstDep))dcaBudget-=u||0;
     if(BUYS.includes(t.type)&&sym){const c=C(sym);c.qty+=q;if(u!=null){c.usd+=u;c.cq+=q;}continue;}
@@ -832,7 +840,7 @@ function derive(){
   const syms=Object.keys(h).filter(s=>h[s].qty>1e-12);
   let total=0,inv=0,valued=true;for(const s of syms){const p=+prices[s];if(p)total+=h[s].qty*p;else valued=false;inv+=Math.max(0,h[s].usd);}
   syms.sort((a,b)=>(h[b].qty*(+prices[b]||0))-(h[a].qty*(+prices[a]||0)));
-  return {h,syms,prices,total,inv,valued,reserve,dcaBudget,deposited,depositedUah,hasDep,realized};
+  return {h,syms,prices,total,inv,valued,reserve,dcaBudget,deposited,depositedUah,hasDep,realized,earned};
 }
 const split=()=>Object.assign({BTC:50,ETH:30,ALT:20},S.settings.split||{});
 const depShare=()=>{const v=(S.settings.depositSplit||{}).dca;return (v==null?50:+v)/100;};
@@ -1123,9 +1131,11 @@ let stKind=null;
 const ST_T={cal:'Календарь',picks:'Твои монеты',cands:'Кандидаты',news:'Новости и рынок',res:'Резерв и DCA'};
 function openSt(k){stKind=k;openSheet('stSheet');renderPick(derive());const b=$('stSheet').querySelector('.sh-body');if(b)b.scrollTop=0;}
 $('stMenu').addEventListener('click',e=>{const b=e.target.closest('[data-st]');if(b)openSt(b.dataset.st);});
-function resInfo(D){const capP=+S.settings.capPct||20,cap=D.total*capP/100,inc=+S.settings.incomeMonthlyUah||0,r=rate(),flow=inc&&r?inc*.3*(1-depShare())/r:0;
+function resInfo(D){const E=earnCfg(),er=earnRate(E),due=earnDue(E);
+  const earnHtml=E?`<div class="tile earn" style="margin-top:10px"><div class="k">Резерв в стейкинге · ${esc(E.place||'')}</div><div class="v" style="font-size:20px">~${nf(er*100,1)}% <span class="small mute" style="font-weight:600">годовых · +${money(D.reserve*er/365,{d:3})}/день</span></div><div class="s">заработано ${money(D.earned,{sign:true})}${E.fact?' · по факту ~'+nf(E.fact,1)+'%':''} · сверено ${dShort(E.at)}</div>${due?'<p class="hint" style="color:var(--warn);margin-top:6px">Прошёл месяц — пора сверить с биржей</p>':''}<button type="button" class="btn sm ${due?'':'ghost'}" data-act="earn" style="margin-top:10px;width:100%">Сверить с биржей</button></div>`:`<button type="button" class="btn sm ghost" data-act="earn" style="margin-top:10px;width:100%">Резерв лежит в стейкинге? Настроить учёт</button>`;
+  const capP=+S.settings.capPct||20,cap=D.total*capP/100,inc=+S.settings.incomeMonthlyUah||0,r=rate(),flow=inc&&r?inc*.3*(1-depShare())/r:0;
   const dk=D.hasDep?'Бюджет DCA':'DCA в месяц',dv=D.hasDep?usd(D.dcaBudget):(inc&&r?usd(inc*.3*depShare()/r,0):'—'),ds=D.hasDep?(D.dcaBudget>0.5?'осталось купить':'всё куплено ✓'):(inc?'оценка по доходу':'');
-  return {dk,dv,html:`<div class="grid2"><div class="tile"><div class="k">Резерв USDT</div><div class="v">${money(D.reserve)}</div><div class="s">${cap?'потолок '+money(cap,{d:0}):''}${flow?' · +'+usd(flow,0)+'/мес':''}</div><div class="meter"><i style="width:${cap?Math.min(100,D.reserve/cap*100):0}%"></i></div><button type="button" class="btn sm" data-act="reserve" style="margin-top:12px;width:100%">Пополнить</button></div><div class="tile"><div class="k">${dk}</div><div class="v">${dv}</div><div class="s">${ds}</div><button type="button" class="btn sm ghost" data-act="buy" style="margin-top:12px;width:100%">Купить</button></div></div><p class="hint">Резерв USDT — деньги для докупок по лестнице. Выше потолка (${capP}% от стоимости монет) резерв не копим: излишек идёт в DCA.</p>`};}
+  return {dk,dv,html:`<div class="grid2"><div class="tile"><div class="k">Резерв USDT</div><div class="v">${money(D.reserve)}</div><div class="s">${cap?'потолок '+money(cap,{d:0}):''}${flow?' · +'+usd(flow,0)+'/мес':''}</div><div class="meter"><i style="width:${cap?Math.min(100,D.reserve/cap*100):0}%"></i></div><button type="button" class="btn sm" data-act="reserve" style="margin-top:12px;width:100%">Пополнить</button></div><div class="tile"><div class="k">${dk}</div><div class="v">${dv}</div><div class="s">${ds}</div><button type="button" class="btn sm ghost" data-act="buy" style="margin-top:12px;width:100%">Купить</button></div></div>${earnHtml}<p class="hint">Резерв USDT — деньги для докупок по лестнице. Выше потолка (${capP}% от стоимости монет) резерв не копим: излишек идёт в DCA.</p>`};}
 function renderPick(D){const sc=S.screen,ap=S.altplan||{},yr=ap.draftYear||'',run=screenRunning(),req=S.screenreq||{};
   const dr=ap.draft||{},dk=Object.keys(dr).sort(),uniq=[...new Set(dk.map(k=>dr[k].sym))],RS=resInfo(D);
   const row=(k,ico,col,nm,sub)=>`<button type="button" class="row r3" data-st="${k}" aria-haspopup="dialog">${icoBadge(ico,col)}<span class="col"><span class="nm">${nm}</span><span class="sub">${sub}</span></span><span class="chev">›</span></button>`;
@@ -1135,7 +1145,7 @@ function renderPick(D){const sc=S.screen,ap=S.altplan||{},yr=ap.draftYear||'',ru
     +row('picks','star','var(--warn)','Твои монеты',pk.length?pk.map(esc).join(' · '):'пока не выбраны')
     +row('cands','cand','var(--pos)','Кандидаты',sc?(run?'анализ идёт — обычно 5–10 минут':`прошли фильтр ${(sc.cands||[]).length} · не прошли ${(sc.out||[]).length}`):'появятся после первого анализа')
     +row('news','news','var(--info)','Новости и рынок',sc?`${(sc.macro||[]).length} фактов · ${(sc.headlines||[]).length} заголовков${sc.global?' · доля BTC '+nf(+sc.global.btcDom||0,1)+'%':''}`:'появятся после первого анализа')
-    +row('res','reserve','var(--lav)','Резерв и DCA','резерв '+money(D.reserve)+' · '+RS.dk+' '+RS.dv);
+    +row('res','reserve','var(--lav)','Резерв и DCA','резерв '+money(D.reserve)+(earnCfg()?' · стейкинг ~'+nf(earnRate(earnCfg())*100,1)+'%':'')+(earnDue(earnCfg())?' · пора сверить':'')+' · '+RS.dk+' '+RS.dv);
   if(!stKind||!$('stSheet').classList.contains('open'))return;
   $('stTitle').textContent=stKind==='cal'?'Календарь'+(yr?' '+yr:''):ST_T[stKind];
   let h='';
@@ -1189,7 +1199,7 @@ async function runScreen(){runAsk=false;
 let hFilter='all',actPane='hist';
 const HF=[['all','Все'],['buys','Покупки'],['sell','Продажи'],['deposit','Депозиты'],['reserve','Резерв'],['income','Доход']];
 function hMatch(t){switch(hFilter){case 'buys':return BUYS.includes(t.type)&&t.type!=='airdrop';case 'sell':return t.type==='sell';case 'deposit':return t.type==='deposit';case 'reserve':return t.type==='reserve_in'||t.type==='reserve_adj'||t.type==='dip';case 'income':return t.type==='income';default:return true;}}
-function txTitle(t){const s=(t.symbol||'').toUpperCase();switch(t.type){case 'buy':return 'Покупка '+s;case 'dca':return 'DCA · '+s;case 'dip':return 'Докупка · ур. '+(t.level||'?')+' · '+s;case 'sell':return 'Продажа '+s;case 'airdrop':return 'Аирдроп '+s;case 'start':return 'Остаток · '+s;case 'deposit':return 'Пополнение биржи';case 'reserve_in':return 'Резерв пополнен';case 'reserve_adj':return 'Поправка резерва';case 'income':return 'Доход';}return t.type;}
+function txTitle(t){const s=(t.symbol||'').toUpperCase();switch(t.type){case 'buy':return 'Покупка '+s;case 'dca':return 'DCA · '+s;case 'dip':return 'Докупка · ур. '+(t.level||'?')+' · '+s;case 'sell':return 'Продажа '+s;case 'airdrop':return 'Аирдроп '+s;case 'start':return 'Остаток · '+s;case 'deposit':return 'Пополнение биржи';case 'reserve_in':return 'Резерв пополнен';case 'reserve_adj':return t.earn?'Проценты стейкинга':'Поправка резерва';case 'income':return 'Доход';}return t.type;}
 function txLeft(t){if([...BUYS,'sell'].includes(t.type))return badge((t.symbol||'').toUpperCase());return icoBadge(t.type==='deposit'?'deposit':t.type==='income'?'income':t.type==='reserve_adj'?'adj':'reserve');}
 function txRight(t){const s=(t.symbol||'').toUpperCase(),u=(t.usd==null||t.usd==='')?null:+t.usd;
   if([...BUYS,'sell'].includes(t.type))return `<span class="val ${t.type==='sell'?'neg':'pos'}">${t.type==='sell'?'−':'+'}${qty(t.qty)} ${esc(s)}</span><span class="small mute">${t.type==='airdrop'?'бесплатно':u!=null?money(u):''}</span>`;
@@ -1340,14 +1350,14 @@ document.querySelectorAll('.sh-head').forEach(h=>{let y0=null;const sh=h.closest
   h.addEventListener('pointerup',up);h.addEventListener('pointercancel',up);});
 
 /* ===== новая запись ===== */
-const TITLES={menu:'Новая запись',buy:'Купить',dip:'Докупка по уровню',sell:'Продать',deposit:'Пополнить биржу',reserve:'Резерв USDT',income:'Получил доход',start:'Остаток монеты'};
-const FORMS=['buy','dip','sell','deposit','reserve','income','start'];
+const TITLES={menu:'Новая запись',buy:'Купить',dip:'Докупка по уровню',sell:'Продать',deposit:'Пополнить биржу',reserve:'Резерв USDT',earn:'Стейкинг резерва',income:'Получил доход',start:'Остаток монеты'};
+const FORMS=['buy','dip','sell','deposit','reserve','earn','income','start'];
 let mode='menu',buyMode='dca',resKind='reserve_in';
 function openAct(m,opt){openSheet('actSheet');showForm(m||'menu',opt);}
 function showForm(m,opt){opt=opt||{};mode=m;$('f-menu').hidden=m!=='menu';FORMS.forEach(k=>{$('f-'+k).hidden=k!==m;});
   $('actBack').hidden=m==='menu';$('actTitle').textContent=TITLES[m]||'';$('actFoot').hidden=m==='menu';$('dateField').hidden=m==='menu'||m==='income';$('fErr').textContent='';$('fDate').value=isoDay(new Date());
   const b=$('actSheet').querySelector('.sh-body');if(b)b.scrollTop=0;
-  const init={buy:initBuy,dip:initDip,sell:initSell,deposit:initDep,reserve:initRes,income:initInc,start:initStart}[m];if(init)init(opt);}
+  const init={buy:initBuy,dip:initDip,sell:initSell,deposit:initDep,reserve:initRes,earn:initEarn,income:initInc,start:initStart}[m];if(init)init(opt);}
 $('actBack').addEventListener('click',()=>{play('tick');showForm('menu');});
 $('plusBtn').addEventListener('click',()=>openAct('menu'));
 function tsFromDate(){const v=$('fDate').value;if(!v||v===isoDay(new Date()))return new Date().toISOString();const a=v.split('-').map(Number);return new Date(a[0],a[1]-1,a[2],12,0,0).toISOString();}
@@ -1417,6 +1427,18 @@ $('depUsd').addEventListener('input',()=>{$('depUsd').dataset.touched='1';depCal
 function setResKind(k){resKind=k;[...$('resKind').children].forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.k===k)));$('resLbl').textContent=k==='reserve_adj'?'Поправка, $ (можно с минусом)':'Сумма, $';}
 $('resKind').addEventListener('click',e=>{const b=e.target.closest('[data-k]');if(b){play('tick');setResKind(b.dataset.k);}});
 function initRes(opt){setResKind(opt.kind||'reserve_in');$('resAmt').value='';$('resNote').value='';}
+/* ===== стейкинг резерва: оценка дохода, сверка с биржей раз в месяц ===== */
+const earnCfg=()=>{const e=S.settings.earn;return e&&e.on?e:null;};
+const earnRate=e=>e?(e.day&&e.bal?e.day*365/e.bal:(+e.apr||0)/100):0;           /* доля в год */
+const earnDays=e=>e&&e.at?(Date.now()-Date.parse(e.at))/864e5:0;
+const earnDue=e=>!!e&&earnDays(e)>=30;
+function initEarn(){const e=S.settings.earn||{};$('erBal').value='';$('erPlace').value=e.place||'Bybit · гибкий';$('erDay').value=e.day!=null?e.day:'';$('erApr').value=e.apr!=null?e.apr:'';earnCalc();}
+function earnCalc(){const D=derive(),b=+$('erBal').value,row=(k,v)=>`<div><span>${k}</span><span>${v}</span></div>`;
+  if(!b){$('erCalc').innerHTML=row('Резерв в приложении',money(D.reserve))+'<p class="hint">Впиши сумму с экрана биржи — посчитаю начисленные проценты.</p>';return;}
+  const d=b-D.reserve;$('erCalc').innerHTML=row('Резерв в приложении',money(D.reserve))+row('В стейкинге',usd(b))+row(d>=0?'Проценты к записи':'Разница (минус)',money(d,{sign:true}));}
+['erBal','erDay','erApr'].forEach(id=>$(id).addEventListener('input',earnCalc));
+function earnNudge(){const e=earnCfg();if(!S.ready||!earnDue(e))return;const k='earnAsk',d=isoDay(new Date());try{if(localStorage.getItem(k)===d)return;localStorage.setItem(k,d);}catch(x){}
+  setTimeout(()=>toast('Прошёл месяц — сверь стейкинг резерва',{label:'Сверить',fn:()=>openAct('earn')}),2500);}
 function initInc(){$('incUah').value='';incCalc();}
 function incCalc(){const v=+$('incUah').value||0,r=rate(),row=(k,g)=>`<div><span>${k}</span><span>${uah(g)}${r?' · '+usd(g/r,0):''}</span></div>`;
   $('incCalc').innerHTML=v?row('30% в крипту',v*.3)+row('→ DCA',v*.3*depShare())+row('→ резерв USDT',v*.3*(1-depShare()))+row('10% на депозит',v*.1)+'<p class="hint">После этого пополни биржу и запиши «Пополнить биржу».</p>':'<p class="hint">Впиши сумму — посчитаю, сколько куда.</p>';}
@@ -1454,6 +1476,13 @@ async function saveForm(){const err=$('fErr');err.textContent='';if(!db){err.tex
       finish('cash',0,'Продано '+qtyRaw(q)+' '+sym+' за '+usd(u));}
     else if(mode==='deposit'){const g=+$('depUah').value||0,u=+$('depUsd').value||0;if(!u){err.textContent='Впиши сумму пополнения.';return;}const dcaUsd=+(u*depShare()).toFixed(2);
       await db.collection('tx').add({ts,type:'deposit',uah:g||null,usd:+u.toFixed(2),dcaUsd,reserveUsd:+(u-dcaUsd).toFixed(2),rate:g?+(g/u).toFixed(4):null});finish('coins',3,'Биржа +'+usd(u)+': DCA '+usd(dcaUsd)+', резерв '+usd(u-dcaUsd));}
+    else if(mode==='earn'){const b=+$('erBal').value;if(!b||b<0){err.textContent='Впиши, сколько сейчас USDT в стейкинге.';return;}
+      const D=derive(),d=+(b-D.reserve).toFixed(2),day=+$('erDay').value||null,apr=+$('erApr').value||null,prev=S.settings.earn||{};
+      let fact=prev.fact||null;const days=prev.at?(Date.parse(ts)-Date.parse(prev.at))/864e5:0;if(prev.bal&&days>=7&&d>0)fact=+(d/prev.bal/days*365*100).toFixed(2);
+      if(Math.abs(d)>=0.01)await db.collection('tx').add({ts,type:'reserve_adj',usd:d,note:'Проценты стейкинга',earn:true});
+      await db.doc('app/settings').update({earn:{on:true,place:$('erPlace').value.trim()||'стейкинг',day,apr,bal:+b.toFixed(4),at:ts,fact}});
+      try{localStorage.setItem('earnAsk',isoDay(new Date()));}catch(x){}
+      finish('cash',0,Math.abs(d)>=0.01?'Сверено · проценты '+money(d,{sign:true}):'Сверено · резерв совпадает');}
     else if(mode==='reserve'){const v=+$('resAmt').value;if(!v||(resKind==='reserve_in'&&v<0)){err.textContent='Впиши сумму больше нуля.';return;}const it={ts,type:resKind,usd:+v.toFixed(2)};const n=$('resNote').value.trim();if(n)it.note=n;await db.collection('tx').add(it);finish('cash',0,'Резерв '+(v>0?'+':'')+usd(v));}
     else if(mode==='income'){const v=+$('incUah').value||0;if(!v){err.textContent='Впиши сумму дохода.';return;}await db.collection('tx').add({ts,type:'income',uah:v});finish('cash',0,'Доход '+uah(v)+' записан');}
     else if(mode==='start'){const sym=($('nsSym').value||'').trim().toUpperCase(),q=+$('nsQty').value||0,u=$('nsUsd').value;if(!sym||!q){err.textContent='Впиши монету и количество.';return;}await db.collection('tx').add({ts,type:'start',symbol:sym,qty:q,usd:u===''?null:+u});finish('coin',1,sym+' добавлен');}
@@ -1559,9 +1588,9 @@ function msPayload(x){let fresh=0;try{fresh=S.alerts.filter(a=>String(a.ts||'')>
 function msSync(x){MSC.last=x;if(!msApply())return;if(window.Mascot){try{window.Mascot.sync(msPayload(x));}catch(e){}}else msLoad();}
 function msLoad(){if(MSC.loading||MSC.failed)return;MSC.loading=true;
   const add=(src,ok)=>{try{const s=document.createElement('script');s.src=src;s.async=true;s.onload=ok;s.onerror=()=>{MSC.failed=true;};document.head.appendChild(s);}catch(e){MSC.failed=true;}};
-  const boot=()=>add('mascot.js?v=20261026100644',()=>{try{if(window.Mascot&&window.Mascot.init({host:$('mascot'),app:{audio:ac,buzz}})&&MSC.last)window.Mascot.sync(msPayload(MSC.last));}catch(e){}});
+  const boot=()=>add('mascot.js?v=20261026182117',()=>{try{if(window.Mascot&&window.Mascot.init({host:$('mascot'),app:{audio:ac,buzz}})&&MSC.last)window.Mascot.sync(msPayload(MSC.last));}catch(e){}});
   setTimeout(()=>{if(window.THREE)boot();else add('three.min.js',boot);},300);}
-function render(){const D=derive();renderHeader();renderHome(D);renderGrowth();renderCoins(D);renderStrategy(D);renderActivity();if(cvSym&&$('coinSheet').classList.contains('open'))renderCoinView();}
+function render(){const D=derive();renderHeader();renderHome(D);renderGrowth();renderCoins(D);renderStrategy(D);renderActivity();earnNudge();if(cvSym&&$('coinSheet').classList.contains('open'))renderCoinView();}
 document.body.classList.add('loading');
 const startTab=(location.hash||'').slice(1);if(['coins','strategy','activity'].includes(startTab))show(startTab);
 render();
