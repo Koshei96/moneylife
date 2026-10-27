@@ -2256,18 +2256,19 @@
     wakeLoop();
   }
   /* знакомство: звук на телефоне включается только после касания, поэтому приветствие звучит на первое нажатие */
+  /* при открытии приложения Слиток спит: просыпается от касания или важного события (покупка, пополнение, новый сигнал) */
   function firstData() {
-    ST.lastInput = now();
+    ST.lastInput = ST.lastEvent = now() - SLEEP_AFTER - 1; ST.mood = 'sleep'; ST.moodSince = now();
     if (!lsGet('ms-intro2', false)) ST.introPending = true;
-    setTimeout(() => { if (!isNight()) playClip('hello'); }, 900);
   }
 
   /* ---------- настроение ---------- */
+  const SLEEP_AFTER = 60;
   function resolveMood(t) {
     const idle = t - Math.max(ST.lastInput, ST.lastEvent), duty = ST.go || ST.fresh > 0;
     if (ST.hide) return 'hide';
+    if (idle > SLEEP_AFTER) return 'sleep';   /* засыпает через минуту без касаний и событий (сигнал ему не мешает — он виден на карточке) */
     if (ST.offline && t - ST.offSince > 60) return 'offline';
-    if (!duty && idle > 180) return 'sleep';
     if (isNight() && !duty) return 'night';
     if (ST.go) return 'hunter';
     const p = ST.pct;
@@ -2278,7 +2279,7 @@
   function schedule(t) {
     if (act) return;
     if (queue.length) { const q = queue.shift(); playClip(q.name, q.data); return; }
-    if ((ST.go || ST.fresh > 0) && t > ST.nextSignal && ST.mood !== 'hide' && LOC.mode !== 'carry') { ST.nextSignal = t + 30; playClip('signal'); if (ST.go) say('signal'); return; }
+    if ((ST.go || ST.fresh > 0) && t > ST.nextSignal && ST.mood !== 'hide' && ST.mood !== 'sleep' && LOC.mode !== 'carry') { const le = ST.lastEvent; ST.nextSignal = t + 30; playClip('signal'); ST.lastEvent = le; if (ST.go) say('signal'); return; }   /* напоминание не отменяет сон */
     brain(t);
   }
 
@@ -2475,7 +2476,7 @@
     if (t - ST.lastTap < 0.32) { clearTimeout(ST.tapTimer); ST.lastTap = 0; if (act && act.c.pri < 3) endClip(); playClip('dance'); sfx('happy'); say('dance', U_); return; }
     ST.lastTap = t; sfx('tap');
     ST.tapTimer = setTimeout(() => {
-      if (now() - (ST.wokeAt || -9) < 1.2) { say('wake', U_); return; }
+      if (now() - (ST.wokeAt || -9) < 1.2) { if (ST.introPending && ST.sound) { ST.introPending = false; lsSet('ms-intro2', true); playClip('tapWave'); say('intro', U_); } else say('wake', U_); return; }
       if (LOC.mode === 'carry' || (act && act.c.pri >= 3)) return;
       if (act) endClip();
       if (ST.introPending && ST.sound) { ST.introPending = false; lsSet('ms-intro2', true); playClip('tapWave'); say('intro', U_); return; }
