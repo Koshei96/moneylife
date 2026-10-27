@@ -726,9 +726,9 @@ button:focus-visible{outline:2px solid var(--pink);outline-offset:2px}
 
 <div class="toast" id="toast" role="status"><span id="toastMsg"></span><button type="button" id="toastBtn" hidden></button></div>
 
-<script src="config.js?v=20261027100000"></script>
+<script src="config.js?v=20261027095000"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="shim.js?v=20261027100000"></script>
+<script src="shim.js?v=20261027095000"></script>
 <script>
 /* ===== основа ===== */
 const $=id=>document.getElementById(id);
@@ -825,6 +825,9 @@ function balTo(v){const el=$('hBal'),f=x=>money(x,{d:0});
 function countTo(el,to,f){if(to==null||!isFinite(to)){if(S.ready)el.textContent='—';el._v=null;return;}const from=el._v==null?to:el._v;el._v=to;if(reduced||from===to){el.textContent=f(to);return;}const st=performance.now(),dur=650;cancelAnimationFrame(el._raf);const step=n=>{const k=Math.min(1,(n-st)/dur),e=1-Math.pow(1-k,3);el.textContent=f(from+(to-from)*e);if(k<1)el._raf=requestAnimationFrame(step);};el._raf=requestAnimationFrame(step);}
 
 /* ===== расчёт портфеля ===== */
+/* текст ошибки записи: «Не сохранилось: нет связи» или «…: ошибка базы» */
+window.addEventListener('online',()=>{try{renderHeader()}catch(e){}});window.addEventListener('offline',()=>{try{renderHeader()}catch(e){}});
+function failMsg(e,what){const off=(e&&e.code==='offline')||(typeof navigator!=='undefined'&&navigator.onLine===false)||/fetch|network/i.test(String(e&&e.message||''));return what+(off?': нет связи.':': ошибка базы, попробуй ещё раз.');}
 function derive(){
   const h={};let reserve=0,dcaBudget=0,deposited=0,depositedUah=0,hasDep=false,realized=0,earned=0;
   const txs=S.tx.slice().sort(byTs),firstDep=(txs.find(t=>t.type==='deposit')||{}).ts||null;
@@ -999,7 +1002,8 @@ $('gRanges').addEventListener('click',e=>{const b=e.target.closest('button');if(
 
 /* ===== главная ===== */
 function renderHeader(){const L=S.live;let h;
-  if(L.status==='ok'||L.status==='stale')h=`<i class="dot ${L.status==='ok'?'live':''}"></i><span>${L.status==='ok'?'Онлайн':'Цены с задержкой'} · ${tHM(L.at)}</span>`;
+  if(navigator.onLine===false){const at=L.at||(S.market&&S.market.updatedAt);h=`<i class="dot"></i><span>Нет сети${at?' · цены на '+tHM(at):''}</span>`;}
+  else if(L.status==='ok'||L.status==='stale')h=`<i class="dot ${L.status==='ok'?'live':''}"></i><span>${L.status==='ok'?'Онлайн':'Цены с задержкой'} · ${tHM(L.at)}</span>`;
   else if(S.market&&S.market.updatedAt)h=`<i class="dot"></i><span>Цены на ${dShort(S.market.updatedAt)}, ${tHM(S.market.updatedAt)}</span>`;
   else h=`<i class="dot"></i><span>${db?'Нет свежих цен':'Загружаю…'}</span>`;
   $('status').innerHTML=h;$('eyeBtn').innerHTML=P.hide?I.eyeOff:I.eye;$('eyeBtn').setAttribute('aria-pressed',String(P.hide));$('eyeBtn').setAttribute('aria-label',P.hide?'Показать суммы':'Скрыть суммы');}
@@ -1175,7 +1179,7 @@ function renderPick(D){const sc=S.screen,ap=S.altplan||{},yr=ap.draftYear||'',ru
     h+=`<p class="hint" style="margin-top:12px">Новости обновляются 1-го числа каждого месяца или по кнопке «Обновить сейчас» в «Кандидатах». Заголовки — дословно, с переводом.</p>`;}
   $('stBody').innerHTML=h;}
 async function approvePlan(){const ap=S.altplan;if(!db||!ap||!ap.draft){toast('Нет подключения к данным');return;}const months=Object.assign({},ap.months||{});for(const k in ap.draft){const m=ap.draft[k];months[k]={sym:m.sym,theme:m.theme||''};}
-  try{await db.doc('app/altplan').update({months,approved:true,approvedAt:new Date().toISOString()});play('cash');buzz([12,40,18]);toast('План '+ap.draftYear+' утверждён');}catch(e){toast('Не сохранилось, попробуй ещё раз');}}
+  try{await db.doc('app/altplan').update({months,approved:true,approvedAt:new Date().toISOString()});play('cash');buzz([12,40,18]);toast('План '+ap.draftYear+' утверждён');}catch(e){toast(failMsg(e,'Не сохранилось'));}}
 function openPlanEditor(){const ap=S.altplan||{},dr=ap.draft||{},cs=(S.screen&&S.screen.cands)||[];
   $('planTitle').textContent='План на '+(ap.draftYear||'');
   const opts=sel=>{const list=cs.slice(),add=(o)=>{if(o&&o.sym&&!list.find(c=>c.sym===o.sym))list.push(o);};for(const p of (ap.picks||[])){const o=((S.screen&&S.screen.out)||[]).find(c=>c.sym===p);add(o?Object.assign({},o,{bad:true}):{sym:p,score:null,sector:'',bad:true});}for(const o of ((S.screen&&S.screen.out)||[]))add(Object.assign({},o,{bad:true}));for(const k in dr)add({sym:dr[k].sym,score:null,sector:dr[k].theme||'',bad:true});return list.map(c=>`<option value="${esc(c.sym)}"${c.sym===sel?' selected':''}>${esc(c.sym)}${c.score!=null?' · балл '+c.score:''}${c.sector?' · '+esc(c.sector):''}${c.bad?' · не прошёл фильтр':''}</option>`).join('');};
@@ -1187,7 +1191,7 @@ async function savePlanEditor(){const ap=S.altplan||{},dr=ap.draft||{},cs=(S.scr
   const over=Object.keys(cnt).filter(s=>cnt[s]>3);if(over.length){$('peErr').textContent='Одна монета — не больше 3 месяцев: '+over.join(', ')+'.';return;}
   if(!db){$('peErr').textContent='Нет подключения к данным.';return;}
   const upd={draft:nd,draftEditedAt:new Date().toISOString(),draftLocked:true};if(ap.approved){const months=Object.assign({},ap.months||{});for(const k in nd)months[k]={sym:nd[k].sym,theme:nd[k].theme};upd.months=months;}
-  try{await db.doc('app/altplan').update(upd);closeSheets();play('cash');toast(ap.approved?'План обновлён':'Черновик обновлён');}catch(e){$('peErr').textContent='Не сохранилось, попробуй ещё раз.';}}
+  try{await db.doc('app/altplan').update(upd);closeSheets();play('cash');toast(ap.approved?'План обновлён':'Черновик обновлён');}catch(e){$('peErr').textContent=failMsg(e,'Не сохранилось');}}
 async function runScreen(){runAsk=false;
   if(!mcp){toast('Запуск работает только в приложении Claude');renderPick(derive());return;}
   const at=new Date().toISOString();S.screenreq={requestedAt:at};renderPick(derive());
@@ -1486,7 +1490,7 @@ async function saveForm(){const err=$('fErr');err.textContent='';if(!db){err.tex
     else if(mode==='reserve'){const v=+$('resAmt').value;if(!v||(resKind==='reserve_in'&&v<0)){err.textContent='Впиши сумму больше нуля.';return;}const it={ts,type:resKind,usd:+v.toFixed(2)};const n=$('resNote').value.trim();if(n)it.note=n;await db.collection('tx').add(it);finish('cash',0,'Резерв '+(v>0?'+':'')+usd(v));}
     else if(mode==='income'){const v=+$('incUah').value||0;if(!v){err.textContent='Впиши сумму дохода.';return;}await db.collection('tx').add({ts,type:'income',uah:v});finish('cash',0,'Доход '+uah(v)+' записан');}
     else if(mode==='start'){const sym=($('nsSym').value||'').trim().toUpperCase(),q=+$('nsQty').value||0,u=$('nsUsd').value;if(!sym||!q){err.textContent='Впиши монету и количество.';return;}await db.collection('tx').add({ts,type:'start',symbol:sym,qty:q,usd:u===''?null:+u});finish('coin',1,sym+' добавлен');}
-  }catch(e){err.textContent='Не сохранилось. Попробуй ещё раз или пришли мне в чат.';}
+  }catch(e){err.textContent=failMsg(e,'Не сохранилось');}
   finally{btn.disabled=false;}}
 $('saveBtn').addEventListener('click',saveForm);
 
@@ -1508,9 +1512,9 @@ async function saveTx(){const t=S.tx.find(x=>x.id===eId);if(!t||!db){$('eErr').t
   if(!$('eUahF').hidden){const g=$('eUah').value;nd.uah=g===''?null:+g;}
   if(coinT&&nd.usd&&nd.qty)nd.price=+(nd.usd/nd.qty).toPrecision(8);
   const note=$('eNote').value.trim();if(note)nd.note=note;else delete nd.note;
-  try{await db.doc('tx/'+eId).set(nd);closeSheets();play('coin');buzz(12);toast('Запись обновлена');}catch(e){$('eErr').textContent='Не сохранилось, попробуй ещё раз.';}}
+  try{await db.doc('tx/'+eId).set(nd);closeSheets();play('coin');buzz(12);toast('Запись обновлена');}catch(e){$('eErr').textContent=failMsg(e,'Не сохранилось');}}
 async function delTx(){const t=S.tx.find(x=>x.id===eId);if(!t||!db)return;const id=eId,data=Object.assign({},t);delete data.id;
-  try{await db.doc('tx/'+id).delete();closeSheets();play('del');buzz(20);toast('Запись удалена',{label:'Отменить',fn:async()=>{try{await db.doc('tx/'+id).set(data);play('coin');toast('Запись восстановлена');}catch(e){toast('Не удалось восстановить');}}});}catch(e){$('eErr').textContent='Не удалось удалить, попробуй ещё раз.';}}
+  try{await db.doc('tx/'+id).delete();closeSheets();play('del');buzz(20);toast('Запись удалена',{label:'Отменить',fn:async()=>{try{await db.doc('tx/'+id).set(data);play('coin');toast('Запись восстановлена');}catch(e){toast(failMsg(e,'Не восстановилось'));}}});}catch(e){$('eErr').textContent=failMsg(e,'Не удалилось');}}
 $('eSave').addEventListener('click',saveTx);
 $('eDel').addEventListener('click',delTx);
 
@@ -1533,7 +1537,7 @@ async function saveStrategy(){const B=+$('stB').value,E=+$('stE').value,A=+$('st
   if(!(k2>=0&&k2<=50)){$('setErr').textContent='Ключ 2 — от 0 до 50%.';return;}
   if(!(ac>=0&&ac<=100)){$('setErr').textContent='Потолок альтов — от 0 до 100%.';return;}
   if(!db){$('setErr').textContent='Нет подключения к данным.';return;}
-  try{await db.doc('app/settings').update({split:{BTC:B,ETH:E,ALT:A},capPct:cap,depositSplit:{dca:dep},altOfMonth:alt,incomeMonthlyUah:inc||null,key2Pct:k2,altCapPct:ac});play('cash');toast('Правила сохранены');$('setErr').textContent='';}catch(e){$('setErr').textContent='Не сохранилось, попробуй ещё раз.';}}
+  try{await db.doc('app/settings').update({split:{BTC:B,ETH:E,ALT:A},capPct:cap,depositSplit:{dca:dep},altOfMonth:alt,incomeMonthlyUah:inc||null,key2Pct:k2,altCapPct:ac});play('cash');toast('Правила сохранены');$('setErr').textContent='';}catch(e){$('setErr').textContent=failMsg(e,'Не сохранилось');}}
 $('eyeBtn').addEventListener('click',()=>{P.hide=!P.hide;savePrefs();play('tick');buzz(8);render();toast(P.hide?'Суммы скрыты':'Суммы видны');});
 
 /* ===== живые цены ===== */
@@ -1588,7 +1592,7 @@ function msPayload(x){let fresh=0;try{fresh=S.alerts.filter(a=>String(a.ts||'')>
 function msSync(x){MSC.last=x;if(!msApply())return;if(window.Mascot){try{window.Mascot.sync(msPayload(x));}catch(e){}}else msLoad();}
 function msLoad(){if(MSC.loading||MSC.failed)return;MSC.loading=true;
   const add=(src,ok)=>{try{const s=document.createElement('script');s.src=src;s.async=true;s.onload=ok;s.onerror=()=>{MSC.failed=true;};document.head.appendChild(s);}catch(e){MSC.failed=true;}};
-  const boot=()=>add('mascot.js?v=20261027100000',()=>{try{if(window.Mascot&&window.Mascot.init({host:$('mascot'),app:{audio:ac,buzz}})&&MSC.last)window.Mascot.sync(msPayload(MSC.last));}catch(e){}});
+  const boot=()=>add('mascot.js?v=20261027095000',()=>{try{if(window.Mascot&&window.Mascot.init({host:$('mascot'),app:{audio:ac,buzz}})&&MSC.last)window.Mascot.sync(msPayload(MSC.last));}catch(e){}});
   setTimeout(()=>{if(window.THREE)boot();else add('three.min.js',boot);},300);}
 function render(){const D=derive();renderHeader();renderHome(D);renderGrowth();renderCoins(D);renderStrategy(D);renderActivity();earnNudge();if(cvSym&&$('coinSheet').classList.contains('open'))renderCoinView();}
 document.body.classList.add('loading');
