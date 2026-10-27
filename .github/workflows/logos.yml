@@ -1,0 +1,24 @@
+# Служебная задача: скачать логотипы монет с CoinGecko в папку fetched/ этой ветки.
+# Сайт не трогает — ветка logos-tool отдельная от main.
+name: logos-fetch
+on:
+  push:
+    branches: [logos-tool]
+    paths: ['tools/**']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 tools/fetch_logos.py
+      - run: |
+          rm -rf fetched && mv out fetched
+          git config user.name "github-actions[bot]"
+          git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
+          git add fetched
+          git commit -q -m "Логотипы с CoinGecko" || exit 0
+          git push

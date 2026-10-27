@@ -1,0 +1,178 @@
+AAVE aave
+ADA cardano
+AERO
+AIXBT
+AKE
+ALGO
+ALLO
+AMPL
+AMZNX
+APT aptos
+ARB arbitrum
+ARK
+ARRR
+ASTER
+ATOM cosmos
+AVAX avalanche-2
+BCH
+BDX
+BGB
+BLUR blur
+BMX
+BNB binancecoin
+BNCB
+BOBA
+BONK
+BSB
+BSV
+BTC bitcoin
+BTT
+CAKE
+CATI catizen
+CC
+CGPT
+CRO
+CRV
+CTM
+CUSD
+CVX
+DAI
+DASH
+DCR
+DHN
+DOGE dogecoin
+DOGS dogs-2
+DOT polkadot
+EDGEN edgen
+ENA ethena
+ETC
+ETH ethereum
+ETHFI
+EURC
+EV
+EVAA
+FET fetch-ai
+FIL
+FLR
+FORT
+GCOIN
+GHO
+GRAM
+GRT
+GT
+GUSD
+HBAR
+HMSTR hamster-kombat
+HTX
+HYPE hyperliquid
+IBS
+ICP
+IMX
+INJ injective-protocol
+IWFON
+JLP
+JST
+JUP jupiter-exchange-solana
+KAS
+KCS
+KITE
+KMNO
+LA
+LEO
+LINK chainlink
+LIT
+LQTY
+LSK lisk
+LTC litecoin
+LUNC
+M
+MAJOR major
+MANTRA
+MATIC
+ME
+MGO
+MNT mantle
+MOC
+MON
+MORPHO
+MRSOON tonstation
+MTL
+NEAR near
+NEURAL
+NEWT newton-protocol
+NEX
+NEXO
+NFT
+NIGHT
+NUMI
+NVDA
+OGC
+OKB
+ON
+ONDO ondo-finance
+OP optimism
+OPN
+OUSD
+OXT
+PAWS paws
+PEARL
+PENGU
+PEPE pepe
+PI
+POL polygon-ecosystem-token
+PROMPT
+PUMP
+PX not-pixel
+PYTH
+PYUSD
+QNT quant-network
+RAY
+RENDER render-token
+RHEA
+RLUSD
+SEI sei-network
+SIGN
+SKHYB
+SKY
+SKYAI
+SOL solana
+SONIC
+STABLE
+STBL
+STRK
+STX
+SUI sui
+SYN
+TAO bittensor
+TIA celestia
+TKO
+TRUMP
+TRX tron
+U
+UNI uniswap
+USD1
+USDB
+USDC
+USDE
+USDF
+USDG
+USDGO
+USDT
+VANA
+VET
+VIRTUAL
+VVV
+WLD worldcoin-wld
+WLFI
+WOOF woof-2
+X x-empire
+XAUT
+XDC
+XLM stellar
+XMR
+XRP ripple
+XU3O8
+ZAMA zama
+ZEC
+ZKC
+ZRO
