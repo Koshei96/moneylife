@@ -496,6 +496,21 @@ button:focus-visible{outline:2px solid var(--pink);outline-offset:2px}
 [data-theme="light"] .badge.logo img{filter:none}
 [data-theme="light"] :is(.hero,.cc-face) .badge.logo img{filter:drop-shadow(0 0 10px color-mix(in srgb,var(--c,#b15cff) 55%,transparent))}
 [data-theme="light"] :is(.hero,.cc-face) .badge.logo img[alt="ONDO"]{filter:invert(1) drop-shadow(0 0 10px color-mix(in srgb,var(--c,#b15cff) 55%,transparent))}
+/* логотип CoinGecko у монет вне нашего набора: круг 92% значка, как у своих */
+.badge.logo.ext img{width:92%;height:92%;border-radius:50%;object-fit:cover}
+/* подсказки монет под полем «Монета» */
+.sug{display:grid;margin-top:-4px;background:var(--surface2);border:1px solid var(--line2);border-radius:var(--r-m);overflow:hidden;box-shadow:0 14px 30px -20px #000}
+.sug[hidden]{display:none}
+.sug-it{display:grid;grid-template-columns:32px minmax(0,1fr) auto;gap:12px;align-items:center;min-height:52px;padding:8px 12px;border:0;border-top:1px solid var(--line);background:none;color:var(--fg);text-align:left;font:inherit;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.sug-it:first-child{border-top:0}
+.sug-it:active,.sug-it:focus-visible{background:var(--raise);outline:none}
+.sug-it .badge{width:32px;height:32px;font-size:9.5px}
+.sug-nm{display:grid;min-width:0;line-height:1.25}
+.sug-nm b{font-weight:700;font-size:15px}
+.sug-nm small{color:var(--mute);font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sug-rk{font-size:12px;color:var(--dim);font-variant-numeric:tabular-nums}
+.sug-note{padding:12px;font-size:13px;color:var(--mute);line-height:1.4}
+[data-theme="light"] .sug{background:#fff;box-shadow:0 14px 30px -22px #1b153055}
 [data-theme="light"] .more{color:#c0268f}
 [data-theme="light"] .cc-face svg text[fill="#8e83b6"]{fill:#8e83b6}
 </style>
@@ -635,7 +650,7 @@ button:focus-visible{outline:2px solid var(--pink);outline-offset:2px}
         <div class="rows" id="bRows"></div>
       </div>
       <div id="buyOne" hidden style="display:flex;flex-direction:column;gap:12px">
-        <div class="f2"><label class="field"><span>Монета</span><input type="text" id="oSym" list="symList" maxlength="12" placeholder="BTC" autocomplete="off"></label><label class="field"><span>Потратил, $</span><input type="number" id="oUsd" step="any" min="0" inputmode="decimal"></label></div>
+        <div class="f2"><label class="field"><span>Монета</span><input type="text" id="oSym" maxlength="12" placeholder="BTC" autocomplete="off"></label><label class="field"><span>Потратил, $</span><input type="number" id="oUsd" step="any" min="0" inputmode="decimal"></label></div>
         <label class="field"><span>Получил монет</span><input type="number" id="oQty" step="any" min="0" inputmode="decimal"></label>
         <p class="hint" id="oHint"></p>
         <label class="check"><input type="checkbox" id="oDca"><span>Покупка из бюджета DCA</span></label>
@@ -682,7 +697,7 @@ button:focus-visible{outline:2px solid var(--pink);outline-offset:2px}
     </div>
 
     <div id="f-start" hidden style="display:flex;flex-direction:column;gap:12px">
-      <div class="f2"><label class="field"><span>Монета</span><input type="text" id="nsSym" list="symList" maxlength="12" placeholder="BTC" autocomplete="off"></label><label class="field"><span>Количество</span><input type="number" id="nsQty" step="any" min="0" inputmode="decimal"></label></div>
+      <div class="f2"><label class="field"><span>Монета</span><input type="text" id="nsSym" maxlength="12" placeholder="BTC" autocomplete="off"></label><label class="field"><span>Количество</span><input type="number" id="nsQty" step="any" min="0" inputmode="decimal"></label></div>
       <label class="field"><span>Сколько всего вложено, $ (если знаешь)</span><input type="number" id="nsUsd" step="any" min="0" inputmode="decimal"></label>
       <p class="hint">Для монет, которые уже лежат на кошельке до начала учёта.</p>
     </div>
@@ -691,7 +706,6 @@ button:focus-visible{outline:2px solid var(--pink);outline-offset:2px}
   </div></div>
   <div class="sh-foot" id="actFoot" hidden><div class="sh-in"><p class="err" id="fErr" role="alert"></p><button type="button" class="btn block" id="saveBtn">Сохранить</button></div></div>
 </div>
-<datalist id="symList"></datalist>
 
 <!-- Монета -->
 <div class="sheet" id="coinSheet" role="dialog" aria-modal="true" aria-labelledby="cvTitle">
@@ -788,9 +802,9 @@ button:focus-visible{outline:2px solid var(--pink);outline-offset:2px}
 
 <div class="toast" id="toast" role="status"><span id="toastMsg"></span><button type="button" id="toastBtn" hidden></button></div>
 
-<script src="config.js?v=20261027124500"></script>
+<script src="config.js?v=20261027133000"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="shim.js?v=20261027124500"></script>
+<script src="shim.js?v=20261027133000"></script>
 <script>
 /* ===== основа ===== */
 const $=id=>document.getElementById(id);
@@ -808,6 +822,8 @@ const DEF_SYM={BTC:'₿',ETH:'Ξ',SOL:'◎'};
 /* логотипы монет лежат файлами logos/ТИКЕР.webp и грузятся только когда видны */
 const LOGO=Object.fromEntries('AAVE ADA AERO AIXBT AKE ALGO ALLO AMPL AMZNX APT ARB ARK ARRR ASTER ATOM AVAX BCH BDX BGB BLUR BMX BNB BNCB BOBA BONK BSB BSV BTC BTT CAKE CATI CC CGPT CRO CRV CTM CUSD CVX DAI DASH DCR DHN DOGE DOGS DOT EDGEN ENA ETC ETH ETHFI EURC EV EVAA FET FIL FLR FORT GCOIN GHO GRAM GRT GT GUSD HBAR HMSTR HTX HYPE IBS ICP IMX INJ IWFON JLP JST JUP KAS KCS KITE KMNO LA LEO LINK LIT LQTY LSK LTC LUNC M MAJOR MANTRA MATIC ME MGO MNT MOC MON MORPHO MRSOON MTL NEAR NEURAL NEWT NEX NEXO NFT NIGHT NUMI NVDA OGC OKB ON ONDO OP OPN OUSD OXT PAWS PEARL PENGU PEPE PI POL PROMPT PUMP PX PYTH PYUSD QNT RAY RENDER RHEA RLUSD SEI SIGN SKHYB SKY SKYAI SOL SONIC STABLE STBL STRK STX SUI SYN TAO TIA TKO TRUMP TRX U UNI USD1 USDB USDC USDE USDF USDG USDGO USDT VANA VET VIRTUAL VVV WLD WLFI WOOF X XAUT XDC XLM XMR XRP XU3O8 ZAMA ZEC ZKC ZRO'.split(' ').map(k=>[k,'logos/'+k+'.webp']));
 const LOGO_C={"AAVE":"#7270f4","ADA":"#044cfa","AERO":"#2b50fd","AIXBT":"#ab75ef","AKE":"#cd559d","ALGO":"#1ae4e0","ALLO":"#cfd3df","AMPL":"#cfd3df","AMZNX":"#ff9800","APT":"#cfd3df","ARB":"#24a4da","ARK":"#fb0303","ARRR":"#c7883f","ASTER":"#fbb869","ATOM":"#cfd3df","AVAX":"#e74142","BCH":"#14cc99","BDX":"#39c541","BGB":"#00f0ff","BLUR":"#e3561b","BMX":"#2fcdcf","BNB":"#f3bb0b","BNCB":"#cfa242","BOBA":"#b0e01e","BONK":"#fb9e03","BSB":"#ff6d45","BSV":"#ffc300","BTC":"#f79319","BTT":"#cfd3df","CAKE":"#3dd3df","CATI":"#c56739","CC":"#edff65","CFX":"#cfd3df","CGPT":"#f9b13d","CRO":"#3956c5","CRV":"#f72707","CTM":"#cfd3df","CUSD":"#8f5cf5","CVX":"#dfad3b","DAI":"#fabb36","DASH":"#009aff","DCR":"#296fff","DHN":"#6c70f8","DOGE":"#c7aa37","DOGS":"#cfd3df","DOT":"#cfd3df","EDGEN":"#cfd3df","ENA":"#cfd3df","ETC":"#29d52c","ETH":"#cfd3df","ETHFI":"#3b2ed0","EURC":"#0d68f1","EV":"#cfd3df","EVAA":"#3800ff","FET":"#cfd3df","FIL":"#008fff","FLR":"#e32057","FORT":"#cfd3df","GCOIN":"#cfd3df","GHO":"#28d659","GRAM":"#2fa0f5","GRT":"#4539c5","GT":"#005dff","GUSD":"#25d9f3","HBAR":"#cfd3df","HMSTR":"#da9b4b","HTX":"#f92525","HYPE":"#6afad8","IBS":"#74e14b","ICP":"#29aae1","IMX":"#cfd3df","INJ":"#4c3dff","IWFON":"#831ae4","JLP":"#3dc9ba","JST":"#e51a19","JUP":"#3fccbd","KAS":"#66d2c1","KCS":"#2ad4b0","KITE":"#cfd3df","KMNO":"#cfd3df","LA":"#21ddd8","LEO":"#cfa12f","LINK":"#0846f7","LIT":"#cfd3df","LQTY":"#4059e4","LSK":"#cfd3df","LTC":"#3970c5","LUNC":"#ffd83d","M":"#6439c5","MAJOR":"#3667c8","MANTRA":"#ff65c2","ME":"#f56b9b","MGO":"#7fd9d0","MNT":"#3fc793","MOC":"#10eed4","MON":"#6e54fe","MORPHO":"#2a73ff","MRSOON":"#cfd3df","MTL":"#febc0d","NEAR":"#00ffa3","NEURAL":"#2ed080","NEWT":"#cfd3df","NEX":"#cfd3df","NEXO":"#cfd3df","NFT":"#cfd3df","NIGHT":"#cfd3df","NUMI":"#f5c138","NVDA":"#cbff00","OGC":"#e114ea","OKB":"#cfd3df","ON":"#fd4407","ONDO":"#cfd3df","OP":"#ff0320","OPN":"#fe5816","OUSD":"#cfd3df","OXT":"#5839c5","PAWS":"#cfd3df","PEARL":"#cfd3df","PENGU":"#679afd","PEPE":"#4bc539","PI":"#7239c5","POL":"#6f00ff","PROMPT":"#ffc965","PUMP":"#52d190","PX":"#cfd3df","PYTH":"#cfd3df","PYUSD":"#cfd3df","QNT":"#cfd3df","RAY":"#407bec","RENDER":"#ec1213","RHEA":"#1be3bf","RLUSD":"#0069ff","SEI":"#c53953","SIGN":"#f98a28","SKHYB":"#f1a63d","SKY":"#21ccfb","SKYAI":"#cfd3df","SOIL":"#cfd3df","SOL":"#8150ef","SONIC":"#0000ff","STABLE":"#cfd3df","STBL":"#6500ff","STRK":"#e8778b","STX":"#fc6331","SUI":"#4ca2fe","SYN":"#b028e8","TAO":"#cfd3df","TIA":"#8b4cf0","TKO":"#25cc61","TRUMP":"#c6993b","TRX":"#f40a2b","U":"#c8ae42","UNI":"#ee3d93","USD1":"#f7a207","USDB":"#feff00","USDC":"#0d68f1","USDE":"#cfd3df","USDF":"#cfd3df","USDG":"#c7e36b","USDGO":"#73ff00","USDT":"#00feff","VANA":"#4141fc","VET":"#5f41dd","VIRTUAL":"#39c5c5","VVV":"#e14f22","WLD":"#cfd3df","WLFI":"#f0b10e","WOOF":"#209eff","X":"#cfd3df","XAUT":"#d3b25b","XDC":"#3773c7","XLM":"#cfd3df","XMR":"#ff6a00","XRP":"#cfd3df","XU3O8":"#a8cf59","ZAMA":"#fed216","ZEC":"#ecb243","ZKC":"#cfd3df","ZRO":"#cfd3df","MATIC":"#6f00ff"};
+/* какую монету CoinGecko изображает каждый наш логотип: при одинаковых тикерах чужой монете наш логотип не показываем */
+const LOGO_ID={"AAVE":"aave","ADA":"cardano","AERO":"aerodrome-finance","AIXBT":"aixbt","AKE":"akedo","ALGO":"algorand","ALLO":"allora","AMPL":"ampleforth","AMZNX":"amazon-xstock","APT":"aptos","ARB":"arbitrum","ARK":"ark","ARRR":"pirate-chain","ASTER":"aster-2","ATOM":"cosmos","AVAX":"avalanche-2","BCH":"bitcoin-cash","BDX":"beldex","BGB":"bitget-token","BLUR":"blur","BMX":"bitmart-token","BNB":"binancecoin","BOBA":"boba-network","BONK":"bonk","BSB":"block-street","BSV":"bitcoin-cash-sv","BTC":"bitcoin","BTT":"bittorrent","CAKE":"pancakeswap-token","CATI":"catizen","CC":"canton-network","CGPT":"chaingpt","CRO":"crypto-com-chain","CRV":"curve-dao-token","CTM":"c8ntinuum","CUSD":"celo-dollar","CVX":"convex-finance","DAI":"dai","DASH":"dash","DCR":"decred","DHN":"dohrnii","DOGE":"dogecoin","DOGS":"dogs-2","DOT":"polkadot","EDGEN":"edgen","ENA":"ethena","ETC":"ethereum-classic","ETH":"ethereum","ETHFI":"ether-fi","EURC":"euro-coin","EV":"everything","EVAA":"evaa-protocol","FET":"fetch-ai","FIL":"filecoin","FLR":"flare-networks","FORT":"forta","GCOIN":"playnance","GHO":"gho","GRAM":"the-open-network","GRT":"the-graph","GT":"gatechain-token","GUSD":"gemini-dollar","HBAR":"hedera-hashgraph","HMSTR":"hamster-kombat","HTX":"htx-dao","HYPE":"hyperliquid","IBS":"ibs-3","ICP":"internet-computer","IMX":"immutable-x","INJ":"injective-protocol","IWFON":"ishares-russell-1000-growth-etf-ondo-tokenized-etf","JLP":"jupiter-perpetuals-liquidity-provider-token","JST":"just","JUP":"jupiter-exchange-solana","KAS":"kaspa","KCS":"kucoin-shares","KITE":"kite-2","KMNO":"kamino","LA":"lagrange","LEO":"leo-token","LINK":"chainlink","LIT":"lighter","LQTY":"liquity","LSK":"lisk","LTC":"litecoin","LUNC":"terra-luna","M":"memecore","MAJOR":"major","MANTRA":"mantra","MATIC":"matic-network","ME":"magic-eden","MGO":"mango-network","MNT":"mantle","MOC":"mossland","MON":"monad","MORPHO":"morpho","MRSOON":"tonstation","MTL":"metal","NEAR":"near","NEURAL":"neuralai","NEWT":"newton-protocol","NEX":"nexus-4","NEXO":"nexo","NFT":"apenft","NIGHT":"midnight-3","NUMI":"numine-token","NVDA":"nvidia-robinhood-tokenized-stock","OKB":"okb","ON":"orochi-network","ONDO":"ondo-finance","OP":"optimism","OPN":"opinion","OUSD":"origin-dollar","OXT":"orchid-protocol","PAWS":"paws","PEARL":"pearl-2","PENGU":"pudgy-penguins","PEPE":"pepe","PI":"pi-network","POL":"polygon-ecosystem-token","PROMPT":"wayfinder","PUMP":"pump-fun","PX":"not-pixel","PYTH":"pyth-network","PYUSD":"paypal-usd","QNT":"quant-network","RAY":"raydium","RENDER":"render-token","RHEA":"rhea-2","RLUSD":"ripple-usd","SEI":"sei-network","SIGN":"sign-global","SKHYB":"sk-hynix-bstocks-tokenized-stock","SKY":"sky","SKYAI":"skyai","SOL":"solana","SONIC":"sonic-svm","STABLE":"stable-2","STBL":"stbl","STRK":"starknet","STX":"blockstack","SUI":"sui","SYN":"synapse-2","TAO":"bittensor","TIA":"celestia","TKO":"tokocrypto","TRUMP":"official-trump","TRX":"tron","U":"united-stables","UNI":"uniswap","USD1":"usd1-wlfi","USDB":"usdb","USDC":"usd-coin","USDE":"ethena-usde","USDF":"falcon-finance","USDG":"global-dollar","USDGO":"usdgo","USDT":"tether","VANA":"vana","VET":"vechain","VIRTUAL":"virtual-protocol","VVV":"venice-token","WLD":"worldcoin-wld","WLFI":"world-liberty-financial","WOOF":"woof-2","X":"x-empire","XAUT":"tether-gold","XDC":"xdce-crowd-sale","XLM":"stellar","XMR":"monero","XRP":"ripple","XU3O8":"uranium","ZAMA":"zama","ZEC":"zcash","ZKC":"boundless","ZRO":"layerzero"};
 const coinColor=s=>COLORS[s]||LOGO_C[s]||'#b15cff';
 const CG={BTC:'bitcoin',ETH:'ethereum',XRP:'ripple',SOL:'solana',NEAR:'near',ZAMA:'zama',ONDO:'ondo-finance',FET:'fetch-ai',BNB:'binancecoin',QNT:'quant-network',AVAX:'avalanche-2',SUI:'sui',TRX:'tron',RENDER:'render-token',ARB:'arbitrum',OP:'optimism',ATOM:'cosmos',ADA:'cardano',PX:'not-pixel',POL:'polygon-ecosystem-token',MNT:'mantle',DOT:'polkadot',BLUR:'blur',CATI:'catizen',DOGS:'dogs-2',LSK:'lisk',TON:'the-open-network',DOGE:'dogecoin',LINK:'chainlink',XLM:'stellar',LTC:'litecoin',TAO:'bittensor',HYPE:'hyperliquid',ENA:'ethena',PEPE:'pepe',WLD:'worldcoin-wld',APT:'aptos',INJ:'injective-protocol',TIA:'celestia',SEI:'sei-network',JUP:'jupiter-exchange-solana',UNI:'uniswap',AAVE:'aave',NEWT:'newton-protocol',X:'x-empire',HMSTR:'hamster-kombat',MAJOR:'major',PAWS:'paws',MRSOON:'tonstation',WOOF:'woof-2',EDGEN:'edgen'};
 const BUYS=['start','buy','dca','dip','airdrop'];
@@ -975,10 +991,20 @@ async function checkAth(){if(!db||athBusy||!S.cycle||S.live.status!=='ok')return
     await db.collection('alerts').add({ts:new Date().toISOString(),kind:'ath',text:`Новый максимум BTC ${usd(out.ath,0)}. Лестница пересчитана: ${lp}.`+(used?' Прошлый цикл закрыт, все уровни снова активны.':'')});
     toast('Новый максимум BTC — лестница пересчитана');render();}catch(e){}finally{athBusy=false;}}
 const cgMap=()=>Object.assign({},CG,S.settings.cgIds||{});
+/* названия и логотипы монет, которых нет во встроенных списках: из живых цен CoinGecko и из справочника; хранятся на телефоне */
+let CMETA={};try{CMETA=JSON.parse(localStorage.getItem('ml-cmeta')||'{}')||{};}catch(e){CMETA={};}
+let cmetaT=0;
+function metaPut(sym,name,img){const o=CMETA[sym]||['',''],n=[name||o[0]||'',img||o[1]||''];if(o[0]===n[0]&&o[1]===n[1])return;CMETA[sym]=n;
+  clearTimeout(cmetaT);cmetaT=setTimeout(()=>{try{localStorage.setItem('ml-cmeta',JSON.stringify(CMETA));}catch(e){}},400);}
+const coinName=s=>NAMES[s]||(CMETA[s]&&CMETA[s][0])||s;
 function badgeTxt(sym,cls){const c=COLORS[sym]||'#b15cff',l=DEF_SYM[sym]||sym.slice(0,4),g=!!DEF_SYM[sym],n=[...l].length;return `<span class="badge ${cls||''} ${g?'g':n>=4?'s4':n===3?'s3':''}" style="--c:${c}">${esc(l)}</span>`;}
-function badge(sym,cls){if(LOGO[sym])return `<span class="badge logo ${cls||''}" style="--c:${coinColor(sym)}"><img src="${LOGO[sym]}" alt="${esc(sym)}" draggable="false" decoding="async" onerror="logoFail(this,'${sym}','${esc(cls||'')}')"></span>`;return badgeTxt(sym,cls);}
+/* свой логотип подходит, если тикер не переназначен на другую монету с тем же тикером */
+const ownLogo=(sym,id)=>LOGO[sym]&&(!id||!LOGO_ID[sym]||LOGO_ID[sym]===id);
+function logoImg(sym,src,cls,ext){return `<span class="badge logo${ext?' ext':''} ${cls||''}" style="--c:${coinColor(sym)}"><img src="${esc(src)}" alt="${esc(sym)}" data-cls="${esc(cls||'')}"${ext?' crossorigin="anonymous" referrerpolicy="no-referrer" loading="lazy"':''} draggable="false" decoding="async" onerror="logoFail(this)"></span>`;}
+function badge(sym,cls){const id=cgMap()[sym];if(ownLogo(sym,id))return logoImg(sym,LOGO[sym],cls);
+  const u=CMETA[sym]&&CMETA[sym][1];if(u)return logoImg(sym,u,cls,true);return badgeTxt(sym,cls);}
 /* логотип не загрузился (нет сети, ещё не был в памяти) — показываем буквы */
-window.logoFail=(img,sym,cls)=>{const b=img.closest('.badge');if(b)b.outerHTML=badgeTxt(sym,cls);};
+window.logoFail=img=>{const b=img.closest('.badge');if(b)b.outerHTML=badgeTxt(img.alt,img.dataset.cls||'');};
 const icoBadge=(k,color)=>`<span class="badge ico"${color?` style="color:${color}"`:''}>${I[k]||I.level}</span>`;
 function spark(arr){if(!arr||arr.length<2)return '';const W=52,H=24,mn=Math.min(...arr),mx=Math.max(...arr),k=mx-mn||1,up=arr[arr.length-1]>=arr[0];const pts=arr.map((v,i)=>(i/(arr.length-1)*W).toFixed(1)+','+(H-2-(v-mn)/k*(H-4)).toFixed(1)).join(' ');return `<svg class="spark" viewBox="0 0 ${W} ${H}" aria-hidden="true"><polyline points="${pts}" fill="none" stroke="${up?'#34e0a1':'#ff5f6d'}" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/></svg>`;}
 
@@ -1135,7 +1161,7 @@ function renderCoins(D){
   $('dustBtn').setAttribute('aria-pressed',String(P.dust));
   const q=($('coinSearch').value||'').trim().toLowerCase();
   let list=D.syms.map(s=>{const c=D.h[s],p=+D.prices[s]||0,v=p?c.qty*p:null;return {s,c,p,v,pl:v!=null&&c.usd>0?(v-c.usd)/c.usd*100:null,ch:S.live.change[s]};});
-  if(q)list=list.filter(o=>o.s.toLowerCase().includes(q)||(NAMES[o.s]||'').toLowerCase().includes(q));
+  if(q)list=list.filter(o=>o.s.toLowerCase().includes(q)||coinName(o.s).toLowerCase().includes(q));
   const nz=(v,dflt)=>v==null?dflt:v;
   if(P.sort==='pnl')list.sort((a,b)=>nz(b.pl,-1e9)-nz(a.pl,-1e9));else if(P.sort==='chg')list.sort((a,b)=>nz(b.ch,-1e9)-nz(a.ch,-1e9));else if(P.sort==='name')list.sort((a,b)=>a.s.localeCompare(b.s));else list.sort((a,b)=>nz(b.v,-1)-nz(a.v,-1));
   const dust=list.filter(o=>o.v!=null&&o.v<10);let shown=list;if(P.dust&&!q)shown=list.filter(o=>o.v==null||o.v>=10);
@@ -1147,7 +1173,7 @@ function renderCoins(D){
       if(P.sort==='pnl'){m=o.pl!=null?pct(o.pl):'—';cl=o.pl==null?'mute':o.pl>=0?'pos':'neg';}
       else if(o.ch!=null){m='24ч '+pct(o.ch);cl=o.ch>=0?'pos':'neg';}
       else if(o.pl!=null){m=pct(o.pl);cl=o.pl>=0?'pos':'neg';}else m='';
-      return `<button type="button" class="row" data-coin="${esc(o.s)}">${badge(o.s)}<span class="col"><span class="nm">${esc(NAMES[o.s]||o.s)}</span><span class="sub">${qtyS(o.c.qty)} ${esc(o.s)}${o.v!=null&&D.total?' · '+(o.v/D.total<.1?nf(o.v/D.total*100,1):nf(o.v/D.total*100,0))+'%':''}</span></span>${spark(S.live.spark[o.s])||'<span class="spark"></span>'}<span class="r"><span class="val">${o.v!=null?money(o.v):'нет цены'}</span><span class="small ${cl}">${m}</span></span></button>`;}).join('');
+      return `<button type="button" class="row" data-coin="${esc(o.s)}">${badge(o.s)}<span class="col"><span class="nm">${esc(coinName(o.s))}</span><span class="sub">${qtyS(o.c.qty)} ${esc(o.s)}${o.v!=null&&D.total?' · '+(o.v/D.total<.1?nf(o.v/D.total*100,1):nf(o.v/D.total*100,0))+'%':''}</span></span>${spark(S.live.spark[o.s])||'<span class="spark"></span>'}<span class="r"><span class="val">${o.v!=null?money(o.v):'нет цены'}</span><span class="small ${cl}">${m}</span></span></button>`;}).join('');
   $('dustNote').innerHTML=P.dust&&!q&&dust.length?`Скрыто ${pl(dust.length,'мелкая монета','мелкие монеты','мелких монет')} на ${money(dust.reduce((a,o)=>a+(o.v||0),0))} · <button type="button" class="more" id="showDust">показать</button>`:(!P.dust&&dust.length?`<button type="button" class="more" id="hideDust">Скрыть мелочь до $10</button>`:'');}
 $('coinSearch').addEventListener('input',()=>renderCoins(derive()));
 $('sortChips').addEventListener('click',e=>{const b=e.target.closest('[data-sort]');if(!b)return;P.sort=b.dataset.sort;savePrefs();play('tick');renderCoins(derive());});
@@ -1283,7 +1309,7 @@ const txRow=t=>`<button type="button" class="row r3" data-tx="${esc(t.id)}">${tx
 function renderHist(){
   $('histChips').innerHTML=HF.map(([k,l])=>`<button type="button" class="fchip" data-hf="${k}" aria-pressed="${hFilter===k}">${l}</button>`).join('');
   const q=($('histSearch').value||'').trim().toLowerCase();
-  const list=S.tx.filter(hMatch).filter(t=>{if(!q)return true;const s=(t.symbol||'').toLowerCase();return s.includes(q)||(t.note||'').toLowerCase().includes(q)||(NAMES[(t.symbol||'').toUpperCase()]||'').toLowerCase().includes(q)||txTitle(t).toLowerCase().includes(q);}).sort((a,b)=>byTs(b,a)).slice(0,250);
+  const list=S.tx.filter(hMatch).filter(t=>{if(!q)return true;const s=(t.symbol||'').toLowerCase();return s.includes(q)||(t.note||'').toLowerCase().includes(q)||coinName((t.symbol||'').toUpperCase()).toLowerCase().includes(q)||txTitle(t).toLowerCase().includes(q);}).sort((a,b)=>byTs(b,a)).slice(0,250);
   if(!list.length){$('histList').innerHTML=`<div class="empty">${S.tx.length?'Ничего не найдено.':(S.ready?'Записей пока нет. Нажми «+» или напиши мне в чат, что купил.':'Загружаю…')}</div>`;return;}
   let html='',cur='',buf='';
   for(const t of list){const d=new Date(t.ts),k=d.getFullYear()+'-'+d.getMonth();if(k!==cur){if(buf)html+=buf+'</div>';cur=k;html+=`<div class="mhead">${monthLabel(d)}</div>`;buf='<div class="list">';}buf+=txRow(t);}
@@ -1310,7 +1336,7 @@ function renderReport(){const y=rep[0],m=rep[1],s0=new Date(y,m,1),e0=new Date(y
   $('repTiles').innerHTML=T('Внесено на биржу',money(sum(dep),{d:0}),dep.length?uahM(sum(dep,'uah')):'депозитов не было')+T('Куплено',money(bought,{d:0}),buys.length?pl(buys.length,'покупка','покупки','покупок'):'покупок не было')+T('Продано',money(sold,{d:0}),sells.length?'зафикс. '+money(realized,{sign:true,d:0}):'продаж не было',sells.length?(realized>=0?'pos':'neg'):'')+T('Доход записан',inc.length?uahM(sum(inc,'uah')):'—',inc.length?pl(inc.length,'запись','записи','записей'):'нет записей');
   const by={};for(const t of buys){const s=(t.symbol||'').toUpperCase();by[s]=(by[s]||0)+(+t.usd||0);}const arr=Object.entries(by).sort((a,b)=>b[1]-a[1]),mx=arr.length?arr[0][1]:1;
   $('repBuyCnt').textContent=arr.length?pl(arr.length,'монета','монеты','монет'):'';
-  $('repBuys').innerHTML=arr.length?arr.map(([s,v])=>`<div class="rep-row"><span>${esc(NAMES[s]||s)} <span class="mute small">${esc(s)}</span></span><span>${money(v)} · ${nf(bought?v/bought*100:0,0)}%</span><div class="bar"><i style="width:${v/mx*100}%"></i></div></div>`).join(''):'<div class="hint">В этом месяце покупок не было.</div>';
+  $('repBuys').innerHTML=arr.length?arr.map(([s,v])=>`<div class="rep-row"><span>${esc(coinName(s))} <span class="mute small">${esc(s)}</span></span><span>${money(v)} · ${nf(bought?v/bought*100:0,0)}%</span><div class="bar"><i style="width:${v/mx*100}%"></i></div></div>`).join(''):'<div class="hint">В этом месяце покупок не было.</div>';
   const avgOf=(h,s)=>h[s]&&h[s].cq?h[s].usd/h[s].cq:null;
   $('repAvg').innerHTML=['BTC','ETH'].map(s=>{const a=avgOf(hS,s),b=avgOf(hE,s);if(!a&&!b)return '';const d=a&&b?b-a:null;return `<div><span>${s}</span><span>${a?usd(a,0):'—'} → ${b?usd(b,0):'—'}${d!=null&&Math.abs(d)>=1?` <span class="${d<=0?'pos':'neg'}">(${d>0?'+':'−'}${usd(Math.abs(d),0)})</span>`:''}</span></div>`;}).join('')||'<div class="hint">Нет данных.</div>';
   $('repRes').innerHTML=`<div><span>Пополнено</span><span class="pos">${money(resIn,{sign:true})}</span></div><div><span>Потрачено на уровнях</span><span class="${resOut?'neg':''}">${resOut?money(-resOut):money(0)}</span></div><div><span>На конец месяца</span><span>${money(resEnd)}</span></div>`;
@@ -1359,7 +1385,7 @@ document.addEventListener('keydown',e=>{if(!cvSym||!$('coinSheet').classList.con
 function openCoin(sym){cvSym=sym;drawn.cv=0;setFlip(false,true);openSheet('coinSheet');renderCoinView();const b=$('coinSheet').querySelector('.sh-body');if(b)b.scrollTop=0;loadCoinChart();}
 function renderCoinView(){const sym=cvSym;if(!sym)return;const D=derive(),c=D.h[sym]||{qty:0,usd:0,cq:0,realized:0},p=+D.prices[sym]||0,v=p*c.qty,avg=c.cq?c.usd/c.cq:0,un=v&&c.usd>0?v-c.usd:null,ch=S.live.change[sym],free=c.cq>1e-12&&Math.abs(c.usd)<1e-9;
   $('cvCard').style.setProperty('--c',coinColor(sym));const bd=$('cvBadge');if(bd.dataset.sym!==sym){bd.innerHTML=badge(sym);bd.dataset.sym=sym;}
-  cvPosRender();$('cvTitle').textContent=(NAMES[sym]||sym)+' · '+sym;$('cvName').textContent=NAMES[sym]||sym;$('cvCur').textContent=sym;cvHead();
+  cvPosRender();$('cvTitle').textContent=coinName(sym)+' · '+sym;$('cvName').textContent=coinName(sym);$('cvCur').textContent=sym;cvHead();
   const cell=(k,val,cl)=>`<div class="cc-cell"><span>${k}</span><b class="${cl||''}">${val}</b></div>`;
   const plCl=un!=null?(un>=0?'pos':'neg'):free&&v?'pos':'',plVal=un!=null?`${money(un,{sign:true})}<em>${pct(un/c.usd*100)}</em>`:free&&v?`${money(v,{sign:true})}<em>аирдроп</em>`:'—';
   const rz=Math.abs(c.realized||0)>=0.01?`<div class="cc-cell cc-rz"><span>Зафиксировано</span><b class="${c.realized>0?'pos':'neg'}">${money(c.realized,{sign:true})}</b></div>`:'';
@@ -1409,8 +1435,8 @@ $('cvSell').addEventListener('click',()=>{const s=cvSym;openAct('sell',{sym:s});
 
 /* ===== шторки ===== */
 let txReturn=null;
-function openSheet(id){document.querySelectorAll('.sheet.open').forEach(s=>{if(s.id!==id)s.classList.remove('open');});$(id).classList.add('open');$('scrim').classList.add('open');document.body.classList.add('lock');play('tick');buzz(8);}
-function closeSheets(){const back=txReturn&&$('txSheet').classList.contains('open')?txReturn:null;txReturn=null;
+function openSheet(id){sugHide();document.querySelectorAll('.sheet.open').forEach(s=>{if(s.id!==id)s.classList.remove('open');});$(id).classList.add('open');$('scrim').classList.add('open');document.body.classList.add('lock');play('tick');buzz(8);}
+function closeSheets(){sugHide();const back=txReturn&&$('txSheet').classList.contains('open')?txReturn:null;txReturn=null;
   document.querySelectorAll('.sheet.open').forEach(s=>s.classList.remove('open'));
   if(back&&cvSym){$(back).classList.add('open');renderCoinView();return;}
   $('scrim').classList.remove('open');document.body.classList.remove('lock');}
@@ -1461,7 +1487,80 @@ function collectRows(pf,type,ts,level){const items=[];const D=derive();
   return items.length?{items}:{err:'Впиши сумму или количество хотя бы одной монеты.'};}
 function setBuyMode(m){buyMode=m;[...$('buyMode').children].forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.m===m)));$('buyDca').hidden=m!=='dca';$('buyOne').hidden=m!=='one';}
 $('buyMode').addEventListener('click',e=>{const b=e.target.closest('[data-m]');if(b){play('tick');setBuyMode(b.dataset.m);}});
-function symOptions(){const D=derive();$('symList').innerHTML=[...new Set([...D.syms,...Object.keys(CG)])].map(s=>`<option value="${esc(s)}">`).join('');}
+/* ===== справочник монет CoinGecko: поиск по тикеру и названию в полях «Монета» ===== */
+/* data/coins.json — оглавление; часть A — 3000 крупнейших (грузится первой), часть B — все остальные. Строка: [тикер, название, id|"" , место|0, картинка] */
+const CGI='https://coin-images.coingecko.com/coins/images/';
+const dirSlug=n=>n.normalize('NFKD').replace(/[^\x00-\x7F]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'');
+const DIR={rows:[],byId:new Map(),bySym:new Map(),p:null,full:false,v:'',n:0};
+function dirAdd(arr){for(const r of arr){const o={sym:r[0],name:r[1],id:r[2]||dirSlug(r[1]),rank:r[3]||0,img:r[4]||'',su:String(r[0]).toUpperCase(),nu:String(r[1]).toUpperCase()};o.nw=' '+o.nu.replace(/[^0-9A-ZА-ЯЁ]+/g,' ');
+  DIR.rows.push(o);DIR.byId.set(o.id,o);const l=DIR.bySym.get(o.su);l?l.push(o):DIR.bySym.set(o.su,[o]);}}
+function dirImg(o){const v=o&&o.img;if(!v)return '';const k=v.indexOf('/');if(k<0){const d=v.indexOf('.');return CGI+v.slice(0,d)+'/large/'+o.id+v.slice(d);}return CGI+v.slice(0,k)+'/large/'+v.slice(k+1);}
+function dirLoad(){if(DIR.p)return DIR.p;
+  DIR.p=(async()=>{DIR.rows=[];DIR.byId.clear();DIR.bySym.clear();DIR.full=false;
+    const meta=await (await fetch('data/coins.json',{cache:'no-cache'})).json();
+    const part=async n=>{const r=await fetch('data/'+n);if(!r.ok)throw new Error('dir '+r.status);return r.json();};
+    dirAdd(await part(meta.a));sugRefresh();
+    dirAdd(await part(meta.b));DIR.full=true;DIR.v=meta.v;DIR.n=meta.n;sugRefresh();
+    dirClean(meta);dirFill();})().catch(e=>{DIR.p=null;sugRefresh();throw e;});
+  return DIR.p;}
+/* старые части справочника (после еженедельного обновления) убираем из памяти телефона */
+async function dirClean(meta){try{for(const k of await caches.keys()){if(!/^ml-keep/.test(k))continue;const c=await caches.open(k);
+  for(const q of await c.keys()){const m=q.url.match(/\/data\/(coins-[ab]\.[0-9a-f]+\.json)$/);if(m&&m[1]!==meta.a&&m[1]!==meta.b)await c.delete(q);}}}catch(e){}}
+/* монеты с одинаковым тикером: самая крупная по капитализации; без рейтинга — только если она одна */
+function dirBest(su){const l=DIR.bySym.get(su)||[];if(!l.length)return null;const r=l.filter(o=>o.rank).sort((a,b)=>a.rank-b.rank);return r[0]||(l.length===1?l[0]:null);}
+/* порядок: точный тикер → начало тикера → начало названия → слово в названии; внутри — по капитализации; монеты из портфеля выше */
+function dirSearch(q,k){q=q.trim().toUpperCase();if(!q)return [];const m=cgMap(),own=new Set(derive().syms.map(x=>m[x]).filter(Boolean)),out=[],w=' '+q;
+  for(const o of DIR.rows){let t;if(o.su===q)t=0;else if(o.su.startsWith(q))t=1;else if(o.nu.startsWith(q))t=2;else if(q.length>=2&&o.nw.includes(w))t=3;else continue;
+    out.push([t+Math.log10(o.rank||1e6)-(own.has(o.id)?3:0),o]);}
+  out.sort((a,b)=>a[0]-b[0]);return out.slice(0,k||6).map(x=>x[1]);}
+/* монеты портфеля без id CoinGecko: после загрузки справочника подбираем самую крупную с этим тикером */
+let dirFilling=false;
+async function dirFill(){if(dirFilling||!db||!DIR.full)return;const m=cgMap(),add={};
+  for(const sym of derive().syms){if(m[sym])continue;const o=dirBest(sym);if(o&&o.rank){add[sym]=o.id;metaPut(sym,o.name,dirImg(o));}}
+  if(!Object.keys(add).length)return;dirFilling=true;
+  try{await db.doc('app/settings').update({cgIds:Object.assign({},S.settings.cgIds||{},add)});startLive();}catch(e){}finally{dirFilling=false;}}
+
+/* подсказки под полем: одна панель, переезжает под активное поле */
+const SUG_IN=['oSym','nsSym','bAlt','dAlt','eSym','stAlt'];
+const sug=document.createElement('div');sug.className='sug';sug.hidden=true;sug.setAttribute('role','listbox');sug.setAttribute('aria-label','Монеты CoinGecko');
+let sugEl=null;
+function sugBadge(o){if(LOGO[o.su]&&LOGO_ID[o.su]===o.id)return logoImg(o.su,LOGO[o.su],'');const u=dirImg(o);return u?logoImg(o.su,u,'',true):badgeTxt(o.su,'');}
+function sugShow(el){sugEl=el;const row=el.closest('.f2')||el.closest('.field');if(row&&sug.previousElementSibling!==row)row.after(sug);sugRefresh();}
+function sugHide(){sug.hidden=true;sugEl=null;}
+function sugRefresh(){if(!sugEl)return;const q=(sugEl.value||'').trim(),was=sug.hidden;if(!q){sug.hidden=true;return;}
+  if(!DIR.rows.length){sug.innerHTML='<div class="sug-note">'+(DIR.p?'Загружаю список монет…':'Список монет не загрузился — нет связи. Тикер можно вписать вручную.')+'</div>';sug.hidden=false;return;}
+  const list=dirSearch(q,6);
+  if(!list.length){sug.innerHTML='<div class="sug-note">'+(DIR.full?'В CoinGecko такой монеты нет. Можно записать как есть — стоимость будет по твоим сделкам.':'Ищу среди всех монет…')+'</div>';sug.hidden=false;return;}
+  sug.innerHTML=list.map(o=>`<button type="button" class="sug-it" role="option" data-id="${esc(o.id)}">${sugBadge(o)}<span class="sug-nm"><b>${esc(o.sym)}</b><small>${esc(o.name)}</small></span><span class="sug-rk">${o.rank?'#'+nf(o.rank,0):''}</span></button>`).join('');
+  sug.hidden=false;if(was&&sug.scrollIntoView)requestAnimationFrame(()=>{try{sug.scrollIntoView({block:'nearest',behavior:reduced?'auto':'smooth'});}catch(e){}});}
+for(const k of SUG_IN){const el=$(k);if(!el)continue;el.removeAttribute('list');el.setAttribute('autocapitalize','characters');el.setAttribute('spellcheck','false');
+  el.addEventListener('focus',()=>{dirLoad().catch(()=>{});if(el.value.trim())sugShow(el);});
+  el.addEventListener('input',()=>{const v=el.value.trim().toUpperCase();if(el.dataset.pickSym&&el.dataset.pickSym===v)return;delete el.dataset.pickId;delete el.dataset.pickSym;sugShow(el);});
+  el.addEventListener('blur',()=>setTimeout(()=>{if(sugEl===el&&document.activeElement!==el)sugHide();},200));
+  el.addEventListener('keydown',e=>{if(e.key==='Escape')sugHide();});}
+sug.addEventListener('pointerdown',e=>{if(e.target.closest('.sug-it'))e.preventDefault();});   /* не закрываем клавиатуру касанием подсказки */
+sug.addEventListener('click',e=>{const b=e.target.closest('.sug-it');if(!b||!sugEl)return;const o=DIR.byId.get(b.dataset.id);if(!o)return;const el=sugEl;
+  el.value=o.sym;el.dataset.pickId=o.id;el.dataset.pickSym=o.su;pricePeek(o);el.dispatchEvent(new Event('input'));sugHide();play('tick');buzz(8);});
+/* новая монета ещё без цены: один запрос к CoinGecko, чтобы форма сразу посчитала количество по сумме */
+async function pricePeek(o){if(!mcp||cgMap()[o.su]===o.id&&S.live.prices[o.su])return;
+  try{const r=await mcp.callTool('CoinGecko','get-coin-markets',{ids:[o.id]}),c=((r&&r.payload&&r.payload.coins)||[])[0];
+    if(c&&typeof c.currentPrice==='number'){S.live.prices[o.su]=c.currentPrice;metaPut(o.su,c.name,c.image);for(const k of SUG_IN){const el=$(k);if(el&&el.dataset.pickId===o.id)el.dispatchEvent(new Event('input'));}}}catch(e){}}
+/* после сохранения: запоминаем, какая монета CoinGecko стоит за тикером (выбранная в подсказке или самая крупная) */
+function pickedCoin(el,sym){if(el.dataset.pickSym===sym&&el.dataset.pickId)return DIR.byId.get(el.dataset.pickId)||{id:el.dataset.pickId};
+  if(cgMap()[sym])return null;return dirBest(sym);}
+async function rememberCoins(ids){const add={},m=cgMap();
+  for(const k of ids){const el=$(k);if(!el)continue;const sym=(el.value||'').trim().toUpperCase();if(!sym)continue;const o=pickedCoin(el,sym);
+    delete el.dataset.pickId;delete el.dataset.pickSym;if(!o)continue;if(o.name)metaPut(sym,o.name,dirImg(o));if(m[sym]!==o.id)add[sym]=o.id;}
+  if(!db||!Object.keys(add).length)return;
+  try{await db.doc('app/settings').update({cgIds:Object.assign({},S.settings.cgIds||{},add)});startLive();render();}catch(e){}}
+/* монеты портфеля без id CoinGecko (вписаны без связи или до v1.3): раз за запуск через 5 с проверяем по справочнику;
+   тикеры, которых нет в CoinGecko (например, OGC), помним неделю, чтобы не качать справочник при каждом запуске */
+let dirAutoDone=false;
+function dirAuto(){if(dirAutoDone||!S.ready)return;dirAutoDone=true;setTimeout(()=>{let miss={};try{miss=JSON.parse(localStorage.getItem('ml-dirmiss')||'{}')||{};}catch(e){}
+  const m=cgMap(),now=Date.now(),need=derive().syms.filter(x=>!m[x]&&!(miss[x]&&now-miss[x]<7*864e5));if(!need.length)return;
+  dirLoad().then(()=>{for(const x of need)if(!dirBest(x))miss[x]=now;try{localStorage.setItem('ml-dirmiss',JSON.stringify(miss));}catch(e){}}).catch(()=>{});},5000);}
+const formCoinInputs=()=>mode==='buy'?[buyMode==='dca'?'bAlt':'oSym']:mode==='dip'?['dAlt']:mode==='start'?['nsSym']:[];
+function symOptions(){sugHide();}
 function initBuy(opt){const D=derive(),sp=split();symOptions();
   $('buyMode').children[0].textContent='По DCA · '+sp.BTC+'/'+sp.ETH+'/'+sp.ALT;setBuyMode(opt.sym?'one':'dca');
   $('dcaHint').innerHTML=D.hasDep?(D.dcaBudget>0.5?'Бюджет DCA: осталось <b>'+usd(D.dcaBudget)+'</b>':'Бюджет DCA уже потрачен — покупка уйдёт в минус бюджета'):'Сумма разложится по монетам по твоему правилу.';
@@ -1517,7 +1616,7 @@ function incCalc(){const v=+$('incUah').value||0,r=rate(),row=(k,g)=>`<div><span
   $('incCalc').innerHTML=v?row('30% в крипту',v*.3)+row('→ DCA',v*.3*depShare())+row('→ резерв USDT',v*.3*(1-depShare()))+row('10% на депозит',v*.1)+'<p class="hint">После этого пополни биржу и запиши «Пополнить биржу».</p>':'<p class="hint">Впиши сумму — посчитаю, сколько куда.</p>';}
 $('incUah').addEventListener('input',incCalc);
 function initStart(){symOptions();$('nsSym').value='';$('nsQty').value='';$('nsUsd').value='';}
-function finish(snd,n,msg){closeSheets();play(snd);buzz([12,40,18]);if(snd!=='cash')coinFly($('plusBtn'),Math.min(n,4));toast(msg);}
+function finish(snd,n,msg){rememberCoins(formCoinInputs());closeSheets();play(snd);buzz([12,40,18]);if(snd!=='cash')coinFly($('plusBtn'),Math.min(n,4));toast(msg);}
 async function saveForm(){const err=$('fErr');err.textContent='';if(!db){err.textContent='Нет подключения к данным — пришли запись мне в чат.';return;}
   const ts=tsFromDate(),btn=$('saveBtn');btn.disabled=true;
   try{
@@ -1581,7 +1680,7 @@ async function saveTx(){const t=S.tx.find(x=>x.id===eId);if(!t||!db){$('eErr').t
   if(!$('eUahF').hidden){const g=$('eUah').value;nd.uah=g===''?null:+g;}
   if(coinT&&nd.usd&&nd.qty)nd.price=+(nd.usd/nd.qty).toPrecision(8);
   const note=$('eNote').value.trim();if(note)nd.note=note;else delete nd.note;
-  try{await db.doc('tx/'+eId).set(nd);closeSheets();play('coin');buzz(12);toast('Запись обновлена');}catch(e){$('eErr').textContent=failMsg(e,'Не сохранилось');}}
+  try{await db.doc('tx/'+eId).set(nd);if(coinT)rememberCoins(['eSym']);closeSheets();play('coin');buzz(12);toast('Запись обновлена');}catch(e){$('eErr').textContent=failMsg(e,'Не сохранилось');}}
 async function delTx(){const t=S.tx.find(x=>x.id===eId);if(!t||!db)return;const id=eId,data=Object.assign({},t);delete data.id;
   try{await db.doc('tx/'+id).delete();closeSheets();play('del');buzz(20);toast('Запись удалена',{label:'Отменить',fn:async()=>{try{await db.doc('tx/'+id).set(data);play('coin');toast('Запись восстановлена');}catch(e){toast(failMsg(e,'Не восстановилось'));}}});}catch(e){$('eErr').textContent=failMsg(e,'Не удалилось');}}
 $('eSave').addEventListener('click',saveTx);
@@ -1592,7 +1691,7 @@ const swSet=(id,on)=>$(id).setAttribute('aria-checked',String(!!on));
 function fillSettings(){[...$('themeSeg').children].forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.th===(P.theme||'system'))));[...$('curSeg').children].forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.c===P.cur)));
   swSet('swHide',P.hide);swSet('swDust',P.dust);swSet('swSound',P.sound);swSet('swHaptic',P.haptic);swSet('swMascot',P.mascot!==false);swSet('swMsSound',P.msVoice!==false);
   const sp=split();$('stB').value=sp.BTC;$('stE').value=sp.ETH;$('stA').value=sp.ALT;$('stCap').value=S.settings.capPct||20;$('stDep').value=Math.round(depShare()*100);$('stAlt').value=S.settings.altOfMonth||'';$('stInc').value=S.settings.incomeMonthlyUah||'';$('stK2').value=k2Cfg().pct;$('stAltCap').value=altCapPct();$('setErr').textContent='';
-  const L=S.live;$('dataInfo').innerHTML=`<div><span>Курс доллара</span><span>${rate()?nf(rate(),2)+' грн за $':'—'}</span></div>${S.settings.usdUahSrc?`<div><span>Откуда курс</span><span>${esc(S.settings.usdUahSrc)}${S.settings.usdUahAt?' · '+dShort(S.settings.usdUahAt)+', '+tHM(S.settings.usdUahAt):''}</span></div>`:''}${S.settings.usdUahNbu?`<div><span>Курс НБУ</span><span>${nf(+S.settings.usdUahNbu,2)} грн</span></div>`:''}<div><span>Живые цены</span><span>${L.status==='ok'?'CoinGecko · '+tHM(L.at):L.status==='stale'?'с задержкой':LIVE_MSG[L.code]||'нет'}</span></div><div><span>Последняя проверка</span><span>${S.market&&S.market.updatedAt?dShort(S.market.updatedAt)+', '+tHM(S.market.updatedAt):'—'}</span></div><div><span>Проверка рынка</span><span>8:41 и 20:41</span></div><div><span>Записей</span><span>${S.tx.length}</span></div>`;}
+  const L=S.live;$('dataInfo').innerHTML=`<div><span>Курс доллара</span><span>${rate()?nf(rate(),2)+' грн за $':'—'}</span></div>${S.settings.usdUahSrc?`<div><span>Откуда курс</span><span>${esc(S.settings.usdUahSrc)}${S.settings.usdUahAt?' · '+dShort(S.settings.usdUahAt)+', '+tHM(S.settings.usdUahAt):''}</span></div>`:''}${S.settings.usdUahNbu?`<div><span>Курс НБУ</span><span>${nf(+S.settings.usdUahNbu,2)} грн</span></div>`:''}<div><span>Живые цены</span><span>${L.status==='ok'?'CoinGecko · '+tHM(L.at):L.status==='stale'?'с задержкой':LIVE_MSG[L.code]||'нет'}</span></div><div><span>Монеты и логотипы</span><span>CoinGecko${DIR.n?' · '+nf(DIR.n,0)+' в поиске':''}</span></div><div><span>Последняя проверка</span><span>${S.market&&S.market.updatedAt?dShort(S.market.updatedAt)+', '+tHM(S.market.updatedAt):'—'}</span></div><div><span>Проверка рынка</span><span>8:41 и 20:41</span></div><div><span>Записей</span><span>${S.tx.length}</span></div>`;}
 function openSettings(toStrat){fillSettings();openSheet('setSheet');const b=$('setSheet').querySelector('.sh-body');if(b)b.scrollTop=0;if(toStrat)setTimeout(()=>{const el=$('stratLbl');if(el&&el.scrollIntoView)el.scrollIntoView({behavior:reduced?'auto':'smooth',block:'start'});},380);}
 $('setBtn').addEventListener('click',()=>openSettings(false));
 const SW={swHide:'hide',swDust:'dust',swSound:'sound',swHaptic:'haptic',swMascot:'mascot',swMsSound:'msVoice'};
@@ -1607,7 +1706,7 @@ async function saveStrategy(){const B=+$('stB').value,E=+$('stE').value,A=+$('st
   if(!(k2>=0&&k2<=50)){$('setErr').textContent='Ключ 2 — от 0 до 50%.';return;}
   if(!(ac>=0&&ac<=100)){$('setErr').textContent='Потолок альтов — от 0 до 100%.';return;}
   if(!db){$('setErr').textContent='Нет подключения к данным.';return;}
-  try{await db.doc('app/settings').update({split:{BTC:B,ETH:E,ALT:A},capPct:cap,depositSplit:{dca:dep},altOfMonth:alt,incomeMonthlyUah:inc||null,key2Pct:k2,altCapPct:ac});play('cash');toast('Правила сохранены');$('setErr').textContent='';}catch(e){$('setErr').textContent=failMsg(e,'Не сохранилось');}}
+  try{await db.doc('app/settings').update({split:{BTC:B,ETH:E,ALT:A},capPct:cap,depositSplit:{dca:dep},altOfMonth:alt,incomeMonthlyUah:inc||null,key2Pct:k2,altCapPct:ac});rememberCoins(['stAlt']);play('cash');toast('Правила сохранены');$('setErr').textContent='';}catch(e){$('setErr').textContent=failMsg(e,'Не сохранилось');}}
 $('eyeBtn').addEventListener('click',()=>{P.hide=!P.hide;savePrefs();play('tick');buzz(8);render();toast(P.hide?'Суммы скрыты':'Суммы видны');});
 
 /* ===== живые цены ===== */
@@ -1616,7 +1715,7 @@ const AUTHZ=['needs_reauth','server_not_connected','blocked_by_policy','approval
 let liveUnsubs=[],liveKey='';
 function onLive(ev){const L=S.live;
   if(ev.type==='data'){const coins=(ev.result&&ev.result.payload&&ev.result.payload.coins)||[],rev={},m=cgMap();for(const k in m)(rev[m[k]]=rev[m[k]]||[]).push(k);
-    for(const c of coins)for(const sym of (rev[c.id]||[])){if(typeof c.currentPrice==='number')L.prices[sym]=c.currentPrice;if(typeof c.priceChangePercentage24h==='number')L.change[sym]=c.priceChangePercentage24h;if(Array.isArray(c.sparkline7d)){const sp=c.sparkline7d.filter(v=>typeof v==='number');L.spark[sym]=sp.length>80?sp.filter((_,i)=>i%2===0):sp;if(sp.length)L.peak[sym]=Math.max(...sp);}}
+    for(const c of coins)for(const sym of (rev[c.id]||[])){metaPut(sym,c.name,c.image);if(typeof c.currentPrice==='number')L.prices[sym]=c.currentPrice;if(typeof c.priceChangePercentage24h==='number')L.change[sym]=c.priceChangePercentage24h;if(Array.isArray(c.sparkline7d)){const sp=c.sparkline7d.filter(v=>typeof v==='number');L.spark[sym]=sp.length>80?sp.filter((_,i)=>i%2===0):sp;if(sp.length)L.peak[sym]=Math.max(...sp);}}
     L.at=(ev.result&&ev.result.cache&&ev.result.cache.storedAt)||Date.now();L.status='ok';L.code=null;render();checkAth();return;}
   const code=(ev.error&&ev.error.code)||'upstream_error';
   if(AUTHZ.includes(code)){L.prices={};L.change={};L.spark={};L.peak={};L.status='off';L.code=code;}else{L.status=Object.keys(L.prices).length?'stale':'off';L.code=null;}
@@ -1662,7 +1761,7 @@ function msPayload(x){let fresh=0;try{fresh=S.alerts.filter(a=>String(a.ts||'')>
 function msSync(x){MSC.last=x;if(!msApply())return;if(window.Mascot){try{window.Mascot.sync(msPayload(x));}catch(e){}}else msLoad();}
 function msLoad(){if(MSC.loading||MSC.failed)return;MSC.loading=true;
   const add=(src,ok)=>{try{const s=document.createElement('script');s.src=src;s.async=true;s.onload=ok;s.onerror=()=>{MSC.failed=true;};document.head.appendChild(s);}catch(e){MSC.failed=true;}};
-  const boot=()=>add('mascot.js?v=20261027124500',()=>{try{if(window.Mascot&&window.Mascot.init({host:$('mascot'),app:{audio:ac,buzz}})&&MSC.last)window.Mascot.sync(msPayload(MSC.last));}catch(e){}});
+  const boot=()=>add('mascot.js?v=20261027133000',()=>{try{if(window.Mascot&&window.Mascot.init({host:$('mascot'),app:{audio:ac,buzz}})&&MSC.last)window.Mascot.sync(msPayload(MSC.last));}catch(e){}});
   setTimeout(()=>{if(window.THREE)boot();else add('three.min.js',boot);},300);}
 function render(){const D=derive();renderHeader();renderHome(D);renderGrowth();renderCoins(D);renderStrategy(D);renderActivity();earnNudge();if(cvSym&&$('coinSheet').classList.contains('open'))renderCoinView();}
 document.body.classList.add('loading');
@@ -1678,7 +1777,7 @@ render();
   db.doc('app/screen').onSnapshot(s=>{S.screen=s.exists?s.data():null;renderStrategy(derive());},fail);
   db.doc('app/screenreq').onSnapshot(s=>{S.screenreq=s.exists?s.data():null;renderStrategy(derive());},fail);
   db.doc('app/market').onSnapshot(s=>{S.market=s.exists?s.data():null;render();},fail);
-  db.collection('tx').limit(1000).onSnapshot(q=>{S.tx=q.docs.map(d=>Object.assign({id:d.id},d.data()));S.ready=true;document.body.classList.remove('loading');render();startLive();},fail);
+  db.collection('tx').limit(1000).onSnapshot(q=>{S.tx=q.docs.map(d=>Object.assign({id:d.id},d.data()));S.ready=true;document.body.classList.remove('loading');render();startLive();dirAuto();},fail);
   db.collection('alerts').orderBy('ts','desc').limit(20).onSnapshot(q=>{S.alerts=q.docs.map(d=>d.data());renderAlerts();},fail);
   db.collection('history').limit(1000).onSnapshot(q=>{S.history=q.docs.map(d=>d.data());renderGrowth();},fail);
 })();
