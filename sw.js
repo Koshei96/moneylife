@@ -1,10 +1,10 @@
 /* MoneyLife service worker — версия подставляется при сборке */
-const V='ml-20261027120000';
+const V='ml-20261027121500';
 /* KEEP — неизменные файлы (логотипы, голос с хэшем в имени, библиотеки, шрифты): переживают обновления версии и не качаются заново */
-const KEEP='ml-keep-4';
+const KEEP='ml-keep-5';
 const IMM=['three.min.js','https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js'];
 const isKeep=u=>(u.origin===location.origin&&(/\/logos\//.test(u.pathname)||/\.bin$/.test(u.pathname)||/three\.min\.js$/.test(u.pathname)))||/supabase-js@[0-9.]+\//.test(u.href)||u.hostname.includes('gstatic');
-const SHELL=['./','index.html','shim.js','config.js','manifest.webmanifest','icons/icon-192.png','icons/icon-512.png','icons/apple-touch-icon.png','mascot.js?v=20261027120000'];
+const SHELL=['./','index.html','shim.js','config.js','manifest.webmanifest','icons/icon-192.png','icons/icon-512.png','icons/apple-touch-icon.png','mascot.js?v=20261027121500'];
 self.addEventListener('install',e=>{e.waitUntil(Promise.all([caches.open(V).then(c=>c.addAll(SHELL)).catch(()=>{}),caches.open(KEEP).then(async c=>{for(const x of IMM){if(!(await c.match(x)))await c.add(x).catch(()=>{});}})]));});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(ks=>Promise.all(ks.filter(k=>k!==V&&k!==KEEP).map(k=>caches.delete(k)))).then(()=>self.clients.claim()));});
 self.addEventListener('message',e=>{if(e.data==='skip')self.skipWaiting();});
