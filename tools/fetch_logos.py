@@ -49,6 +49,14 @@ for p in req:
         cid = ranked[0] if ranked else None
     r = {'id': cid, 'cands': [(x, mk.get(x, {}).get('market_cap_rank')) for x in cands[:15]]}
     c = mk.get(cid) if cid else None
+    if cid and not c:
+        # монеты без рыночных данных (например, после переименования) — берём картинку из карточки монеты
+        try:
+            j = json.loads(get(f'{API}/coins/{cid}?localization=false&tickers=false&market_data=false&community_data=false&developer_data=false'))
+            c = {'name': j.get('name'), 'image': (j.get('image') or {}).get('large'), 'market_cap_rank': j.get('market_cap_rank')}
+        except Exception as e:
+            r['err'] = str(e)
+        time.sleep(5)
     if c and c.get('image'):
         url = c['image'].replace('/small/', '/large/').replace('/thumb/', '/large/')
         r.update(name=c['name'], rank=c.get('market_cap_rank'), image=url)
