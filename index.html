@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>MoneyLife</title>
 <meta name="theme-color" content="#06040e">
+<script>/* тема до отрисовки: «Авто» — как в телефоне, иначе выбор из настроек */
+(function(){try{var p=JSON.parse(localStorage.getItem('cp-prefs2')||'{}'),t=p.theme||'system',d=t==='system'?(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark'):t;document.documentElement.setAttribute('data-theme',d);document.querySelector('meta[name=theme-color]').content=d==='light'?'#f5f2fc':'#06040e';}catch(e){}})();</script>
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -450,6 +452,40 @@ button:focus-visible{outline:2px solid var(--pink);outline-offset:2px}
 .seg button{min-height:44px}
 .btn.sm{min-height:44px}
 .check{min-height:44px}
+
+/* ===== v1.2.5: светлая тема (вариант A — карточка баланса и карточка монеты остаются тёмными фирменными) ===== */
+:root[data-theme="light"]{--bg:#f5f2fc;--bg2:#ffffff;--surface:#ffffff;--surface2:#faf8ff;--raise:#efe9fb;--field:#f0ebfa;--line:#e6dff5;--line2:#d4c8ee;
+--fg:#1b1530;--mute:#665c86;--dim:#958cb0;--lav:#5b2fe0;--accent:#7a3cf0;--accent-soft:#7a3cf01a;--glow:#7a3cf040;
+--pos:#0e9f6e;--pos-soft:#0e9f6e17;--neg:#e2364b;--neg-soft:#e2364b14;--warn:#b7791f;--warn-soft:#d9a1351c;--info:#3866d6;--info-soft:#3866d614;color-scheme:light}
+[data-theme="light"] nav.tabs{background:#fffffff2}
+[data-theme="light"] .scrim{background:#1b153066}
+[data-theme="light"] .chip,[data-theme="light"] .chart-read .pc{background:#1b15300d}
+[data-theme="light"] .row:active{background:#1b15300a}
+[data-theme="light"] .badge{background:#ffffff}
+[data-theme="light"] .mark{background:#ffffff}
+[data-theme="light"] .signal{background:linear-gradient(135deg,#fff0f2,#fff 60%,#fff4f6);border-color:#e2364b55;box-shadow:0 14px 34px -26px #e2364b}
+[data-theme="light"] .signal.soft{background:linear-gradient(135deg,#fff8ea,#fff 60%,#fffaf0);border-color:#d9a13566}
+[data-theme="light"] .mi.main{background:linear-gradient(135deg,#f1eaff,#ffffff);border-color:#a64dff44}
+[data-theme="light"] .card{box-shadow:0 1px 2px #1b153008,0 8px 24px -18px #1b153030}
+[data-theme="light"] .wm-l{background:linear-gradient(100deg,#7a3cf0 0%,#c03ad8 55%,#e8409f 100%);-webkit-background-clip:text;background-clip:text}
+[data-theme="light"] .toast,[data-theme="light"] #mlUpd{box-shadow:0 12px 30px -12px #1b153040}
+[data-theme="light"] .qa i{background:#fff}
+[data-theme="light"] .qa button:first-child i{background:var(--grad)}
+[data-theme="light"] .plus{box-shadow:0 12px 28px -8px var(--glow),0 0 0 6px var(--bg)}
+[data-theme="light"] #mlAuth{background:radial-gradient(80vmax 60vmax at 50% -10%,#a64dff26,transparent 60%),var(--bg)}
+/* карточка баланса — тёмная в обеих темах: внутри неё возвращаем тёмные цвета */
+[data-theme="light"] .hero{color:#f5f1ff;--fg:#f5f1ff;--mute:#c9bdf0;--dim:#9a8fc4;--lav:#cfbaff;--line:#241b47;--line2:#372a68;--surface:#100b21;--surface2:#160f2e;--pos:#34e0a1;--pos-soft:#34e0a11f;--neg:#ff5f6d;--neg-soft:#ff5f6d1f}
+[data-theme="light"] .hero .chip{background:#ffffff14}
+/* графики на светлых карточках */
+[data-theme="light"] .card svg text[fill="#8e83b6"]{fill:#8a80a8}
+[data-theme="light"] .card svg line[stroke="#ffffff10"]{stroke:#1b153014}
+[data-theme="light"] .card svg [stroke="#cfbaff"]{stroke:#7a3cf0}
+[data-theme="light"] .card svg [stroke="#0b0818"]{stroke:#ffffff}
+[data-theme="light"] .card svg circle[stroke="#1d1540"]{stroke:#ece6fb}
+[data-theme="light"] .card svg text[fill="#a99dcc"]{fill:var(--mute)}
+[data-theme="light"] .card svg text[fill="#f5f1ff"]{fill:var(--fg)}
+[data-theme="light"] .cc-face svg [stroke="#0b0818"]{stroke:#0b0818}
+[data-theme="light"] .cc-face svg text[fill="#8e83b6"]{fill:#8e83b6}
 </style>
 <style>
 #mlAuth{position:fixed;inset:0;z-index:200;display:grid;place-items:center;padding:24px;background:radial-gradient(80vmax 60vmax at 50% -10%,#3b1d7a55,transparent 60%),var(--bg)}
@@ -711,6 +747,7 @@ button:focus-visible{outline:2px solid var(--pink);outline-offset:2px}
   <div class="sh-body"><div class="sh-in">
     <span class="label">Отображение</span>
     <div class="card" style="padding:4px 16px">
+      <div class="setrow" style="flex-wrap:wrap"><div><b>Тема</b><small>«Авто» — как в настройках телефона</small></div><div class="seg" id="themeSeg" style="width:100%"><button type="button" data-th="system">Авто</button><button type="button" data-th="dark">Тёмная</button><button type="button" data-th="light">Светлая</button></div></div>
       <div class="setrow"><div><b>Валюта</b><small>Суммы в долларах или гривне</small></div><div class="seg" id="curSeg" style="width:132px;flex:none"><button type="button" data-c="USD">$</button><button type="button" data-c="UAH">₴</button></div></div>
       <div class="setrow"><div><b>Скрывать суммы</b><small>Вместо цифр — точки</small></div><button type="button" class="switch" id="swHide" role="switch" aria-checked="false" aria-label="Скрывать суммы"></button></div>
       <div class="setrow"><div><b>Скрывать мелочь</b><small>Монеты дешевле $10</small></div><button type="button" class="switch" id="swDust" role="switch" aria-checked="true" aria-label="Скрывать мелочь"></button></div>
@@ -739,9 +776,9 @@ button:focus-visible{outline:2px solid var(--pink);outline-offset:2px}
 
 <div class="toast" id="toast" role="status"><span id="toastMsg"></span><button type="button" id="toastBtn" hidden></button></div>
 
-<script src="config.js?v=20261027103000"></script>
+<script src="config.js?v=20261027110000"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="shim.js?v=20261027103000"></script>
+<script src="shim.js?v=20261027110000"></script>
 <script>
 /* ===== основа ===== */
 const $=id=>document.getElementById(id);
@@ -785,7 +822,10 @@ const I={
 
 /* ===== состояние и настройки ===== */
 const S={settings:{},cycle:null,market:null,altplan:null,screen:null,screenreq:null,tx:[],alerts:[],history:[],live:{prices:{},change:{},spark:{},peak:{},at:null,status:'wait',code:null},ready:false};
-const P=(()=>{const d={cur:'USD',hide:false,dust:true,sound:true,haptic:true,sort:'value',mascot:true,msVoice:true};try{return Object.assign(d,JSON.parse(localStorage.getItem('cp-prefs2')||'{}'));}catch(e){return d;}})();
+const P=(()=>{const d={cur:'USD',theme:'system',hide:false,dust:true,sound:true,haptic:true,sort:'value',mascot:true,msVoice:true};try{return Object.assign(d,JSON.parse(localStorage.getItem('cp-prefs2')||'{}'));}catch(e){return d;}})();
+/* тема: data-theme на <html>, цвет строки состояния; «Авто» следит за телефоном */
+function applyTheme(){const t=P.theme||'system',d=t==='system'?(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark'):t;document.documentElement.setAttribute('data-theme',d);const m=document.querySelector('meta[name=theme-color]');if(m)m.content=d==='light'?'#f5f2fc':'#06040e';}
+try{matchMedia('(prefers-color-scheme: light)').addEventListener('change',()=>{if((P.theme||'system')==='system'){applyTheme();try{render()}catch(e){}}});}catch(e){}
 function savePrefs(){try{localStorage.setItem('cp-prefs2',JSON.stringify(P));}catch(e){}}
 let db=null,mcp=null;
 
@@ -1537,7 +1577,7 @@ $('eDel').addEventListener('click',delTx);
 
 /* ===== настройки ===== */
 const swSet=(id,on)=>$(id).setAttribute('aria-checked',String(!!on));
-function fillSettings(){[...$('curSeg').children].forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.c===P.cur)));
+function fillSettings(){[...$('themeSeg').children].forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.th===(P.theme||'system'))));[...$('curSeg').children].forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.c===P.cur)));
   swSet('swHide',P.hide);swSet('swDust',P.dust);swSet('swSound',P.sound);swSet('swHaptic',P.haptic);swSet('swMascot',P.mascot!==false);swSet('swMsSound',P.msVoice!==false);
   const sp=split();$('stB').value=sp.BTC;$('stE').value=sp.ETH;$('stA').value=sp.ALT;$('stCap').value=S.settings.capPct||20;$('stDep').value=Math.round(depShare()*100);$('stAlt').value=S.settings.altOfMonth||'';$('stInc').value=S.settings.incomeMonthlyUah||'';$('stK2').value=k2Cfg().pct;$('stAltCap').value=altCapPct();$('setErr').textContent='';
   const L=S.live;$('dataInfo').innerHTML=`<div><span>Курс доллара</span><span>${rate()?nf(rate(),2)+' грн за $':'—'}</span></div>${S.settings.usdUahSrc?`<div><span>Откуда курс</span><span>${esc(S.settings.usdUahSrc)}${S.settings.usdUahAt?' · '+dShort(S.settings.usdUahAt)+', '+tHM(S.settings.usdUahAt):''}</span></div>`:''}${S.settings.usdUahNbu?`<div><span>Курс НБУ</span><span>${nf(+S.settings.usdUahNbu,2)} грн</span></div>`:''}<div><span>Живые цены</span><span>${L.status==='ok'?'CoinGecko · '+tHM(L.at):L.status==='stale'?'с задержкой':LIVE_MSG[L.code]||'нет'}</span></div><div><span>Последняя проверка</span><span>${S.market&&S.market.updatedAt?dShort(S.market.updatedAt)+', '+tHM(S.market.updatedAt):'—'}</span></div><div><span>Проверка рынка</span><span>8:41 и 20:41</span></div><div><span>Записей</span><span>${S.tx.length}</span></div>`;}
@@ -1545,6 +1585,7 @@ function openSettings(toStrat){fillSettings();openSheet('setSheet');const b=$('s
 $('setBtn').addEventListener('click',()=>openSettings(false));
 const SW={swHide:'hide',swDust:'dust',swSound:'sound',swHaptic:'haptic',swMascot:'mascot',swMsSound:'msVoice'};
 Object.keys(SW).forEach(id=>$(id).addEventListener('click',()=>{const k=SW[id];P[k]=!P[k];savePrefs();swSet(id,P[k]);if(k==='sound'&&P.sound)play('tick');if(k==='haptic')buzz(10);render();}));
+$('themeSeg').addEventListener('click',e=>{const b=e.target.closest('[data-th]');if(!b)return;P.theme=b.dataset.th;savePrefs();applyTheme();play('tick');fillSettings();render();});
 $('curSeg').addEventListener('click',e=>{const b=e.target.closest('[data-c]');if(!b)return;if(b.dataset.c==='UAH'&&!rate()){toast('Курс гривны ещё не загружен');return;}P.cur=b.dataset.c;savePrefs();play('tick');fillSettings();render();});
 $('saveStrat').addEventListener('click',()=>saveStrategy());
 async function saveStrategy(){const B=+$('stB').value,E=+$('stE').value,A=+$('stA').value,cap=+$('stCap').value,dep=+$('stDep').value,alt=($('stAlt').value||'').trim().toUpperCase(),inc=+$('stInc').value,k2=+$('stK2').value,ac=+$('stAltCap').value;
@@ -1609,7 +1650,7 @@ function msPayload(x){let fresh=0;try{fresh=S.alerts.filter(a=>String(a.ts||'')>
 function msSync(x){MSC.last=x;if(!msApply())return;if(window.Mascot){try{window.Mascot.sync(msPayload(x));}catch(e){}}else msLoad();}
 function msLoad(){if(MSC.loading||MSC.failed)return;MSC.loading=true;
   const add=(src,ok)=>{try{const s=document.createElement('script');s.src=src;s.async=true;s.onload=ok;s.onerror=()=>{MSC.failed=true;};document.head.appendChild(s);}catch(e){MSC.failed=true;}};
-  const boot=()=>add('mascot.js?v=20261027103000',()=>{try{if(window.Mascot&&window.Mascot.init({host:$('mascot'),app:{audio:ac,buzz}})&&MSC.last)window.Mascot.sync(msPayload(MSC.last));}catch(e){}});
+  const boot=()=>add('mascot.js?v=20261027110000',()=>{try{if(window.Mascot&&window.Mascot.init({host:$('mascot'),app:{audio:ac,buzz}})&&MSC.last)window.Mascot.sync(msPayload(MSC.last));}catch(e){}});
   setTimeout(()=>{if(window.THREE)boot();else add('three.min.js',boot);},300);}
 function render(){const D=derive();renderHeader();renderHome(D);renderGrowth();renderCoins(D);renderStrategy(D);renderActivity();earnNudge();if(cvSym&&$('coinSheet').classList.contains('open'))renderCoinView();}
 document.body.classList.add('loading');
