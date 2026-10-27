@@ -27,20 +27,57 @@
   let loaded = false;
   const key = (c, id) => c + '/' + id;
   const clone = o => (o == null ? o : JSON.parse(JSON.stringify(o)));
-  function emit() { for (const l of [...listeners]) { try { l(); } catch (e) { console.error(e); } } }
+  function emit() { for (const l of [...listeners]) { try { l(); } catch (e) { console.error(e); } } if (loaded && uid) saveLocal(); }
+
+  /* ---------- копия данных на телефоне: приложение открывается и без интернета ---------- */
+  const LS_UID = 'ml-last-uid', lsDocs = () => 'ml-docs:' + uid;
+  let saveT = 0, offlineAt = null, chan = null, retrying = false;
+  function saveLocal() {
+    clearTimeout(saveT);
+    saveT = setTimeout(() => { try { localStorage.setItem(lsDocs(), JSON.stringify({ at: Date.now(), rows: [...cache] })); } catch (e) {} }, 400);
+  }
+  function loadLocal() {
+    try {
+      const j = JSON.parse(localStorage.getItem(lsDocs()) || 'null');
+      if (!j || !Array.isArray(j.rows) || !j.rows.length) return null;
+      cache.clear(); for (const [k, v] of j.rows) cache.set(k, v);
+      loaded = true; for (const l of [...listeners]) { try { l(); } catch (e) {} }
+      return j.at || 0;
+    } catch (e) { return null; }
+  }
+  const fmtAt = t => { try { return new Date(t).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }); } catch (e) { return ''; } };
+  /* плашка вверху: at = время копии; 0 — копии нет; null — связь есть, плашку убрать */
+  function setOffline(at) {
+    offlineAt = at;
+    const b = document.getElementById('offline'); if (!b) return;
+    const sp = b.querySelector('span');
+    if (sp && b.dataset.orig == null) b.dataset.orig = sp.textContent;
+    if (at == null) { if (b.dataset.ml) { b.hidden = true; delete b.dataset.ml; if (sp) sp.textContent = b.dataset.orig; } return; }
+    if (sp) sp.textContent = at ? 'Нет связи с базой — показаны данные, сохранённые ' + fmtAt(at) + '. Новые записи пока не сохраняются.' : b.dataset.orig;
+    b.hidden = false; b.dataset.ml = '1';
+  }
+  /* связь вернулась — догружаем свежие данные */
+  async function retry() {
+    if (retrying || offlineAt == null || !uid) return; retrying = true;
+    try { await loadAll(); setOffline(null); } catch (e) {} finally { retrying = false; }
+  }
+  window.addEventListener('online', () => setTimeout(retry, 800));
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) retry(); });
 
   async function loadAll() {
     const c = client();
-    let from = 0; const page = 1000; cache.clear();
+    let from = 0; const page = 1000; const next = new Map();
     for (;;) {
       const { data, error } = await c.from('docs').select('col,id,data').range(from, from + page - 1);
       if (error) throw error;
-      for (const r of data) cache.set(key(r.col, r.id), r.data || {});
+      for (const r of data) next.set(key(r.col, r.id), r.data || {});
       if (data.length < page) break;
       from += page;
     }
+    cache.clear(); for (const [k, v] of next) cache.set(k, v);
     loaded = true; emit();
-    c.channel('docs-' + uid)
+    if (chan) return;
+    chan = c.channel('docs-' + uid)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'docs', filter: 'owner=eq.' + uid }, p => {
         const row = p.new && p.new.col ? p.new : p.old;
         if (!row || !row.col) return;
@@ -56,26 +93,34 @@
     const r = crypto.getRandomValues(new Uint8Array(20)); for (const b of r) s += a[b % a.length]; return s;
   };
 
+  function canWrite() { if (offlineAt != null || navigator.onLine === false) { const e = new Error('Нет интернета — запись не сохранена'); e.code = 'offline'; throw e; } }
+  function rollback(k, prev) { if (prev === undefined) cache.delete(k); else cache.set(k, prev); emit(); }
   async function writeSet(c, id, data) {
-    cache.set(key(c, id), clone(data)); emit();
-    const { error } = await client().from('docs').upsert({ owner: uid, col: c, id, data, updated_at: new Date().toISOString() }, { onConflict: 'owner,col,id' });
-    if (error) throw error;
+    canWrite();
+    const k = key(c, id), prev = cache.get(k);
+    cache.set(k, clone(data)); emit();
+    let r; try { r = await client().from('docs').upsert({ owner: uid, col: c, id, data, updated_at: new Date().toISOString() }, { onConflict: 'owner,col,id' }); } catch (e) { r = { error: e }; }
+    if (r.error) { rollback(k, prev); throw r.error; }
   }
   async function writeUpdate(c, id, patch) {
-    const cur = cache.get(key(c, id)) || {};
+    canWrite();
+    const k0 = key(c, id), prev = cache.get(k0);
+    const cur = prev || {};
     const next = Object.assign({}, cur);
     for (const k of Object.keys(patch)) {
       const v = patch[k];
       if (v && typeof v === 'object' && v.__delete__ === true) delete next[k]; else next[k] = clone(v);
     }
-    cache.set(key(c, id), next); emit();
-    const { error } = await client().rpc('doc_merge', { p_col: c, p_id: id, p_patch: patch });
-    if (error) throw error;
+    cache.set(k0, next); emit();
+    let r; try { r = await client().rpc('doc_merge', { p_col: c, p_id: id, p_patch: patch }); } catch (e) { r = { error: e }; }
+    if (r.error) { rollback(k0, prev); throw r.error; }
   }
   async function writeDelete(c, id) {
-    cache.delete(key(c, id)); emit();
-    const { error } = await client().from('docs').delete().match({ owner: uid, col: c, id });
-    if (error) throw error;
+    canWrite();
+    const k = key(c, id), prev = cache.get(k);
+    cache.delete(k); emit();
+    let r; try { r = await client().from('docs').delete().match({ owner: uid, col: c, id }); } catch (e) { r = { error: e }; }
+    if (r.error) { rollback(k, prev); throw r.error; }
   }
 
   function docRef(path) {
@@ -413,17 +458,39 @@
     let o = null;
     const onSession = async s => {
       if (!s || !s.user) { if (!o) o = overlay(); return; }
-      if (uid === s.user.id) return;
-      uid = s.user.id;
+      if (uid === s.user.id && offlineAt == null) return;
+      uid = s.user.id; try { localStorage.setItem(LS_UID, uid); } catch (e) {}
       if (o) { o.remove(); o = null; }
-      try { await loadAll(); } catch (e) { console.error(e); }
+      const at = loaded ? (offlineAt || Date.now()) : loadLocal();
+      if (at != null) window.__mlAuthed();          /* копия есть — показываем сразу, не ждём сеть */
+      try { await loadAll(); setOffline(null); }
+      catch (e) { console.error(e); setOffline(at != null ? at : 0); }
       window.__mlAuthed();
     };
-    const { data } = await c.auth.getSession();
-    await onSession(data.session);
+    let ses = null, serr = null;
+    try { const r = await c.auth.getSession(); ses = r.data && r.data.session; serr = r.error; } catch (e) { serr = e; }
+    /* нет сети, а вход просрочился: открываем сохранённую копию последнего пользователя только для просмотра */
+    if (!ses && (serr || navigator.onLine === false)) {
+      let last = null; try { last = localStorage.getItem(LS_UID); } catch (e) {}
+      if (last) {
+        uid = last; const at = loadLocal();
+        if (at != null) {
+          window.__mlAuthed(); setOffline(at);
+          const back = async () => { window.removeEventListener('online', back); const r = await c.auth.getSession().catch(() => ({ data: {} })); await onSession(r.data && r.data.session); };
+          window.addEventListener('online', back);
+          c.auth.onAuthStateChange((ev, s) => { if (ev === 'SIGNED_OUT') { location.reload(); return; } if (s) onSession(s); });
+          return;
+        }
+        uid = null;
+      }
+    }
+    await onSession(ses);
     c.auth.onAuthStateChange((ev, s) => { if (ev === 'SIGNED_OUT') { location.reload(); return; } onSession(s); });
   }
-  window.mlSignOut = async () => { try { await client().auth.signOut(); } catch (e) {} location.reload(); };
+  window.mlSignOut = async () => {
+    try { if (uid) localStorage.removeItem(lsDocs()); localStorage.removeItem(LS_UID); } catch (e) {}   /* выход — копия с телефона удаляется */
+    try { await client().auth.signOut(); } catch (e) {} location.reload();
+  };
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
 
