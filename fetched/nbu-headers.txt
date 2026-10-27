@@ -1,0 +1,21 @@
+HTTP/2 200 
+date: Tue, 27 Oct 2026 14:47:43 GMT
+content-type: application/json; charset=utf-8
+server: cloudflare
+vary: Accept-Encoding
+x-powered-by: Servlet/3.1
+statusrequest: OK+%C2%E8%EA%EE%ED%E0%ED%EE
+filename: exchange
+x-xss-protection: 1
+x-frame-options: SAMEORIGIN
+x-content-type-options: nosniff
+content-language: uk-UA
+x-cache-status: HIT
+access-control-allow-origin: *
+x-request-id: a5e19fdad5693d6980cfe614763b6fa6
+nel: {"report_to":"cf-nel","success_fraction":0.01,"max_age":604800}
+cf-cache-status: DYNAMIC
+set-cookie: __cf_bm=VxJl4MOnLWOauGOIh0BN5dWF_KmiHwMBdOCB0aMBShE-1793112463.4959342-1.0.1.1-z3z6F0D1ln3oP.l4pnTu5rt5iePU5jnw5k2NxbM1jyJMChpmxFUpvLUUVhc7um1yJqwxeAG5HIi.jZsR2Rpmqngkb981hZBuHmj7V50CD462Ap38w_fztCt_YipTmKVYX_3emgWt73eZ0NsOeBMHaw; HttpOnly; SameSite=None; Secure; Path=/; Domain=bank.gov.ua; Expires=Tue, 27 Oct 2026 15:17:43 GMT
+report-to: {"group":"cf-nel","max_age":604800,"endpoints":[{"url":"https://a.nel.cloudflare.com/report/v4?s=6XcvziWNqxpwkbPzgaDmJdiWYKNnDYsa1OW507cTh0AT3cs84zGn%2FN7nErZXWSCY%2Bu%2BFfnxujxGJ3N4vlb66EsTXoETlP1GfZND%2B6zNFUjLaR5NJjU1pLWKZNftK"}]}
+cf-ray: a5127f60daab6191-ORD
+
