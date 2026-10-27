@@ -511,6 +511,31 @@ button:focus-visible{outline:2px solid var(--pink);outline-offset:2px}
 .sug-rk{font-size:12px;color:var(--dim);font-variant-numeric:tabular-nums}
 .sug-note{padding:12px;font-size:13px;color:var(--mute);line-height:1.4}
 [data-theme="light"] .sug{background:#fff;box-shadow:0 14px 30px -22px #1b153055}
+/* экраны входа: регистрация, восстановление пароля, Google */
+.mla-card .field{display:flex;flex-direction:column;gap:6px}
+.mla-card .field>span:first-child{font-size:13px;color:var(--mute)}
+.mla-pw{position:relative;display:block}
+.mla-pw input{padding-right:52px!important}
+.mla-eye{position:absolute;right:2px;top:50%;transform:translateY(-50%);width:48px;height:48px;display:grid;place-items:center;background:none;border:0;color:var(--mute);cursor:pointer;border-radius:var(--r-m)}
+.mla-link{background:none;border:0;color:var(--lav);font:inherit;font-weight:600;padding:12px 4px;min-height:48px;cursor:pointer;align-self:center}
+.mla-foot{margin:0;text-align:center;color:var(--mute);font-size:14px}
+.mla-foot .mla-link{padding:12px 6px}
+.mla-hint{margin:-4px 0 0;font-size:12.5px;color:var(--dim)}
+.mla-text{margin:0;color:var(--mute);line-height:1.5}
+.mla-text b{color:var(--fg)}
+.mla-check{display:grid;grid-template-columns:24px 1fr;gap:10px;align-items:start;font-size:13px;color:var(--mute);line-height:1.45;padding:6px 0;cursor:pointer}
+.mla-check input{width:22px!important;height:22px;margin:0;padding:0!important;accent-color:var(--accent)}
+.mla-check a,.hint a{color:var(--lav)}
+.mla-or{display:flex;align-items:center;gap:10px;color:var(--dim);font-size:12px}
+.mla-or::before,.mla-or::after{content:"";flex:1;height:1px;background:var(--line)}
+.btn.mla-g{background:#fff;color:#1f1f1f;border:1px solid #dadce0;box-shadow:none;display:flex;align-items:center;justify-content:center;gap:10px}
+.mla-mail{font-size:40px;line-height:1;text-align:center;color:var(--lav)}
+#mlAuth .err.ok,.err.ok{color:var(--pos)}
+.btn.busy{opacity:.6;pointer-events:none}
+/* удаление аккаунта */
+.del-warn{border-color:#ff5f6d55;display:grid;gap:6px}
+.del-warn b{color:var(--neg)}
+.del-warn p{margin:0;color:var(--mute);line-height:1.5}
 [data-theme="light"] .more{color:#c0268f}
 [data-theme="light"] .cc-face svg text[fill="#8e83b6"]{fill:#8e83b6}
 </style>
@@ -686,7 +711,7 @@ button:focus-visible{outline:2px solid var(--pink);outline-offset:2px}
     <div id="f-earn" hidden style="display:flex;flex-direction:column;gap:12px">
       <label class="field"><span>Сейчас в стейкинге, USDT</span><input type="number" id="erBal" step="any" min="0" inputmode="decimal" placeholder="365.09"></label>
       <div class="calc" id="erCalc"></div>
-      <label class="field"><span>Где лежит</span><input type="text" id="erPlace" maxlength="40" placeholder="Bybit · гибкий" autocomplete="off"></label>
+      <label class="field"><span>Где лежит</span><input type="text" id="erPlace" maxlength="40" placeholder="Например: Bybit, гибкий" autocomplete="off"></label>
       <div class="f2"><label class="field"><span>Доход в день, USDT</span><input type="number" id="erDay" step="any" min="0" inputmode="decimal" placeholder="0.023"></label><label class="field"><span>или ставка, % годовых</span><input type="number" id="erApr" step="any" min="0" inputmode="decimal" placeholder="1.9"></label></div>
       <p class="hint">«Доход в день» — строка «Ожидаемая суточная доходность» на экране биржи: по ней приложение оценивает доход. Разница между суммой в стейкинге и резервом в приложении запишется как «Проценты стейкинга».</p>
     </div>
@@ -796,15 +821,33 @@ button:focus-visible{outline:2px solid var(--pink);outline-offset:2px}
     </div>
     <span class="label">Данные</span>
     <div class="card"><div class="kv" id="dataInfo"></div></div>
-    <button type="button" class="btn block ghost" onclick="mlSignOut()">Выйти из аккаунта</button>
+    <span class="label">Аккаунт</span>
+    <div class="card" style="display:flex;flex-direction:column;gap:10px">
+      <div class="kv" id="accInfo"></div>
+      <button type="button" class="btn block ghost" id="expBtn">Скачать мои данные</button>
+      <button type="button" class="btn block ghost" onclick="mlSignOut()">Выйти из аккаунта</button>
+      <button type="button" class="btn block danger" id="delBtn">Удалить аккаунт</button>
+    </div>
+    <p class="hint">Money Life — дневник и калькулятор для твоей стратегии, а не инвестиционный совет: решения о покупке и продаже принимаешь ты. <a href="privacy.html" target="_blank" rel="noopener">Политика конфиденциальности</a></p>
+  </div></div>
+</div>
+
+<div class="sheet" id="delSheet" role="dialog" aria-modal="true" aria-labelledby="delTitle">
+  <div class="sh-head"><div class="grab"></div><div class="sh-bar"><h3 id="delTitle">Удалить аккаунт</h3><button type="button" class="ib" data-close aria-label="Закрыть"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div></div>
+  <div class="sh-body"><div class="sh-in">
+    <div class="card del-warn"><b>Это нельзя отменить.</b><p>Удалятся аккаунт <span id="delMail"></span> и все записи: покупки, продажи, настройки, история. Сначала можно скачать свои данные.</p></div>
+    <button type="button" class="btn block ghost" id="delExp">Скачать мои данные</button>
+    <label class="field"><span>Чтобы подтвердить, впиши слово УДАЛИТЬ</span><input type="text" id="delWord" autocomplete="off" autocapitalize="characters" spellcheck="false"></label>
+    <p class="err" id="delErr" role="alert"></p>
+    <button type="button" class="btn block danger" id="delGo" disabled>Удалить навсегда</button>
   </div></div>
 </div>
 
 <div class="toast" id="toast" role="status"><span id="toastMsg"></span><button type="button" id="toastBtn" hidden></button></div>
 
-<script src="config.js?v=20261027134500"></script>
+<script src="config.js?v=20261027150000"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="shim.js?v=20261027134500"></script>
+<script src="shim.js?v=20261027150000"></script>
 <script>
 /* ===== основа ===== */
 const $=id=>document.getElementById(id);
@@ -1167,7 +1210,7 @@ function renderCoins(D){
   const dust=list.filter(o=>o.v!=null&&o.v<10);let shown=list;if(P.dust&&!q)shown=list.filter(o=>o.v==null||o.v>=10);
   COIN_ORDER={shown:shown.map(o=>o.s),all:list.map(o=>o.s)};
   $('coinsTot').textContent=shown.length?shown.length+' · '+money(shown.reduce((a,o)=>a+(o.v||0),0),{d:0}):'';
-  if(!D.syms.length){$('coinList').innerHTML=`<div class="empty" style="border:0">${S.ready?'Монет пока нет. Нажми «+» → «Остаток монеты» или пришли мне скриншоты — внесу сам.':'Загружаю…'}</div>`;$('dustNote').innerHTML='';return;}
+  if(!D.syms.length){$('coinList').innerHTML=`<div class="empty" style="border:0">${S.ready?'Монет пока нет. Нажми «+» → «Остаток монеты», чтобы внести то, что у тебя уже есть.':'Загружаю…'}</div>`;$('dustNote').innerHTML='';return;}
   if(!shown.length){$('coinList').innerHTML='<div class="empty" style="border:0">Ничего не найдено.</div>';}
   else $('coinList').innerHTML=shown.map(o=>{let m,cl='mute';
       if(P.sort==='pnl'){m=o.pl!=null?pct(o.pl):'—';cl=o.pl==null?'mute':o.pl>=0?'pos':'neg';}
@@ -1256,7 +1299,7 @@ function renderPick(D){const sc=S.screen,ap=S.altplan||{},yr=ap.draftYear||'',ru
       h+=`<p class="hint" style="margin-top:8px">${ap.draftLocked?'Это твой выбор монет: ежемесячный подбор его не перестраивает, а только предупреждает, если у монеты что-то случилось.':'Правила черновика: не меньше 8 месяцев с баллом от 50, одна монета — не больше 3 месяцев, в каждом квартале минимум 3 сектора, монета не ставится на месяц своей крупной разблокировки.'}${ap.approved?' Утверждённый план подставляет альткоин месяца автоматически.':' После утверждения план сам подставит альткоин месяца с января.'}</p>`;}
     else h='<div class="empty">Черновик календаря появится после анализа рынка.</div>';}
   else if(!sc)h='<div class="empty">Появится после первого анализа рынка — 1-го числа каждого месяца.</div>';
-  else if(stKind==='picks'){h=sc.picks&&sc.picks.length?`<div class="list pk-list">`+sc.picks.map(p=>`<div class="row r3 static">${badge(p.sym)}<span class="col"><span class="nm">${esc(p.sym)}</span><span class="sub wrap">${esc(p.note||'')}</span></span><span class="chip ${p.ok?(p.score>=50?'pos':'warn'):'neg'}">${p.ok?'балл '+p.score:'не прошёл'}</span></div>`).join('')+'</div>':'<div class="empty">Твоих монет пока нет. Назови их в чате — добавлю.</div>';
+  else if(stKind==='picks'){h=sc.picks&&sc.picks.length?`<div class="list pk-list">`+sc.picks.map(p=>`<div class="row r3 static">${badge(p.sym)}<span class="col"><span class="nm">${esc(p.sym)}</span><span class="sub wrap">${esc(p.note||'')}</span></span><span class="chip ${p.ok?(p.score>=50?'pos':'warn'):'neg'}">${p.ok?'балл '+p.score:'не прошёл'}</span></div>`).join('')+'</div>':'<div class="empty">Твоих монет пока нет. Нажми «+» → «Остаток монеты».</div>';
     h+=`<p class="hint">Каждый месяц анализ проверяет твои монеты по тем же правилам, что и остальные, и предупреждает, если что-то изменилось.</p>`;}
   else if(stKind==='cands'){
     h=`<div class="pk-run">${run?`<span class="chip warn">Анализ идёт с ${tHM(req.requestedAt)} — обычно 5–10 минут</span>`:runAsk?`<span class="small">Запустить новый анализ рынка и новостей сейчас? Займёт 5–10 минут.</span><div class="btnrow"><button type="button" class="btn sm ghost" id="pkNo">Отмена</button><button type="button" class="btn sm" id="pkGo">Запустить</button></div>`:`<span class="small mute">обновлено ${dShort(sc.updatedAt)}${sc.nextRun?' · следующий '+dShort(sc.nextRun):''}</span>${window.ML_STANDALONE?'<span class="small mute">анализ — в Claude, 1-го числа</span>':'<button type="button" class="btn sm ghost" id="pkRun">Обновить сейчас</button>'}`}</div>`;
@@ -1310,7 +1353,7 @@ function renderHist(){
   $('histChips').innerHTML=HF.map(([k,l])=>`<button type="button" class="fchip" data-hf="${k}" aria-pressed="${hFilter===k}">${l}</button>`).join('');
   const q=($('histSearch').value||'').trim().toLowerCase();
   const list=S.tx.filter(hMatch).filter(t=>{if(!q)return true;const s=(t.symbol||'').toLowerCase();return s.includes(q)||(t.note||'').toLowerCase().includes(q)||coinName((t.symbol||'').toUpperCase()).toLowerCase().includes(q)||txTitle(t).toLowerCase().includes(q);}).sort((a,b)=>byTs(b,a)).slice(0,250);
-  if(!list.length){$('histList').innerHTML=`<div class="empty">${S.tx.length?'Ничего не найдено.':(S.ready?'Записей пока нет. Нажми «+» или напиши мне в чат, что купил.':'Загружаю…')}</div>`;return;}
+  if(!list.length){$('histList').innerHTML=`<div class="empty">${S.tx.length?'Ничего не найдено.':(S.ready?'Записей пока нет. Нажми «+», чтобы записать первую покупку.':'Загружаю…')}</div>`;return;}
   let html='',cur='',buf='';
   for(const t of list){const d=new Date(t.ts),k=d.getFullYear()+'-'+d.getMonth();if(k!==cur){if(buf)html+=buf+'</div>';cur=k;html+=`<div class="mhead">${monthLabel(d)}</div>`;buf='<div class="list">';}buf+=txRow(t);}
   html+=buf+'</div>';$('histList').innerHTML=html;}
@@ -1483,7 +1526,7 @@ function collectRows(pf,type,ts,level){const items=[];const D=derive();
   for(const s of ['BTC','ETH','ALT']){let q=+$(pf+'q_'+s).value||0;const uv=$(pf+'u_'+s).value,u=uv===''?null:+uv,sym=rowSym(pf,s);let est=false;
     if(!q&&u>0){const p=+D.prices[sym]||0;if(p){q=u/p;est=true;}}
     if(!q)continue;if(!sym)return {err:'Впиши тикер альткоина.'};
-    const it={ts,type,symbol:sym,qty:+q.toPrecision(8),usd:u==null?null:+u.toFixed(2)};if(u&&q)it.price=+(u/q).toPrecision(8);if(est)it.note='количество по оценке — поправь по Bybit';if(level)it.level=level;items.push(it);}
+    const it={ts,type,symbol:sym,qty:+q.toPrecision(8),usd:u==null?null:+u.toFixed(2)};if(u&&q)it.price=+(u/q).toPrecision(8);if(est)it.note='количество по оценке — поправь по данным биржи';if(level)it.level=level;items.push(it);}
   return items.length?{items}:{err:'Впиши сумму или количество хотя бы одной монеты.'};}
 function setBuyMode(m){buyMode=m;[...$('buyMode').children].forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.m===m)));$('buyDca').hidden=m!=='dca';$('buyOne').hidden=m!=='one';}
 $('buyMode').addEventListener('click',e=>{const b=e.target.closest('[data-m]');if(b){play('tick');setBuyMode(b.dataset.m);}});
@@ -1585,7 +1628,7 @@ function initSell(opt){const D=derive(),list=D.syms;$('sSym').innerHTML=list.map
 function sellCalc(){const D=derive(),sym=$('sSym').value,c=D.h[sym];if(!c){$('sCalc').innerHTML='<p class="hint">Монет для продажи пока нет.</p>';return;}
   const q=+$('sQty').value||0,p=+D.prices[sym]||0;if(q&&p&&!$('sUsd').dataset.touched)$('sUsd').value=(q*p).toFixed(2);
   const u=+$('sUsd').value||0,avg=c.cq?c.usd/c.cq:0,cost=avg*Math.min(q,c.cq),r=u-cost;
-  $('sCalc').innerHTML=`<div><span>Есть сейчас</span><span>${qtyRaw(c.qty)} ${esc(sym)}</span></div><div><span>Средняя цена покупки</span><span>${avg?usdp(avg):'—'}</span></div>`+(q?`<div><span>Себестоимость проданного</span><span>${usd(cost)}</span></div>${u?`<div><span>Цена продажи</span><span>${usdp(u/q)}</span></div><div><span>Зафиксируешь</span><span class="${r>=0?'pos':'neg'}">${r>=0?'+':''}${usd(r)}${cost?' ('+pct(r/cost*100)+')':''}</span></div>`:''}<div><span>Останется</span><span>${qtyRaw(Math.max(0,+(c.qty-q).toPrecision(8)))} ${esc(sym)}</span></div>`:'<p class="hint">Впиши количество — сумму подставлю по текущей цене, поправь по Bybit.</p>');}
+  $('sCalc').innerHTML=`<div><span>Есть сейчас</span><span>${qtyRaw(c.qty)} ${esc(sym)}</span></div><div><span>Средняя цена покупки</span><span>${avg?usdp(avg):'—'}</span></div>`+(q?`<div><span>Себестоимость проданного</span><span>${usd(cost)}</span></div>${u?`<div><span>Цена продажи</span><span>${usdp(u/q)}</span></div><div><span>Зафиксируешь</span><span class="${r>=0?'pos':'neg'}">${r>=0?'+':''}${usd(r)}${cost?' ('+pct(r/cost*100)+')':''}</span></div>`:''}<div><span>Останется</span><span>${qtyRaw(Math.max(0,+(c.qty-q).toPrecision(8)))} ${esc(sym)}</span></div>`:'<p class="hint">Впиши количество — сумму подставлю по текущей цене, поправь по данным биржи.</p>');}
 $('sSym').addEventListener('change',()=>{delete $('sUsd').dataset.touched;sellCalc();});
 $('sQty').addEventListener('input',sellCalc);
 $('sUsd').addEventListener('input',()=>{$('sUsd').dataset.touched='1';sellCalc();});
@@ -1604,7 +1647,7 @@ const earnCfg=()=>{const e=S.settings.earn;return e&&e.on?e:null;};
 const earnRate=e=>e?(e.day&&e.bal?e.day*365/e.bal:(+e.apr||0)/100):0;           /* доля в год */
 const earnDays=e=>e&&e.at?(Date.now()-Date.parse(e.at))/864e5:0;
 const earnDue=e=>!!e&&earnDays(e)>=30;
-function initEarn(){const e=S.settings.earn||{};$('erBal').value='';$('erPlace').value=e.place||'Bybit · гибкий';$('erDay').value=e.day!=null?e.day:'';$('erApr').value=e.apr!=null?e.apr:'';earnCalc();}
+function initEarn(){const e=S.settings.earn||{};$('erBal').value='';$('erPlace').value=e.place||'';$('erDay').value=e.day!=null?e.day:'';$('erApr').value=e.apr!=null?e.apr:'';earnCalc();}
 function earnCalc(){const D=derive(),b=+$('erBal').value,row=(k,v)=>`<div><span>${k}</span><span>${v}</span></div>`;
   if(!b){$('erCalc').innerHTML=row('Резерв в приложении',money(D.reserve))+'<p class="hint">Впиши сумму с экрана биржи — посчитаю начисленные проценты.</p>';return;}
   const d=b-D.reserve;$('erCalc').innerHTML=row('Резерв в приложении',money(D.reserve))+row('В стейкинге',usd(b))+row(d>=0?'Проценты к записи':'Разница (минус)',money(d,{sign:true}));}
@@ -1617,14 +1660,14 @@ function incCalc(){const v=+$('incUah').value||0,r=rate(),row=(k,g)=>`<div><span
 $('incUah').addEventListener('input',incCalc);
 function initStart(){symOptions();$('nsSym').value='';$('nsQty').value='';$('nsUsd').value='';}
 function finish(snd,n,msg){rememberCoins(formCoinInputs());closeSheets();play(snd);buzz([12,40,18]);if(snd!=='cash')coinFly($('plusBtn'),Math.min(n,4));toast(msg);}
-async function saveForm(){const err=$('fErr');err.textContent='';if(!db){err.textContent='Нет подключения к данным — пришли запись мне в чат.';return;}
+async function saveForm(){const err=$('fErr');err.textContent='';if(!db){err.textContent='Нет подключения к данным — попробуй ещё раз чуть позже.';return;}
   const ts=tsFromDate(),btn=$('saveBtn');btn.disabled=true;
   try{
     if(mode==='buy'){
       if(buyMode==='dca'){const r=collectRows('b','dca',ts);if(r.err){err.textContent=r.err;return;}for(const it of r.items)await db.collection('tx').add(it);const a=altSym('b');if(a&&!planAlt(ymKey(new Date()))&&a!==(S.settings.altOfMonth||'').toUpperCase())await db.doc('app/settings').update({altOfMonth:a});finish(r.items.length>1?'coins':'coin',r.items.length,'В копилке: '+r.items.map(i=>i.symbol).join(', '));}
       else{const sym=($('oSym').value||'').trim().toUpperCase(),u=+$('oUsd').value||0;let q=+$('oQty').value||0,est=false;if(!sym){err.textContent='Впиши монету.';return;}
         if(!q&&u){const p=+derive().prices[sym]||0;if(p){q=u/p;est=true;}}if(!q){err.textContent='Впиши количество или сумму.';return;}
-        const it={ts,type:$('oDca').checked?'dca':'buy',symbol:sym,qty:+q.toPrecision(8),usd:u?+u.toFixed(2):null};if(u&&q)it.price=+(u/q).toPrecision(8);if(est)it.note='количество по оценке — поправь по Bybit';
+        const it={ts,type:$('oDca').checked?'dca':'buy',symbol:sym,qty:+q.toPrecision(8),usd:u?+u.toFixed(2):null};if(u&&q)it.price=+(u/q).toPrecision(8);if(est)it.note='количество по оценке — поправь по данным биржи';
         await db.collection('tx').add(it);finish('coin',1,sym+' в копилке');}}
     else if(mode==='dip'){const lv=+$('dLevel').value||0;if(!lv){err.textContent='Нет активного уровня.';return;}const r=collectRows('d','dip',ts,lv);if(r.err){err.textContent=r.err;return;}
       for(const it of r.items)await db.collection('tx').add(it);
@@ -1691,6 +1734,7 @@ const swSet=(id,on)=>$(id).setAttribute('aria-checked',String(!!on));
 function fillSettings(){[...$('themeSeg').children].forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.th===(P.theme||'system'))));[...$('curSeg').children].forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.c===P.cur)));
   swSet('swHide',P.hide);swSet('swDust',P.dust);swSet('swSound',P.sound);swSet('swHaptic',P.haptic);swSet('swMascot',P.mascot!==false);swSet('swMsSound',P.msVoice!==false);
   const sp=split();$('stB').value=sp.BTC;$('stE').value=sp.ETH;$('stA').value=sp.ALT;$('stCap').value=S.settings.capPct||20;$('stDep').value=Math.round(depShare()*100);$('stAlt').value=S.settings.altOfMonth||'';$('stInc').value=S.settings.incomeMonthlyUah||'';$('stK2').value=k2Cfg().pct;$('stAltCap').value=altCapPct();$('setErr').textContent='';
+  const U=window.mlUser;$('accInfo').innerHTML=U?`<div><span>Почта</span><span>${esc(U.email||'—')}</span></div><div><span>Вход</span><span>${U.provider==='google'?'через Google':'почта и пароль'}</span></div>`:'<div><span>Аккаунт</span><span>—</span></div>';$('delBtn').hidden=!(window.ML_CONFIG&&ML_CONFIG.accountDelete);
   const L=S.live;$('dataInfo').innerHTML=`<div><span>Курс доллара</span><span>${rate()?nf(rate(),2)+' грн за $':'—'}</span></div>${S.settings.usdUahSrc?`<div><span>Откуда курс</span><span>${esc(S.settings.usdUahSrc)}${S.settings.usdUahAt?' · '+dShort(S.settings.usdUahAt)+', '+tHM(S.settings.usdUahAt):''}</span></div>`:''}${S.settings.usdUahNbu?`<div><span>Курс НБУ</span><span>${nf(+S.settings.usdUahNbu,2)} грн</span></div>`:''}<div><span>Живые цены</span><span>${L.status==='ok'?'CoinGecko · '+tHM(L.at):L.status==='stale'?'с задержкой':LIVE_MSG[L.code]||'нет'}</span></div><div><span>Монеты и логотипы</span><span>CoinGecko${DIR.n?' · '+nf(DIR.n,0)+' в поиске':''}</span></div><div><span>Последняя проверка</span><span>${S.market&&S.market.updatedAt?dShort(S.market.updatedAt)+', '+tHM(S.market.updatedAt):'—'}</span></div><div><span>Проверка рынка</span><span>8:41 и 20:41</span></div><div><span>Записей</span><span>${S.tx.length}</span></div>`;}
 function openSettings(toStrat){fillSettings();openSheet('setSheet');const b=$('setSheet').querySelector('.sh-body');if(b)b.scrollTop=0;if(toStrat)setTimeout(()=>{const el=$('stratLbl');if(el&&el.scrollIntoView)el.scrollIntoView({behavior:reduced?'auto':'smooth',block:'start'});},380);}
 $('setBtn').addEventListener('click',()=>openSettings(false));
@@ -1707,6 +1751,20 @@ async function saveStrategy(){const B=+$('stB').value,E=+$('stE').value,A=+$('st
   if(!(ac>=0&&ac<=100)){$('setErr').textContent='Потолок альтов — от 0 до 100%.';return;}
   if(!db){$('setErr').textContent='Нет подключения к данным.';return;}
   try{await db.doc('app/settings').update({split:{BTC:B,ETH:E,ALT:A},capPct:cap,depositSplit:{dca:dep},altOfMonth:alt,incomeMonthlyUah:inc||null,key2Pct:k2,altCapPct:ac});rememberCoins(['stAlt']);play('cash');toast('Правила сохранены');$('setErr').textContent='';}catch(e){$('setErr').textContent=failMsg(e,'Не сохранилось');}}
+/* ===== аккаунт: выгрузка данных и удаление ===== */
+window.mlToast=m=>toast(m);
+function exportData(){try{const d=window.mlExport?window.mlExport():null;if(!d){toast('Нет подключения к данным');return;}
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(d,null,1)],{type:'application/json'}));a.download='money-life-'+isoDay(new Date())+'.json';
+  document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},2000);toast('Файл с данными сохранён');}catch(e){toast('Не получилось сохранить файл');}}
+$('expBtn').addEventListener('click',exportData);$('delExp').addEventListener('click',exportData);
+function openDel(){$('delMail').textContent=(window.mlUser&&mlUser.email)||'';$('delWord').value='';$('delErr').textContent='';$('delGo').disabled=true;openSheet('delSheet');}
+$('delBtn').addEventListener('click',openDel);
+$('delWord').addEventListener('input',()=>{$('delGo').disabled=$('delWord').value.trim().toUpperCase()!=='УДАЛИТЬ';});
+$('delGo').addEventListener('click',async()=>{const b=$('delGo');b.disabled=true;$('delErr').textContent='';
+  try{await window.mlDeleteAccount();}catch(e){b.disabled=false;$('delErr').textContent=e&&e.code==='offline'?'Нет связи — удалить можно только онлайн.':'Не получилось удалить: '+((e&&e.message)||'ошибка')+'. Попробуй ещё раз.';}});
+/* ссылка для удаления с сайта (Google Play требует её): …/#delete — после входа сразу открываем подтверждение */
+if(location.hash==='#delete'){const t=setInterval(()=>{if(S.ready&&window.mlUser){clearInterval(t);history.replaceState(null,'',location.pathname);if(window.ML_CONFIG&&ML_CONFIG.accountDelete)openDel();}},400);}
+else if(location.hash==='#deleted')history.replaceState(null,'',location.pathname);
 $('eyeBtn').addEventListener('click',()=>{P.hide=!P.hide;savePrefs();play('tick');buzz(8);render();toast(P.hide?'Суммы скрыты':'Суммы видны');});
 
 /* ===== живые цены ===== */
@@ -1761,7 +1819,7 @@ function msPayload(x){let fresh=0;try{fresh=S.alerts.filter(a=>String(a.ts||'')>
 function msSync(x){MSC.last=x;if(!msApply())return;if(window.Mascot){try{window.Mascot.sync(msPayload(x));}catch(e){}}else msLoad();}
 function msLoad(){if(MSC.loading||MSC.failed)return;MSC.loading=true;
   const add=(src,ok)=>{try{const s=document.createElement('script');s.src=src;s.async=true;s.onload=ok;s.onerror=()=>{MSC.failed=true;};document.head.appendChild(s);}catch(e){MSC.failed=true;}};
-  const boot=()=>add('mascot.js?v=20261027134500',()=>{try{if(window.Mascot&&window.Mascot.init({host:$('mascot'),app:{audio:ac,buzz}})&&MSC.last)window.Mascot.sync(msPayload(MSC.last));}catch(e){}});
+  const boot=()=>add('mascot.js?v=20261027150000',()=>{try{if(window.Mascot&&window.Mascot.init({host:$('mascot'),app:{audio:ac,buzz}})&&MSC.last)window.Mascot.sync(msPayload(MSC.last));}catch(e){}});
   setTimeout(()=>{if(window.THREE)boot();else add('three.min.js',boot);},300);}
 function render(){const D=derive();renderHeader();renderHome(D);renderGrowth();renderCoins(D);renderStrategy(D);renderActivity();earnNudge();if(cvSym&&$('coinSheet').classList.contains('open'))renderCoinView();}
 document.body.classList.add('loading');

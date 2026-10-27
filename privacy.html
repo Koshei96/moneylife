@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Money Life — политика конфиденциальности</title>
+<meta name="theme-color" content="#06040e">
+<link rel="icon" type="image/png" href="icons/icon-192.png">
+<style>
+/* Политика конфиденциальности Money Life: русский и украинский, язык по телефону, переключатель вверху */
+:root{--bg:#06040e;--card:#100b21;--line:#2a2145;--fg:#f1edff;--mute:#b3a8d9;--lav:#b9a2ff;color-scheme:dark}
+@media (prefers-color-scheme:light){:root{--bg:#f5f2fc;--card:#ffffff;--line:#e6dff5;--fg:#1b1530;--mute:#5d547c;--lav:#5b2fe0;color-scheme:light}}
+*{box-sizing:border-box}
+html,body{background:var(--bg);margin:0}
+body{color:var(--fg);font:16px/1.6 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding:24px max(16px,env(safe-area-inset-right)) 48px max(16px,env(safe-area-inset-left))}
+main{max-width:720px;margin:0 auto;display:grid;gap:18px}
+header{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between}
+h1{font-size:26px;line-height:1.2;margin:0}
+h2{font-size:18px;margin:8px 0 0}
+p,ul{margin:0}
+ul{padding-left:20px;display:grid;gap:6px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px;display:grid;gap:10px}
+.mute{color:var(--mute);font-size:14px}
+a{color:var(--lav)}
+.lang{display:flex;gap:6px}
+.lang button{font:inherit;font-size:14px;font-weight:600;min-width:48px;min-height:44px;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--fg);cursor:pointer}
+.lang button[aria-pressed="true"]{background:var(--lav);border-color:var(--lav);color:var(--bg)}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<main>
+<header><a href="./" aria-label="Money Life">← Money Life</a><div class="lang" role="group" aria-label="Язык"><button type="button" data-l="ru">RU</button><button type="button" data-l="uk">UK</button></div></header>
+
+<article lang="ru" data-lang="ru">
+  <div class="card">
+    <h1>Политика конфиденциальности</h1>
+    <p class="mute">Действует с 27 октября 2026 года.</p>
+    <p>Money Life — приложение для учёта криптовалютного портфеля и личной стратегии покупок. Его делает частный разработчик из Украины. Здесь простыми словами описано, какие данные приложение хранит и что с ними происходит.</p>
+  </div>
+  <div class="card">
+    <h2>Какие данные мы храним</h2>
+    <ul>
+      <li><b>Аккаунт:</b> адрес почты и пароль. Пароль хранится только в зашифрованном виде, его не видит никто, включая разработчика. При входе через Google — почта и имя из аккаунта Google.</li>
+      <li><b>Твои записи:</b> покупки, продажи, суммы, количество монет, настройки стратегии, заметки — всё, что ты вносишь сам.</li>
+      <li><b>Технические данные:</b> время входа и IP-адрес в журналах серверов, на которых работает приложение.</li>
+    </ul>
+    <p>Мы не собираем контакты, геолокацию, фото и файлы. В приложении нет рекламы и сторонних трекеров.</p>
+  </div>
+  <div class="card">
+    <h2>Зачем</h2>
+    <ul>
+      <li>Показывать твой портфель на любом устройстве после входа.</li>
+      <li>Считать сигналы твоей стратегии и, если ты разрешишь, присылать уведомления.</li>
+      <li>Отправлять письма для подтверждения почты и восстановления пароля.</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h2>Где хранятся и кто видит</h2>
+    <p>Данные хранятся в базе Supabase на сервере в Лондоне (Великобритания). Правила базы разрешают каждому пользователю видеть только свои записи. Разработчик как администратор технически имеет доступ к базе и не просматривает записи без твоей просьбы — например, при обращении в поддержку.</p>
+    <p>Мы не продаём и не передаём твои данные. Приложение работает через сервисы:</p>
+    <ul>
+      <li><b>Supabase</b> — хранение данных и вход;</li>
+      <li><b>Google</b> — вход через Google и отправка писем;</li>
+      <li><b>CoinGecko, Binance, Gate.io</b> — цены монет. Запросы идут прямо с твоего устройства и не содержат твоих записей;</li>
+      <li><b>GitHub Pages</b> — размещение сайта приложения.</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h2>Удаление и выгрузка</h2>
+    <ul>
+      <li><b>Удалить аккаунт:</b> «Настройки» → «Аккаунт» → «Удалить аккаунт» или по ссылке <a href="./#delete">koshei96.github.io/moneylife/#delete</a>. Аккаунт и все записи удаляются сразу и полностью.</li>
+      <li><b>Скачать свои данные:</b> «Настройки» → «Аккаунт» → «Скачать мои данные» — файл со всеми записями.</li>
+      <li>Пока аккаунт не удалён, данные хранятся.</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h2>Важно</h2>
+    <ul>
+      <li>Money Life — дневник и калькулятор, а не инвестиционный совет. Решения о покупке и продаже принимаешь ты.</li>
+      <li>Приложение не предназначено для лиц младше 18 лет.</li>
+      <li>Если политика изменится, новая версия появится на этой странице с новой датой.</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h2>Связь</h2>
+    <p>Ответь на любое письмо от Money Life — оно придёт разработчику.</p>
+  </div>
+</article>
+
+<article lang="uk" data-lang="uk" hidden>
+  <div class="card">
+    <h1>Політика конфіденційності</h1>
+    <p class="mute">Діє з 27 жовтня 2026 року.</p>
+    <p>Money Life — застосунок для обліку криптовалютного портфеля та особистої стратегії покупок. Його розробляє приватний розробник з України. Тут простими словами пояснено, які дані зберігає застосунок і що з ними відбувається.</p>
+  </div>
+  <div class="card">
+    <h2>Які дані ми зберігаємо</h2>
+    <ul>
+      <li><b>Акаунт:</b> адреса пошти та пароль. Пароль зберігається лише в зашифрованому вигляді, його не бачить ніхто, зокрема розробник. Під час входу через Google — пошта та ім'я з акаунта Google.</li>
+      <li><b>Твої записи:</b> покупки, продажі, суми, кількість монет, налаштування стратегії, нотатки — усе, що ти вносиш сам.</li>
+      <li><b>Технічні дані:</b> час входу та IP-адреса в журналах серверів, на яких працює застосунок.</li>
+    </ul>
+    <p>Ми не збираємо контакти, геолокацію, фото й файли. У застосунку немає реклами та сторонніх трекерів.</p>
+  </div>
+  <div class="card">
+    <h2>Навіщо</h2>
+    <ul>
+      <li>Показувати твій портфель на будь-якому пристрої після входу.</li>
+      <li>Рахувати сигнали твоєї стратегії та, якщо ти дозволиш, надсилати сповіщення.</li>
+      <li>Надсилати листи для підтвердження пошти та відновлення пароля.</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h2>Де зберігаються і хто бачить</h2>
+    <p>Дані зберігаються в базі Supabase на сервері в Лондоні (Велика Британія). Правила бази дозволяють кожному користувачеві бачити лише свої записи. Розробник як адміністратор технічно має доступ до бази й не переглядає записи без твого прохання — наприклад, під час звернення до підтримки.</p>
+    <p>Ми не продаємо й не передаємо твої дані. Застосунок працює через сервіси:</p>
+    <ul>
+      <li><b>Supabase</b> — зберігання даних і вхід;</li>
+      <li><b>Google</b> — вхід через Google і надсилання листів;</li>
+      <li><b>CoinGecko, Binance, Gate.io</b> — ціни монет. Запити йдуть просто з твого пристрою й не містять твоїх записів;</li>
+      <li><b>GitHub Pages</b> — розміщення сайту застосунку.</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h2>Видалення та вивантаження</h2>
+    <ul>
+      <li><b>Видалити акаунт:</b> «Налаштування» → «Акаунт» → «Видалити акаунт» або за посиланням <a href="./#delete">koshei96.github.io/moneylife/#delete</a>. Акаунт і всі записи видаляються одразу й повністю.</li>
+      <li><b>Завантажити свої дані:</b> «Налаштування» → «Акаунт» → «Завантажити мої дані» — файл з усіма записами.</li>
+      <li>Доки акаунт не видалено, дані зберігаються.</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h2>Важливо</h2>
+    <ul>
+      <li>Money Life — щоденник і калькулятор, а не інвестиційна порада. Рішення про купівлю та продаж ухвалюєш ти.</li>
+      <li>Застосунок не призначений для осіб, молодших за 18 років.</li>
+      <li>Якщо політика зміниться, нова версія з'явиться на цій сторінці з новою датою.</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h2>Зв'язок</h2>
+    <p>Дай відповідь на будь-який лист від Money Life — він надійде розробникові.</p>
+  </div>
+</article>
+</main>
+<script>
+/* язык: сохранённый выбор → язык телефона → русский */
+(function(){var arts=document.querySelectorAll('article[data-lang]'),btns=document.querySelectorAll('.lang button');
+function set(l){arts.forEach(function(a){a.hidden=a.dataset.lang!==l;});btns.forEach(function(b){b.setAttribute('aria-pressed',String(b.dataset.l===l));});document.documentElement.lang=l;try{localStorage.setItem('ml-lang',l);}catch(e){}}
+var l=null;try{l=localStorage.getItem('ml-lang');}catch(e){}
+if(l!=='ru'&&l!=='uk')l=/^uk/i.test(navigator.language||'')?'uk':'ru';
+btns.forEach(function(b){b.addEventListener('click',function(){set(b.dataset.l);});});set(l);})();
+</script>
+</body>
+</html>

@@ -2,7 +2,7 @@
    Даёт приложению тот же интерфейс, что и в Claude:
    claude.use('db')  → документы в Supabase (таблица docs) с живыми обновлениями;
    claude.use('mcp') → цены и графики напрямую с CoinGecko.
-   Вход — почта и пароль (Supabase Auth). */
+   Вход — почта и пароль или Google (Supabase Auth); восстановление пароля по письму. */
 (function () {
   'use strict';
   const CFG = window.ML_CONFIG || {};
@@ -423,41 +423,142 @@
   };
 
   /* ---------- вход ---------- */
-  function overlay() {
-    const o = document.createElement('div');
-    o.id = 'mlAuth';
-    o.innerHTML = `<div class="mla-card">
-      <h1 class="wm" aria-label="MoneyLife"><span>Money</span><span class="wm-l">Life</span></h1>
-      <p class="mla-sub">Вход в твой личный кабинет</p>
-      <label class="field"><span>Почта</span><input type="email" id="mlaEmail" autocomplete="username" inputmode="email"></label>
-      <label class="field"><span>Пароль</span><input type="password" id="mlaPass" autocomplete="current-password"></label>
-      <p class="err" id="mlaErr" role="alert"></p>
-      <button type="button" class="btn block" id="mlaIn">Войти</button>
-      ${CFG.allowSignup===false?'':'<button type="button" class="btn block ghost" id="mlaUp">Создать аккаунт</button>'}
-      <p class="mla-note">Данные хранятся в твоей базе Supabase и видны только тебе.</p></div>`;
-    document.body.appendChild(o);
-    const err = m => { o.querySelector('#mlaErr').textContent = m || ''; };
-    const go = async up => {
-      const email = o.querySelector('#mlaEmail').value.trim(), password = o.querySelector('#mlaPass').value;
-      if (!email || password.length < 8) { err('Введи почту и пароль не короче 8 символов.'); return; }
-      err('');
-      const c = client();
-      const r = up ? await c.auth.signUp({ email, password }) : await c.auth.signInWithPassword({ email, password });
-      if (r.error) { err(up ? 'Не удалось создать аккаунт: ' + r.error.message : 'Неверная почта или пароль.'); return; }
-      if (up && !r.data.session) { err('Аккаунт создан. Напиши Claude в чат «аккаунт создан» — он подтвердит его и перенесёт твои данные. Письмо от Supabase можно не открывать.'); return; }
-    };
-    o.querySelector('#mlaIn').addEventListener('click', () => go(false));
-    const up = o.querySelector('#mlaUp'); if (up) up.addEventListener('click', () => go(true));
-    o.querySelector('#mlaPass').addEventListener('keydown', e => { if (e.key === 'Enter') go(false); });
+  /* что пришло в адресе после письма или входа через Google — читаем до того, как Supabase его очистит */
+  const URLH = (location.hash || '').slice(1), URLQ = new URLSearchParams(URLH.includes('=') ? URLH : '');
+  const fromMail = URLQ.get('type');                       /* signup | recovery | magiclink | email_change */
+  const urlErr = URLQ.get('error_description') || '';
+  const SITE = CFG.siteUrl || (location.origin + location.pathname);
+  const okPass = p => p.length >= 8 && /[A-Za-z]/.test(p) && /\d/.test(p);
+  const PASS_HINT = 'От 8 символов: латинские буквы и цифры.';
+  function authErr(e, mode) {
+    const m = String((e && (e.code || e.message)) || '');
+    if (/invalid_credentials|Invalid login/i.test(m)) return 'Неверная почта или пароль.';
+    if (/email_not_confirmed|not confirmed/i.test(m)) return 'Почта ещё не подтверждена — открой ссылку из письма.';
+    if (/user_already_exists|already registered/i.test(m)) return 'Эта почта уже зарегистрирована. Войди или восстанови пароль.';
+    if (/weak_password|Password should/i.test(m)) return 'Слабый пароль. ' + PASS_HINT;
+    if (/signup_disabled|Signups not allowed/i.test(m)) return 'Регистрация пока закрыта.';
+    if (/over_email_send_rate_limit|rate limit|security purposes|only request this/i.test(m)) return 'Слишком часто. Подожди минуту и попробуй снова.';
+    if (/email_address_invalid|invalid format|Unable to validate email/i.test(m)) return 'Проверь адрес почты.';
+    if (/same_password|different from the old/i.test(m)) return 'Новый пароль должен отличаться от старого.';
+    if (/Failed to fetch|NetworkError|network/i.test(m)) return 'Нет связи. Проверь интернет.';
+    return (mode === 'up' ? 'Не удалось создать аккаунт: ' : 'Не получилось: ') + m;
+  }
+  const esc = t => String(t == null ? '' : t).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const G_ICON = '<svg viewBox="0 0 48 48" width="20" height="20" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.1 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.1 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-7.9l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 38.6 44 33 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>';
+
+  /* экраны: in — вход, up — регистрация, forgot — забыли пароль, sent — письмо отправлено, newpass — новый пароль */
+  function overlay(mode, note) {
+    const o = document.getElementById('mlAuth') || document.body.appendChild(Object.assign(document.createElement('div'), { id: 'mlAuth' }));
+    let email = (o.dataset.email || ''), sentKind = 'signup', wait = 0, waitT = 0;
+    const c = client();
+    const canUp = CFG.allowSignup !== false, google = !!CFG.google;
+    const field = (id, label, type, ac, val) => `<label class="field"><span>${label}</span><input type="${type}" id="${id}" autocomplete="${ac}"${type === 'email' ? ' inputmode="email" autocapitalize="none" spellcheck="false"' : ''} value="${esc(val || '')}"></label>`;
+    const passField = (id, label, ac) => `<label class="field"><span>${label}</span><span class="mla-pw"><input type="password" id="${id}" autocomplete="${ac}"><button type="button" class="mla-eye" data-eye="${id}" aria-label="Показать пароль"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></button></span></label>`;
+    const gBtn = google ? `<div class="mla-or"><span>или</span></div><button type="button" class="btn block mla-g" id="mlaG">${G_ICON}<span>Войти через Google</span></button>` : '';
+    const priv = '<a href="privacy.html" target="_blank" rel="noopener">политикой конфиденциальности</a>';
+    function draw() {
+      const head = '<h1 class="wm" aria-label="MoneyLife"><span>Money</span><span class="wm-l">Life</span></h1>';
+      let h = '';
+      if (mode === 'in') h = `${head}<p class="mla-sub">Вход в личный кабинет</p>${field('mlaEmail', 'Почта', 'email', 'username', email)}${passField('mlaPass', 'Пароль', 'current-password')}
+        <p class="err" id="mlaErr" role="alert"></p><button type="button" class="btn block" id="mlaGo">Войти</button>
+        <button type="button" class="mla-link" data-to="forgot">Забыли пароль?</button>${gBtn}
+        ${canUp ? '<p class="mla-foot">Нет аккаунта? <button type="button" class="mla-link" data-to="up">Создать</button></p>' : ''}`;
+      else if (mode === 'up') h = `${head}<p class="mla-sub">Новый аккаунт</p>${field('mlaEmail', 'Почта', 'email', 'username', email)}${passField('mlaPass', 'Пароль', 'new-password')}
+        <p class="mla-hint">${PASS_HINT}</p>
+        <label class="mla-check"><input type="checkbox" id="mlaAgree"><span>Понимаю: Money Life — дневник и калькулятор, а не инвестиционный совет. Согласен с ${priv}.</span></label>
+        <p class="err" id="mlaErr" role="alert"></p><button type="button" class="btn block" id="mlaGo">Создать аккаунт</button>${gBtn}
+        <p class="mla-foot">Уже есть аккаунт? <button type="button" class="mla-link" data-to="in">Войти</button></p>`;
+      else if (mode === 'forgot') h = `${head}<p class="mla-sub">Восстановление пароля</p><p class="mla-text">Пришлём на почту ссылку. По ней ты задашь новый пароль.</p>${field('mlaEmail', 'Почта', 'email', 'username', email)}
+        <p class="err" id="mlaErr" role="alert"></p><button type="button" class="btn block" id="mlaGo">Прислать ссылку</button>
+        <button type="button" class="mla-link" data-to="in">Назад ко входу</button>`;
+      else if (mode === 'sent') h = `${head}<div class="mla-mail" aria-hidden="true">✉</div><p class="mla-sub">Письмо отправлено</p>
+        <p class="mla-text">${sentKind === 'recovery' ? 'Открой ссылку из письма на' : 'Подтверди почту: открой ссылку из письма на'} <b>${esc(email)}</b>. ${sentKind === 'recovery' ? 'Откроется приложение, и ты задашь новый пароль.' : 'После этого вход произойдёт сам.'} Письма нет — проверь «Спам».</p>
+        <p class="err" id="mlaErr" role="alert"></p><button type="button" class="btn block ghost" id="mlaAgain" disabled>Отправить ещё раз</button>
+        <button type="button" class="mla-link" data-to="in">Назад ко входу</button>`;
+      else if (mode === 'newpass') h = `${head}<p class="mla-sub">Новый пароль</p>${passField('mlaPass', 'Новый пароль', 'new-password')}<p class="mla-hint">${PASS_HINT}</p>
+        <p class="err" id="mlaErr" role="alert"></p><button type="button" class="btn block" id="mlaGo">Сохранить пароль</button>`;
+      o.innerHTML = `<div class="mla-card" role="dialog" aria-modal="true">${h}${mode === 'in' || mode === 'up' ? '<p class="mla-note">Твои записи видны только тебе.</p>' : ''}</div>`;
+      wire();
+      const hadNote = !!note;
+      if (note) { const e = o.querySelector('#mlaErr'); if (e) { e.textContent = note.text; e.classList.toggle('ok', !!note.ok); } note = null; }
+      if (mode === 'sent') tick(hadNote ? 0 : 60);
+    }
+    const err = (m, ok) => { const e = o.querySelector('#mlaErr'); if (e) { e.textContent = m || ''; e.classList.toggle('ok', !!ok); } };
+    const val = id => { const e = o.querySelector('#' + id); return e ? e.value : ''; };
+    const busy = (b, on) => { if (b) { b.disabled = on; b.classList.toggle('busy', on); } };
+    function tick(n) { wait = n; clearInterval(waitT); const b = o.querySelector('#mlaAgain'); const up = () => { if (!b) return; b.disabled = wait > 0; b.textContent = wait > 0 ? 'Отправить ещё раз через ' + wait + ' с' : 'Отправить ещё раз'; }; up(); waitT = setInterval(() => { wait--; up(); if (wait <= 0) clearInterval(waitT); }, 1000); }
+    async function go() {
+      const b = o.querySelector('#mlaGo'); err('');
+      if (mode !== 'newpass') { email = val('mlaEmail').trim(); o.dataset.email = email; if (!/^\S+@\S+\.\S+$/.test(email)) { err('Впиши почту.'); return; } }
+      const pass = val('mlaPass');
+      busy(b, true);
+      try {
+        if (mode === 'in') {
+          if (!pass) { err('Впиши пароль.'); return; }
+          const r = await c.auth.signInWithPassword({ email, password: pass });
+          if (r.error) { if (/email_not_confirmed|not confirmed/i.test(r.error.code || r.error.message || '')) { sentKind = 'signup'; mode = 'sent'; note = { text: 'Почта ещё не подтверждена.' }; draw(); return; } err(authErr(r.error)); }
+        } else if (mode === 'up') {
+          if (!okPass(pass)) { err(PASS_HINT); return; }
+          if (!o.querySelector('#mlaAgree').checked) { err('Отметь, что понимаешь условия.'); return; }
+          const r = await c.auth.signUp({ email, password: pass, options: { emailRedirectTo: SITE, data: { agreed_at: new Date().toISOString() } } });
+          if (r.error) { err(authErr(r.error, 'up')); return; }
+          if (!r.data.session) { sentKind = 'signup'; mode = 'sent'; draw(); }
+        } else if (mode === 'forgot') {
+          const r = await c.auth.resetPasswordForEmail(email, { redirectTo: SITE });
+          if (r.error) { err(authErr(r.error)); return; }
+          sentKind = 'recovery'; mode = 'sent'; draw();
+        } else if (mode === 'newpass') {
+          if (!okPass(pass)) { err(PASS_HINT); return; }
+          const r = await c.auth.updateUser({ password: pass });
+          if (r.error) { err(authErr(r.error)); return; }
+          o.remove(); window.mlToast && window.mlToast('Пароль изменён');
+        }
+      } catch (e) { err(authErr(e, mode)); }
+      finally { busy(b, false); }
+    }
+    async function again() {
+      const b = o.querySelector('#mlaAgain'); busy(b, true); err('');
+      try {
+        const r = sentKind === 'recovery' ? await c.auth.resetPasswordForEmail(email, { redirectTo: SITE }) : await c.auth.resend({ type: 'signup', email, options: { emailRedirectTo: SITE } });
+        if (r.error) err(authErr(r.error)); else { err('Отправили ещё раз.', true); tick(60); }
+      } catch (e) { err(authErr(e)); } finally { if (wait <= 0) busy(b, false); }
+    }
+    function wire() {
+      const g = o.querySelector('#mlaGo'); if (g) g.addEventListener('click', go);
+      o.querySelectorAll('input').forEach(i => i.addEventListener('keydown', e => { if (e.key === 'Enter' && i.type !== 'checkbox') go(); }));
+      o.querySelectorAll('[data-to]').forEach(x => x.addEventListener('click', () => { const e = o.querySelector('#mlaEmail'); if (e) { email = e.value.trim(); o.dataset.email = email; } mode = x.dataset.to; clearInterval(waitT); draw(); }));
+      o.querySelectorAll('[data-eye]').forEach(x => x.addEventListener('click', () => { const i = o.querySelector('#' + x.dataset.eye); i.type = i.type === 'password' ? 'text' : 'password'; x.setAttribute('aria-label', i.type === 'password' ? 'Показать пароль' : 'Скрыть пароль'); }));
+      const a = o.querySelector('#mlaAgain'); if (a) a.addEventListener('click', again);
+      const gg = o.querySelector('#mlaG'); if (gg) gg.addEventListener('click', async () => { busy(gg, true); try { const r = await c.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: SITE } }); if (r.error) { err(authErr(r.error)); busy(gg, false); } } catch (e) { err(authErr(e)); busy(gg, false); } });
+    }
+    draw();
     return o;
   }
+
+  /* удаление аккаунта и выгрузка данных — для настроек приложения */
+  window.mlUser = null;
+  window.mlExport = () => {
+    const out = { app: 'Money Life', exportedAt: new Date().toISOString(), user: window.mlUser && window.mlUser.email, docs: [] };
+    for (const [k, v] of cache) { const i = k.indexOf('/'); out.docs.push({ col: k.slice(0, i), id: k.slice(i + 1), data: v }); }
+    return out;
+  };
+  window.mlDeleteAccount = async () => {
+    const c = client(); if (!c || !uid) throw new Error('not signed in');
+    if (navigator.onLine === false) { const e = new Error('offline'); e.code = 'offline'; throw e; }
+    const r = await c.rpc('delete_my_account'); if (r.error) throw r.error;
+    try { localStorage.removeItem(lsDocs()); localStorage.removeItem(LS_UID); localStorage.removeItem('ml-cmeta'); } catch (e) {}
+    try { await c.auth.signOut({ scope: 'local' }); } catch (e) {}
+    history.replaceState(null, '', location.pathname + '#deleted'); location.reload();   /* экран входа покажет «аккаунт удалён» */
+  };
 
   async function boot() {
     const c = client();
     if (!c) { document.body.insertAdjacentHTML('beforeend', '<div id="mlAuth"><div class="mla-card"><p>Приложение ещё не настроено: нет адреса базы.</p></div></div>'); return; }
     let o = null;
+    const startNote = urlErr ? { text: /expired|invalid/i.test(urlErr) ? 'Ссылка устарела или уже использована — запроси новую.' : 'Не получилось: ' + urlErr } : (URLH === 'deleted' ? { text: 'Аккаунт и все записи удалены.', ok: true } : (URLH === 'delete' ? { text: 'Войди, чтобы удалить аккаунт.' } : null));
     const onSession = async s => {
-      if (!s || !s.user) { if (!o) o = overlay(); return; }
+      if (!s || !s.user) { if (!o) o = overlay(urlErr && /expired|invalid/i.test(urlErr) ? 'forgot' : 'in', startNote); return; }
+      window.mlUser = { id: s.user.id, email: s.user.email || '', provider: (s.user.app_metadata && s.user.app_metadata.provider) || 'email' };
       if (uid === s.user.id && offlineAt == null) return;
       uid = s.user.id; try { localStorage.setItem(LS_UID, uid); } catch (e) {}
       if (o) { o.remove(); o = null; }
@@ -485,7 +586,9 @@
       }
     }
     await onSession(ses);
-    c.auth.onAuthStateChange((ev, s) => { if (ev === 'SIGNED_OUT') { location.reload(); return; } onSession(s); });
+    if (ses && fromMail === 'recovery') overlay('newpass');                                  /* пришёл по ссылке «новый пароль» */
+    else if (ses && fromMail === 'signup') setTimeout(() => window.mlToast && window.mlToast('Почта подтверждена — добро пожаловать!'), 1500);
+    c.auth.onAuthStateChange((ev, s) => { if (ev === 'SIGNED_OUT') { location.reload(); return; } if (ev === 'PASSWORD_RECOVERY') { overlay('newpass'); } onSession(s); });
   }
   window.mlSignOut = async () => {
     try { if (uid) localStorage.removeItem(lsDocs()); localStorage.removeItem(LS_UID); } catch (e) {}   /* выход — копия с телефона удаляется */
