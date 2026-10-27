@@ -2402,12 +2402,22 @@
     raf = 0;
     if (!visible()) { hum(false); ST.hum = false; QG.last = 0; return; }
     raf = requestAnimationFrame(frame);
-    const t = now(), fps = ST.reduced ? 12 : ST.mood === 'sleep' ? 15 : 30;
+    const t = now(), fps = targetFps(t);
     if (t - lastF < 1 / fps - 0.004) return;
     const dt = Math.min(0.1, t - lastF); lastF = t;
-    try { update(dt, t); renderer.render(scene, camera); } catch (e) { console.error(e); cancelAnimationFrame(raf); raf = 0; return; }
+    try { update(dt, t); renderer.render(scene, camera); FC.n++; } catch (e) { console.error(e); cancelAnimationFrame(raf); raf = 0; return; }
     govern(t, fps);
     if (!firstFrame) { firstFrame = true; host.classList.add('ms-live'); }
+  }
+  /* экономия батареи: 30 кадров — когда что-то происходит; 20 — стоит без дела; 10 — спит.
+     Батарея ≤ 20% и не заряжается — не больше 20 кадров и картинка попроще */
+  const BAT = { low: false }, FC = { n: 0 };
+  try { if (navigator.getBattery) navigator.getBattery().then(b => { const u = () => { const was = BAT.low; BAT.low = !b.charging && b.level <= 0.2; if (BAT.low !== was && renderer) { renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, BAT.low ? 1.5 : 2)); measure(); } }; u(); b.addEventListener('levelchange', u); b.addEventListener('chargingchange', u); }).catch(() => {}); } catch (e) {}
+  function targetFps(t) {
+    if (ST.reduced) return 12;
+    if (ST.mood === 'sleep') return BAT.low ? 8 : 10;
+    const busy = act || HS.cur || ST.drag || AU.cur || LOC.mode !== 'stand' || t - ST.lastInput < 6 || t - ST.lastEvent < 4;
+    return busy && !BAT.low ? 30 : 20;
   }
   /* если телефон не успевает рисовать 30 кадров в секунду — понемногу снижаем качество (чёткость, затем тени) */
   const QG = { ema: 0, level: 0, next: 0, last: 0, off: false };
@@ -2504,7 +2514,7 @@
     } catch (e) { return false; }
     if (!document.getElementById('ms-css')) { const st = document.createElement('style'); st.id = 'ms-css'; st.textContent = CSS; document.head.appendChild(st); }
     ST.reduced = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 3));
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));   /* больше 2× на маленькой карточке не видно, а батарея тратится */
     renderer.outputEncoding = T.sRGBEncoding; renderer.toneMapping = T.ACESFilmicToneMapping; renderer.toneMappingExposure = 0.95;
     renderer.shadowMap.enabled = true; renderer.shadowMap.type = T.PCFSoftShadowMap;
     renderer.setClearColor(0x000000, 0);
@@ -2559,6 +2569,7 @@
       box: () => { const r = host.getBoundingClientRect(); return { x: r.left + pxX(LOC.x) - 1.05 * LY.U, y: r.top + pxY(LOC.y + R.topY + 0.15), w: 2.1 * LY.U, h: pxY(LOC.y - 0.25) - pxY(LOC.y + R.topY + 0.15) }; },
       pr: v => { QG.off = true; renderer.setPixelRatio(v); measure(); },
       quality: () => ({ level: QG.level, ema: +QG.ema.toFixed(3) }),
+      frames: () => FC.n, fps: () => targetFps(now()), fpsWhy: () => { const t = now(); return { act: act && act.name, hobby: HS.cur && HS.cur.name, job: JOB && JOB.name, drag: !!ST.drag, voice: !!AU.cur, loc: LOC.mode, input: +(t - ST.lastInput).toFixed(1), ev: +(t - ST.lastEvent).toFixed(1) }; }, bat: v => { if (v != null) BAT.low = !!v; return BAT.low; },
       job: n => { endJob(true); runJob(n); },
       hobby: (n, d, o) => { endJob(true); endClip(); job('dbg-' + n, [SP.hobby(n, d || 40, o)]); return !!HS.cur; },
       hobbyAt: k => { if (HS.cur) { const dt = k - (now() - HS.cur.t0); HS.cur.t0 -= dt; for (const f of ['next', 'hm', 'cT', 'b0', 'modeT', 'turnT', 'reactT']) if (typeof HS.cur[f] === 'number') HS.cur[f] -= dt; } },
