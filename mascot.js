@@ -1872,32 +1872,51 @@
     if (!ST.hide && ST.pct != null && isFinite(ST.pct)) { const p = ST.pct; it.push({ k: 'port', s: 1.4 + Math.min(3, Math.abs(p) / 2) + Math.random() * 0.5, ids: Math.abs(p) < 0.5 ? ['n.portFlat'] : [p > 0 ? 'n.portUp' : 'n.portDown'].concat(pctIds(Math.max(1, Math.abs(p)))) }); }
     let best = null;
     if (!ST.hide) for (const s of D.syms || []) {
-      if (s === 'BTC' || NEWS_COINS.indexOf(s) < 0) continue;
+      if (s === 'BTC') continue;   /* любая монета портфеля: если названия нет в голосе — скажем «одна из твоих монет», а название покажем в пузыре */
       const c = lv.change && lv.change[s], v = (+(D.prices && D.prices[s]) || 0) * ((D.h && D.h[s] && D.h[s].qty) || 0);
       if (c == null || !isFinite(c) || v < 20 || Math.abs(c) < 3) continue;
       if (!best || Math.abs(c) > Math.abs(best.c)) best = { s, c };
     }
-    if (best) it.push({ k: 'coin', s: 1.5 + Math.min(3, Math.abs(best.c) / 4) + Math.random() * 0.5, ids: ['n.c.' + best.s, best.c > 0 ? 'n.coinUp' : 'n.coinDown'].concat(pctIds(Math.abs(best.c))) });
+    if (best) {
+      const up = best.c > 0, named = NEWS_COINS.indexOf(best.s) >= 0;
+      it.push({ k: 'coin', s: 1.5 + Math.min(3, Math.abs(best.c) / 4) + Math.random() * 0.5,
+        ids: (named ? ['n.c.' + best.s, up ? 'n.coinUp' : 'n.coinDown'] : [up ? 'n.anyUp' : 'n.anyDown']).concat(pctIds(Math.abs(best.c))),
+        bub: { text: best.s + ' ' + pctTxt(best.c), neg: !up } });
+    }
     it.push(ST.fresh > 0 || ST.go ? { k: 'sig', s: 4, ids: ['n.sig'] } : { k: 'sig', s: 0.6 + Math.random() * 0.4, ids: ['n.noSig'] });
     it.sort((a, b) => b.s - a.s);
     const sel = it.slice(0, btcIt ? 2 : 3), hr = new Date().getHours();
     const intro = hr >= 5 && hr < 12 && lsGet('ms-newsDay', '') !== dayKey() ? 'n.morning' : hr >= 18 ? 'n.evening' : 'n.intro.' + (Math.random() < 0.5 ? 0 : 1);
-    const seq = [{ id: intro, gap: 0.3 }], add = ids => ids.forEach((id, i) => seq.push({ id, gap: i === ids.length - 1 ? 0.34 : -0.07 }));
-    if (btcIt) add(btcIt); sel.forEach(x => add(x.ids)); seq.push({ id: 'n.outro.' + (Math.random() < 0.5 ? 0 : 1), gap: 0 });
+    const parts = [{ ids: [intro], gap: 0.3 }];
+    if (btcIt) parts.push({ ids: btcIt, gap: 0.34 }); sel.forEach(x => parts.push({ ids: x.ids, gap: 0.34, bub: x.bub }));
+    parts.push({ ids: ['n.outro.' + (Math.random() < 0.5 ? 0 : 1)], gap: 0 });
+    const seq = []; parts.forEach(p => p.ids.forEach((id, i) => seq.push({ id, gap: i === p.ids.length - 1 ? p.gap : -0.07 })));
     let date = ''; try { date = new Date().toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' }); } catch (e) {}
     const price = Math.round(btc).toLocaleString('ru-RU').replace(/ /g, ' ') + ' $';
     const head = hasCh ? 'БИТКОИН ' + pctTxt(ch) + ' ЗА СУТКИ' : 'БИТКОИН — ' + price;
     const sub = 'Цена ' + price + (ath > 0 ? (btc >= ath * 0.995 ? ' · исторический максимум!' : ' · до максимума ' + Math.round((1 - btc / ath) * 100) + '%') : '');
-    return { seq, paper: { head, sub, date, spark: lv.spark && lv.spark.BTC, up: !hasCh || ch >= 0 }, keys: [btcIt ? 'btc' : ''].concat(sel.map(x => x.k)) };
+    return { seq, parts, bubs: sel.filter(x => x.bub).map(x => x.bub.text), paper: { head, sub, date, spark: lv.spark && lv.spark.BTC, up: !hasCh || ch >= 0 }, keys: [btcIt ? 'btc' : ''].concat(sel.map(x => x.k)) };
   }
   const canTalk = () => !!(ST.sound && AU.c && AU.c.state === 'running' && !isNight() && AU.pack && AU.packN && !document.hidden);
   function newsDue() {
     if (isNight() || ST.hide || !ST.sound || !ST.S || !(AU.c && AU.c.state === 'running')) return false;
     return Date.now() - (lsGet('ms-news', 0) || 0) > 3 * 3600e3;
   }
+  /* выпуск из частей: часть без голоса пропускаем целиком; для пузыря считаем, когда звучит его часть */
+  function newsSeq(items) {
+    const seq = [], bubs = [];
+    for (const p of items.parts || []) {
+      if (p.ids.some(id => !packOf(id))) continue;
+      const i0 = seq.length;
+      p.ids.forEach((id, i) => seq.push({ id, gap: i === p.ids.length - 1 ? p.gap : -0.07 }));
+      if (p.bub) bubs.push({ i0, i1: seq.length - 1, text: p.bub.text, neg: p.bub.neg });
+    }
+    let t = 0.05; const st = seq.map(x => { const s0 = t, pk = packOf(x.id); t += (pk ? pk[0].idx[x.id][2] / 1000 : 0) + (x.gap || 0); return s0; });
+    return { seq, bubs: bubs.map(b => { const pk = packOf(seq[b.i1].id); return { from: st[b.i0], to: st[b.i1] + (pk ? pk[0].idx[seq[b.i1].id][2] / 1000 : 0.8) + 0.8, text: b.text, neg: b.neg }; }) };
+  }
   function startTell(h) {
-    const dur = voiceSeq(h.items.seq); if (!dur) return false;
-    h.tell = { t0: now(), dur }; h.dur = now() - h.t0 + dur + 0.9;
+    const ns = newsSeq(h.items), dur = voiceSeq(ns.seq); if (!dur) return false;
+    h.tell = { t0: now(), dur }; h.bubs = ns.bubs; h.bubOn = null; h.dur = now() - h.t0 + dur + 0.9;
     lsSet('ms-news', Date.now()); lsSet('ms-newsDay', dayKey()); HS.newsPending = false;
     return true;
   }
@@ -1912,6 +1931,10 @@
     },
     tick(h, dt, t) {
       const el = t - h.t0;
+      if (h.tell && h.bubs && h.bubs.length) {
+        const tk = t - h.tell.t0, b = h.bubs.find(x => tk >= x.from && tk <= x.to) || null;
+        if (b !== h.bubOn) { if (b) { setSign(b.text, b.neg); floatOn('sign', true); } else floatOn('sign', false); h.bubOn = b; }
+      }
       if (!h.tell && el >= h.read && !h.gave) {
         if (canTalk()) startTell(h);
         else if (el < h.read + 4 && ST.sound && !isNight() && AU.c && AU.c.state === 'running' && !AU.failedN) { loadPackN(); h.dur = el + 1; }
@@ -1931,7 +1954,8 @@
         P.hz += 0.05 * Math.sin(t * 2.1) * lower * w; P.ex = lerp(P.ex, 0, lower); P.hx -= 0.04 * lower * w;
       }
       lookUser(P, t, w);
-    }
+    },
+    end(h) { if (h.bubOn) { floatOn('sign', false); h.bubOn = null; } }
   };
   /* кадр занятий: веса (плавное появление/исчезание), позы, таймлайны */
   function hobbyFrame(P, dt, t) {
@@ -2541,7 +2565,7 @@
       settle: n => { for (let i = 0; i < (n || 45); i++) update(1 / 30, now()); renderer.render(scene, camera); },
       game: (m, k) => { if (HP && HP.game) { HP.game.mode = m; HP.game.modeT = now() - (k || 0); } },
       turn: () => { if (HS.cur) HS.cur.turnT = now(); },
-      news: () => { const x = newsCompose(); return x ? { ids: x.seq.map(q => q.id), keys: x.keys, paper: x.paper.head + ' / ' + x.paper.sub } : null; },
+      news: () => { const x = newsCompose(); return x ? { ids: x.seq.map(q => q.id), keys: x.keys, bubs: x.bubs, paper: x.paper.head + ' / ' + x.paper.sub } : null; },
       tellFake: d => { const h = HS.cur; if (h && h.name === 'news') { h.tell = { t0: now(), dur: d || 8 }; h.dur = now() - h.t0 + (d || 8) + 0.9; } },
       tell: () => { const h = HS.cur; return !!(h && h.name === 'news' && !h.tell && startTell(h)); },
       packs: () => ({ main: !!AU.pack, news: !!AU.packN, failedN: !!AU.failedN }),
