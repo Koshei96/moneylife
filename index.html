@@ -536,6 +536,31 @@ button:focus-visible{outline:2px solid var(--pink);outline-offset:2px}
 .del-warn{border-color:#ff5f6d55;display:grid;gap:6px}
 .del-warn b{color:var(--neg)}
 .del-warn p{margin:0;color:var(--mute);line-height:1.5}
+/* знакомство для нового пользователя */
+#ob{position:fixed;inset:0;z-index:150;display:grid;place-items:center;overflow:auto;padding:20px max(16px,env(safe-area-inset-right,0px)) calc(20px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));background:radial-gradient(80vmax 60vmax at 50% -10%,#3b1d7a55,transparent 60%),var(--bg)}
+#ob[hidden]{display:none}
+[data-theme="light"] #ob{background:radial-gradient(80vmax 60vmax at 50% -10%,#a64dff26,transparent 60%),var(--bg)}
+.ob-card{width:100%;max-width:420px;display:flex;flex-direction:column;gap:14px;background:linear-gradient(180deg,var(--surface2),var(--surface));border:1px solid var(--line);border-radius:var(--r-xl);padding:22px}
+.ob-top{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:44px}
+.ob-dots{display:flex;gap:6px}.ob-dots i{width:22px;height:5px;border-radius:3px;background:var(--line2)}.ob-dots i.on{background:var(--accent)}
+.ob-skip{background:none;border:0;color:var(--mute);font:inherit;font-size:13px;font-weight:600;min-height:44px;padding:0 4px;cursor:pointer}
+.ob-card h2{font-family:"Sora",var(--ui);font-size:23px;line-height:1.2;margin:0;letter-spacing:-.02em}
+.ob-lead{color:var(--mute);margin:0;line-height:1.5}
+.ob-opts{display:grid;gap:10px}
+.ob-opt{display:grid;gap:4px;text-align:left;padding:14px;border-radius:var(--r-l);border:1.5px solid var(--line2);background:var(--surface);color:var(--fg);font:inherit;cursor:pointer;min-height:48px}
+.ob-opt[aria-pressed="true"]{border-color:var(--accent);background:var(--raise);box-shadow:0 0 0 3px var(--accent-soft)}
+.ob-opt .oh{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.ob-opt b{font-size:16px}
+.ob-opt small{color:var(--mute);line-height:1.45;font-size:13px}
+.ob-opt .sp{font-weight:700;color:var(--lav);font-size:13px}
+.ob-nav{display:flex;gap:10px}.ob-nav .btn{flex:1}
+.ob-coins{display:grid;gap:10px}
+.ob-coin{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr) 44px;gap:8px;align-items:end}
+.ob-coin .ib{width:44px;height:46px}
+.ob-calc{background:var(--raise);border-radius:var(--r-m);padding:12px;font-size:14px;color:var(--mute);line-height:1.5}
+.ob-calc b{color:var(--fg)}
+.ob-note{font-size:12px;color:var(--dim);margin:0;line-height:1.45}
+.lv.skip{opacity:.6}.mk.skip b{opacity:.5}
 [data-theme="light"] .more{color:#c0268f}
 [data-theme="light"] .cc-face svg text[fill="#8e83b6"]{fill:#8e83b6}
 </style>
@@ -616,6 +641,7 @@ button:focus-visible{outline:2px solid var(--pink);outline-offset:2px}
       <p class="hint" id="nextLbl" style="margin-top:12px"></p>
     </div>
     <div class="list" id="levels"></div>
+    <div class="card" id="ladOff" hidden><div class="sec-h"><span class="label">Лестница докупок</span><span class="chip">выключена</span></div><p class="hint" style="margin-top:6px">Докупки на просадках биткоина из резерва. Включить: «Настройки» → «Изменить правила» → «Лестница докупок».</p></div>
     <div class="card" id="planCard">
       <div class="sec-h"><span class="label">План альткоинов</span><span class="small mute" id="planLbl"></span></div>
       <div class="months" id="planMonths"></div>
@@ -759,7 +785,7 @@ button:focus-visible{outline:2px solid var(--pink);outline-offset:2px}
 <!-- Сигналы -->
 <div class="sheet" id="sigSheet" role="dialog" aria-modal="true" aria-labelledby="sigTitle">
   <div class="sh-head"><div class="grab"></div><div class="sh-bar"><h3 id="sigTitle">Сигналы</h3><button type="button" class="ib" data-close aria-label="Закрыть"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div></div>
-  <div class="sh-body"><div class="sh-in"><p class="hint">Проверка рынка 2 раза в день — в 8:41 и 20:41 по Киеву. Важное дублируется push-уведомлением.</p><div id="alerts"></div></div></div>
+  <div class="sh-body"><div class="sh-in"><p class="hint" id="sigHint">Сигналы о просадках биткоина и напоминания о покупках.</p><div id="alerts"></div></div></div>
 </div>
 
 <!-- Раздел стратегии -->
@@ -814,7 +840,8 @@ button:focus-visible{outline:2px solid var(--pink);outline-offset:2px}
       <p class="hint">Эти правила общие для приложения и для проверки рынка 2 раза в день.</p>
       <div class="f3"><label class="field"><span>BTC, %</span><input type="number" id="stB" min="0" max="100" inputmode="numeric"></label><label class="field"><span>ETH, %</span><input type="number" id="stE" min="0" max="100" inputmode="numeric"></label><label class="field"><span>Альты, %</span><input type="number" id="stA" min="0" max="100" inputmode="numeric"></label></div>
       <div class="f2"><label class="field"><span>Потолок резерва, %</span><input type="number" id="stCap" min="1" max="100" inputmode="numeric"></label><label class="field"><span>Депозит в DCA, %</span><input type="number" id="stDep" min="0" max="100" inputmode="numeric"></label></div>
-      <div class="f2"><label class="field"><span>Альткоин вне плана</span><input type="text" id="stAlt" maxlength="12" autocomplete="off"></label><label class="field"><span>Доход в месяц, грн</span><input type="number" id="stInc" min="0" inputmode="numeric"></label></div>
+      <div class="f2"><label class="field"><span>Альткоин вне плана</span><input type="text" id="stAlt" maxlength="12" autocomplete="off"></label><label class="field"><span id="stIncL">Доход в месяц, грн</span><input type="number" id="stInc" min="0" inputmode="numeric"></label></div>
+      <div class="setrow"><div><b>Лестница докупок</b><small>Покупки из резерва, когда биткоин падает на 30–70% от максимума</small></div><button type="button" class="switch" id="swLadder" role="switch" aria-checked="true" aria-label="Лестница докупок"></button></div>
       <div class="f2"><label class="field"><span>Ключ 2: ниже средней, %</span><input type="number" id="stK2" min="0" max="50" step="any" inputmode="decimal"></label><label class="field"><span>Потолок альтов, %</span><input type="number" id="stAltCap" min="0" max="100" inputmode="numeric"></label></div>
       <p class="err" id="setErr" role="alert"></p>
       <button type="button" class="btn block" id="saveStrat">Сохранить правила</button>
@@ -843,11 +870,13 @@ button:focus-visible{outline:2px solid var(--pink);outline-offset:2px}
   </div></div>
 </div>
 
+<div id="ob" hidden role="dialog" aria-modal="true" aria-labelledby="obTitle"><div class="ob-card" id="obCard"></div></div>
+
 <div class="toast" id="toast" role="status"><span id="toastMsg"></span><button type="button" id="toastBtn" hidden></button></div>
 
-<script src="config.js?v=20261027165000"></script>
+<script src="config.js?v=20261027171500"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="shim.js?v=20261027165000"></script>
+<script src="shim.js?v=20261027171500"></script>
 <script>
 /* ===== основа ===== */
 const $=id=>document.getElementById(id);
@@ -902,7 +931,12 @@ let db=null,mcp=null;
 
 /* ===== форматирование ===== */
 const nf=(v,d)=>Number(v).toLocaleString('ru-RU',{minimumFractionDigits:d,maximumFractionDigits:d});
-const rate=()=>Number(S.settings.usdUah)||0;
+/* курс гривны: из настроек (у владельца его пишет задача) или официальный курс НБУ — раз в день, хранится на телефоне */
+let NBU=null;try{NBU=JSON.parse(localStorage.getItem('ml-nbu')||'null');}catch(e){}
+const rate=()=>Number(S.settings.usdUah)||(NBU&&+NBU.rate)||0;
+async function nbuLoad(){const today=new Date().toISOString().slice(0,10);if(Number(S.settings.usdUah)||(NBU&&NBU.day===today))return;
+  try{const r=await fetch('https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?valcode=USD&json');const j=await r.json();const v=+(j&&j[0]&&j[0].rate);
+    if(v>0){NBU={rate:v,day:today};try{localStorage.setItem('ml-nbu',JSON.stringify(NBU));}catch(e){}render();}}catch(e){}}
 function money(v,o){o=o||{};if(v==null||!isFinite(v))return '—';if(P.hide&&!o.show)return '••••';
   const toU=P.cur==='UAH'&&rate()>0;const x=toU?v*rate():v,a=Math.abs(x);
   let d=o.d;if(d==null)d=o.price?(a>=1000?0:a>=1?2:a>=0.01?4:6):(a>=1000?0:2);
@@ -972,6 +1006,11 @@ function derive(){
 }
 const split=()=>Object.assign({BTC:50,ETH:30,ALT:20},S.settings.split||{});
 const depShare=()=>{const v=(S.settings.depositSplit||{}).dca;return (v==null?50:+v)/100;};
+/* сколько в месяц уходит в крипту, $: из знакомства (budget) или 30% дохода (правило владельца) */
+function budgetUsd(){const b=S.settings.budget,r=rate();if(b&&+b.amount>0)return b.cur==='USD'?+b.amount:(r?+b.amount/r:0);const inc=+S.settings.incomeMonthlyUah||0;return inc&&r?inc*.3/r:0;}
+const ladderOn=()=>S.settings.ladder!==false;
+/* данные из задач Claude есть только у автора: расписание проверок, подбор альткоинов */
+const ownerFeeds=()=>!!(S.market&&S.market.source);
 /* ===== план альткоинов: альткоин месяца берётся из плана ===== */
 const MONTHS=['январь','февраль','март','апрель','май','июнь','июль','август','сентябрь','октябрь','ноябрь','декабрь'];
 const MON3=['янв','фев','мар','апр','май','июн','июл','авг','сен','окт','ноя','дек'];
@@ -1010,7 +1049,7 @@ function lvPlan(l,D){const btc=+D.prices.BTC||0,k1=lvKey1(l,btc),alt=altNow();
     for(const k of ['BTC','ETH','ALT'])if(sh[k]>0)parts.push({k,sym:k==='ALT'?alt:k,usd:+(amt*sh[k]/100).toFixed(2),done:false});}
   for(const p of parts){if(p.done||!(p.usd>0)){p.st='done';continue;}p.k2=key2(p.sym,D);p.st=!k1?'pending':(p.k2.ok?'go':'hold');}
   return {amt,parts,k1,noAlt:!parts.some(p=>p.k==='ALT'&&p.usd>0)};}
-function lvState(l,btc,D){if(l.status==='done')return 'done';
+function lvState(l,btc,D){if(l.status==='done')return 'done';if(l.status==='skipped')return 'skip';
   if(lvKey1(l,btc)){if(!D)return 'go';const pl=lvPlan(l,D);if(pl.parts.length&&pl.parts.every(x=>x.st==='done'))return 'done';return pl.parts.some(x=>x.st==='go')?'go':'hold';}
   if(btc&&btc<=lvPrice(l)*1.03)return 'near';return 'wait';}
 function partTxt(p){const s=esc(p.sym||'альткоин');
@@ -1149,7 +1188,7 @@ function renderHome(D){
   const btc=+D.prices.BTC||null,ath=S.cycle&&S.cycle.ath,r=rate();
   balTo(D.syms.length?D.total:(S.ready?0:null));
   const gain=D.total-D.inv;
-  $('hSub').innerHTML=D.inv>0&&D.total>0?`<span class="${gain>=0?'pos':'neg'}">${money(gain,{sign:true,d:0})} · ${pct(gain/D.inv*100)}</span> прибыль сейчас`:(S.ready?'Добавь монеты через «+»':'загружаю');
+  $('hSub').innerHTML=D.inv>0&&D.total>0?`<span class="${gain>=0?'pos':'neg'}">${money(gain,{sign:true,d:0})} · ${pct(gain/D.inv*100)}</span> прибыль сейчас`:(S.ready?(D.syms.length?'Укажи цену покупки':'Добавь монеты через «+»'):'загружаю');
   const ch=[];let d24=0,has24=false;for(const s of D.syms){const c=S.live.change[s],p=+D.prices[s];if(c!=null&&p){has24=true;const v=D.h[s].qty*p;d24+=v-v/(1+c/100);}}
   if(has24&&D.total)ch.push(`<span class="chip ${d24>=0?'pos':'neg'}">24ч ${money(d24,{sign:true,d:0})} · ${pct(d24/(D.total-d24)*100)}</span>`);
   if(r&&D.total)ch.push(`<span class="chip">≈ ${P.hide?'••••':(P.cur==='UAH'?usd(D.total,0):uah(D.total*r))}</span>`);
@@ -1157,7 +1196,7 @@ function renderHome(D){
   if(!D.valued)ch.push('<span class="chip warn">не у всех монет есть цена</span>');
   $('hChips').innerHTML=ch.join('');
   const levels=(S.cycle&&S.cycle.levels)||[];
-  const act=levels.filter(l=>l.status!=='done'&&lvKey1(l,btc)).map(l=>({l,pl:lvPlan(l,D)})).filter(o=>!o.pl.parts.every(p=>p.st==='done'));
+  const act=levels.filter(l=>l.status!=='done'&&l.status!=='skipped'&&lvKey1(l,btc)).map(l=>({l,pl:lvPlan(l,D)})).filter(o=>!o.pl.parts.every(p=>p.st==='done'));
   const go=act.find(o=>o.pl.parts.some(p=>p.st==='go'));
   if(go){const goP=go.pl.parts.filter(p=>p.st==='go'),sum=goP.reduce((a,p)=>a+p.usd,0),rest=go.pl.parts.filter(p=>p.st==='hold');
     $('signal').innerHTML=`<div class="signal"><span class="chip neg" style="align-self:flex-start">Сигнал · уровень ${go.l.n} · −${go.l.drop}%</span><div class="t">Можно докупить: ${usd(sum)}</div><div class="chips">${goP.map(p=>`<span class="chip pos">${esc(p.sym)} ${usd(p.usd)}</span>`).join('')}${rest.map(p=>`<span class="chip">${partTxt(p)}</span>`).join('')}</div><button type="button" class="btn sm" data-dip="${go.l.n}" style="align-self:flex-start">Записать докупку</button></div>`;}
@@ -1168,9 +1207,10 @@ function renderHome(D){
   countTo($('tRes'),S.ready?D.reserve:null,v=>money(v));
   const capP=+S.settings.capPct||20,cap=D.total*capP/100;$('tResS').textContent=D.total?'потолок '+money(cap,{d:0})+(D.reserve>cap?' · выше!':''):'';$('tResM').style.width=(cap?Math.min(100,D.reserve/cap*100):0)+'%';
   countTo($('tBtc'),btc,v=>money(v,{d:0,show:true}));$('tBtcS').textContent=btc&&ath?pct((btc/ath-1)*100)+' от максимума':'';
-  const inc=+S.settings.incomeMonthlyUah||0;
+  const bud=budgetUsd(),ds=depShare();
   if(D.hasDep){$('tDcaK').textContent='Бюджет DCA';countTo($('tDca'),D.dcaBudget,v=>usd(v));$('tDcaS').textContent=D.dcaBudget>0.5?'осталось купить':'всё куплено ✓';}
-  else{$('tDcaK').textContent='DCA в месяц';countTo($('tDca'),inc&&r?inc*.15/r:(S.ready?0:null),v=>usd(v,0));$('tDcaS').textContent=inc?'и столько же в резерв':'';}
+  else{$('tDcaK').textContent='DCA в месяц';countTo($('tDca'),bud?bud*ds:(S.ready?0:null),v=>usd(v,0));$('tDcaS').textContent=bud&&ds<1?'и '+usd(bud*(1-ds),0)+' в резерв':'';}
+  {const t=$('tRes').closest('.tile');if(t)t.hidden=!ladderOn()&&!D.reserve;}
   renderMovers(D);renderAlloc(D);renderAlerts();renderTeaser();renderLiveBanner();
   msSync({D,pct:has24&&D.total?d24/(D.total-d24)*100:null,go:!!go});}
 function renderMovers(D){const arr=D.syms.map(s=>({s,c:S.live.change[s],v:(+D.prices[s]||0)*D.h[s].qty})).filter(o=>o.c!=null&&o.v>=10).sort((a,b)=>b.c-a.c);
@@ -1187,9 +1227,9 @@ function renderAlloc(D){const sp=split();$('tgt').textContent=sp.BTC+' / '+sp.ET
 let sigSeen='';try{sigSeen=localStorage.getItem('sigSeen')||'';}catch(e){}
 function renderAlerts(){const all=S.alerts,A=all.slice(0,12),tone={level:'var(--neg)',near:'var(--warn)',ath:'var(--pos)',cap:'var(--pos)',payday:'var(--info)',buy:'var(--neg)',stale:'var(--warn)',rules:'var(--info)',news:'var(--warn)'};
   const fresh=all.filter(a=>String(a.ts||'')>sigSeen).length,last=all[0];
-  $('sigBtn').innerHTML=`${icoBadge('bell',fresh?'var(--pink)':'')}<span class="col"><span class="nm">Сигналы${fresh?`<span class="cnt">${Math.min(fresh,99)}</span>`:''}</span><span class="sub">${last?esc(dShort(last.ts)+', '+tHM(last.ts)+' · '+last.text):'проверка 8:41 и 20:41 по Киеву'}</span></span><span class="chev">›</span>`;
+  $('sigBtn').innerHTML=`${icoBadge('bell',fresh?'var(--pink)':'')}<span class="col"><span class="nm">Сигналы${fresh?`<span class="cnt">${Math.min(fresh,99)}</span>`:''}</span><span class="sub">${last?esc(dShort(last.ts)+', '+tHM(last.ts)+' · '+last.text):(ownerFeeds()?'проверка 8:41 и 20:41 по Киеву':'здесь появятся сигналы и напоминания')}</span></span><span class="chev">›</span>`;
   $('alerts').innerHTML=A.length?'<div class="list">'+A.map(a=>`<div class="row r2 static">${icoBadge(a.kind,tone[a.kind])}<span class="col"><span class="nm wrap">${esc(a.text)}</span><span class="sub">${dShort(a.ts)}, ${tHM(a.ts)}</span></span></div>`).join('')+'</div>':'<div class="empty">Сигналов пока нет. Когда биткоин подойдёт к уровню, сигнал появится здесь и придёт push.</div>';}
-function openSignals(){openSheet('sigSheet');const b=$('sigSheet').querySelector('.sh-body');if(b)b.scrollTop=0;const last=S.alerts[0];if(last&&last.ts){sigSeen=String(last.ts);try{localStorage.setItem('sigSeen',sigSeen);}catch(e){}renderAlerts();if(MSC.last)msSync(MSC.last);}}
+function openSignals(){$('sigHint').textContent=ownerFeeds()?'Проверка рынка 2 раза в день — в 8:41 и 20:41 по Киеву. Важное дублируется push-уведомлением.':'Сигналы о просадках биткоина и напоминания о покупках.';openSheet('sigSheet');const b=$('sigSheet').querySelector('.sh-body');if(b)b.scrollTop=0;const last=S.alerts[0];if(last&&last.ts){sigSeen=String(last.ts);try{localStorage.setItem('sigSeen',sigSeen);}catch(e){}renderAlerts();if(MSC.last)msSync(MSC.last);}}
 $('sigBtn').addEventListener('click',openSignals);
 function renderTeaser(){const d=new Date(),S0=new Date(d.getFullYear(),d.getMonth(),1).toISOString(),inM=S.tx.filter(t=>String(t.ts)>=S0);
   const bought=inM.filter(t=>['buy','dca','dip'].includes(t.type)).reduce((a,t)=>a+(+t.usd||0),0),dep=inM.filter(t=>t.type==='deposit').reduce((a,t)=>a+(+t.usd||0),0);
@@ -1225,6 +1265,9 @@ $('dustNote').addEventListener('click',e=>{if(e.target.id==='showDust'||e.target
 
 /* ===== стратегия ===== */
 function renderStrategy(D){
+  const lOn=ladderOn();$('gauge').closest('.card').hidden=!lOn;$('levels').hidden=!lOn;$('ladOff').hidden=lOn;
+  $('planCard').hidden=!S.altplan;
+  {const lbl=$('stMenu').parentElement.querySelector('.label');if(lbl)lbl.textContent=(S.screen||S.altplan)?'Подбор и рынок':'Резерв и DCA';}
   const btc=+D.prices.BTC||null,ath=S.cycle&&S.cycle.ath,levels=(S.cycle&&S.cycle.levels)||[];
   $('athLbl').textContent=ath?'максимум '+usd(ath,0)+(S.cycle.athDate?' · '+new Date(S.cycle.athDate).toLocaleDateString('ru-RU',{day:'numeric',month:'short',year:'numeric'}):''):'';
   const maxD=85,pos=d=>Math.min(100,d/maxD*100),dd=btc&&ath?Math.max(0,(1-btc/ath)*100):0;
@@ -1233,12 +1276,12 @@ function renderStrategy(D){
   if(btc&&ath)g+=`<div class="cur" style="left:${pos(dd)}%"><span>−${nf(dd,1)}%</span></div>`;
   $('gauge').innerHTML=g;
   const next=levels.find(l=>['wait','near'].includes(lvState(l,btc,D)));
-  $('nextLbl').innerHTML=(next&&btc?`До уровня ${next.n} (${usd(lvPrice(next),0)}) ещё <b>${nf((1-lvPrice(next)/btc)*100,1)}%</b> вниз. Из резерва на нём: <b>${usd(lvPlan(next,D).amt)}</b>. `:'')+(levels.length?'Новый максимум BTC — уровни пересчитаются сами.':'Лестница загрузится вместе с данными.');
-  const chip={done:'<span class="chip pos">выполнен</span>',go:'<span class="chip neg">пора</span>',hold:'<span class="chip warn">ждём ключ 2</span>',near:'<span class="chip warn">близко</span>',wait:'<span class="chip">ждём</span>'};
+  $('nextLbl').innerHTML=(next&&btc?`До уровня ${next.n} (${usd(lvPrice(next),0)}) ещё <b>${nf((1-lvPrice(next)/btc)*100,1)}%</b> вниз. Из резерва на нём: <b>${usd(lvPlan(next,D).amt)}</b>. `:'')+(levels.length?'Новый максимум BTC — уровни пересчитаются сами.':(S.ready?'Лестница появится, когда загрузится максимум биткоина.':'Лестница загрузится вместе с данными.'));
+  const chip={skip:'<span class="chip">пропущен</span>',done:'<span class="chip pos">выполнен</span>',go:'<span class="chip neg">пора</span>',hold:'<span class="chip warn">ждём ключ 2</span>',near:'<span class="chip warn">близко</span>',wait:'<span class="chip">ждём</span>'};
   $('levels').innerHTML=levels.map(l=>{const st=lvState(l,btc,D),pl=lvPlan(l,D),
-    info=st==='done'?`потрачено ${usd(l.spent!=null?+l.spent:pl.parts.reduce((a,p)=>a+(+p.spent||0),0))}${l.doneAt?' · '+dShort(l.doneAt):''}`:pl.k1?pl.parts.map(partTxt).join(' · '):`${l.pct>=100?'весь остаток':l.pct+'% остатка'} ≈ ${usd(pl.amt)}${pl.noAlt?' · только BTC и ETH':''}`;
+    info=st==='skip'?'биткоин уже был ниже, когда ты начал — ждём следующие уровни':st==='done'?`потрачено ${usd(l.spent!=null?+l.spent:pl.parts.reduce((a,p)=>a+(+p.spent||0),0))}${l.doneAt?' · '+dShort(l.doneAt):''}`:pl.k1?pl.parts.map(partTxt).join(' · '):`${l.pct>=100?'весь остаток':l.pct+'% остатка'} ≈ ${usd(pl.amt)}${pl.noAlt?' · только BTC и ETH':''}`;
     return `<div class="lv ${st}"><div class="n">${l.n}</div><div class="t">−${l.drop}% · ${usd(lvPrice(l),0)}</div><div class="rr">${chip[st]}${st==='go'?`<button type="button" class="btn sm" data-dip="${l.n}">Записать</button>`:''}</div><div class="d">${info}</div></div>`;}).join('')||'<div class="empty" style="border:0">Лестница загрузится вместе с данными.</div>';
-  const capP=+S.settings.capPct||20,cap=D.total*capP/100,inc=+S.settings.incomeMonthlyUah||0,r=rate(),flow=inc&&r?inc*.3*(1-depShare())/r:0;
+  const capP=+S.settings.capPct||20,cap=D.total*capP/100,flow=budgetUsd()*(1-depShare());
   const sp=split();
   $('rules').innerHTML=`<div><span>Распределение</span><span>BTC ${sp.BTC}% · ETH ${sp.ETH}% · альты ${sp.ALT}%</span></div><div><span>Потолок резерва</span><span>${capP}% от монет${cap?' = '+money(cap,{d:0}):''}</span></div><div><span>Депозит</span><span>${Math.round(depShare()*100)}% в DCA · ${Math.round((1-depShare())*100)}% в резерв</span></div><div><span>Альткоин месяца</span><span>${esc(altNow()||'не выбран')}${planAlt(ymKey(new Date()))?' · по плану':''}</span></div><div><span>Ключ&nbsp;2</span><span>цена на ${k2Cfg().pct}% ниже средней покупки за ${k2Cfg().days} дней</span></div><div><span>Альты в докупке</span><span>ступени 1–${ALT_MAX_LV}, пока альтов меньше ${altCapPct()}% (сейчас ${nf(altShare(D)*100,0)}%)</span></div><div><span>Новый максимум BTC</span><span>лестница пересчитается сама</span></div><div><span>Проверка рынка</span><span>8:41 и 20:41 по Киеву</span></div><div><span>Подбор альткоинов</span><span>1-го числа, 10:13</span></div>`;
   renderPlan(D);renderPick(D);}
@@ -1275,15 +1318,16 @@ function openSt(k){stKind=k;openSheet('stSheet');renderPick(derive());const b=$(
 $('stMenu').addEventListener('click',e=>{const b=e.target.closest('[data-st]');if(b)openSt(b.dataset.st);});
 function resInfo(D){const E=earnCfg(),er=earnRate(E),due=earnDue(E);
   const earnHtml=E?`<div class="tile earn" style="margin-top:10px"><div class="k">Резерв в стейкинге · ${esc(E.place||'')}</div><div class="v" style="font-size:20px">~${nf(er*100,1)}% <span class="small mute" style="font-weight:600">годовых · +${money(D.reserve*er/365,{d:3})}/день</span></div><div class="s">заработано ${money(D.earned,{sign:true})}${E.fact?' · по факту ~'+nf(E.fact,1)+'%':''} · сверено ${dShort(E.at)}</div>${due?'<p class="hint" style="color:var(--warn);margin-top:6px">Прошёл месяц — пора сверить с биржей</p>':''}<button type="button" class="btn sm ${due?'':'ghost'}" data-act="earn" style="margin-top:10px;width:100%">Сверить с биржей</button></div>`:`<button type="button" class="btn sm ghost" data-act="earn" style="margin-top:10px;width:100%">Резерв лежит в стейкинге? Настроить учёт</button>`;
-  const capP=+S.settings.capPct||20,cap=D.total*capP/100,inc=+S.settings.incomeMonthlyUah||0,r=rate(),flow=inc&&r?inc*.3*(1-depShare())/r:0;
-  const dk=D.hasDep?'Бюджет DCA':'DCA в месяц',dv=D.hasDep?usd(D.dcaBudget):(inc&&r?usd(inc*.3*depShare()/r,0):'—'),ds=D.hasDep?(D.dcaBudget>0.5?'осталось купить':'всё куплено ✓'):(inc?'оценка по доходу':'');
+  const capP=+S.settings.capPct||20,cap=D.total*capP/100,bud=budgetUsd(),flow=bud*(1-depShare());
+  const dk=D.hasDep?'Бюджет DCA':'DCA в месяц',dv=D.hasDep?usd(D.dcaBudget):(bud?usd(bud*depShare(),0):'—'),ds=D.hasDep?(D.dcaBudget>0.5?'осталось купить':'всё куплено ✓'):(bud?(S.settings.budget?'по твоему бюджету':'оценка по доходу'):'');
   return {dk,dv,html:`<div class="grid2"><div class="tile"><div class="k">Резерв USDT</div><div class="v">${money(D.reserve)}</div><div class="s">${cap?'потолок '+money(cap,{d:0}):''}${flow?' · +'+usd(flow,0)+'/мес':''}</div><div class="meter"><i style="width:${cap?Math.min(100,D.reserve/cap*100):0}%"></i></div><button type="button" class="btn sm" data-act="reserve" style="margin-top:12px;width:100%">Пополнить</button></div><div class="tile"><div class="k">${dk}</div><div class="v">${dv}</div><div class="s">${ds}</div><button type="button" class="btn sm ghost" data-act="buy" style="margin-top:12px;width:100%">Купить</button></div></div>${earnHtml}<p class="hint">Резерв USDT — деньги для докупок по лестнице. Выше потолка (${capP}% от стоимости монет) резерв не копим: излишек идёт в DCA.</p>`};}
 function renderPick(D){const sc=S.screen,ap=S.altplan||{},yr=ap.draftYear||'',run=screenRunning(),req=S.screenreq||{};
   const dr=ap.draft||{},dk=Object.keys(dr).sort(),uniq=[...new Set(dk.map(k=>dr[k].sym))],RS=resInfo(D);
   const row=(k,ico,col,nm,sub)=>`<button type="button" class="row r3" data-st="${k}" aria-haspopup="dialog">${icoBadge(ico,col)}<span class="col"><span class="nm">${nm}</span><span class="sub">${sub}</span></span><span class="chev">›</span></button>`;
   const pk=sc&&sc.picks&&sc.picks.length?sc.picks.map(p=>p.sym):(ap.picks||[]);
   $('stLbl').textContent=sc?(run?'анализ идёт…':'обновлено '+dShort(sc.updatedAt)):'';
-  $('stMenu').innerHTML=row('cal','cal','var(--pink)','Календарь'+(yr?' '+esc(String(yr)):''),dk.length?(ap.approved?'утверждён':'черновик')+' · '+uniq.map(esc).join(' · '):'черновик появится после анализа')
+  if(!S.screen&&!S.altplan){$('stMenu').innerHTML=row('res','reserve','var(--lav)','Резерв и DCA','резерв '+money(D.reserve)+' · '+RS.dk+' '+RS.dv);}
+  else $('stMenu').innerHTML=row('cal','cal','var(--pink)','Календарь'+(yr?' '+esc(String(yr)):''),dk.length?(ap.approved?'утверждён':'черновик')+' · '+uniq.map(esc).join(' · '):'черновик появится после анализа')
     +row('picks','star','var(--warn)','Твои монеты',pk.length?pk.map(esc).join(' · '):'пока не выбраны')
     +row('cands','cand','var(--pos)','Кандидаты',sc?(run?'анализ идёт — обычно 5–10 минут':`прошли фильтр ${(sc.cands||[]).length} · не прошли ${(sc.out||[]).length}`):'появятся после первого анализа')
     +row('news','news','var(--info)','Новости и рынок',sc?`${(sc.macro||[]).length} фактов · ${(sc.headlines||[]).length} заголовков${sc.global?' · доля BTC '+nf(+sc.global.btcDom||0,1)+'%':''}`:'появятся после первого анализа')
@@ -1568,7 +1612,7 @@ const SUG_IN=['oSym','nsSym','bAlt','dAlt','eSym','stAlt'];
 const sug=document.createElement('div');sug.className='sug';sug.hidden=true;sug.setAttribute('role','listbox');sug.setAttribute('aria-label','Монеты CoinGecko');
 let sugEl=null;
 function sugBadge(o){if(LOGO[o.su]&&LOGO_ID[o.su]===o.id)return logoImg(o.su,LOGO[o.su],'');const u=dirImg(o);return u?logoImg(o.su,u,'',true):badgeTxt(o.su,'');}
-function sugShow(el){sugEl=el;const row=el.closest('.f2')||el.closest('.field');if(row&&sug.previousElementSibling!==row)row.after(sug);sugRefresh();}
+function sugShow(el){sugEl=el;const row=el.closest('.f2')||el.closest('.ob-coin')||el.closest('.field');if(row&&sug.previousElementSibling!==row)row.after(sug);sugRefresh();}
 function sugHide(){sug.hidden=true;sugEl=null;}
 function sugRefresh(){if(!sugEl)return;const q=(sugEl.value||'').trim(),was=sug.hidden;if(!q){sug.hidden=true;return;}
   if(!DIR.rows.length){sug.innerHTML='<div class="sug-note">'+(DIR.p?'Загружаю список монет…':'Список монет не загрузился — нет связи. Тикер можно вписать вручную.')+'</div>';sug.hidden=false;return;}
@@ -1576,11 +1620,12 @@ function sugRefresh(){if(!sugEl)return;const q=(sugEl.value||'').trim(),was=sug.
   if(!list.length){sug.innerHTML='<div class="sug-note">'+(DIR.full?'В CoinGecko такой монеты нет. Можно записать как есть — стоимость будет по твоим сделкам.':'Ищу среди всех монет…')+'</div>';sug.hidden=false;return;}
   sug.innerHTML=list.map(o=>`<button type="button" class="sug-it" role="option" data-id="${esc(o.id)}">${sugBadge(o)}<span class="sug-nm"><b>${esc(o.sym)}</b><small>${esc(o.name)}</small></span><span class="sug-rk">${o.rank?'#'+nf(o.rank,0):''}</span></button>`).join('');
   sug.hidden=false;if(was&&sug.scrollIntoView)requestAnimationFrame(()=>{try{sug.scrollIntoView({block:'nearest',behavior:reduced?'auto':'smooth'});}catch(e){}});}
-for(const k of SUG_IN){const el=$(k);if(!el)continue;el.removeAttribute('list');el.setAttribute('autocapitalize','characters');el.setAttribute('spellcheck','false');
+function sugAttach(el){if(!el||el.dataset.sug)return;el.dataset.sug='1';el.removeAttribute('list');el.setAttribute('autocapitalize','characters');el.setAttribute('spellcheck','false');
   el.addEventListener('focus',()=>{dirLoad().catch(()=>{});if(el.value.trim())sugShow(el);});
   el.addEventListener('input',()=>{const v=el.value.trim().toUpperCase();if(el.dataset.pickSym&&el.dataset.pickSym===v)return;delete el.dataset.pickId;delete el.dataset.pickSym;sugShow(el);});
   el.addEventListener('blur',()=>setTimeout(()=>{if(sugEl===el&&document.activeElement!==el)sugHide();},200));
   el.addEventListener('keydown',e=>{if(e.key==='Escape')sugHide();});}
+for(const k of SUG_IN)sugAttach($(k));
 sug.addEventListener('pointerdown',e=>{if(e.target.closest('.sug-it'))e.preventDefault();});   /* не закрываем клавиатуру касанием подсказки */
 sug.addEventListener('click',e=>{const b=e.target.closest('.sug-it');if(!b||!sugEl)return;const o=DIR.byId.get(b.dataset.id);if(!o)return;const el=sugEl;
   el.value=o.sym;el.dataset.pickId=o.id;el.dataset.pickSym=o.su;pricePeek(o);el.dispatchEvent(new Event('input'));sugHide();play('tick');buzz(8);});
@@ -1612,7 +1657,7 @@ function initBuy(opt){const D=derive(),sp=split();symOptions();
 const oHint=()=>hintFor(($('oSym').value||'').trim().toUpperCase(),+$('oUsd').value||0,+$('oQty').value||0,$('oHint'),$('oQty'));
 ['oSym','oUsd','oQty'].forEach(id=>$(id).addEventListener('input',oHint));
 let dipPlan=null;
-function initDip(opt){const D=derive(),btc=+D.prices.BTC||0,lv=((S.cycle&&S.cycle.levels)||[]).filter(l=>lvState(l,btc,D)!=='done'),tag={go:' · можно',hold:' · ждём ключ 2'};
+function initDip(opt){const D=derive(),btc=+D.prices.BTC||0,lv=((S.cycle&&S.cycle.levels)||[]).filter(l=>!['done','skip'].includes(lvState(l,btc,D))),tag={go:' · можно',hold:' · ждём ключ 2'};
   $('dLevel').innerHTML=lv.length?lv.map(l=>`<option value="${l.n}">Уровень ${l.n} · −${l.drop}% · ${l.pct>=100?'весь остаток':l.pct+'% остатка'}${tag[lvState(l,btc,D)]||''}</option>`).join(''):'<option value="">Нет активных уровней</option>';
   const pick=opt.level||(lv.find(l=>lvState(l,btc,D)==='go')||lv[0]||{}).n;if(pick)$('dLevel').value=String(pick);
   $('dAlt').value=altNow();dipAmount();}
@@ -1733,7 +1778,7 @@ $('eDel').addEventListener('click',delTx);
 const swSet=(id,on)=>$(id).setAttribute('aria-checked',String(!!on));
 function fillSettings(){[...$('themeSeg').children].forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.th===(P.theme||'system'))));[...$('curSeg').children].forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.c===P.cur)));
   swSet('swHide',P.hide);swSet('swDust',P.dust);swSet('swSound',P.sound);swSet('swHaptic',P.haptic);swSet('swMascot',P.mascot!==false);swSet('swMsSound',P.msVoice!==false);
-  const sp=split();$('stB').value=sp.BTC;$('stE').value=sp.ETH;$('stA').value=sp.ALT;$('stCap').value=S.settings.capPct||20;$('stDep').value=Math.round(depShare()*100);$('stAlt').value=S.settings.altOfMonth||'';$('stInc').value=S.settings.incomeMonthlyUah||'';$('stK2').value=k2Cfg().pct;$('stAltCap').value=altCapPct();$('setErr').textContent='';
+  const sp=split();$('stB').value=sp.BTC;$('stE').value=sp.ETH;$('stA').value=sp.ALT;$('stCap').value=S.settings.capPct||20;$('stDep').value=Math.round(depShare()*100);$('stAlt').value=S.settings.altOfMonth||'';{const b=S.settings.budget;$('stIncL').textContent=b?'В крипту в месяц, '+(b.cur==='USD'?'$':'грн'):'Доход в месяц, грн';$('stInc').value=b?(b.amount||''):(S.settings.incomeMonthlyUah||'');}swSet('swLadder',ladderOn());$('stK2').value=k2Cfg().pct;$('stAltCap').value=altCapPct();$('setErr').textContent='';
   const U=window.mlUser;$('accInfo').innerHTML=U?`<div><span>Почта</span><span>${esc(U.email||'—')}</span></div><div><span>Вход</span><span>${U.provider==='google'?'через Google':'почта и пароль'}</span></div>`:'<div><span>Аккаунт</span><span>—</span></div>';$('delBtn').hidden=!(window.ML_CONFIG&&ML_CONFIG.accountDelete);
   const L=S.live;$('dataInfo').innerHTML=`<div><span>Курс доллара</span><span>${rate()?nf(rate(),2)+' грн за $':'—'}</span></div>${S.settings.usdUahSrc?`<div><span>Откуда курс</span><span>${esc(S.settings.usdUahSrc)}${S.settings.usdUahAt?' · '+dShort(S.settings.usdUahAt)+', '+tHM(S.settings.usdUahAt):''}</span></div>`:''}${S.settings.usdUahNbu?`<div><span>Курс НБУ</span><span>${nf(+S.settings.usdUahNbu,2)} грн</span></div>`:''}<div><span>Живые цены</span><span>${L.status==='ok'?'CoinGecko · '+tHM(L.at):L.status==='stale'?'с задержкой':LIVE_MSG[L.code]||'нет'}</span></div><div><span>Монеты и логотипы</span><span>CoinGecko${DIR.n?' · '+nf(DIR.n,0)+' в поиске':''}</span></div><div><span>Последняя проверка</span><span>${S.market&&S.market.updatedAt?dShort(S.market.updatedAt)+', '+tHM(S.market.updatedAt):'—'}</span></div><div><span>Проверка рынка</span><span>8:41 и 20:41</span></div><div><span>Записей</span><span>${S.tx.length}</span></div>`;}
 function openSettings(toStrat){fillSettings();openSheet('setSheet');const b=$('setSheet').querySelector('.sh-body');if(b)b.scrollTop=0;if(toStrat)setTimeout(()=>{const el=$('stratLbl');if(el&&el.scrollIntoView)el.scrollIntoView({behavior:reduced?'auto':'smooth',block:'start'});},380);}
@@ -1750,7 +1795,81 @@ async function saveStrategy(){const B=+$('stB').value,E=+$('stE').value,A=+$('st
   if(!(k2>=0&&k2<=50)){$('setErr').textContent='Ключ 2 — от 0 до 50%.';return;}
   if(!(ac>=0&&ac<=100)){$('setErr').textContent='Потолок альтов — от 0 до 100%.';return;}
   if(!db){$('setErr').textContent='Нет подключения к данным.';return;}
-  try{await db.doc('app/settings').update({split:{BTC:B,ETH:E,ALT:A},capPct:cap,depositSplit:{dca:dep},altOfMonth:alt,incomeMonthlyUah:inc||null,key2Pct:k2,altCapPct:ac});rememberCoins(['stAlt']);play('cash');toast('Правила сохранены');$('setErr').textContent='';}catch(e){$('setErr').textContent=failMsg(e,'Не сохранилось');}}
+  try{await db.doc('app/settings').update({split:{BTC:B,ETH:E,ALT:A},capPct:cap,depositSplit:{dca:dep},altOfMonth:alt,...(S.settings.budget?{budget:{amount:inc||0,cur:S.settings.budget.cur||'UAH'}}:{incomeMonthlyUah:inc||null}),key2Pct:k2,altCapPct:ac,ladder:$('swLadder').getAttribute('aria-checked')==='true'});if($('swLadder').getAttribute('aria-checked')==='true'&&!(S.cycle&&S.cycle.levels&&S.cycle.levels.length))cycleCreate();rememberCoins(['stAlt']);play('cash');toast('Правила сохранены');$('setErr').textContent='';}catch(e){$('setErr').textContent=failMsg(e,'Не сохранилось');}}
+/* ===== знакомство: 4 шага для нового пользователя ===== */
+/* шаблоны стратегий: «Простой», «Как у автора», «Свой» (начинается как у автора, дальше — в настройках) */
+const TPL={simple:{split:{BTC:70,ETH:30,ALT:0},capPct:20,depositSplit:{dca:100},ladder:false,key2Pct:5,key2Days:60,altCapPct:0},
+  author:{split:{BTC:50,ETH:30,ALT:20},capPct:20,depositSplit:{dca:50},ladder:true,key2Pct:5,key2Days:60,altCapPct:20,altOfMonth:'SOL'}};
+TPL.own=TPL.author;
+const OB={step:0,cur:'USD',tpl:'author',amt:'',amtCur:'UAH',day:'',coins:[{sym:'',qty:''}],busy:false};
+const obNeed=()=>S.ready&&!!window.mlUser&&!S.settings.onboardedAt&&!S.settings.split&&!S.tx.length;
+let obShown=false;
+function obCheck(){if(obShown||!obNeed())return;obShown=true;OB.cur=P.cur||'USD';$('ob').hidden=false;obDraw();}
+function obMoney(v){return OB.amtCur==='USD'?usd(v,0):uah(v);}
+function obDraw(){const st=OB.step,N=4,dots='<div class="ob-dots" aria-hidden="true">'+[0,1,2,3].map(i=>`<i class="${i<=st?'on':''}"></i>`).join('')+'</div>';
+  const top=`<div class="ob-top">${dots}<button type="button" class="ob-skip" id="obSkip">${st<3?'Пропустить':''}</button></div>`;
+  const nav=(next,back)=>`<p class="err" id="obErr" role="alert"></p><div class="ob-nav">${back?'<button type="button" class="btn ghost" id="obBack">Назад</button>':''}<button type="button" class="btn" id="obNext">${next}</button></div>`;
+  let h='';
+  if(st===0)h=`${top}<h2 id="obTitle">Добро пожаловать в Money Life</h2><p class="ob-lead">Здесь удобно копить в крипте по своему плану: записывать покупки, держать распределение и докупать, когда рынок падает.</p>
+    <div class="field"><span>Как показывать суммы?</span><div class="seg" id="obCur"><button type="button" data-c="USD" aria-pressed="${OB.cur==='USD'}">$ доллары</button><button type="button" data-c="UAH" aria-pressed="${OB.cur==='UAH'}">₴ гривны</button></div></div>
+    <p class="ob-note">Money Life — дневник и калькулятор, а не инвестиционный совет. Решения принимаешь ты.</p>${nav('Начать',false)}`;
+  else if(st===1){const o=(k,name,sp,txt,rec)=>`<button type="button" class="ob-opt" data-tpl="${k}" aria-pressed="${OB.tpl===k}"><span class="oh"><b>${name}</b>${rec?'<span class="chip acc">советую</span>':''}</span>${sp?`<span class="sp">${sp}</span>`:''}<small>${txt}</small></button>`;
+    h=`${top}<h2 id="obTitle">Выбери стратегию</h2><p class="ob-lead">Это правила, по которым приложение подсказывает, что и когда покупать. Всё можно поменять потом в «Настройках».</p>
+    <div class="ob-opts">${o('simple','Простой','BTC 70% · ETH 30%','Каждый месяц покупаешь на одну и ту же сумму. Без резерва и докупок на просадках.')}
+    ${o('author','Как у автора','BTC 50% · ETH 30% · альткоины 20%','Половина бюджета — покупки по плану, половина — резерв в USDT. Когда биткоин падает на 30–70% от максимума, резерв идёт на докупку по уровням.',true)}
+    ${o('own','Свой','','Начнёшь с правил «Как у автора» и настроишь всё сам: доли монет, резерв, лестницу.')}</div>${nav('Дальше',true)}`;}
+  else if(st===2){const a=+OB.amt||0,t=TPL[OB.tpl],ds=t.depositSplit.dca/100;
+    h=`${top}<h2 id="obTitle">Сколько в месяц?</h2><p class="ob-lead">Сумма, которую ты откладываешь на крипту каждый месяц. По ней приложение посчитает план покупок.</p>
+    <div class="f2"><label class="field"><span>Сумма в месяц</span><input type="number" id="obAmt" min="0" step="any" inputmode="decimal" value="${esc(OB.amt)}" placeholder="${OB.amtCur==='USD'?'100':'4000'}"></label>
+    <div class="field"><span>Валюта</span><div class="seg" id="obAmtCur"><button type="button" data-c="UAH" aria-pressed="${OB.amtCur==='UAH'}">₴</button><button type="button" data-c="USD" aria-pressed="${OB.amtCur==='USD'}">$</button></div></div></div>
+    <label class="field"><span>В какой день обычно пополняешь биржу?</span><select id="obDay"><option value="">Не важно</option>${Array.from({length:28},(_,i)=>`<option value="${i+1}"${+OB.day===i+1?' selected':''}>${i+1}-го числа</option>`).join('')}</select></label>
+    <div class="ob-calc" id="obCalc">${a?(ds<1?`Каждый месяц: <b>${obMoney(a*ds)}</b> на покупки по плану и <b>${obMoney(a*(1-ds))}</b> в резерв для докупок.`:`Каждый месяц: <b>${obMoney(a)}</b> на покупки — BTC ${t.split.BTC}% и ETH ${t.split.ETH}%.`):'Впиши сумму — покажу, как она разделится.'}</div>
+    <p class="ob-note">Можно пропустить и вписать позже в «Настройках».</p>${nav('Дальше',true)}`;}
+  else if(st===3){h=`${top}<h2 id="obTitle">Что у тебя уже есть?</h2><p class="ob-lead">Добавь монеты, которые уже купил, — портфель сразу покажет их стоимость. Если только начинаешь, пропусти.</p>
+    <div class="ob-coins" id="obCoins">${OB.coins.map((c,i)=>`<div class="ob-coin" data-i="${i}"><label class="field"><span>Монета</span><input type="text" class="ob-sym" maxlength="12" placeholder="BTC" autocomplete="off" value="${esc(c.sym)}"></label><label class="field"><span>Количество</span><input type="number" class="ob-qty" min="0" step="any" inputmode="decimal" value="${esc(c.qty)}"></label><button type="button" class="ib ob-del" aria-label="Убрать монету"${OB.coins.length<2?' hidden':''}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>`).join('')}</div>
+    <button type="button" class="btn ghost" id="obAdd">+ Ещё монета</button>
+    <p class="ob-note">Цену покупки можно добавить позже в «Активности». Без неё прибыль по этим монетам не считается.</p>${nav(OB.busy?'Сохраняю…':'Готово',true)}`;}
+  $('obCard').innerHTML=h;obWire();}
+function obSaveCoins(){document.querySelectorAll('#obCoins .ob-coin').forEach(r=>{const i=+r.dataset.i,c=OB.coins[i];if(!c)return;const si=r.querySelector('.ob-sym');c.sym=si.value.trim().toUpperCase();c.qty=r.querySelector('.ob-qty').value;c.pickId=si.dataset.pickSym===c.sym?si.dataset.pickId:'';});}
+function obWire(){const q=id=>$(id);
+  const sk=q('obSkip');if(sk)sk.onclick=()=>obFinish(true);
+  const bk=q('obBack');if(bk)bk.onclick=()=>{if(OB.step===3)obSaveCoins();OB.step--;play('tick');obDraw();};
+  const cur=q('obCur');if(cur)cur.onclick=e=>{const b=e.target.closest('[data-c]');if(!b)return;OB.cur=b.dataset.c;OB.amtCur=OB.cur==='USD'?'USD':'UAH';play('tick');obDraw();};
+  document.querySelectorAll('[data-tpl]').forEach(b=>b.onclick=()=>{OB.tpl=b.dataset.tpl;play('tick');obDraw();});
+  const amt=q('obAmt');if(amt)amt.oninput=()=>{OB.amt=amt.value;const t=TPL[OB.tpl],ds=t.depositSplit.dca/100,a=+OB.amt||0;q('obCalc').innerHTML=a?(ds<1?`Каждый месяц: <b>${obMoney(a*ds)}</b> на покупки по плану и <b>${obMoney(a*(1-ds))}</b> в резерв для докупок.`:`Каждый месяц: <b>${obMoney(a)}</b> на покупки — BTC ${t.split.BTC}% и ETH ${t.split.ETH}%.`):'Впиши сумму — покажу, как она разделится.';};
+  const ac=q('obAmtCur');if(ac)ac.onclick=e=>{const b=e.target.closest('[data-c]');if(!b)return;OB.amtCur=b.dataset.c;OB.amt=q('obAmt').value;play('tick');obDraw();};
+  const dy=q('obDay');if(dy)dy.onchange=()=>{OB.day=dy.value;};
+  document.querySelectorAll('#obCoins .ob-sym').forEach(el=>{sugAttach(el);dirLoad().catch(()=>{});});
+  document.querySelectorAll('#obCoins .ob-del').forEach(b=>b.onclick=()=>{obSaveCoins();OB.coins.splice(+b.closest('.ob-coin').dataset.i,1);obDraw();});
+  const add=q('obAdd');if(add)add.onclick=()=>{obSaveCoins();OB.coins.push({sym:'',qty:''});obDraw();const l=document.querySelectorAll('#obCoins .ob-sym');if(l.length)l[l.length-1].focus();};
+  const nx=q('obNext');if(nx)nx.onclick=()=>{q('obErr').textContent='';
+    if(OB.step===0){P.cur=OB.cur==='UAH'?'UAH':'USD';OB.amtCur=P.cur==='USD'?'USD':'UAH';savePrefs();}
+    if(OB.step===2){OB.amt=q('obAmt').value;if(OB.amt!==''&&!(+OB.amt>0)){q('obErr').textContent='Впиши сумму больше нуля или оставь поле пустым.';return;}}
+    if(OB.step===3){obSaveCoins();const bad=OB.coins.find(c=>c.sym&&!(+c.qty>0));if(bad){q('obErr').textContent='Впиши количество для '+bad.sym+'.';return;}obFinish(false);return;}
+    OB.step++;play('tick');obDraw();};}
+/* лестница: максимум BTC с CoinGecko (если не ответил — последний известный) и уровни по умолчанию */
+async function cycleCreate(){if(!db)return;let ath=126000,day='2025-10-06';
+  let px=+derive().prices.BTC||0;
+  try{const r=await fetch('https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=bitcoin');const j=await r.json();if(j&&j[0]&&+j[0].ath>0){ath=Math.round(+j[0].ath);day=String(j[0].ath_date||day).slice(0,10);px=+j[0].current_price||px;}}catch(e){}
+  const dd=px&&ath?(1-px/ath)*100:0;   /* уровни, которые биткоин уже прошёл до старта, помечаем «пропущен» */
+  await db.doc('app/cycle').set({ath,athDate:day,startedAt:new Date().toISOString().slice(0,10),levels:LV_DEF.map(([d,p],i)=>({n:i+1,drop:d,pct:p,status:d<=dd?'skipped':'pending'}))});}
+async function obFinish(skip){if(OB.busy||!db)return;OB.busy=true;const ts=new Date().toISOString();
+  try{const t=TPL[skip?'author':OB.tpl],set=Object.assign({},t,{template:skip?'author':OB.tpl,onboardedAt:ts});
+    if(!skip&&+OB.amt>0)set.budget={amount:+OB.amt,cur:OB.amtCur};
+    if(!skip&&OB.day)set.depositDay=+OB.day;
+    const ids={};const coins=skip?[]:OB.coins.filter(c=>c.sym&&+c.qty>0);
+    for(const c of coins){const o=c.pickId?DIR.byId.get(c.pickId):(CG[c.sym]?null:dirBest(c.sym));if(o){if(CG[c.sym]!==o.id)ids[c.sym]=o.id;metaPut(c.sym,o.name,dirImg(o));}}
+    if(Object.keys(ids).length)set.cgIds=Object.assign({},S.settings.cgIds||{},ids);
+    await db.doc('app/settings').set(Object.assign({},S.settings,set));
+    for(const c of coins)await db.collection('tx').add({ts,type:'start',symbol:c.sym,qty:+(+c.qty).toPrecision(8),usd:null,note:'добавлено при знакомстве'});
+    if(set.ladder)await cycleCreate();
+    $('ob').hidden=true;startLive(true);render();
+    if(!skip&&OB.tpl==='own'){openSheet('setSheet');fillSettings();setTimeout(()=>{const l=$('stratLbl');if(l)l.scrollIntoView({block:'start'});},350);toast('Настрой правила под себя');}
+    else toast(coins.length?'Готово! Портфель настроен':'Готово! Нажми «+», чтобы записать первую покупку');
+    play('coin');buzz([12,40,18]);}
+  catch(e){const er=$('obErr');if(er)er.textContent=failMsg(e,'Не сохранилось');}
+  finally{OB.busy=false;}}
+
 /* ===== аккаунт: выгрузка данных и удаление ===== */
 window.mlToast=m=>toast(m);
 function exportData(){try{const d=window.mlExport?window.mlExport():null;if(!d){toast('Нет подключения к данным');return;}
@@ -1765,6 +1884,7 @@ $('delGo').addEventListener('click',async()=>{const b=$('delGo');b.disabled=true
 /* ссылка для удаления с сайта (Google Play требует её): …/#delete — после входа сразу открываем подтверждение */
 if(location.hash==='#delete'){const t=setInterval(()=>{if(S.ready&&window.mlUser){clearInterval(t);history.replaceState(null,'',location.pathname);if(window.ML_CONFIG&&ML_CONFIG.accountDelete)openDel();}},400);}
 else if(location.hash==='#deleted')history.replaceState(null,'',location.pathname);
+$('swLadder').addEventListener('click',()=>{const b=$('swLadder');b.setAttribute('aria-checked',String(b.getAttribute('aria-checked')!=='true'));play('tick');});
 $('eyeBtn').addEventListener('click',()=>{P.hide=!P.hide;savePrefs();play('tick');buzz(8);render();toast(P.hide?'Суммы скрыты':'Суммы видны');});
 
 /* ===== живые цены ===== */
@@ -1816,11 +1936,11 @@ const MSC={loading:false,failed:false,last:null};
 function msApply(){const on=P.mascot!==false,h=document.querySelector('.hero');if(h&&h.classList)h.classList.toggle('has-ms',on);const m=$('mascot');if(m)m.hidden=!on;return on;}
 function msPayload(x){let fresh=0;try{fresh=S.alerts.filter(a=>String(a.ts||'')>sigSeen).length;}catch(e){}
   return Object.assign({S,P,money,fresh,offline:(typeof navigator!=='undefined'&&navigator.onLine===false)||S.live.status==='off'},x);}
-function msSync(x){MSC.last=x;if(!msApply())return;if(!S.ready||document.getElementById('mlAuth'))return;   /* Слиток просыпается только на главном экране, после входа */
+function msSync(x){MSC.last=x;if(!msApply())return;if(!S.ready||document.getElementById('mlAuth')||!$('ob').hidden)return;   /* Слиток просыпается только на главном экране, после входа */
   if(window.Mascot){try{window.Mascot.sync(msPayload(x));}catch(e){}}else msLoad();}
 function msLoad(){if(MSC.loading||MSC.failed)return;MSC.loading=true;
   const add=(src,ok)=>{try{const s=document.createElement('script');s.src=src;s.async=true;s.onload=ok;s.onerror=()=>{MSC.failed=true;};document.head.appendChild(s);}catch(e){MSC.failed=true;}};
-  const boot=()=>add('mascot.js?v=20261027165000',()=>{try{if(window.Mascot&&window.Mascot.init({host:$('mascot'),app:{audio:ac,buzz}})&&MSC.last)window.Mascot.sync(msPayload(MSC.last));}catch(e){}});
+  const boot=()=>add('mascot.js?v=20261027171500',()=>{try{if(window.Mascot&&window.Mascot.init({host:$('mascot'),app:{audio:ac,buzz}})&&MSC.last&&$('ob').hidden&&!document.getElementById('mlAuth'))window.Mascot.sync(msPayload(MSC.last));}catch(e){}});
   setTimeout(()=>{if(window.THREE)boot();else add('three.min.js',boot);},300);}
 function render(){const D=derive();renderHeader();renderHome(D);renderGrowth();renderCoins(D);renderStrategy(D);renderActivity();earnNudge();if(cvSym&&$('coinSheet').classList.contains('open'))renderCoinView();}
 document.body.classList.add('loading');
@@ -1836,7 +1956,7 @@ render();
   db.doc('app/screen').onSnapshot(s=>{S.screen=s.exists?s.data():null;renderStrategy(derive());},fail);
   db.doc('app/screenreq').onSnapshot(s=>{S.screenreq=s.exists?s.data():null;renderStrategy(derive());},fail);
   db.doc('app/market').onSnapshot(s=>{S.market=s.exists?s.data():null;render();},fail);
-  db.collection('tx').limit(1000).onSnapshot(q=>{S.tx=q.docs.map(d=>Object.assign({id:d.id},d.data()));S.ready=true;document.body.classList.remove('loading');render();startLive();dirAuto();},fail);
+  db.collection('tx').limit(1000).onSnapshot(q=>{S.tx=q.docs.map(d=>Object.assign({id:d.id},d.data()));S.ready=true;document.body.classList.remove('loading');obCheck();render();startLive();dirAuto();nbuLoad();},fail);
   db.collection('alerts').orderBy('ts','desc').limit(20).onSnapshot(q=>{S.alerts=q.docs.map(d=>d.data());renderAlerts();},fail);
   db.collection('history').limit(1000).onSnapshot(q=>{S.history=q.docs.map(d=>d.data());renderGrowth();},fail);
 })();
