@@ -1143,37 +1143,42 @@
       try { const t = h.c.currentTime; h.g.gain.cancelScheduledValues(t); h.g.gain.setValueAtTime(Math.max(0.0001, h.g.gain.value), t); h.g.gain.exponentialRampToValueAtTime(0.0001, t + 0.3); h.s.stop(t + 0.35); h.o.stop(t + 0.35); } catch (e) {}
     }
   }
-  /* голос: все фразы лежат одним файлом voice-slitok.js (кусочки MP3); раскрываем по одной, когда нужно */
+  /* голос: оглавление — маленький voice-slitok.js, сами MP3 — двоичный файл с хэшем в имени (кэшируется надолго);
+     старый формат (base64 внутри скрипта) тоже понимаем */
+  function rawFrom(v, url) {
+    if (v.b64) { const bin = atob(v.b64), u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); v.b64 = ''; return Promise.resolve(u); }
+    if (v.bin) return fetch(url.replace(/[^/]*$/, '') + v.bin).then(r => { if (!r.ok) throw new Error('voice ' + r.status); return r.arrayBuffer(); }).then(b => new Uint8Array(b));
+    return Promise.reject(new Error('нет голоса'));
+  }
+  function loadVoiceFile(url, key, onScript) {
+    const v = window.MS_VOICE && window.MS_VOICE[key]; if (v) { onScript(v); return; }
+    const s = document.createElement('script'); s.src = url; s.async = true;
+    s.onload = () => onScript(window.MS_VOICE && window.MS_VOICE[key]); s.onerror = () => onScript(null);
+    document.head.appendChild(s);
+  }
   function loadPack() {
     if (AU.pack || AU.loading || AU.failed || !ST.sound) return;
-    if (window.MS_VOICE && window.MS_VOICE.slitok) { prepPack(); return; }
     AU.loading = true;
     try {
-      const s = document.createElement('script'); s.src = VOICE_URL; s.async = true;
-      s.onload = () => { AU.loading = false; prepPack(); const w = AU.want; AU.want = null; if (w && now() - w.t < 2.5) voice(w.id, w.o); };
-      s.onerror = () => { AU.loading = false; AU.failed = true; };
-      document.head.appendChild(s);
+      loadVoiceFile(VOICE_URL, 'slitok', v => {
+        if (!v) { AU.loading = false; AU.failed = true; return; }
+        rawFrom(v, VOICE_URL).then(u => {
+          AU.raw = u; AU.pack = v; AU.loading = false;
+          const w = AU.want; AU.want = null; if (w && now() - w.t < 4) voice(w.id, w.o);
+        }).catch(() => { AU.loading = false; AU.failed = true; });
+      });
     } catch (e) { AU.loading = false; AU.failed = true; }
-  }
-  function prepPack() {
-    const v = window.MS_VOICE && window.MS_VOICE.slitok;
-    if (!v || !v.b64) { if (!AU.raw) AU.failed = true; return; }
-    try { const bin = atob(v.b64), u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); AU.raw = u; AU.pack = v; v.b64 = ''; } catch (e) { AU.failed = true; }
   }
   function loadPackN() {
     if (AU.packN || AU.loadingN || AU.failedN || !ST.sound) return;
-    if (window.MS_VOICE && window.MS_VOICE.slitokN) { prepPackN(); return; }
     AU.loadingN = true;
     try {
-      const s = document.createElement('script'); s.src = VOICE_N_URL; s.async = true;
-      s.onload = () => { AU.loadingN = false; prepPackN(); }; s.onerror = () => { AU.loadingN = false; AU.failedN = true; };
-      document.head.appendChild(s);
+      loadVoiceFile(VOICE_N_URL, 'slitokN', v => {
+        if (!v) { AU.loadingN = false; AU.failedN = true; return; }
+        rawFrom(v, VOICE_N_URL).then(u => { AU.rawN = u; AU.packN = v; AU.loadingN = false; })
+          .catch(() => { AU.loadingN = false; AU.failedN = true; });
+      });
     } catch (e) { AU.loadingN = false; AU.failedN = true; }
-  }
-  function prepPackN() {
-    const v = window.MS_VOICE && window.MS_VOICE.slitokN;
-    if (!v || !v.b64) { if (!AU.rawN) AU.failedN = true; return; }
-    try { const bin = atob(v.b64), u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); AU.rawN = u; AU.packN = v; v.b64 = ''; } catch (e) { AU.failedN = true; }
   }
   const packOf = id => (AU.pack && AU.pack.idx[id] ? [AU.pack, AU.raw] : AU.packN && AU.packN.idx[id] ? [AU.packN, AU.rawN] : null);
   function vbuf(c, id) {
