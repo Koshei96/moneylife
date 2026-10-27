@@ -440,6 +440,7 @@
     if (/over_email_send_rate_limit|rate limit|security purposes|only request this/i.test(m)) return 'Слишком часто. Подожди минуту и попробуй снова.';
     if (/email_address_invalid|invalid format|Unable to validate email/i.test(m)) return 'Проверь адрес почты.';
     if (/same_password|different from the old/i.test(m)) return 'Новый пароль должен отличаться от старого.';
+    if (/sending confirmation|sending.*email|Email address not authorized|smtp/i.test(m)) return 'Не получилось отправить письмо. Попробуй позже или войди через Google.';
     if (/Failed to fetch|NetworkError|network/i.test(m)) return 'Нет связи. Проверь интернет.';
     return (mode === 'up' ? 'Не удалось создать аккаунт: ' : 'Не получилось: ') + m;
   }
