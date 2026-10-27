@@ -1857,7 +1857,8 @@
   const NEWS_COINS = ['BTC', 'ETH', 'XRP', 'SOL', 'NEAR', 'BNB', 'AVAX', 'TRX', 'OP', 'ATOM', 'POL', 'DOT', 'XLM', 'ADA', 'TON', 'SUI', 'LINK', 'DOGE', 'RENDER', 'ARB', 'ONDO', 'FET', 'HYPE', 'AAVE', 'LTC', 'ETC', 'MNT', 'QNT', 'ZEC', 'XMR', 'WBT', 'LEO', 'BCH', 'RAIN', 'UNI', 'CC', 'GRAM', 'HBAR', 'SHIB', 'TAO', 'ENA', 'CRO', 'OKB', 'M', 'PUMP', 'PEPE', 'ASTER', 'BTW', 'WLFI', 'WLD', 'SKY', 'MORPHO', 'ICP', 'HTX', 'BGB', 'VVV', 'JST', 'KCS', 'GT', 'KAS', 'ALGO', 'Q', 'JUP', 'PI', 'INJ', 'NEXO', 'FIL', 'LIT', 'AKE', 'DASH', 'CAKE', 'XDC', 'NIGHT', 'PEARL', 'ZRO', 'ETHFI', 'APT', 'PYTH', 'BDX', 'ZAMA']; /* монеты, чьи названия озвучены в voice-slitok-n.js */
   function pctIds(v) { v = clamp(Math.round(v), 1, 99); if (v <= 30) return ['n.p.' + v]; return ['n.t.' + Math.floor(v / 10), 'n.pu.' + (v % 10)]; }
   function kIds(K) { K = clamp(Math.round(K), 1, 999); const out = [], hu = Math.floor(K / 100), r = K % 100; if (hu) out.push('n.h.' + hu); if (r >= 20) out.push('n.t.' + Math.floor(r / 10), 'n.k.' + (r % 10)); else out.push('n.k.' + r); return out; }
-  const pctTxt = v => (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(1).replace('.', ',') + '%';
+  /* проценты на газете и в пузыре — целыми, как их произносит голос (pctIds округляет так же) */
+  const pctTxt = v => Math.abs(v) < 0.5 ? '≈0%' : (v >= 0 ? '+' : '−') + clamp(Math.round(Math.abs(v)), 1, 99) + '%';
   function newsCompose() {
     const S = ST.S, D = ST.D; if (!S || !D) return null;
     const lv = S.live || {}, btc = +(lv.prices && lv.prices.BTC) || +(D.prices && D.prices.BTC) || 0;
