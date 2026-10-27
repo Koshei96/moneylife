@@ -2256,10 +2256,12 @@
     wakeLoop();
   }
   /* знакомство: звук на телефоне включается только после касания, поэтому приветствие звучит на первое нажатие */
-  /* при открытии приложения Слиток спит: просыпается от касания или важного события (покупка, пополнение, новый сигнал) */
+  /* днём Слиток всегда бодр и занят делами; ночью (00:00–07:00) при открытии приложения он уже спит */
   function firstData() {
-    ST.lastInput = ST.lastEvent = now() - SLEEP_AFTER - 1; ST.mood = 'sleep'; ST.moodSince = now();
     if (!lsGet('ms-intro2', false)) ST.introPending = true;
+    if (isNight()) { ST.lastInput = ST.lastEvent = now() - SLEEP_AFTER - 1; ST.mood = 'sleep'; ST.moodSince = now(); return; }
+    ST.lastInput = now();
+    setTimeout(() => { if (!isNight()) playClip('hello'); }, 900);
   }
 
   /* ---------- настроение ---------- */
@@ -2267,7 +2269,7 @@
   function resolveMood(t) {
     const idle = t - Math.max(ST.lastInput, ST.lastEvent), duty = ST.go || ST.fresh > 0;
     if (ST.hide) return 'hide';
-    if (idle > SLEEP_AFTER) return 'sleep';   /* засыпает через минуту без касаний и событий (сигнал ему не мешает — он виден на карточке) */
+    if (isNight() && idle > SLEEP_AFTER) return 'sleep';   /* спит только ночью: через минуту без касаний и событий (сигнал не мешает — он виден на карточке) */
     if (ST.offline && t - ST.offSince > 60) return 'offline';
     if (isNight() && !duty) return 'night';
     if (ST.go) return 'hunter';
