@@ -88,9 +88,12 @@ def manifest_checks(html):
     allowed = re.findall(r"'(\w+)'", tabs.group(0)) if tabs else []
     for sc in m.get('shortcuts') or []:
         h = (sc.get('url') or '').partition('#')[2]
-        if not (sc.get('url', '').startswith('./') and h in allowed): fail(f'манифест: ярлык «{sc.get("name")}»', f'адрес {sc.get("url")!r} не открывает вкладку')
-        elif not all(png(i.get('src', ''), f'манифест: значок ярлыка «{sc.get("name")}»') for i in sc.get('icons') or [{}]): pass
-        else: ok(f'манифест: ярлык «{sc["name"]}» → #{h}')
+        name = sc.get('name')
+        if not (sc.get('url', '').startswith('./') and h in allowed):
+            fail(f'манифест: ярлык «{name}»', f'адрес {sc.get("url")!r} не открывает вкладку'); continue
+        # значки ярлыка необязательны; если указаны — файлы должны быть (png() сам пишет провал)
+        icons_ok = [png(i.get('src', ''), f'манифест: значок ярлыка «{name}»') for i in sc.get('icons') or []]
+        if all(icons_ok): ok(f'манифест: ярлык «{name}» → #{h}')
     try:
         al = json.loads((ROOT / '.well-known' / 'assetlinks.json').read_text(encoding='utf-8'))
         t = al[0]['target']
@@ -252,6 +255,19 @@ def run_browser():
             else: fail('ярлык #strategy', 'вкладка «Стратегия» не открылась')
             shot(pg, '05b-shortcut-strategy')
         scenario('Ярлык «Стратегия»', {'session': True, 'docs': SEED}, s_shortcut, path='index.html#strategy')
+
+        # --- В3. ярлык, когда приложение уже открыто: меняется только #хэш — вкладка должна переключиться
+        def s_hash(pg, n):
+            wait_app(pg); pg.wait_for_timeout(800)
+            if pg.get_attribute('nav.tabs [data-tab="home"]', 'aria-current') != 'page': raise AssertionError('при запуске открыта не «Главная»')
+            pg.evaluate("location.hash='#strategy'"); pg.wait_for_timeout(800)
+            if pg.get_attribute('nav.tabs [data-tab="strategy"]', 'aria-current') == 'page' and pg.locator('#v-strategy:not([hidden])').count():
+                ok('открытое приложение: #strategy переключает на «Стратегию»')
+            else: fail('открытое приложение: смена #хэша', 'вкладка «Стратегия» не открылась')
+            pg.evaluate("location.hash='#coins'"); pg.wait_for_timeout(800)
+            if pg.get_attribute('nav.tabs [data-tab="coins"]', 'aria-current') == 'page': ok('открытое приложение: #coins переключает на «Монеты»')
+            else: fail('открытое приложение: смена #хэша', 'вкладка «Монеты» не открылась')
+        scenario('Ярлык в открытом приложении', {'session': True, 'docs': SEED}, s_hash)
 
         # --- Г. запись покупки через форму (если форма доступна)
         def s_buy(pg, n):
