@@ -1,8 +1,11 @@
 {
+  "id": "/moneylife/",
   "name": "MoneyLife",
   "short_name": "MoneyLife",
   "description": "Личный криптопортфель: DCA, лестница докупок, план альткоинов",
   "lang": "ru",
+  "dir": "ltr",
+  "categories": ["finance"],
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
@@ -13,5 +16,13 @@
     {"src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
     {"src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
     {"src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"}
+  ],
+  "shortcuts": [
+    {"name": "Монеты", "short_name": "Монеты", "description": "Открыть список монет портфеля", "url": "./#coins",
+     "icons": [{"src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png"}]},
+    {"name": "Стратегия", "short_name": "Стратегия", "description": "Лестница докупок и план альткоинов", "url": "./#strategy",
+     "icons": [{"src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png"}]},
+    {"name": "Активность", "short_name": "Активность", "description": "Открыть историю операций", "url": "./#activity",
+     "icons": [{"src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png"}]}
   ]
 }

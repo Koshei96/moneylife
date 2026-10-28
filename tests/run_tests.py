@@ -3,6 +3,7 @@
 
 Что проверяется:
   1. Статика: синтаксис всех JS (файлы и встроенные скрипты index.html), валидность JSON,
+     манифест PWA (id, категория, иконки any/maskable, ярлыки), шаблон assetlinks.json,
      что все файлы из списка SHELL в sw.js существуют.
   2. Приложение в настоящем браузере (Chromium, экран телефона 390x844) без интернета:
      Supabase подменён имитацией (tests/mock-supabase.js), внешние запросы отрезаны.
@@ -54,6 +55,47 @@ def static_checks():
     vsw = re.search(r"const V='ml-(\d{14})'", sw)
     if vsw: vs.add(vsw.group(1))
     ok('версия сборки согласована: ' + next(iter(vs))) if len(vs) == 1 else fail('версия сборки', 'разные метки: ' + ', '.join(sorted(vs)))
+    manifest_checks(html)
+
+def manifest_checks(html):
+    """Манифест PWA — паспорт приложения для Google Play (TWA через Bubblewrap/PWABuilder)."""
+    from PIL import Image
+    try: m = json.loads((ROOT / 'manifest.webmanifest').read_text(encoding='utf-8'))
+    except Exception as e: fail('манифест', f'не читается: {e}'); return
+    # id не менять: от него зависит, узнает ли телефон уже установленное приложение
+    if m.get('id') == '/moneylife/': ok('манифест: постоянный id «/moneylife/»')
+    else: fail('манифест: id', f'ожидалось "/moneylife/", в файле {m.get("id")!r} — смена id «раздвоит» установленное приложение')
+    ok('манифест: категория finance') if 'finance' in (m.get('categories') or []) else fail('манифест: categories', 'нет "finance"')
+    ok('манифест: язык ru') if m.get('lang') == 'ru' else fail('манифест: lang', f'{m.get("lang")!r}')
+    def png(src, what):
+        p = ROOT / src
+        if not p.exists(): fail(what, f'нет файла {src}'); return None
+        try: return Image.open(p).size
+        except Exception as e: fail(what, f'{src} не картинка: {e}'); return None
+    icons = m.get('icons') or []
+    for ic in icons:
+        size = png(ic.get('src', ''), f'манифест: иконка {ic.get("src")}')
+        if size and ic.get('sizes') != f'{size[0]}x{size[1]}':
+            fail(f'манифест: иконка {ic["src"]}', f'в манифесте {ic.get("sizes")}, а на деле {size[0]}x{size[1]}')
+    if any('any' in (ic.get('purpose') or 'any').split() and ic.get('sizes') == '512x512' for ic in icons): ok('манифест: обычная иконка 512×512')
+    else: fail('манифест: иконка any', 'нет обычной иконки 512×512')
+    mask = [ic for ic in icons if 'maskable' in (ic.get('purpose') or '').split()]
+    sizes = [png(ic['src'], 'манифест: maskable-иконка') for ic in mask]
+    if mask and all(s and s[0] == s[1] and s[0] >= 512 for s in sizes): ok('манифест: maskable-иконка на месте и квадратная')
+    else: fail('манифест: maskable-иконка', f'нужна квадратная от 512 px, найдено {sizes or "ничего"}')
+    # ярлыки ведут на вкладки, которые index.html умеет открывать по #хэшу
+    tabs = re.search(r"const startTab=.*?\.includes\(startTab\)", html)
+    allowed = re.findall(r"'(\w+)'", tabs.group(0)) if tabs else []
+    for sc in m.get('shortcuts') or []:
+        h = (sc.get('url') or '').partition('#')[2]
+        if not (sc.get('url', '').startswith('./') and h in allowed): fail(f'манифест: ярлык «{sc.get("name")}»', f'адрес {sc.get("url")!r} не открывает вкладку')
+        elif not all(png(i.get('src', ''), f'манифест: значок ярлыка «{sc.get("name")}»') for i in sc.get('icons') or [{}]): pass
+        else: ok(f'манифест: ярлык «{sc["name"]}» → #{h}')
+    try:
+        al = json.loads((ROOT / '.well-known' / 'assetlinks.json').read_text(encoding='utf-8'))
+        t = al[0]['target']
+        ok('шаблон assetlinks.json: ' + t['package_name']) if t.get('namespace') == 'android_app' and t.get('package_name') else fail('assetlinks.json', 'нет пакета')
+    except Exception as e: fail('шаблон assetlinks.json', str(e)[:200])
 
 # ---------------------------------------------------------------- 2. браузер
 class QuietHandler(http.server.SimpleHTTPRequestHandler):
@@ -144,10 +186,10 @@ def run_browser():
         def shot(pg, name):
             pg.screenshot(path=str(OUT / f'{name}.png'))
 
-        def scenario(name, cfg, body, prices=True):
+        def scenario(name, cfg, body, prices=True, path='index.html'):
             ctx, pg, errs = page_for(name, cfg, prices)
             try:
-                pg.goto(base + 'index.html', wait_until='load', timeout=30000)
+                pg.goto(base + path, wait_until='load', timeout=30000)
                 pg.wait_for_timeout(1500)
                 body(pg, name)
                 if errs: fail(f'{name}: без ошибок в консоли', ' | '.join(dict.fromkeys(errs))[:600])
@@ -201,6 +243,15 @@ def run_browser():
             if 'BTC' not in txt: fail('данные портфеля', 'на экранах нет BTC из тестовых данных')
             else: ok('данные портфеля отображаются')
         scenario('Пользователь с данными', {'session': True, 'docs': SEED}, s_user)
+
+        # --- В2. ярлык с главного экрана телефона (shortcuts в манифесте) открывает нужную вкладку
+        def s_shortcut(pg, n):
+            wait_app(pg); pg.wait_for_timeout(800)
+            if pg.get_attribute('nav.tabs [data-tab="strategy"]', 'aria-current') == 'page' and pg.locator('#v-strategy:not([hidden])').count():
+                ok('ярлык #strategy открывает вкладку «Стратегия»')
+            else: fail('ярлык #strategy', 'вкладка «Стратегия» не открылась')
+            shot(pg, '05b-shortcut-strategy')
+        scenario('Ярлык «Стратегия»', {'session': True, 'docs': SEED}, s_shortcut, path='index.html#strategy')
 
         # --- Г. запись покупки через форму (если форма доступна)
         def s_buy(pg, n):
