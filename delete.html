@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Удаление аккаунта Money Life</title>
+<meta name="description" content="Как удалить аккаунт Money Life и все данные — в приложении или письмом, даже без установленного приложения.">
+<meta name="theme-color" content="#06040e">
+<link rel="icon" type="image/png" href="icons/icon-192.png">
+<style>
+/* Удаление аккаунта Money Life (требование Google Play): русский и украинский, язык по телефону, переключатель вверху.
+   Оформление — как у privacy.html. [почта поддержки — выберет владелец] — заменить на настоящий адрес перед публикацией. */
+:root{--bg:#06040e;--card:#100b21;--line:#2a2145;--fg:#f1edff;--mute:#b3a8d9;--lav:#b9a2ff;--warn:#ffb86b;color-scheme:dark}
+@media (prefers-color-scheme:light){:root{--bg:#f5f2fc;--card:#ffffff;--line:#e6dff5;--fg:#1b1530;--mute:#5d547c;--lav:#5b2fe0;--warn:#a34a00;color-scheme:light}}
+*{box-sizing:border-box}
+html,body{background:var(--bg);margin:0}
+body{color:var(--fg);font:16px/1.6 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding:24px max(16px,env(safe-area-inset-right)) 48px max(16px,env(safe-area-inset-left))}
+main{max-width:720px;margin:0 auto;display:grid;gap:18px}
+header{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between}
+h1{font-size:26px;line-height:1.2;margin:0}
+h2{font-size:18px;margin:8px 0 0}
+p,ul,ol{margin:0}
+ul,ol{padding-left:22px;display:grid;gap:6px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px;display:grid;gap:10px}
+.mute{color:var(--mute);font-size:14px}
+a{color:var(--lav);overflow-wrap:anywhere}
+.todo{display:inline-block;padding:0 6px;border:2px dashed var(--warn);border-radius:8px;color:var(--warn);font-weight:700}
+.lang{display:flex;gap:6px}
+.lang button{font:inherit;font-size:14px;font-weight:600;min-width:48px;min-height:44px;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--fg);cursor:pointer}
+.lang button[aria-pressed="true"]{background:var(--lav);border-color:var(--lav);color:var(--bg)}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<main>
+<header><a href="./" aria-label="Money Life">← Money Life</a><div class="lang" role="group" aria-label="Язык"><button type="button" data-l="ru">RU</button><button type="button" data-l="uk">UK</button></div></header>
+
+<article lang="ru" data-lang="ru">
+  <div class="card">
+    <h1>Удаление аккаунта Money Life</h1>
+    <p>Здесь можно удалить свой аккаунт в приложении Money Life и все данные — даже если приложение уже не установлено.</p>
+  </div>
+  <div class="card">
+    <h2>Способ 1: удалить самому (сразу)</h2>
+    <p>В приложении:</p>
+    <ol>
+      <li>На главном экране нажмите значок шестерёнки «Настройки» вверху.</li>
+      <li>Прокрутите вниз до раздела «Аккаунт» и нажмите «Удалить аккаунт».</li>
+      <li>При желании сначала нажмите «Скачать мои данные» — сохранится файл со всеми записями.</li>
+      <li>Впишите слово УДАЛИТЬ и нажмите «Удалить навсегда».</li>
+    </ol>
+    <p>Без приложения: откройте ссылку <a href="./#delete">koshei96.github.io/moneylife/#delete</a> в любом браузере и войдите той же почтой или через Google, как обычно. Сразу откроется окно «Удалить аккаунт» — дальше шаги 3–4.</p>
+    <p class="mute">Удаление работает только при подключении к интернету.</p>
+  </div>
+  <div class="card">
+    <h2>Способ 2: написать нам</h2>
+    <p>Если войти не получается, напишите на <span class="todo">[почта поддержки — выберет владелец]</span> с той почты, на которую зарегистрирован аккаунт, с темой «Удалить аккаунт».</p>
+    <p>Мы удалим аккаунт в течение 30 дней (обычно за 1–3 дня) и ответим письмом. Письмо с другого адреса мы не сможем проверить — тогда попросим написать с адреса аккаунта.</p>
+  </div>
+  <div class="card">
+    <h2>Что удаляется</h2>
+    <ul>
+      <li><b>Аккаунт:</b> почта, имя (при входе через Google) и пароль в зашифрованном виде.</li>
+      <li><b>Все ваши записи:</b> покупки, продажи, суммы, количество монет, настройки стратегии, заметки, история и уведомления.</li>
+      <li><b>Копия данных на телефоне</b> — стирается при удалении в приложении.</li>
+    </ul>
+    <p>Удаление настоящее, без «корзины»: восстановить аккаунт и записи нельзя.</p>
+  </div>
+  <div class="card">
+    <h2>Что и сколько хранится после удаления</h2>
+    <ul>
+      <li><b>Технические журналы серверов</b> (время входа, IP-адрес) — до 7 дней. Они нужны для защиты от взлома и стираются автоматически.</li>
+      <li><b>Файл, который вы сами скачали</b>, остаётся у вас — его мы удалить не можем.</li>
+    </ul>
+    <p>Больше ничего не остаётся. Подробнее — в <a href="privacy.html">политике конфиденциальности</a>.</p>
+  </div>
+</article>
+
+<article lang="uk" data-lang="uk" hidden>
+  <div class="card">
+    <h1>Видалення акаунта Money Life</h1>
+    <p>Тут можна видалити свій акаунт у застосунку Money Life і всі дані — навіть якщо застосунок уже не встановлено.</p>
+  </div>
+  <div class="card">
+    <h2>Спосіб 1: видалити самостійно (одразу)</h2>
+    <p>У застосунку (кнопки в ньому російською):</p>
+    <ol>
+      <li>На головному екрані натисніть значок шестерні «Настройки» вгорі.</li>
+      <li>Прокрутіть донизу до розділу «Аккаунт» і натисніть «Удалить аккаунт».</li>
+      <li>За бажанням спершу натисніть «Скачать мои данные» — збережеться файл з усіма записами.</li>
+      <li>Впишіть слово УДАЛИТЬ і натисніть «Удалить навсегда».</li>
+    </ol>
+    <p>Без застосунку: відкрийте посилання <a href="./#delete">koshei96.github.io/moneylife/#delete</a> у будь-якому браузері й увійдіть тією ж поштою або через Google, як зазвичай. Одразу відкриється вікно «Удалить аккаунт» — далі кроки 3–4.</p>
+    <p class="mute">Видалення працює лише з підключенням до інтернету.</p>
+  </div>
+  <div class="card">
+    <h2>Спосіб 2: написати нам</h2>
+    <p>Якщо увійти не вдається, напишіть на <span class="todo">[почта поддержки — выберет владелец]</span> з тієї пошти, на яку зареєстровано акаунт, з темою «Видалити акаунт».</p>
+    <p>Ми видалимо акаунт протягом 30 днів (зазвичай за 1–3 дні) і відповімо листом. Лист з іншої адреси ми не зможемо перевірити — тоді попросимо написати з адреси акаунта.</p>
+  </div>
+  <div class="card">
+    <h2>Що видаляється</h2>
+    <ul>
+      <li><b>Акаунт:</b> пошта, ім'я (під час входу через Google) і пароль у зашифрованому вигляді.</li>
+      <li><b>Усі ваші записи:</b> покупки, продажі, суми, кількість монет, налаштування стратегії, нотатки, історія та сповіщення.</li>
+      <li><b>Копія даних на телефоні</b> — стирається під час видалення в застосунку.</li>
+    </ul>
+    <p>Видалення справжнє, без «кошика»: відновити акаунт і записи неможливо.</p>
+  </div>
+  <div class="card">
+    <h2>Що і скільки зберігається після видалення</h2>
+    <ul>
+      <li><b>Технічні журнали серверів</b> (час входу, IP-адреса) — до 7 днів. Вони потрібні для захисту від зламу й стираються автоматично.</li>
+      <li><b>Файл, який ви самі завантажили</b>, залишається у вас — його ми видалити не можемо.</li>
+    </ul>
+    <p>Більше нічого не залишається. Докладніше — у <a href="privacy.html">політиці конфіденційності</a>.</p>
+  </div>
+</article>
+</main>
+<script>
+/* язык: сохранённый выбор → язык телефона → русский (тот же ключ, что у privacy.html) */
+(function(){var arts=document.querySelectorAll('article[data-lang]'),btns=document.querySelectorAll('.lang button');
+function set(l){arts.forEach(function(a){a.hidden=a.dataset.lang!==l;});btns.forEach(function(b){b.setAttribute('aria-pressed',String(b.dataset.l===l));});document.documentElement.lang=l;try{localStorage.setItem('ml-lang',l);}catch(e){}}
+var l=null;try{l=localStorage.getItem('ml-lang');}catch(e){}
+if(l!=='ru'&&l!=='uk')l=/^uk/i.test(navigator.language||'')?'uk':'ru';
+btns.forEach(function(b){b.addEventListener('click',function(){set(b.dataset.l);});});set(l);})();
+</script>
+</body>
+</html>

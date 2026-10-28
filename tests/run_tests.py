@@ -4,11 +4,13 @@
 Что проверяется:
   1. Статика: синтаксис всех JS (файлы и встроенные скрипты index.html), валидность JSON,
      манифест PWA (id, категория, иконки any/maskable, ярлыки), шаблон assetlinks.json,
-     что все файлы из списка SHELL в sw.js существуют.
+     что все файлы из списка SHELL в sw.js существуют; страница удаления аккаунта delete.html
+     (RU/UK, ссылка из privacy.html) и SQL-функция supabase/delete_my_account.sql.
   2. Приложение в настоящем браузере (Chromium, экран телефона 390x844) без интернета:
      Supabase подменён имитацией (tests/mock-supabase.js), внешние запросы отрезаны.
      Сценарии: экран входа, новый пользователь (знакомство), пользователь с данными
-     (все вкладки, шторки), запись покупки, работа без связи с базой.
+     (все вкладки, шторки), запись покупки, работа без связи с базой, удаление аккаунта
+     (удаляются только свои записи, чужие целы, повторное удаление не ломает приложение).
   3. В любом сценарии падение JS (pageerror) или console.error = провал.
 
 Скриншоты каждого экрана — в tests/out/ (не попадают в git), их стоит открыть и посмотреть глазами.
@@ -56,6 +58,54 @@ def static_checks():
     if vsw: vs.add(vsw.group(1))
     ok('версия сборки согласована: ' + next(iter(vs))) if len(vs) == 1 else fail('версия сборки', 'разные метки: ' + ', '.join(sorted(vs)))
     manifest_checks(html)
+    deletion_checks()
+
+def deletion_checks():
+    """Удаление аккаунта (требование Google Play): веб-страница и серверная функция."""
+    d = ROOT / 'delete.html'
+    if not d.exists(): fail('delete.html', 'нет файла'); return
+    dh = d.read_text(encoding='utf-8')
+    ru = re.search(r'<article lang="ru"[^>]*>(.*?)</article>', dh, re.S)
+    uk = re.search(r'<article lang="uk"[^>]*>(.*?)</article>', dh, re.S)
+    if ru and 'Удаление аккаунта Money Life' in ru.group(1) and uk and 'Видалення акаунта Money Life' in uk.group(1): ok('delete.html: текст на русском и украинском')
+    else: fail('delete.html: языки', 'нет русского или украинского раздела с заголовком')
+    for name, part in (('RU', ru), ('UK', uk)):
+        t = part.group(1) if part else ''
+        miss = [x for x in ['#delete', 'Удалить аккаунт', 'УДАЛИТЬ', 'Удалить навсегда', 'privacy.html'] if x not in t]
+        ok(f'delete.html ({name}): шаги в приложении, ссылка #delete и политика') if not miss else fail(f'delete.html ({name})', 'нет: ' + ', '.join(miss))
+    # почту поддержки выбирает владелец — пока заметный заполнитель, придуманных адресов нет
+    if '[почта поддержки' in dh and not re.search(r'[\w.+-]+@[\w-]+\.[a-z]{2,}', dh): ok('delete.html: вместо почты поддержки — заполнитель, адрес не придуман')
+    else: fail('delete.html: почта поддержки', 'нет заполнителя или вписан адрес, которого владелец не выбирал')
+    pv = (ROOT / 'privacy.html').read_text(encoding='utf-8')
+    n = pv.count('href="delete.html"')
+    ok('privacy.html: ссылка на delete.html (RU и UK)') if n >= 2 else fail('privacy.html: ссылка на delete.html', f'нужна в обоих языках, найдено {n}')
+    q = ROOT / 'supabase' / 'delete_my_account.sql'
+    if not q.exists(): fail('delete_my_account.sql', 'нет файла'); return
+    sql = re.sub(r'\s+', ' ', re.sub(r'--[^\n]*', '', q.read_text(encoding='utf-8'))).lower()   # без комментариев
+    shim = (ROOT / 'shim.js').read_text(encoding='utf-8')
+    called = re.search(r"\.rpc\('(\w+)'\)", shim[shim.find('mlDeleteAccount'):])
+    if called and f'function public.{called.group(1)}()' in sql: ok(f'SQL: функция public.{called.group(1)}() — та, что вызывает shim.js, без параметров')
+    else: fail('SQL: имя функции', f'shim.js вызывает {called and called.group(1)!r}, в файле её нет')
+    uidvar = re.search(r'(\w+) uuid := auth\.uid\(\)', sql)
+    me = [r'auth\.uid\(\)'] + ([re.escape(uidvar.group(1))] if uidvar else [])
+    me_re = '(' + '|'.join(me) + ')'
+    for name, cond in [('security definer', 'security definer' in sql),
+                       ('set search_path = public', 'set search_path = public' in sql),
+                       ('отказ без входа (auth.uid() пустой → ошибка)', bool(re.search(r'if ' + me_re + r' is null then raise exception', sql)))]:
+        ok(f'SQL: {name}') if cond else fail(f'SQL: {name}', 'не найдено')
+    # каждое удаление — только по вошедшему пользователю
+    dels = re.findall(r'delete from ([\w.]+) where ([^;]+);', sql)
+    alls = re.findall(r'delete from ([\w.]+)', sql)
+    good = {t: w.strip() for t, w in dels if re.fullmatch(r'(owner|id) = ' + me_re, w.strip())}
+    if len(dels) == len(alls) == len(good) and good.get('public.docs', '').startswith('owner') and good.get('auth.users', '').startswith('id '):
+        ok('SQL: удаляет только public.docs по owner = auth.uid() и auth.users по id = auth.uid()')
+    else: fail('SQL: условия удаления', f'найдено {dels or alls}')
+    grants = re.findall(r'grant execute on function public\.delete_my_account\(\) to ([\w, ]+);', sql)
+    if grants == ['authenticated'] and 'revoke all on function public.delete_my_account() from public, anon;' in sql:
+        ok('SQL: вызывать может только authenticated (у public и anon права отозваны)')
+    else: fail('SQL: права', f'grant → {grants}')
+    if 'create or replace function' in sql and 'drop ' not in sql: ok('SQL: повторный запуск файла безопасен (create or replace, без drop)')
+    else: fail('SQL: повторный запуск', 'нужен create or replace без drop')
 
 def manifest_checks(html):
     """Манифест PWA — паспорт приложения для Google Play (TWA через Bubblewrap/PWABuilder)."""
@@ -397,6 +447,75 @@ def run_browser():
             if 'нет актуальных цен' in sub and '19 окт' in sub: ok('без цен: подписана дата снимка')
             else: fail('без цен: дата снимка', f'подпись «{sub}»')
         scenario('Нет цен, есть снимок', {'session': True, 'docs': SNAP}, s_noprice_snap, prices=False)
+
+        # --- Ж. страница удаления аккаунта (для Google Play) и ссылка на неё из политики
+        def s_delpage(pg, n):
+            pg.wait_for_selector('article[data-lang="ru"]:not([hidden]) h1', timeout=5000)
+            if 'Удаление аккаунта Money Life' not in pg.inner_text('article[data-lang="ru"] h1'): raise AssertionError('нет заголовка на русском')
+            shot(pg, '11-delete-page-ru'); ok('delete.html открывается (RU)')
+            pg.click('.lang [data-l="uk"]'); pg.wait_for_timeout(200)
+            if pg.locator('article[data-lang="uk"]:not([hidden])').count() and 'Видалення' in pg.inner_text('article[data-lang="uk"] h1'):
+                shot(pg, '12-delete-page-uk'); ok('delete.html: переключение на украинский')
+            else: fail('delete.html: украинский', 'не переключился')
+        scenario('Страница удаления', {'session': False, 'docs': []}, s_delpage, path='delete.html')
+
+        def s_priv2del(pg, n):
+            pg.click('article[data-lang="ru"] a[href="delete.html"]'); pg.wait_for_load_state('load')
+            if pg.url.endswith('/delete.html') and pg.locator('article[data-lang="ru"] h1').count(): ok('privacy.html → ссылка ведёт на delete.html')
+            else: fail('privacy.html → delete.html', f'открылось {pg.url}')
+        scenario('Политика → удаление', {'session': False, 'docs': []}, s_priv2del, path='privacy.html')
+
+        # --- З. удаление аккаунта из приложения: свои записи удалены, чужие целы, повтор не ломает
+        OTHER = [{'col': 'tx', 'id': 't1', 'data': {'ts': NOW, 'type': 'buy', 'symbol': 'BTC', 'qty': 1, 'usd': 1, 'price': 1}},
+                 {'col': 'app', 'id': 'settings', 'data': {'onboardedAt': NOW}}]
+        def s_delete(pg, n):
+            wait_app(pg)
+            pg.click('#setBtn'); pg.wait_for_selector('#setSheet.open', timeout=5000)
+            if pg.get_attribute('#delBtn', 'hidden') is not None: raise AssertionError('кнопка «Удалить аккаунт» скрыта при accountDelete: true')
+            pg.locator('#delBtn').scroll_into_view_if_needed(); pg.click('#delBtn'); pg.wait_for_selector('#delSheet.open', timeout=5000)
+            if not pg.is_disabled('#delGo'): raise AssertionError('«Удалить навсегда» активна без слова УДАЛИТЬ')
+            pg.fill('#delWord', 'удалить')
+            if pg.is_disabled('#delGo'): raise AssertionError('«Удалить навсегда» не включилась после слова УДАЛИТЬ')
+            pg.wait_for_timeout(400); shot(pg, '13-delete-sheet'); ok('окно удаления: кнопка включается только после слова УДАЛИТЬ')
+            with pg.expect_navigation(timeout=10000):
+                pg.evaluate("()=>{const b=document.getElementById('delGo');b.click();b.click();}")   # двойное нажатие
+            pg.wait_for_selector('#mlAuth', state='visible', timeout=8000); pg.wait_for_timeout(500)
+            shot(pg, '14-after-delete')
+            if 'Аккаунт и все записи удалены' in pg.inner_text('#mlAuth'): ok('после удаления — экран входа «Аккаунт и все записи удалены»')
+            else: fail('после удаления: сообщение', pg.inner_text('#mlAuth')[:200])
+            st = pg.evaluate("""()=>({mine: window.__mlRows.size, other: window.__mlForeign.size, gone: window.__mlDeletedUsers.has('test-user-0001'),
+                calls: +(sessionStorage.getItem('__mlDelCalls')||0), local: Object.keys(localStorage).filter(k=>k.startsWith('ml-docs:')||k==='ml-last-uid')})""")
+            if st['mine'] == 0 and st['gone']: ok('удалены все записи и аккаунт этого пользователя')
+            else: fail('удаление своих данных', f'осталось записей {st["mine"]}, аккаунт удалён: {st["gone"]}')
+            if st['other'] == len(OTHER): ok('записи другого пользователя целы')
+            else: fail('чужие записи', f'было {len(OTHER)}, стало {st["other"]}')
+            if st['calls'] == 1: ok('двойное нажатие «Удалить навсегда» — одно удаление')
+            else: fail('двойное нажатие', f'вызовов delete_my_account: {st["calls"]}')
+            if not st['local']: ok('копия данных на телефоне стёрта')
+            else: fail('копия на телефоне', 'остались ключи ' + ', '.join(st['local']))
+            # повторное удаление после выхода: аккуратный отказ, приложение живо
+            r = pg.evaluate("()=>window.mlDeleteAccount().then(()=>'ok',e=>'отказ: '+(e&&e.message))")
+            if r.startswith('отказ'): ok('повторное удаление после выхода — аккуратный отказ (' + r + ')')
+            else: fail('повторное удаление', 'не отказало')
+            # вход удалённым аккаунтом не пускает и не роняет приложение
+            pg.fill('#mlaEmail', 'tester@example.com'); pg.fill('#mlaPass', 'secret123'); pg.click('#mlaGo'); pg.wait_for_timeout(800)
+            msg = pg.inner_text('#mlaErr').strip() if pg.locator('#mlaErr').count() else ''
+            if pg.locator('#mlAuth').is_visible() and msg: ok('вход удалённым аккаунтом — ошибка «' + msg + '»')
+            else: fail('вход удалённым аккаунтом', 'экран входа пропал или нет сообщения')
+        scenario('Удаление аккаунта', {'session': True, 'docs': SEED, 'otherDocs': OTHER, 'accountDelete': True, 'persist': True}, s_delete)
+
+        # --- З2. сама функция (имитация повторяет SQL): повторный вызов не падает, без входа — отказ
+        def s_delete_rpc(pg, n):
+            wait_app(pg)
+            r = pg.evaluate("""async()=>{const c=window.supabase.createClient();const a=await c.rpc('delete_my_account');const b=await c.rpc('delete_my_account');
+                await c.auth.signOut();const z=await c.rpc('delete_my_account');return {a:a.error,b:b.error,z:z.error&&z.error.message,other:window.__mlForeign.size}}""")
+            if r['a'] is None and r['b'] is None: ok('delete_my_account: повторный вызов без ошибки')
+            else: fail('delete_my_account: повтор', str(r))
+            if r['z'] == 'not signed in': ok('delete_my_account: без входа — отказ «not signed in»')
+            else: fail('delete_my_account: без входа', str(r))
+            if r['other'] == len(OTHER): ok('delete_my_account: чужие записи целы после двух вызовов')
+            else: fail('delete_my_account: чужие записи', str(r))
+        scenario('Функция удаления', {'session': True, 'docs': SEED, 'otherDocs': OTHER}, s_delete_rpc)
 
         browser.close()
     srv.shutdown()
