@@ -133,6 +133,14 @@ def run_browser():
             pg.on('console', lambda m: errs.append('console.error: ' + m.text[:300]) if m.type == 'error' and not IGNORE_CONSOLE.search(m.text) and 'mock:' not in m.text else None)
             return ctx, pg, errs
 
+        def wait_app(pg, timeout=20000):
+            # Ждём нижнее меню через опрос по таймеру, а не по кадрам анимации: в тестовом браузере
+            # 3D-маскот рисуется без видеокарты (~4 кадра/с), и обычное ожидание Playwright не успевает.
+            pg.wait_for_function("""()=>{const n=document.querySelector('nav.tabs');if(!n)return false;
+                const r=n.getBoundingClientRect(),s=getComputedStyle(n);
+                return r.width>0&&r.height>0&&s.visibility!=='hidden'&&s.display!=='none'&&!n.closest('[hidden]')}""",
+                polling=250, timeout=timeout)
+
         def shot(pg, name):
             pg.screenshot(path=str(OUT / f'{name}.png'))
 
@@ -172,13 +180,16 @@ def run_browser():
 
         # --- В. пользователь с данными: вкладки и шторки
         def s_user(pg, n):
-            pg.wait_for_selector('nav.tabs', timeout=8000)
+            wait_app(pg)
             if pg.locator('#ob:not([hidden])').count(): raise AssertionError('знакомство показано пользователю, у которого уже есть данные')
             pg.wait_for_timeout(1500); shot(pg, '04-home'); ok('главный экран открыт')
             bal = (pg.inner_text('#hBal') if pg.locator('#hBal').count() else '').replace('\u202f', ' ').replace('\xa0', ' ')
             digits = re.sub(r'[^0-9]', '', bal)
             if not digits or int(digits) == 0: fail('стоимость портфеля с ценами', f'показано «{bal}» — ожидалось больше нуля (BTC 0.005 × $110 000 и т.д.)')
             else: ok(f'стоимость портфеля посчитана: {bal}')
+            sub = pg.inner_text('#hSub').replace('\u202f', ' ').replace('\xa0', ' ')
+            if '+$150' in sub: ok('прибыль с ценами посчитана: +$150 (950 − 800)')
+            else: fail('прибыль с ценами', f'показано «{sub}», ожидалось +$150')
             for tab, title in [('coins', 'Монеты'), ('strategy', 'Стратегия'), ('activity', 'Активность'), ('home', 'Главная')]:
                 b = pg.locator(f'nav.tabs [data-tab="{tab}"]')
                 if not b.count(): fail(f'вкладка «{title}»', 'кнопка не найдена'); continue
@@ -193,7 +204,7 @@ def run_browser():
 
         # --- Г. запись покупки через форму (если форма доступна)
         def s_buy(pg, n):
-            pg.wait_for_selector('nav.tabs', timeout=8000)
+            wait_app(pg)
             before = pg.evaluate("[...window.__mlRows.keys()].filter(k=>k.startsWith('tx/')).length")
             opened = pg.evaluate("""()=>{const b=[...document.querySelectorAll('button')].find(x=>x.textContent.trim()==='Купить'&&x.offsetParent);if(!b)return false;b.click();return true;}""")
             if not opened: raise AssertionError('кнопка «Купить» не найдена на главном')
@@ -217,10 +228,28 @@ def run_browser():
             else: fail('база недоступна', 'нет плашки о том, что связи с базой нет')
         scenario('База недоступна', {'session': True, 'docs': SEED, 'failLoad': True}, s_off, prices=False)
 
+        def norm(t): return t.replace('\u202f', ' ').replace('\xa0', ' ').replace('\u2212', '-')
         def s_noprice(pg, n):
-            pg.wait_for_selector('nav.tabs', timeout=8000); pg.wait_for_timeout(1500); shot(pg, '09-no-prices')
+            wait_app(pg); pg.wait_for_timeout(1500); shot(pg, '09-no-prices')
             ok('приложение открылось без цен')
+            sub, gr = norm(pg.inner_text('#hSub')), norm(pg.inner_text('#gRead'))
+            if 'нет актуальных цен' in sub: ok('без цен: под суммой честно написано «нет актуальных цен»')
+            else: fail('без цен: подпись под суммой', f'показано «{sub}»')
+            if '-100' in sub + gr or '-$800' in sub + gr: fail('без цен: нет пугающего убытка', f'показано «{sub}» / «{gr}»')
+            else: ok('без цен: нет пугающего «−100%» убытка')
         scenario('Нет цен (биржи недоступны)', {'session': True, 'docs': SEED}, s_noprice, prices=False)
+
+        # --- Е. нет цен, но есть сохранённый снимок стоимости — показываем его
+        SNAP = SEED + [{'col': 'history', 'id': '2026-10-19', 'data': {'date': '2026-10-19', 'value': 1234}},
+                       {'col': 'history', 'id': '2026-10-10', 'data': {'date': '2026-10-10', 'value': 999}}]
+        def s_noprice_snap(pg, n):
+            wait_app(pg); pg.wait_for_timeout(2500); shot(pg, '10-no-prices-snapshot')
+            bal, sub = norm(pg.inner_text('#hBal')), norm(pg.inner_text('#hSub'))
+            if '1 234' in bal or '1234' in bal: ok(f'без цен: показана последняя известная стоимость {bal}')
+            else: fail('без цен: последняя известная стоимость', f'показано «{bal}», ожидалось $1 234 из снимка 19 окт.')
+            if 'нет актуальных цен' in sub and '19 окт' in sub: ok('без цен: подписана дата снимка')
+            else: fail('без цен: дата снимка', f'подпись «{sub}»')
+        scenario('Нет цен, есть снимок', {'session': True, 'docs': SNAP}, s_noprice_snap, prices=False)
 
         browser.close()
     srv.shutdown()
