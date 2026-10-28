@@ -27,7 +27,7 @@
 --   В том же SQL Editor: новый запрос, вставить две строки ниже (без знаков «--»), Run:
 --     select proname, prosecdef, proconfig from pg_proc where proname = 'delete_my_account';
 --     select grantee, privilege_type from information_schema.routine_privileges where routine_name = 'delete_my_account';
---   Первый: одна строка, prosecdef = true, proconfig = {search_path=public}.
+--   Первый: одна строка, prosecdef = true, proconfig = {"search_path=\"\""}.
 --   Второй: в списке есть authenticated, и НЕТ anon и PUBLIC
 --   (postgres и service_role — служебные, это нормально).
 --   Настоящая проверка — только на ТЕСТОВОМ аккаунте, не на своём: войти вторым аккаунтом,
@@ -43,7 +43,7 @@ create or replace function public.delete_my_account()
 returns void
 language plpgsql
 security definer
-set search_path = public
+set search_path = ''
 as $$
 declare
   me uuid := auth.uid();
