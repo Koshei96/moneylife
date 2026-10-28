@@ -133,6 +133,14 @@ def run_browser():
             pg.on('console', lambda m: errs.append('console.error: ' + m.text[:300]) if m.type == 'error' and not IGNORE_CONSOLE.search(m.text) and 'mock:' not in m.text else None)
             return ctx, pg, errs
 
+        def wait_app(pg, timeout=20000):
+            # Ждём нижнее меню через опрос по таймеру, а не по кадрам анимации: в тестовом браузере
+            # 3D-маскот рисуется без видеокарты (~4 кадра/с), и обычное ожидание Playwright не успевает.
+            pg.wait_for_function("""()=>{const n=document.querySelector('nav.tabs');if(!n)return false;
+                const r=n.getBoundingClientRect(),s=getComputedStyle(n);
+                return r.width>0&&r.height>0&&s.visibility!=='hidden'&&s.display!=='none'&&!n.closest('[hidden]')}""",
+                polling=250, timeout=timeout)
+
         def shot(pg, name):
             pg.screenshot(path=str(OUT / f'{name}.png'))
 
@@ -172,7 +180,7 @@ def run_browser():
 
         # --- В. пользователь с данными: вкладки и шторки
         def s_user(pg, n):
-            pg.wait_for_selector('nav.tabs', timeout=8000)
+            wait_app(pg)
             if pg.locator('#ob:not([hidden])').count(): raise AssertionError('знакомство показано пользователю, у которого уже есть данные')
             pg.wait_for_timeout(1500); shot(pg, '04-home'); ok('главный экран открыт')
             bal = (pg.inner_text('#hBal') if pg.locator('#hBal').count() else '').replace('\u202f', ' ').replace('\xa0', ' ')
@@ -193,7 +201,7 @@ def run_browser():
 
         # --- Г. запись покупки через форму (если форма доступна)
         def s_buy(pg, n):
-            pg.wait_for_selector('nav.tabs', timeout=8000)
+            wait_app(pg)
             before = pg.evaluate("[...window.__mlRows.keys()].filter(k=>k.startsWith('tx/')).length")
             opened = pg.evaluate("""()=>{const b=[...document.querySelectorAll('button')].find(x=>x.textContent.trim()==='Купить'&&x.offsetParent);if(!b)return false;b.click();return true;}""")
             if not opened: raise AssertionError('кнопка «Купить» не найдена на главном')
@@ -218,7 +226,7 @@ def run_browser():
         scenario('База недоступна', {'session': True, 'docs': SEED, 'failLoad': True}, s_off, prices=False)
 
         def s_noprice(pg, n):
-            pg.wait_for_selector('nav.tabs', timeout=8000); pg.wait_for_timeout(1500); shot(pg, '09-no-prices')
+            wait_app(pg); pg.wait_for_timeout(1500); shot(pg, '09-no-prices')
             ok('приложение открылось без цен')
         scenario('Нет цен (биржи недоступны)', {'session': True, 'docs': SEED}, s_noprice, prices=False)
 
