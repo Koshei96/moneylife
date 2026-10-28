@@ -247,7 +247,7 @@ def run_browser():
             bal, sub = norm(pg.inner_text('#hBal')), norm(pg.inner_text('#hSub'))
             if '1 234' in bal or '1234' in bal: ok(f'без цен: показана последняя известная стоимость {bal}')
             else: fail('без цен: последняя известная стоимость', f'показано «{bal}», ожидалось $1 234 из снимка 19 окт.')
-            if 'нет актуальных цен' in sub and '19' in sub: ok('без цен: подписана дата снимка')
+            if 'нет актуальных цен' in sub and '19 окт' in sub: ok('без цен: подписана дата снимка')
             else: fail('без цен: дата снимка', f'подпись «{sub}»')
         scenario('Нет цен, есть снимок', {'session': True, 'docs': SNAP}, s_noprice_snap, prices=False)
 

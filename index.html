@@ -874,9 +874,9 @@ button:focus-visible{outline:2px solid var(--pink);outline-offset:2px}
 
 <div class="toast" id="toast" role="status"><span id="toastMsg"></span><button type="button" id="toastBtn" hidden></button></div>
 
-<script src="config.js?v=20261028095950"></script>
+<script src="config.js?v=20261028100620"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="shim.js?v=20261028095950"></script>
+<script src="shim.js?v=20261028100620"></script>
 <script>
 /* ===== основа ===== */
 const $=id=>document.getElementById(id);
@@ -1161,11 +1161,11 @@ function growthData(){const D=derive(),now=Date.now(),T=timelines(),tl=T.tl,inv=
   return {val,inv:invIn,mode,t0};}
 function gReadSet(t,pt){const el=$('gRead'),D=derive();
   if(t==null){if(!S.ready){el.innerHTML='<div class="v skel">$0 000</div><div class="s">&nbsp;</div>';return;}
-    if(D.noPrice){el.innerHTML='<div class="v">—</div><div class="s">нет актуальных цен — прибыль посчитаю, когда биржи ответят</div>';return;}
+    if(D.noPrice){el.innerHTML=`<div class="v">—</div><div class="s">${priceWait()?'загружаю цены…':'нет актуальных цен — прибыль посчитаю, когда биржи ответят'}</div>`;return;}
     let ch=null,base=0,lbl='';
     if(gRange==='max'){if(D.invPriced>0){ch=D.total-D.invPriced;base=D.invPriced;lbl='прибыль за всё время';}}
-    else{const f=G.val[0];if(f&&f.v>0&&G.val.length>1){const iv0=G.inv.length?at(G.inv,f.t,'v'):0;ch=(D.total-D.inv)-(f.v-iv0);base=f.v+Math.max(0,D.inv-iv0);lbl='прибыль '+RLBL[gRange];}}
-    el.innerHTML=ch==null?`<div class="v">${money(D.total,{d:0})}</div><div class="s">стоимость сейчас</div>`:`<div class="v ${ch>=0?'pos':'neg'}">${money(ch,{sign:true,d:0})}<span class="pc">${pct(base?ch/base*100:0)}</span></div><div class="s">${lbl} · веди пальцем по графику</div>`;return;}
+    else{const f=G.val[0];if(D.valued&&f&&f.v>0&&G.val.length>1){const iv0=G.inv.length?at(G.inv,f.t,'v'):0;ch=(D.total-D.inv)-(f.v-iv0);base=f.v+Math.max(0,D.inv-iv0);lbl='прибыль '+RLBL[gRange];}}
+    el.innerHTML=ch==null?`<div class="v">${money(D.total,{d:0})}</div><div class="s">стоимость сейчас${D.valued?'':' · не у всех монет есть цена'}</div>`:`<div class="v ${ch>=0?'pos':'neg'}">${money(ch,{sign:true,d:0})}<span class="pc">${pct(base?ch/base*100:0)}</span></div><div class="s">${lbl} · веди пальцем по графику</div>`;return;}
   const iv=G.inv.length?at(G.inv,t,'v'):0,gain=pt.v-iv;
   el.innerHTML=`<div class="v">${money(pt.v,{d:0})}</div><div class="s">${dLong(t)} · вложено ${money(iv,{d:0})} · <span class="${gain>=0?'pos':'neg'}">${money(gain,{sign:true,d:0})}</span></div>`;}
 function renderGrowth(){const el=$('gChart');
@@ -1188,13 +1188,15 @@ function renderHeader(){const L=S.live;let h;
   else h=`<i class="dot"></i><span>${db?'Нет свежих цен':'Загружаю…'}</span>`;
   $('status').innerHTML=h;$('eyeBtn').innerHTML=P.hide?I.eyeOff:I.eye;$('eyeBtn').setAttribute('aria-pressed',String(P.hide));$('eyeBtn').setAttribute('aria-label',P.hide?'Показать суммы':'Скрыть суммы');}
 /* последний сохранённый снимок стоимости (history/<дата>) — показываем, когда нет актуальных цен */
+/* цены ещё в пути: живые цены подключены, но первый ответ не пришёл */
+function priceWait(){return !!mcp&&S.live.status==='wait';}
 function lastSnap(){let b=null;for(const x of S.history||[]){if(x&&+x.value>0&&typeof x.date==='string'&&(!b||x.date>b.date))b=x;}return b;}
 function renderHome(D){
   const btc=+D.prices.BTC||null,ath=S.cycle&&S.cycle.ath,r=rate();
   const last=D.noPrice?lastSnap():null;
   balTo(D.noPrice?(last?+last.value:null):D.syms.length?D.total:(S.ready?0:null));
   const gain=D.total-D.invPriced;
-  $('hSub').innerHTML=D.noPrice?(last?`нет актуальных цен · стоимость на ${dShort(+new Date(last.date+'T20:00:00'))}`:'нет актуальных цен — суммы появятся, когда биржи ответят')
+  $('hSub').innerHTML=D.noPrice?(last?`нет актуальных цен · стоимость на ${dShort(+new Date(last.date+'T20:00:00'))}`:priceWait()?'загружаю цены…':'нет актуальных цен — суммы появятся, когда биржи ответят')
     :D.invPriced>0&&D.total>0?`<span class="${gain>=0?'pos':'neg'}">${money(gain,{sign:true,d:0})} · ${pct(gain/D.invPriced*100)}</span> прибыль сейчас`:(S.ready?(D.syms.length?'Укажи цену покупки':'Добавь монеты через «+»'):'загружаю');
   const ch=[];let d24=0,has24=false;for(const s of D.syms){const c=S.live.change[s],p=+D.prices[s];if(c!=null&&p){has24=true;const v=D.h[s].qty*p;d24+=v-v/(1+c/100);}}
   if(has24&&D.total)ch.push(`<span class="chip ${d24>=0?'pos':'neg'}">24ч ${money(d24,{sign:true,d:0})} · ${pct(d24/(D.total-d24)*100)}</span>`);
@@ -1947,7 +1949,7 @@ function msSync(x){MSC.last=x;if(!msApply())return;if(!S.ready||document.getElem
   if(window.Mascot){try{window.Mascot.sync(msPayload(x));}catch(e){}}else msLoad();}
 function msLoad(){if(MSC.loading||MSC.failed)return;MSC.loading=true;
   const add=(src,ok)=>{try{const s=document.createElement('script');s.src=src;s.async=true;s.onload=ok;s.onerror=()=>{MSC.failed=true;};document.head.appendChild(s);}catch(e){MSC.failed=true;}};
-  const boot=()=>add('mascot.js?v=20261028095950',()=>{try{if(window.Mascot&&window.Mascot.init({host:$('mascot'),app:{audio:ac,buzz}})&&MSC.last&&$('ob').hidden&&!document.getElementById('mlAuth'))window.Mascot.sync(msPayload(MSC.last));}catch(e){}});
+  const boot=()=>add('mascot.js?v=20261028100620',()=>{try{if(window.Mascot&&window.Mascot.init({host:$('mascot'),app:{audio:ac,buzz}})&&MSC.last&&$('ob').hidden&&!document.getElementById('mlAuth'))window.Mascot.sync(msPayload(MSC.last));}catch(e){}});
   setTimeout(()=>{if(window.THREE)boot();else add('three.min.js',boot);},300);}
 function render(){const D=derive();renderHeader();renderHome(D);renderGrowth();renderCoins(D);renderStrategy(D);renderActivity();earnNudge();if(cvSym&&$('coinSheet').classList.contains('open'))renderCoinView();}
 document.body.classList.add('loading');
@@ -1965,7 +1967,7 @@ render();
   db.doc('app/market').onSnapshot(s=>{S.market=s.exists?s.data():null;render();},fail);
   db.collection('tx').limit(1000).onSnapshot(q=>{S.tx=q.docs.map(d=>Object.assign({id:d.id},d.data()));S.ready=true;document.body.classList.remove('loading');obCheck();render();startLive();dirAuto();nbuLoad();},fail);
   db.collection('alerts').orderBy('ts','desc').limit(20).onSnapshot(q=>{S.alerts=q.docs.map(d=>d.data());renderAlerts();},fail);
-  db.collection('history').limit(1000).onSnapshot(q=>{S.history=q.docs.map(d=>d.data());renderGrowth();},fail);
+  db.collection('history').limit(1000).onSnapshot(q=>{S.history=q.docs.map(d=>d.data());renderGrowth();if(S.ready&&derive().noPrice)renderHome(derive());},fail);
 })();
 </script>
 </body>
