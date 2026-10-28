@@ -57,6 +57,10 @@ def static_checks():
     vsw = re.search(r"const V='ml-(\d{14})'", sw)
     if vsw: vs.add(vsw.group(1))
     ok('версия сборки согласована: ' + next(iter(vs))) if len(vs) == 1 else fail('версия сборки', 'разные метки: ' + ', '.join(sorted(vs)))
+    # без сети приложение не должно открываться страницей политики: под index.html кэшируется только само приложение
+    nav = re.search(r"mode==='navigate'\)\{(.*?)return;\}", sw, re.S)
+    if nav and "x.put('index.html'" in nav.group(1) and re.search(r"if\(app&&r\.ok\)", nav.group(1)): ok('sw.js: privacy.html/delete.html не подменяют приложение в кэше')
+    else: fail('sw.js: кэш переходов', 'страницы кладутся в кэш под именем index.html')
     manifest_checks(html)
     deletion_checks()
 
