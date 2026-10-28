@@ -94,7 +94,7 @@ def deletion_checks():
     me = [r'auth\.uid\(\)'] + ([re.escape(uidvar.group(1))] if uidvar else [])
     me_re = '(' + '|'.join(me) + ')'
     for name, cond in [('security definer', 'security definer' in sql),
-                       ('set search_path = public', 'set search_path = public' in sql),
+                       ("set search_path = ''", "set search_path = ''" in sql),
                        ('отказ без входа (auth.uid() пустой → ошибка)', bool(re.search(r'if ' + me_re + r' is null then raise exception', sql)))]:
         ok(f'SQL: {name}') if cond else fail(f'SQL: {name}', 'не найдено')
     # каждое удаление — только по вошедшему пользователю
