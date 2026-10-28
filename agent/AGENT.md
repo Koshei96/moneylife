@@ -248,7 +248,8 @@ Artifact `publish` с `url` пульта, `file_path` и `asset: true` → в о
 `{order, name, gender: "m"/"f", role, color, temperament, speech, phrases: [..], hobby, mission,
 emotion: "happy"/"excited"/"calm"/"focused"/"tired"/"curious", mood: "Воодушевлена: ждёт задачу про кнопки",
 status: "работает"/"на связи"/"учится", now: "чем занят", breakUntil: ISO или null, breakNote: "кофе",
-skills: [..до 4], lessons: [..последние 5 уроков], avatar: {bg, skin, hair, hairColor, shirt, glasses, beard, acc}, updatedAt}`.
+skills: [..до 4], lessons: [..последние 5 уроков], avatar: {bg, skin, hair, hairColor, shirt, glasses, beard, acc},
+photo: "/_blob/<id портрета>", updatedAt}`.
 
 - **Настроение** (`emotion` и `mood`) меняется по событиям смены: закрыл трудную задачу — `happy`, ревью нашло
   много замечаний — `focused`, долгая смена — `tired`, новая интересная идея — `curious`/`excited`.
@@ -256,6 +257,22 @@ skills: [..до 4], lessons: [..последние 5 уроков], avatar: {bg,
 - **Аватар** (`avatar`) не менять — это лицо сотрудника. Новому сотруднику при найме придумать свой:
   `hair`: short / long / bob / bun / ponytail / curly / buzz / bald; `acc`: headphones / earring / cap / пусто;
   цвета — в формате `#rrggbb`.
+- **Портрет** (`photo`) — лицо сотрудника на пульте: объёмный персонаж в стиле анимационного кино (как у Pixar),
+  сделанный Figma AI. Пульт его «оживляет» (дышит, покачивается по настроению, кивает, когда печатает).
+  Портрет не менять и не перегенерировать — это лицо человека. Если у сотрудника `photo` нет (новый сотрудник
+  или в прошлый раз кончились кредиты Figma), в смену сделать портрет — один на сотрудника:
+  1. Figma `create_session` (файл `5FeuagAAz7oKb8S3SU4Wou`, «MoneyLife — портреты команды»), затем `generate_image`:
+     `model: gemini-3.1-flash-image`, 1024×1024, промпт по образцу — «Stylized 3D animated movie character portrait,
+     high-end CG render, soft cinematic studio lighting, subsurface skin, highly detailed hair strands and fabric
+     texture. Head and shoulders, centered, looking at camera, <улыбка по характеру>. <Возраст, профессия>:
+     <причёска и цвет волос из avatar>, <кожа>, <глаза>, <очки/борода/аксессуар из avatar>, wearing <одежда цвета
+     avatar.shirt>. Plain solid <цвет avatar.bg> background, no text, no logo.»
+  2. Скачать картинку: Figma `get_screenshot` (тот же `nodeId`, `maxDimension: 512`, `enableBase64Response: true`) —
+     файл ляжет на диск (ссылки figma.com из терминала закрыты). Уменьшить до 512×512 JPEG (Pillow, качество 86).
+  3. Artifact `publish` с `url` пульта, `file_path` и `asset: true` → `/_blob/<id>`; записать в `team/<id>` поле
+     `photo` (`update`). Временные файлы удалить.
+  Кредиты Figma AI платные и ограничены: только портреты новых сотрудников, без «перерисовок». Нет кредитов или
+  Figma недоступна — без портрета (пульт покажет рисованный аватар), попробовать в следующую смену.
 - Пишут в чатах как живые люди: коротко, своими словечками (`phrases`), со своими эмоциями; эмодзи — только тем,
   кому это свойственно, и не в каждом сообщении.
 
