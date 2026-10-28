@@ -288,6 +288,86 @@ def run_browser():
             else: fail('запись покупки', 'новая запись tx не появилась (возможно, поменялась форма — обнови тест)')
         scenario('Покупка', {'session': True, 'docs': SEED}, s_buy)
 
+        # --- Г2. шторки форм: одна высота, верх ниже Слитка, «Сохранить» всегда видна; кнопки не меньше 48 px
+        GEOM = """()=>{const s=document.getElementById('actSheet').getBoundingClientRect(),f=document.getElementById('saveBtn').getBoundingClientRect(),
+            b=document.querySelector('#actSheet .sh-body');return {top:s.top,h:s.height,bottom:s.bottom,vh:innerHeight,save:[f.top,f.bottom,f.height],sh:b.scrollHeight,ch:b.clientHeight}}"""
+        # зона касания: сама кнопка или её невидимый ::after/::before (так увеличены маленькие кнопки)
+        HIT = """(where)=>{const out=[];document.querySelectorAll('button,[role=button],[role=switch],summary,.check,a').forEach(b=>{
+            const r=b.getBoundingClientRect();if(!r.width||!r.height||getComputedStyle(b).visibility==='hidden'||b.closest('[hidden]'))return;
+            const sh=b.closest('.sheet');if(sh&&!sh.classList.contains('open'))return;
+            if(b.tagName==='A'&&b.closest('p'))return; /* ссылка внутри текста — по правилам доступности исключение */
+            let w=r.width,h=r.height;for(const p of ['::after','::before']){const s=getComputedStyle(b,p);
+              if(s.content&&s.content!=='none'&&s.position==='absolute'){w=Math.max(w,parseFloat(s.width)||0);h=Math.max(h,parseFloat(s.height)||0);}}
+            if(w<47.5||h<47.5)out.push(where+': '+(b.id||b.getAttribute('aria-label')||(b.textContent||'').trim().slice(0,14)||b.className)+' '+Math.round(w)+'×'+Math.round(h));
+            if(!(b.textContent||'').trim()&&!b.getAttribute('aria-label')&&!b.getAttribute('aria-labelledby'))out.push(where+': кнопка без текста и без aria-label '+(b.id||b.className));});return out}"""
+        def s_sheets(pg, n):
+            wait_app(pg); pg.wait_for_timeout(800)
+            hb = pg.evaluate("[...document.querySelectorAll('header.top button')].map(b=>{const r=b.getBoundingClientRect();return [b.id,Math.round(r.width),Math.round(r.height),b.getAttribute('aria-label')||'']})")
+            bad = [h for h in hb if h[1] < 48 or h[2] < 48 or not h[3]]
+            if hb and not bad: ok(f'кнопки шапки не меньше 48×48 и с подписью для экранного диктора ({len(hb)} шт.)')
+            else: fail('кнопки шапки ≥48 px', f'{bad or "кнопок нет"}')
+            small = []
+            for tab in ['home', 'coins', 'strategy', 'activity']:
+                pg.evaluate(f"document.querySelector('nav.tabs [data-tab=\"{tab}\"]').click()"); pg.wait_for_timeout(400)
+                small += pg.evaluate(HIT, tab)
+            pg.evaluate("document.querySelector('nav.tabs [data-tab=\"home\"]').click()"); pg.wait_for_timeout(500)
+            pg.evaluate("scrollTo(0,0)")
+            mb = pg.evaluate("(()=>{const m=document.getElementById('mascot'),r=m&&m.getBoundingClientRect();return r&&r.height?r.bottom:document.querySelector('.hero').getBoundingClientRect().bottom})()")
+            g = {}
+            pg.evaluate("document.getElementById('plusBtn').click()"); pg.wait_for_timeout(700)
+            for m, title in [('menu', 'Новая запись'), ('deposit', 'Пополнить биржу'), ('sell', 'Продать'), ('buy', 'Купить')]:
+                if m != 'menu':
+                    pg.evaluate("(()=>{const b=document.getElementById('actBack');if(!b.hidden)b.click();})()"); pg.wait_for_timeout(200)
+                    pg.evaluate(f"document.querySelector('#f-menu [data-go=\"{m}\"]').click()"); pg.wait_for_timeout(600)
+                g[title] = pg.evaluate(GEOM)
+                small += pg.evaluate(HIT, title)
+                for th in ['dark', 'light']:
+                    pg.evaluate(f"document.documentElement.setAttribute('data-theme','{th}')"); pg.wait_for_timeout(150)
+                    shot(pg, f'11-sheet-{m}-{th}')
+                pg.evaluate("document.documentElement.setAttribute('data-theme','dark')")
+            hs = {t: round(v['h']) for t, v in g.items()}
+            if max(hs.values()) - min(hs.values()) <= 1: ok(f'шторки «Новая запись», «Пополнить биржу», «Продать», «Купить» одной высоты: {hs["Купить"]} px')
+            else: fail('шторки форм одной высоты', str(hs))
+            over = {t: round(v['top']) for t, v in g.items() if v['top'] < mb - 0.5}
+            if not over: ok(f'верх шторок ({round(g["Купить"]["top"])} px) ниже Слитка (рамка до {round(mb)} px)')
+            else: fail('шторка не закрывает Слитка', f'рамка маскота до {round(mb)} px, верх шторок: {over}')
+            b = g['Купить']
+            if b['save'][2] > 0 and b['save'][0] >= b['top'] and b['save'][1] <= b['vh']: ok('«Купить»: кнопка «Сохранить» видна внизу шторки')
+            else: fail('«Купить»: «Сохранить» видна', str(b))
+            if b['sh'] > b['ch'] + 20:
+                st = pg.evaluate("(()=>{const x=document.querySelector('#actSheet .sh-body');x.scrollTop=9999;return x.scrollTop})()")
+                sv = pg.evaluate("(()=>{const f=document.getElementById('saveBtn').getBoundingClientRect();return f.bottom<=innerHeight&&f.height>0})()")
+                if st > 0 and sv: ok(f'«Купить»: длинная форма прокручивается внутри шторки ({b["sh"]} px в окне {b["ch"]} px)')
+                else: fail('«Купить»: прокрутка внутри шторки', f'scrollTop={st}, «Сохранить» видна={sv}')
+            else: fail('«Купить»: прокрутка внутри шторки', f'форма не длиннее окна шторки ({b["sh"]} / {b["ch"]}) — проверка не сработала')
+            # экранная клавиатура: окно сжимается до 520 px, поле в фокусе и «Сохранить» должны остаться видны
+            pg.evaluate("document.querySelector('#actSheet .sh-body').scrollTop=0")
+            pg.focus('#bu_ALT'); pg.wait_for_timeout(400)
+            pg.set_viewport_size({'width': 390, 'height': 520}); pg.wait_for_timeout(1200)
+            k = pg.evaluate("""()=>{const s=document.getElementById('actSheet').getBoundingClientRect(),f=document.getElementById('saveBtn').getBoundingClientRect(),
+                i=document.getElementById('bu_ALT').getBoundingClientRect(),b=document.querySelector('#actSheet .sh-body').getBoundingClientRect();
+                return {kb:document.documentElement.classList.contains('kb'),top:s.top,bottom:s.bottom,vh:innerHeight,save:f.bottom,fld:[i.top,i.bottom],body:[b.top,b.bottom]}}""")
+            shot(pg, '11-sheet-keyboard')
+            if k['top'] >= 0 and k['bottom'] <= k['vh'] + 1 and k['save'] <= k['vh'] + 1 and k['fld'][0] >= k['body'][0] - 1 and k['fld'][1] <= k['body'][1] + 1:
+                ok('с клавиатурой: поле в фокусе и «Сохранить» видны (окно 520 px)')
+            else: fail('с клавиатурой поля не перекрыты', str(k))
+            pg.evaluate("document.activeElement&&document.activeElement.blur()")
+            pg.set_viewport_size({'width': 390, 'height': 844}); pg.wait_for_timeout(500)
+            # Слиток ниже обычного (плашка над карточкой баланса) — шторка укорачивается и всё равно его не закрывает
+            pg.evaluate("closeSheets()"); pg.wait_for_timeout(500)
+            pg.evaluate("(()=>{const b=document.getElementById('liveBanner');b.hidden=false;b.style.minHeight='110px';b.dataset.t='1';})()"); pg.wait_for_timeout(300)
+            pg.evaluate("document.getElementById('plusBtn').click()"); pg.wait_for_timeout(700)
+            lo = pg.evaluate("(()=>{const m=document.getElementById('mascot').getBoundingClientRect(),s=document.getElementById('actSheet').getBoundingClientRect();return [m.bottom,s.top,s.height]})()")
+            if lo[1] >= lo[0] - 0.5 and lo[2] >= 339: ok(f'Слиток ниже обычного: шторка укоротилась до {round(lo[2])} px и не закрывает его')
+            else: fail('Слиток ниже обычного', f'рамка до {round(lo[0])} px, верх шторки {round(lo[1])} px, высота {round(lo[2])}')
+            pg.evaluate("closeSheets()"); pg.evaluate("(()=>{const b=document.getElementById('liveBanner');b.hidden=true;b.style.minHeight='';})()"); pg.wait_for_timeout(400)
+            for js, nm in [("openSettings()", 'Настройки'), ("openCoin('BTC')", 'Монета')]:
+                pg.evaluate(js); pg.wait_for_timeout(600); small += pg.evaluate(HIT, nm)
+            small = list(dict.fromkeys(small))
+            if not small: ok('зоны нажатия не меньше 48×48 (вкладки, шторки форм, настройки, монета)')
+            else: fail('зоны нажатия ≥48 px', '; '.join(small)[:600])
+        scenario('Шторки форм', {'session': True, 'docs': SEED}, s_sheets)
+
         # --- Д. база недоступна: приложение не падает
         def s_off(pg, n):
             pg.wait_for_timeout(1500); shot(pg, '08-db-down')
