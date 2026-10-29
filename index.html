@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,interactive-widget=resizes-content">
 <title>MoneyLife</title>
 <meta name="theme-color" content="#06040e">
 <script>/* тема до отрисовки: «Авто» — как в телефоне, иначе выбор из настроек */
@@ -59,9 +59,9 @@ p{margin:0}
 .dot{width:7px;height:7px;border-radius:50%;background:var(--dim);flex:none}
 .dot.live{background:var(--pos);box-shadow:0 0 8px var(--pos);animation:blink 1.8s ease-in-out infinite}
 @keyframes blink{50%{opacity:.35}}
-.ib{width:40px;height:40px;border-radius:var(--r-m);border:1px solid var(--line);background:var(--surface);display:grid;place-items:center;cursor:pointer;transition:transform .15s var(--ease),background .2s,border-color .2s;flex:none;padding:0}
+.ib{width:48px;height:48px;border-radius:var(--r-m);border:1px solid var(--line);background:var(--surface);display:grid;place-items:center;cursor:pointer;transition:transform .15s var(--ease),background .2s,border-color .2s;flex:none;padding:0}
 .ib:active{transform:scale(.92)}
-.ib svg{width:19px;height:19px}
+.ib svg{width:20px;height:20px}
 .ib[aria-pressed="true"]{border-color:var(--accent);color:var(--lav);background:var(--accent-soft)}
 
 /* общие */
@@ -301,6 +301,11 @@ nav.tabs .in{max-width:720px;margin:0 auto;display:grid;grid-template-columns:re
 .sh-in{max-width:640px;margin:0 auto;display:flex;flex-direction:column;gap:14px}
 .sh-foot{flex:none;padding:10px max(16px,env(safe-area-inset-right,0px)) calc(12px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));border-top:1px solid var(--line);background:var(--bg2)}
 .sh-foot .sh-in{gap:8px}
+/* шторки форм («Новая запись», «Купить», «Продать», «Пополнить биржу»… и «Запись») — по высоте содержимого, до 92% экрана
+   (решение владельца 2026-10-29: видна вся форма, Слиток может быть закрыт). Поля прокручиваются внутри,
+   «Сохранить» (.sh-foot) закреплена снизу. С клавиатурой (html.kb) — вся видимая часть экрана над ней. */
+html.kb .sheet.fsheet{height:calc(var(--vvh,100dvh) - 8px);max-height:none;bottom:var(--kb,0px)}
+html.kb nav.tabs{visibility:hidden}
 
 /* формы */
 .field{display:flex;flex-direction:column;gap:6px;min-width:0}
@@ -359,7 +364,7 @@ input[type=date]{color-scheme:dark;min-height:46px}
 #coinSheet .sh-body{touch-action:pan-y}
 #coinSheet{height:92vh;height:92dvh}
 .cv-pos{flex:1;display:flex;align-items:center;gap:4px;font-size:13px;font-weight:600;color:var(--mute);min-width:0}
-.cv-nav{width:36px;height:36px;border-radius:var(--r-m);border:1px solid var(--line);background:var(--surface);color:var(--fg);font-size:20px;line-height:1;display:grid;place-items:center;cursor:pointer;padding:0 0 2px}
+.cv-nav{width:48px;height:48px;border-radius:var(--r-m);border:1px solid var(--line);background:var(--surface);color:var(--fg);font-size:20px;line-height:1;display:grid;place-items:center;cursor:pointer;padding:0 0 2px}
 .cv-nav:disabled{opacity:.3;cursor:default}
 .cv-pos span{padding:0 6px;white-space:nowrap}
 .cc{--c:#b15cff;perspective:1400px;-webkit-perspective:1400px}
@@ -442,16 +447,22 @@ button:focus-visible{outline:2px solid var(--pink);outline-offset:2px}
 
 /* ===== v1.2.4: единые скругления (4 размера + круглые) и зоны касания не меньше 48×48 (Material Design) ===== */
 :root{--r-s:8px;--r-m:12px;--r-l:18px;--r-xl:24px;--r-pill:999px}
-.ib,.cv-nav,.ranges button,.more.mini{position:relative}
-.ib::after,.cv-nav::after{content:"";position:absolute;inset:-6px}
+/* v1.2.6: кнопки-иконки (.ib, стрелки монеты) — сами 48×48; у остальных невидимая зона касания добивает до 48 */
+.ib,.cv-nav,.ranges button,.more,.fchip,.seg button,.toast button{position:relative}
 .ranges button{min-width:44px;min-height:36px}
-.ranges button::after{content:"";position:absolute;inset:-6px 0}
-.more.mini::after{content:"";position:absolute;inset:-14px -12px}
+.ranges button::after{content:"";position:absolute;inset:-6px -2px}
+.more::after{content:"";position:absolute;inset:-11px -8px}
+.more.mini::after{inset:-16px -14px}
 .switch::before{content:"";position:absolute;inset:-10px -4px}
 .fchip{min-height:44px;padding:0 14px;display:inline-flex;align-items:center}
+.fchip::after,.seg button::after{content:"";position:absolute;inset:-2px 0}
+.fchip::after{inset:-3px -1px}
 .seg button{min-height:44px}
-.btn.sm{min-height:44px}
-.check{min-height:44px}
+.btn.sm{min-height:48px}
+.check{min-height:48px}
+.chipsrow{padding-top:2px}
+.toast button{min-height:48px;padding:0 10px;margin:-12px -8px -12px 0}
+.search{min-height:48px}
 
 /* ===== v1.2.5: светлая тема (вариант A — карточка баланса и карточка монеты остаются тёмными фирменными) ===== */
 :root[data-theme="light"]{--bg:#f5f2fc;--bg2:#ffffff;--surface:#ffffff;--surface2:#faf8ff;--raise:#efe9fb;--field:#f0ebfa;--line:#e6dff5;--line2:#d4c8ee;
@@ -541,9 +552,9 @@ button:focus-visible{outline:2px solid var(--pink);outline-offset:2px}
 #ob[hidden]{display:none}
 [data-theme="light"] #ob{background:radial-gradient(80vmax 60vmax at 50% -10%,#a64dff26,transparent 60%),var(--bg)}
 .ob-card{width:100%;max-width:420px;display:flex;flex-direction:column;gap:14px;background:linear-gradient(180deg,var(--surface2),var(--surface));border:1px solid var(--line);border-radius:var(--r-xl);padding:22px}
-.ob-top{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:44px}
+.ob-top{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:48px}
 .ob-dots{display:flex;gap:6px}.ob-dots i{width:22px;height:5px;border-radius:3px;background:var(--line2)}.ob-dots i.on{background:var(--accent)}
-.ob-skip{background:none;border:0;color:var(--mute);font:inherit;font-size:13px;font-weight:600;min-height:44px;padding:0 4px;cursor:pointer}
+.ob-skip{background:none;border:0;color:var(--mute);font:inherit;font-size:13px;font-weight:600;min-height:48px;padding:0 4px;cursor:pointer}
 .ob-card h2{font-family:"Sora",var(--ui);font-size:23px;line-height:1.2;margin:0;letter-spacing:-.02em}
 .ob-lead{color:var(--mute);margin:0;line-height:1.5}
 .ob-opts{display:grid;gap:10px}
@@ -555,8 +566,8 @@ button:focus-visible{outline:2px solid var(--pink);outline-offset:2px}
 .ob-opt .sp{font-weight:700;color:var(--lav);font-size:13px}
 .ob-nav{display:flex;gap:10px}.ob-nav .btn{flex:1}
 .ob-coins{display:grid;gap:10px}
-.ob-coin{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr) 44px;gap:8px;align-items:end}
-.ob-coin .ib{width:44px;height:46px}
+.ob-coin{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr) 48px;gap:8px;align-items:end}
+.ob-coin .ib{width:48px;height:48px}
 .ob-calc{background:var(--raise);border-radius:var(--r-m);padding:12px;font-size:14px;color:var(--mute);line-height:1.5}
 .ob-calc b{color:var(--fg)}
 .ob-note{font-size:12px;color:var(--dim);margin:0;line-height:1.45}
@@ -680,7 +691,7 @@ button:focus-visible{outline:2px solid var(--pink);outline-offset:2px}
 <div class="scrim" id="scrim"></div>
 
 <!-- Новая запись -->
-<div class="sheet" id="actSheet" role="dialog" aria-modal="true" aria-labelledby="actTitle">
+<div class="sheet fsheet" id="actSheet" role="dialog" aria-modal="true" aria-labelledby="actTitle">
   <div class="sh-head"><div class="grab"></div><div class="sh-bar"><button type="button" class="ib" id="actBack" aria-label="Назад" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M15 5l-7 7 7 7"/></svg></button><h3 id="actTitle">Новая запись</h3><button type="button" class="ib" data-close aria-label="Закрыть"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div></div>
   <div class="sh-body"><div class="sh-in">
     <div id="f-menu" class="menu">
@@ -795,7 +806,7 @@ button:focus-visible{outline:2px solid var(--pink);outline-offset:2px}
 </div>
 
 <!-- Запись -->
-<div class="sheet" id="txSheet" role="dialog" aria-modal="true" aria-labelledby="txTitle">
+<div class="sheet fsheet" id="txSheet" role="dialog" aria-modal="true" aria-labelledby="txTitle">
   <div class="sh-head"><div class="grab"></div><div class="sh-bar"><span id="txIcon"></span><h3 id="txTitle">Запись</h3><button type="button" class="ib" data-close aria-label="Закрыть"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div></div>
   <div class="sh-body"><div class="sh-in">
     <label class="field"><span>Дата</span><input type="date" id="eDate"></label>
@@ -874,9 +885,9 @@ button:focus-visible{outline:2px solid var(--pink);outline-offset:2px}
 
 <div class="toast" id="toast" role="status"><span id="toastMsg"></span><button type="button" id="toastBtn" hidden></button></div>
 
-<script src="config.js?v=20261028142841"></script>
+<script src="config.js?v=20261029022652"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="shim.js?v=20261028142841"></script>
+<script src="shim.js?v=20261029022652"></script>
 <script>
 /* ===== основа ===== */
 const $=id=>document.getElementById(id);
@@ -1543,6 +1554,23 @@ document.querySelectorAll('.sh-head').forEach(h=>{let y0=null;const sh=h.closest
   h.addEventListener('pointermove',e=>{if(y0==null)return;sh.style.transform=`translateY(${Math.max(0,e.clientY-y0)}px)`;});
   const up=e=>{if(y0==null)return;const dy=e.clientY-y0;y0=null;sh.style.transition='';sh.style.transform='';if(dy>90)closeSheets();};
   h.addEventListener('pointerup',up);h.addEventListener('pointercancel',up);});
+/* экранная клавиатура: шторка формы занимает видимую часть экрана над клавиатурой, поле в фокусе прокручивается в середину шторки */
+let vvFull=0,vvW=0;
+function kbSync(){const vv=window.visualViewport,h=vv?vv.height:innerHeight,w=vv?vv.width:innerWidth,r=document.documentElement;
+  if(Math.abs(w-vvW)>2){vvW=w;vvFull=0;}if(h>vvFull)vvFull=h;
+  const a=document.activeElement,typing=!!(a&&/^(INPUT|SELECT|TEXTAREA)$/.test(a.tagName)&&!/^(checkbox|radio|button)$/.test(a.type||''));
+  const kb=typing&&vvFull-h>120;r.classList.toggle('kb',kb);
+  if(kb){r.style.setProperty('--vvh',h+'px');r.style.setProperty('--kb',Math.max(0,innerHeight-h-(vv?vv.offsetTop:0))+'px');}
+  else{r.style.removeProperty('--vvh');r.style.removeProperty('--kb');}
+  if(typing&&a.closest('.sheet.open'))setTimeout(()=>fieldInView(a),60);}
+function fieldInView(el){const body=el.closest('.sh-body');if(!body||document.activeElement!==el)return;
+  const r=el.getBoundingClientRect(),br=body.getBoundingClientRect();if(r.top>=br.top+8&&r.bottom<=br.bottom-8)return;
+  body.scrollBy({top:(r.top-br.top)-(br.height-r.height)/2,behavior:reduced?'auto':'smooth'});}
+if(window.visualViewport)visualViewport.addEventListener('resize',kbSync);
+window.addEventListener('resize',kbSync);
+document.addEventListener('focusin',()=>setTimeout(kbSync,300));
+document.addEventListener('focusout',()=>setTimeout(kbSync,150));
+kbSync();
 
 /* ===== новая запись ===== */
 const TITLES={menu:'Новая запись',buy:'Купить',dip:'Докупка по уровню',sell:'Продать',deposit:'Пополнить биржу',reserve:'Резерв USDT',earn:'Стейкинг резерва',income:'Получил доход',start:'Остаток монеты'};
@@ -1949,7 +1977,7 @@ function msSync(x){MSC.last=x;if(!msApply())return;if(!S.ready||document.getElem
   if(window.Mascot){try{window.Mascot.sync(msPayload(x));}catch(e){}}else msLoad();}
 function msLoad(){if(MSC.loading||MSC.failed)return;MSC.loading=true;
   const add=(src,ok)=>{try{const s=document.createElement('script');s.src=src;s.async=true;s.onload=ok;s.onerror=()=>{MSC.failed=true;};document.head.appendChild(s);}catch(e){MSC.failed=true;}};
-  const boot=()=>add('mascot.js?v=20261028142841',()=>{try{if(window.Mascot&&window.Mascot.init({host:$('mascot'),app:{audio:ac,buzz}})&&MSC.last&&$('ob').hidden&&!document.getElementById('mlAuth'))window.Mascot.sync(msPayload(MSC.last));}catch(e){}});
+  const boot=()=>add('mascot.js?v=20261029022652',()=>{try{if(window.Mascot&&window.Mascot.init({host:$('mascot'),app:{audio:ac,buzz}})&&MSC.last&&$('ob').hidden&&!document.getElementById('mlAuth'))window.Mascot.sync(msPayload(MSC.last));}catch(e){}});
   setTimeout(()=>{if(window.THREE)boot();else add('three.min.js',boot);},300);}
 function render(){const D=derive();renderHeader();renderHome(D);renderGrowth();renderCoins(D);renderStrategy(D);renderActivity();earnNudge();if(cvSym&&$('coinSheet').classList.contains('open'))renderCoinView();}
 document.body.classList.add('loading');

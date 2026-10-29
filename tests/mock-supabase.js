@@ -1,19 +1,35 @@
 /* Имитация Supabase для автотестов MoneyLife.
    Подставляется в страницу ДО загрузки приложения (Playwright add_init_script).
    Настройка сценария — через window.__ML_TEST перед этим скриптом:
-     { session: true|false, docs: [{col,id,data}], failLoad: false }
+     { session: true|false, docs: [{col,id,data}], failLoad: false,
+       otherDocs: [{col,id,data}]   — записи ДРУГОГО пользователя в той же базе (приложению не видны),
+       accountDelete: true          — включить кнопку «Удалить аккаунт» (флаг из config.js),
+       persist: true                — сохранить состояние базы при перезагрузке страницы (sessionStorage) }
    Все записи хранятся в памяти страницы; сеть не нужна.
+   rpc('delete_my_account') — как SQL-функция supabase/delete_my_account.sql: без входа — ошибка,
+   иначе удаляет только записи вошедшего и его аккаунт; повторный вызов ничего не ломает.
    Журнал вызовов — window.__mlCalls (для проверок в тестах). */
 (function () {
   'use strict';
   const T = window.__ML_TEST || {};
   const USER = { id: 'test-user-0001', email: 'tester@example.com', app_metadata: { provider: 'email' } };
-  const rows = new Map();
-  for (const d of (T.docs || [])) rows.set(d.col + '/' + d.id, { col: d.col, id: d.id, data: JSON.parse(JSON.stringify(d.data || {})) });
+  const OTHER = 'other-user-0002';
+  const rows = new Map(), foreign = new Map();   /* rows — записи USER, foreign — записи OTHER */
+  const KEY = '__mlMockState';
+  let saved = null;
+  if (T.persist) { try { saved = JSON.parse(sessionStorage.getItem(KEY) || 'null'); } catch (e) {} }
+  const put = (m, d) => m.set(d.col + '/' + d.id, { col: d.col, id: d.id, data: JSON.parse(JSON.stringify(d.data || {})) });
+  for (const d of (saved ? saved.rows : (T.docs || []))) put(rows, d);
+  for (const d of (saved ? saved.foreign : (T.otherDocs || []))) put(foreign, d);
+  const deletedUsers = new Set(saved ? saved.deleted : []);
   const calls = (window.__mlCalls = []);
   const log = (op, a) => calls.push({ op, a: a === undefined ? null : JSON.parse(JSON.stringify(a)) });
   const ok = data => Promise.resolve({ data, error: null });
-  let session = T.session === false ? null : { access_token: 'test', user: USER };
+  let session = saved ? (saved.session ? { access_token: 'test', user: USER } : null) : (T.session === false ? null : { access_token: 'test', user: USER });
+  if (T.persist) addEventListener('pagehide', () => { try { sessionStorage.setItem(KEY, JSON.stringify({ rows: [...rows.values()], foreign: [...foreign.values()], deleted: [...deletedUsers], session: !!session })); } catch (e) {} });
+  if (T.accountDelete) {   /* config.js присваивает window.ML_CONFIG — подменяем только флаг accountDelete */
+    let cfg; Object.defineProperty(window, 'ML_CONFIG', { configurable: true, get: () => cfg, set: v => { cfg = Object.assign({}, v, { accountDelete: true }); } });
+  }
   const authCbs = [];
 
   function query(table) {
@@ -47,6 +63,13 @@
         rows.set(k, { col: cur.col, id: cur.id, data: next });
         return ok(null);
       }
+      if (name === 'delete_my_account') {
+        try { sessionStorage.setItem('__mlDelCalls', String(+(sessionStorage.getItem('__mlDelCalls') || 0) + 1)); } catch (e) {}   /* счёт вызовов переживает перезагрузку */
+        if (!session) return Promise.resolve({ data: null, error: { message: 'not signed in', code: '42501' } });
+        rows.clear();                       /* delete from public.docs where owner = auth.uid() */
+        deletedUsers.add(session.user.id);  /* delete from auth.users where id = auth.uid() — повторно: 0 строк */
+        return ok(null);
+      }
       return ok(null);
     },
     channel() { const ch = { on() { return ch; }, subscribe() { return ch; }, unsubscribe() {} }; return ch; },
@@ -55,7 +78,7 @@
       getSession: () => ok({ session }),
       getUser: () => ok({ user: session ? session.user : null }),
       onAuthStateChange(cb) { authCbs.push(cb); return { data: { subscription: { unsubscribe() {} } } }; },
-      signInWithPassword(c) { log('signIn', { email: c && c.email }); session = { access_token: 'test', user: USER }; setTimeout(() => authCbs.forEach(f => f('SIGNED_IN', session)), 0); return ok({ session, user: USER }); },
+      signInWithPassword(c) { log('signIn', { email: c && c.email }); if (deletedUsers.has(USER.id)) return Promise.resolve({ data: { session: null, user: null }, error: { message: 'Invalid login credentials', status: 400 } }); session = { access_token: 'test', user: USER }; setTimeout(() => authCbs.forEach(f => f('SIGNED_IN', session)), 0); return ok({ session, user: USER }); },
       signUp(c) { log('signUp', { email: c && c.email }); return ok({ user: USER, session: null }); },
       signInWithOAuth() { log('oauth'); return ok({}); },
       signOut() { log('signOut'); session = null; return ok(null); },
@@ -66,5 +89,7 @@
   };
 
   window.__mlRows = rows;
+  window.__mlForeign = foreign;
+  window.__mlDeletedUsers = deletedUsers;
   window.supabase = { createClient: () => client };
 })();
