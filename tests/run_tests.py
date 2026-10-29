@@ -342,7 +342,8 @@ def run_browser():
             else: fail('запись покупки', 'новая запись tx не появилась (возможно, поменялась форма — обнови тест)')
         scenario('Покупка', {'session': True, 'docs': SEED}, s_buy)
 
-        # --- Г2. шторки форм: одна высота, верх ниже Слитка, «Сохранить» всегда видна; кнопки не меньше 48 px
+        # --- Г2. шторки форм: большие, по высоте содержимого (решение владельца 2026-10-29: видна вся форма, Слиток может быть закрыт),
+        #     «Сохранить» всегда видна внизу, длинная форма прокручивается; кнопки не меньше 48 px
         GEOM = """()=>{const s=document.getElementById('actSheet').getBoundingClientRect(),f=document.getElementById('saveBtn').getBoundingClientRect(),
             b=document.querySelector('#actSheet .sh-body');return {top:s.top,h:s.height,bottom:s.bottom,vh:innerHeight,save:[f.top,f.bottom,f.height],sh:b.scrollHeight,ch:b.clientHeight}}"""
         # зона касания: сама кнопка или её невидимый ::after/::before (так увеличены маленькие кнопки)
@@ -366,7 +367,6 @@ def run_browser():
                 small += pg.evaluate(HIT, tab)
             pg.evaluate("document.querySelector('nav.tabs [data-tab=\"home\"]').click()"); pg.wait_for_timeout(500)
             pg.evaluate("scrollTo(0,0)")
-            mb = pg.evaluate("(()=>{const m=document.getElementById('mascot'),r=m&&m.getBoundingClientRect();return r&&r.height?r.bottom:document.querySelector('.hero').getBoundingClientRect().bottom})()")
             g = {}
             pg.evaluate("document.getElementById('plusBtn').click()"); pg.wait_for_timeout(700)
             for m, title in [('menu', 'Новая запись'), ('deposit', 'Пополнить биржу'), ('sell', 'Продать'), ('buy', 'Купить')]:
@@ -379,21 +379,28 @@ def run_browser():
                     pg.evaluate(f"document.documentElement.setAttribute('data-theme','{th}')"); pg.wait_for_timeout(150)
                     shot(pg, f'11-sheet-{m}-{th}')
                 pg.evaluate("document.documentElement.setAttribute('data-theme','dark')")
-            hs = {t: round(v['h']) for t, v in g.items()}
-            if max(hs.values()) - min(hs.values()) <= 1: ok(f'шторки «Новая запись», «Пополнить биржу», «Продать», «Купить» одной высоты: {hs["Купить"]} px')
-            else: fail('шторки форм одной высоты', str(hs))
-            over = {t: round(v['top']) for t, v in g.items() if v['top'] < mb - 0.5}
-            if not over: ok(f'верх шторок ({round(g["Купить"]["top"])} px) ниже Слитка (рамка до {round(mb)} px)')
-            else: fail('шторка не закрывает Слитка', f'рамка маскота до {round(mb)} px, верх шторок: {over}')
             b = g['Купить']
-            if b['save'][2] > 0 and b['save'][0] >= b['top'] and b['save'][1] <= b['vh']: ok('«Купить»: кнопка «Сохранить» видна внизу шторки')
-            else: fail('«Купить»: «Сохранить» видна', str(b))
-            if b['sh'] > b['ch'] + 20:
+            # большая шторка: не меньше 75% окна — или вся форма видна целиком без обрезки
+            if b['h'] >= 0.75 * b['vh'] - 0.5 or b['sh'] <= b['ch'] + 1: ok(f'«Купить»: шторка большая — {round(b["h"])} px из {b["vh"]} ({round(100 * b["h"] / b["vh"])}% окна), форма {b["sh"]} px')
+            else: fail('«Купить»: шторка большая (≥75% окна или вся форма видна)', f'высота {round(b["h"])} px из {b["vh"]}, форма {b["sh"]} px в окне {b["ch"]} px')
+            if b['bottom'] <= b['vh'] + 1 and b['h'] <= 0.92 * b['vh'] + 1: ok(f'«Купить»: шторка в пределах экрана (до 92% окна, верх {round(b["top"])} px)')
+            else: fail('«Купить»: шторка в пределах экрана', str(b))
+            if b['save'][2] > 0 and b['save'][0] >= b['top'] and b['save'][1] <= b['vh'] and b['save'][1] >= b['bottom'] - 120: ok('«Купить»: кнопка «Сохранить» видна внизу шторки')
+            else: fail('«Купить»: «Сохранить» видна внизу', str(b))
+            short = {t: round(v['h']) for t, v in g.items() if not ((v['save'][2] == 0 or v['save'][1] <= v['vh']) and (v['sh'] <= v['ch'] + 1 or v['h'] >= 0.75 * v['vh'] - 0.5))}
+            if not short: ok('шторки «Новая запись», «Пополнить биржу», «Продать», «Купить»: форма видна целиком или шторка большая, «Сохранить» на экране')
+            else: fail('шторки форм: видна вся информация', str(short))
+            # длинная форма (маленький телефон, окно 640 px): тело шторки прокручивается, «Сохранить» остаётся внизу
+            pg.set_viewport_size({'width': 390, 'height': 640}); pg.wait_for_timeout(600)
+            sm = pg.evaluate(GEOM)
+            if sm['sh'] > sm['ch'] + 20:
                 st = pg.evaluate("(()=>{const x=document.querySelector('#actSheet .sh-body');x.scrollTop=9999;return x.scrollTop})()")
-                sv = pg.evaluate("(()=>{const f=document.getElementById('saveBtn').getBoundingClientRect();return f.bottom<=innerHeight&&f.height>0})()")
-                if st > 0 and sv: ok(f'«Купить»: длинная форма прокручивается внутри шторки ({b["sh"]} px в окне {b["ch"]} px)')
-                else: fail('«Купить»: прокрутка внутри шторки', f'scrollTop={st}, «Сохранить» видна={sv}')
-            else: fail('«Купить»: прокрутка внутри шторки', f'форма не длиннее окна шторки ({b["sh"]} / {b["ch"]}) — проверка не сработала')
+                sv = pg.evaluate("(()=>{const f=document.getElementById('saveBtn').getBoundingClientRect(),s=document.getElementById('actSheet').getBoundingClientRect();return f.bottom<=innerHeight&&f.height>0&&f.top>=s.top})()")
+                shot(pg, '11-sheet-buy-640')
+                if st > 0 and sv and sm['bottom'] <= sm['vh'] + 1: ok(f'«Купить» на окне 640 px: длинная форма прокручивается внутри шторки ({sm["sh"]} px в окне {sm["ch"]} px), «Сохранить» видна')
+                else: fail('«Купить»: прокрутка внутри шторки', f'scrollTop={st}, «Сохранить» видна={sv}, {sm}')
+            else: fail('«Купить»: прокрутка внутри шторки', f'форма не длиннее окна шторки ({sm["sh"]} / {sm["ch"]}) — проверка не сработала')
+            pg.set_viewport_size({'width': 390, 'height': 844}); pg.wait_for_timeout(500)
             # экранная клавиатура: окно сжимается до 520 px, поле в фокусе и «Сохранить» должны остаться видны
             pg.evaluate("document.querySelector('#actSheet .sh-body').scrollTop=0")
             pg.focus('#bu_ALT'); pg.wait_for_timeout(400)
@@ -407,20 +414,53 @@ def run_browser():
             else: fail('с клавиатурой поля не перекрыты', str(k))
             pg.evaluate("document.activeElement&&document.activeElement.blur()")
             pg.set_viewport_size({'width': 390, 'height': 844}); pg.wait_for_timeout(500)
-            # Слиток ниже обычного (плашка над карточкой баланса) — шторка укорачивается и всё равно его не закрывает
-            pg.evaluate("closeSheets()"); pg.wait_for_timeout(500)
-            pg.evaluate("(()=>{const b=document.getElementById('liveBanner');b.hidden=false;b.style.minHeight='110px';b.dataset.t='1';})()"); pg.wait_for_timeout(300)
-            pg.evaluate("document.getElementById('plusBtn').click()"); pg.wait_for_timeout(700)
-            lo = pg.evaluate("(()=>{const m=document.getElementById('mascot').getBoundingClientRect(),s=document.getElementById('actSheet').getBoundingClientRect();return [m.bottom,s.top,s.height]})()")
-            if lo[1] >= lo[0] - 0.5 and lo[2] >= 339: ok(f'Слиток ниже обычного: шторка укоротилась до {round(lo[2])} px и не закрывает его')
-            else: fail('Слиток ниже обычного', f'рамка до {round(lo[0])} px, верх шторки {round(lo[1])} px, высота {round(lo[2])}')
-            pg.evaluate("closeSheets()"); pg.evaluate("(()=>{const b=document.getElementById('liveBanner');b.hidden=true;b.style.minHeight='';})()"); pg.wait_for_timeout(400)
+            pg.evaluate("closeSheets()"); pg.wait_for_timeout(400)
             for js, nm in [("openSettings()", 'Настройки'), ("openCoin('BTC')", 'Монета')]:
                 pg.evaluate(js); pg.wait_for_timeout(600); small += pg.evaluate(HIT, nm)
             small = list(dict.fromkeys(small))
             if not small: ok('зоны нажатия не меньше 48×48 (вкладки, шторки форм, настройки, монета)')
             else: fail('зоны нажатия ≥48 px', '; '.join(small)[:600])
         scenario('Шторки форм', {'session': True, 'docs': SEED}, s_sheets)
+
+        # --- Г3. Слиток на главной один: заглушка .ms-still прячется, когда рисует 3D, и после потери WebGL-контекста
+        #     (Android уводит приложение в фон) не остаётся видна рядом с ожившим 3D
+        MS = """()=>{const h=document.getElementById('mascot'),st=h&&h.querySelector('.ms-still'),d=window.Mascot&&Mascot.debug&&Mascot.debug.state();
+            return {cv:h?h.querySelectorAll('canvas').length:-1,mscv:document.querySelectorAll('.ms-cv').length,live:!!(h&&h.classList.contains('ms-live')),
+              still:st?+getComputedStyle(st).opacity:-1,frame:!!(d&&d.frame)}}"""
+        def s_mascot(pg, n):
+            wait_app(pg)
+            if not pg.evaluate("(()=>{try{const c=document.createElement('canvas');return !!(c.getContext('webgl2')||c.getContext('webgl'))}catch(e){return false}})()"):
+                ok('(Слиток: в тестовом браузере нет WebGL — проверки 3D пропущены)'); return
+            try: pg.wait_for_function("()=>{const h=document.getElementById('mascot');return h&&h.classList.contains('ms-live')}", polling=250, timeout=25000)
+            except Exception: raise AssertionError('3D-Слиток не ожил за 25 с (нет класса ms-live)')
+            pg.wait_for_timeout(700)
+            a = pg.evaluate(MS)
+            if a['cv'] == 1 and a['mscv'] == 1 and a['still'] == 0: ok('на главной ровно один Слиток: один canvas .ms-cv, заглушка скрыта')
+            else: fail('на главной ровно один Слиток', str(a))
+            for th in ['dark', 'light']:
+                pg.evaluate(f"document.documentElement.setAttribute('data-theme','{th}')"); pg.wait_for_timeout(400)
+                shot(pg, f'15-mascot-home-{th}')
+            pg.evaluate("document.documentElement.setAttribute('data-theme','dark')")
+            has = pg.evaluate("""()=>{const c=document.querySelector('#mascot .ms-cv');if(!c)return false;const g=c.getContext('webgl2')||c.getContext('webgl');
+                const x=g&&g.getExtension('WEBGL_lose_context');if(!x)return false;window.__msLC=x;return true}""")
+            if not has: ok('(Слиток: WEBGL_lose_context недоступно в тестовом браузере — проверка потери контекста пропущена)'); return
+            pg.evaluate("window.__msLC.loseContext()"); pg.wait_for_timeout(1500)
+            b = pg.evaluate(MS)
+            if not b['live'] and b['still'] == 1 and not b['frame']: ok('потеря WebGL-контекста: 3D спрятан, видна только заглушка')
+            else: fail('потеря WebGL-контекста', str(b))
+            pg.evaluate("window.__msLC.restoreContext()")
+            try: pg.wait_for_function("()=>document.getElementById('mascot').classList.contains('ms-live')", polling=250, timeout=8000)
+            except Exception: pass
+            pg.wait_for_timeout(2000)
+            c = pg.evaluate(MS)
+            shot(pg, '15-mascot-after-restore')
+            both = c['frame'] and c['still'] > 0          # 3D уже рисует, а заглушка всё ещё видна — «два Слитка»
+            if c['cv'] != 1 or c['mscv'] != 1: fail('после восстановления контекста — один canvas', str(c))
+            elif both or c['live'] != c['frame']: fail('после восстановления контекста — не видно двух Слитков', str(c))
+            elif c['live'] and c['still'] == 0: ok('после восстановления контекста: 3D-Слиток ожил, заглушка скрыта, canvas один')
+            elif not c['live'] and c['still'] == 1: ok('после восстановления контекста: 3D не ожил, видна только заглушка (двух Слитков нет)')
+            else: fail('после восстановления контекста', str(c))
+        scenario('Слиток один', {'session': True, 'docs': SEED}, s_mascot)
 
         # --- Д. база недоступна: приложение не падает
         def s_off(pg, n):

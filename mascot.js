@@ -12,7 +12,7 @@
 (function () {
   'use strict';
   const T = window.THREE;
-  if (!T || window.Mascot) return;
+  if (!T || window.Mascot) return;   /* скрипт подключили второй раз — второго Слитка (и второго canvas) не будет */
   const SELF = (document.currentScript && document.currentScript.src) || '';
   const VOICE_URL = /mascot\.js/.test(SELF) ? SELF.replace(/mascot\.js/, 'voice-slitok.js') : 'voice-slitok.js';
   const VOICE_N_URL = VOICE_URL.replace(/voice-slitok\.js/, 'voice-slitok-n.js');   /* числа и шаблоны новостей — грузятся только когда нужны */
@@ -989,7 +989,7 @@
 @media (prefers-reduced-motion:reduce){.ms-float{transition:none}.ms-alert.on,.ms-zing,.ms-shine{animation:none}}`;
 
   /* ---------- состояние ---------- */
-  let host, hero, A = {}, renderer, scene, camera, keyLight, M, R, PR, PT, HP = null, raf = 0, inView = true, lastF = 0, inited = false, firstFrame = false;
+  let host, hero, A = {}, renderer, scene, camera, keyLight, M, R, PR, PT, HP = null, raf = 0, inView = true, lastF = 0, inited = false, firstFrame = false, lost = false;
   const ST = {
     mood: 'calm', moodSince: 0, pct: null, go: false, fresh: 0, offline: false, offSince: 0, hide: false, sound: true,
     lastInput: now(), lastEvent: now(), nextAct: 0, lastJob: '', nextSignal: 0, lastAuto: -1e9, lastEv: -1e9, lastTap: 0, tapTimer: 0, taps: [],
@@ -2403,6 +2403,7 @@
   }
   function frame() {
     raf = 0;
+    if (lost) return;   /* WebGL-контекст потерян (приложение ушло в фон) — не рисуем; после восстановления разбудит wakeLoop */
     if (!visible()) { hum(false); ST.hum = false; QG.last = 0; return; }
     raf = requestAnimationFrame(frame);
     const t = now(), fps = targetFps(t);
@@ -2439,7 +2440,7 @@
     }
     QG.last = t;
   }
-  function wakeLoop() { if (!raf && inited && (LY.ok || measure()) && visible()) { lastF = now(); raf = requestAnimationFrame(frame); } }
+  function wakeLoop() { if (!raf && inited && !lost && (LY.ok || measure()) && visible()) { lastF = now(); raf = requestAnimationFrame(frame); } }
 
   /* ---------- касания: тап, двойной тап, много тапов, долгое нажатие — взять на руки, свайп — покрутить ---------- */
   function userInput(t) { const wasSleep = ST.mood === 'sleep'; ST.lastInput = t || now(); if (wasSleep) { ST.wokeAt = now(); wakeLoop(); } }
@@ -2521,6 +2522,7 @@
     renderer.outputEncoding = T.sRGBEncoding; renderer.toneMapping = T.ACESFilmicToneMapping; renderer.toneMappingExposure = 0.95;
     renderer.shadowMap.enabled = true; renderer.shadowMap.type = T.PCFSoftShadowMap;
     renderer.setClearColor(0x000000, 0);
+    host.querySelectorAll('.ms-cv').forEach(c => c.remove());   /* остался canvas от неудачного запуска — убираем */
     const cv = renderer.domElement; cv.className = 'ms-cv'; cv.setAttribute('aria-hidden', 'true'); host.appendChild(cv);
     scene = new T.Scene(); scene.environment = envMap(renderer);
     camera = new T.OrthographicCamera(-4, 4, 3, -3, 1, 80);
@@ -2549,7 +2551,10 @@
     ui.hit.addEventListener('touchmove', e => { if (ST.drag && ST.drag.carry) e.preventDefault(); }, { passive: false });
     ui.hit.addEventListener('contextmenu', e => e.preventDefault());
     ui.hit.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); unlock(); userInput(); tapped(); } });
-    cv.addEventListener('webglcontextlost', e => { e.preventDefault(); host.classList.remove('ms-live'); cancelAnimationFrame(raf); raf = 0; });
+    /* потеря контекста: прячем 3D (видна заглушка .ms-still); после восстановления первый кадр снова ставит ms-live —
+       иначе заглушка и живой Слиток были бы видны одновременно */
+    cv.addEventListener('webglcontextlost', e => { e.preventDefault(); lost = true; firstFrame = false; host.classList.remove('ms-live'); cancelAnimationFrame(raf); raf = 0; });
+    cv.addEventListener('webglcontextrestored', () => { lost = false; wakeLoop(); });
     setInterval(() => { if (!raf) wakeLoop(); }, 700);
     ST.nextBlink = now() + 1.5; ST.nextGaze = now() + 1; ST.nextAct = now() + 9;
     setTimeout(loadPack, 2500);
