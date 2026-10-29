@@ -301,10 +301,9 @@ nav.tabs .in{max-width:720px;margin:0 auto;display:grid;grid-template-columns:re
 .sh-in{max-width:640px;margin:0 auto;display:flex;flex-direction:column;gap:14px}
 .sh-foot{flex:none;padding:10px max(16px,env(safe-area-inset-right,0px)) calc(12px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));border-top:1px solid var(--line);background:var(--bg2)}
 .sh-foot .sh-in{gap:8px}
-/* v1.2.6: шторки форм («Новая запись», «Купить», «Продать», «Пополнить биржу»… и «Запись») — одной высоты.
-   Верх — ниже Слитка: 60% экрана, но не выше 300 px от верха (маскот кончается ~280 px), и не меньше 340 px.
-   Поля прокручиваются внутри, «Сохранить» (.sh-foot) закреплена снизу. С клавиатурой (html.kb) — вся видимая часть экрана. */
-.sheet.fsheet{height:340px;height:clamp(340px,calc(100vh - 300px),60vh);height:clamp(340px,calc(100dvh - 300px),60dvh);height:min(var(--fs-h,100dvh),clamp(340px,calc(100dvh - 300px),60dvh))}
+/* шторки форм («Новая запись», «Купить», «Продать», «Пополнить биржу»… и «Запись») — по высоте содержимого, до 92% экрана
+   (решение владельца 2026-10-29: видна вся форма, Слиток может быть закрыт). Поля прокручиваются внутри,
+   «Сохранить» (.sh-foot) закреплена снизу. С клавиатурой (html.kb) — вся видимая часть экрана над ней. */
 html.kb .sheet.fsheet{height:calc(var(--vvh,100dvh) - 8px);max-height:none;bottom:var(--kb,0px)}
 html.kb nav.tabs{visibility:hidden}
 
@@ -886,9 +885,9 @@ button:focus-visible{outline:2px solid var(--pink);outline-offset:2px}
 
 <div class="toast" id="toast" role="status"><span id="toastMsg"></span><button type="button" id="toastBtn" hidden></button></div>
 
-<script src="config.js?v=20261028192000"></script>
+<script src="config.js?v=20261029022652"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="shim.js?v=20261028192000"></script>
+<script src="shim.js?v=20261029022652"></script>
 <script>
 /* ===== основа ===== */
 const $=id=>document.getElementById(id);
@@ -1543,11 +1542,7 @@ $('cvSell').addEventListener('click',()=>{const s=cvSym;openAct('sell',{sym:s});
 
 /* ===== шторки ===== */
 let txReturn=null;
-/* шторка формы: 60% экрана, а если Слиток стоит ниже обычного (два ряда чипов, плашка сверху) — укорачиваем, чтобы не закрыть его */
-function fsFit(sh){if(!sh||!sh.classList.contains('fsheet'))return;sh.style.removeProperty('--fs-h');
-  const m=$('mascot'),r=m&&m.offsetParent?m.getBoundingClientRect():null;
-  if(r&&r.height&&r.bottom>0&&r.bottom<innerHeight)sh.style.setProperty('--fs-h',Math.max(340,Math.floor(innerHeight-r.bottom-8))+'px');}
-function openSheet(id){sugHide();document.querySelectorAll('.sheet.open').forEach(s=>{if(s.id!==id)s.classList.remove('open');});if(!$(id).classList.contains('open'))fsFit($(id));$(id).classList.add('open');$('scrim').classList.add('open');document.body.classList.add('lock');play('tick');buzz(8);}
+function openSheet(id){sugHide();document.querySelectorAll('.sheet.open').forEach(s=>{if(s.id!==id)s.classList.remove('open');});$(id).classList.add('open');$('scrim').classList.add('open');document.body.classList.add('lock');play('tick');buzz(8);}
 function closeSheets(){sugHide();const back=txReturn&&$('txSheet').classList.contains('open')?txReturn:null;txReturn=null;
   document.querySelectorAll('.sheet.open').forEach(s=>s.classList.remove('open'));
   if(back&&cvSym){$(back).classList.add('open');renderCoinView();return;}
@@ -1982,7 +1977,7 @@ function msSync(x){MSC.last=x;if(!msApply())return;if(!S.ready||document.getElem
   if(window.Mascot){try{window.Mascot.sync(msPayload(x));}catch(e){}}else msLoad();}
 function msLoad(){if(MSC.loading||MSC.failed)return;MSC.loading=true;
   const add=(src,ok)=>{try{const s=document.createElement('script');s.src=src;s.async=true;s.onload=ok;s.onerror=()=>{MSC.failed=true;};document.head.appendChild(s);}catch(e){MSC.failed=true;}};
-  const boot=()=>add('mascot.js?v=20261028192000',()=>{try{if(window.Mascot&&window.Mascot.init({host:$('mascot'),app:{audio:ac,buzz}})&&MSC.last&&$('ob').hidden&&!document.getElementById('mlAuth'))window.Mascot.sync(msPayload(MSC.last));}catch(e){}});
+  const boot=()=>add('mascot.js?v=20261029022652',()=>{try{if(window.Mascot&&window.Mascot.init({host:$('mascot'),app:{audio:ac,buzz}})&&MSC.last&&$('ob').hidden&&!document.getElementById('mlAuth'))window.Mascot.sync(msPayload(MSC.last));}catch(e){}});
   setTimeout(()=>{if(window.THREE)boot();else add('three.min.js',boot);},300);}
 function render(){const D=derive();renderHeader();renderHome(D);renderGrowth();renderCoins(D);renderStrategy(D);renderActivity();earnNudge();if(cvSym&&$('coinSheet').classList.contains('open'))renderCoinView();}
 document.body.classList.add('loading');
