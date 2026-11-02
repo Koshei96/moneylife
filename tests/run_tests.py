@@ -5,7 +5,9 @@
   1. Статика: синтаксис всех JS (файлы и встроенные скрипты index.html), валидность JSON,
      манифест PWA (id, категория, иконки any/maskable, ярлыки), шаблон assetlinks.json,
      что все файлы из списка SHELL в sw.js существуют; страница удаления аккаунта delete.html
-     (RU/UK, ссылка из privacy.html) и SQL-функция supabase/delete_my_account.sql.
+     (RU/UK, ссылка из privacy.html) и SQL-функция supabase/delete_my_account.sql;
+     публичные страницы: почта поддержки ссылкой mailto, нет заполнителей и TODO, а тексты про кнопку
+     «Удалить аккаунт» соответствуют флагу accountDelete в config.js (выключена → «появится»).
   2. Приложение в настоящем браузере (Chromium, экран телефона 390x844) без интернета:
      Supabase подменён имитацией (tests/mock-supabase.js), внешние запросы отрезаны.
      Сценарии: экран входа, новый пользователь (знакомство), пользователь с данными
@@ -77,10 +79,9 @@ def deletion_checks():
         t = part.group(1) if part else ''
         miss = [x for x in ['#delete', 'Удалить аккаунт', 'УДАЛИТЬ', 'Удалить навсегда', 'privacy.html'] if x not in t]
         ok(f'delete.html ({name}): шаги в приложении, ссылка #delete и политика') if not miss else fail(f'delete.html ({name})', 'нет: ' + ', '.join(miss))
-    # почту поддержки выбирает владелец — пока заметный заполнитель, придуманных адресов нет
-    if '[почта поддержки' in dh and not re.search(r'[\w.+-]+@[\w-]+\.[a-z]{2,}', dh): ok('delete.html: вместо почты поддержки — заполнитель, адрес не придуман')
-    else: fail('delete.html: почта поддержки', 'нет заполнителя или вписан адрес, которого владелец не выбирал')
     pv = (ROOT / 'privacy.html').read_text(encoding='utf-8')
+    support_mail_checks({'delete.html': dh, 'privacy.html': pv})
+    public_pages_checks()
     n = pv.count('href="delete.html"')
     ok('privacy.html: ссылка на delete.html (RU и UK)') if n >= 2 else fail('privacy.html: ссылка на delete.html', f'нужна в обоих языках, найдено {n}')
     q = ROOT / 'supabase' / 'delete_my_account.sql'
@@ -110,6 +111,72 @@ def deletion_checks():
     else: fail('SQL: права', f'grant → {grants}')
     if 'create or replace function' in sql and 'drop ' not in sql: ok('SQL: повторный запуск файла безопасен (create or replace, без drop)')
     else: fail('SQL: повторный запуск', 'нужен create or replace без drop')
+
+SUPPORT_MAIL = 'moneylife.ap@gmail.com'   # почта поддержки — выбрал владелец 02.11.2026
+SUBJECTS = {'ru': 'Удалить аккаунт', 'uk': 'Видалити акаунт'}
+
+def articles(html):
+    return {m.group(1): m.group(2) for m in re.finditer(r'<article lang="(\w+)"[^>]*>(.*?)</article>', html, re.S)}
+
+def support_mail_checks(pages):
+    """Почта поддержки на privacy.html и delete.html: настоящий адрес ссылкой mailto в обоих языках,
+    тема письма закодирована правильно (%D0…, пробел = %20), чужих/придуманных адресов нет."""
+    from urllib.parse import unquote, urlsplit, parse_qs
+    for page, html in pages.items():
+        others = sorted(set(re.findall(r'[\w.+-]+@[\w-]+(?:\.[\w-]+)+', html)) - {SUPPORT_MAIL})
+        if others: fail(f'{page}: почта поддержки', 'на странице другие адреса: ' + ', '.join(others))
+        for lang, body in articles(html).items():
+            hrefs = re.findall(r'href="(mailto:[^"]*)"', body)
+            bad = [h for h in hrefs if re.search(r'[^\x21-\x7e]', h) or urlsplit(h).path != SUPPORT_MAIL]
+            subj = [unquote(parse_qs(urlsplit(h).query).get('subject', [''])[0]) for h in hrefs if 'subject=' in h]
+            if not hrefs: fail(f'{page} ({lang}): почта поддержки', f'нет ссылки mailto:{SUPPORT_MAIL}')
+            elif bad: fail(f'{page} ({lang}): ссылка mailto', 'незакодированные символы или чужой адрес: ' + ', '.join(bad))
+            elif not subj or any(s != SUBJECTS[lang] for s in subj): fail(f'{page} ({lang}): тема письма', f'после раскодирования {subj}, ожидалось «{SUBJECTS[lang]}»')
+            else: ok(f'{page} ({lang}): почта {SUPPORT_MAIL} ссылкой mailto, тема «{SUBJECTS[lang]}» закодирована верно')
+
+PLACEHOLDERS = [(r'\[[^\]\n]{0,80}выберет владелец[^\]\n]{0,40}\]', '[… выберет владелец]'), (r'\bTODO\b', 'TODO'),
+                (r'\bFIXME\b', 'FIXME'), (r'class="[^"]*\btodo\b', 'class="todo"')]
+DEL_BUTTON = re.compile(r'#delete|«Удалить аккаунт»|«Удалить навсегда»')   # кнопка/окно удаления в приложении
+SOON = re.compile(r"появ\w*ся|з['’]яв\w*ся")                               # «появится / появятся», «з'явиться / з'являться»
+
+def delete_button_claims(html):
+    """Абзацы и пункты списков, где упомянута кнопка удаления в приложении (или ссылка #delete).
+    Возвращает [(язык, текст, есть_ли_пометка_«появится»)]. Пометка засчитывается в самом абзаце/пункте
+    или в заголовке h2 той же карточки. Тема письма («тема «Удалить аккаунт»») кнопкой не считается."""
+    out = []
+    for lang, body in articles(html).items():
+        for card in re.findall(r'<div class="card">(.*?)</div>', body, re.S):
+            h2 = re.search(r'<h2>(.*?)</h2>', card, re.S)
+            h2 = h2.group(1) if h2 else ''
+            for _, el in re.findall(r'<(p|li)\b[^>]*>(.*?)</\1>', card, re.S):
+                text = re.sub(r'тем\w*\s+«[^»]*»', '', el)
+                if DEL_BUTTON.search(text):
+                    plain = re.sub(r'\s+', ' ', re.sub(r'<[^>]+>', '', el)).strip()
+                    out.append((lang, plain, bool(SOON.search(el) or SOON.search(h2))))
+    return out
+
+def public_pages_checks():
+    """Публичные страницы (их видит Google Play и пользователи): нет заполнителей и TODO;
+    тексты про удаление аккаунта честно соответствуют флагу accountDelete в config.js."""
+    for page in ['privacy.html', 'delete.html', 'index.html']:
+        html = (ROOT / page).read_text(encoding='utf-8')
+        found = [label for rx, label in PLACEHOLDERS if re.search(rx, html)]
+        ok(f'{page}: нет заполнителей «[… выберет владелец]» и TODO') if not found else fail(f'{page}: заполнители', 'найдено: ' + ', '.join(found))
+    flag = re.search(r'"accountDelete"\s*:\s*(true|false)', (ROOT / 'config.js').read_text(encoding='utf-8'))
+    if not flag: fail('config.js: флаг accountDelete', 'не найден — проверка честности текстов не выполнена'); return
+    enabled = flag.group(1) == 'true'
+    for page in ['privacy.html', 'delete.html']:
+        claims = delete_button_claims((ROOT / page).read_text(encoding='utf-8'))
+        langs = {c[0] for c in claims}
+        if langs != {'ru', 'uk'}: fail(f'{page}: упоминание кнопки удаления', f'не найдено в обоих языках (есть: {sorted(langs)}) — проверка не сработала бы'); continue
+        if not enabled:
+            bad = [f'{l}: «{t[:70]}…»' for l, t, soon in claims if not soon]
+            if not bad: ok(f'{page}: при accountDelete: false кнопка удаления описана как «появится в ближайшем обновлении» ({len(claims)} мест)')
+            else: fail(f'{page}: обещает кнопку удаления, а она выключена (accountDelete: false)', '; '.join(bad)[:600])
+        else:
+            left = [f'{l}: «{t[:70]}…»' for l, t, soon in claims if soon]
+            if not left: ok(f'{page}: кнопка удаления включена — пометок «появится» не осталось')
+            else: fail(f'{page}: кнопку удаления включили — уберите пометки «появится»', '; '.join(left)[:600])
 
 def manifest_checks(html):
     """Манифест PWA — паспорт приложения для Google Play (TWA через Bubblewrap/PWABuilder)."""
