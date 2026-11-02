@@ -560,6 +560,21 @@ button:focus-visible{outline:2px solid var(--pink);outline-offset:2px}
 .ob-calc{background:var(--raise);border-radius:var(--r-m);padding:12px;font-size:14px;color:var(--mute);line-height:1.5}
 .ob-calc b{color:var(--fg)}
 .ob-note{font-size:12px;color:var(--dim);margin:0;line-height:1.45}
+/* монеты уровня лестницы: цена докупки по стратегии и сумма */
+.lvc{grid-column:1/-1;display:grid;margin-top:8px;padding:2px 10px;border-radius:12px;background:var(--surface2);border:1px solid var(--line)}
+.lvc-r{display:grid;grid-template-columns:20px 56px 1fr auto;align-items:center;gap:8px;min-height:34px;font-size:13px;border-top:1px solid var(--line)}
+.lvc-r:first-child{border-top:0}
+.lvc-r .badge{width:20px;height:20px;font-size:6.5px;border-width:1px;box-shadow:none}
+.lvc-r .badge.logo img{filter:drop-shadow(0 0 4px color-mix(in srgb,var(--c,#b15cff) 60%,transparent))}
+.lvc-r .badge.logo img[alt="ONDO"]{filter:invert(1)}
+[data-theme="light"] .lvc-r .badge.logo img{filter:none}
+.lvc-r b{font-weight:600;font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lvc-r .px{font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}
+.lvc-r .px i{font-style:normal;font-size:14px;color:var(--lav);margin-right:3px}
+.lvc-r .am{font-variant-numeric:tabular-nums;color:var(--mute);text-align:right;white-space:nowrap}
+.lvc-r.go .px{color:var(--pos)}.lvc-r.hold .px,.lvc-r.hold .px i{color:var(--warn)}
+.lvc-r.done .px,.lvc-r.done .am{color:var(--pos)}
+#lvNote b{color:var(--lav)}#lvNote b.g{color:var(--pos)}
 .lv.skip{opacity:.6}.mk.skip b{opacity:.5}
 [data-theme="light"] .more{color:#c0268f}
 [data-theme="light"] .cc-face svg text[fill="#8e83b6"]{fill:#8e83b6}
@@ -641,6 +656,7 @@ button:focus-visible{outline:2px solid var(--pink);outline-offset:2px}
       <p class="hint" id="nextLbl" style="margin-top:12px"></p>
     </div>
     <div class="list" id="levels"></div>
+    <p class="note" id="lvNote" style="margin:-4px 6px 0" hidden></p>
     <div class="card" id="ladOff" hidden><div class="sec-h"><span class="label">Лестница докупок</span><span class="chip">выключена</span></div><p class="hint" style="margin-top:6px">Докупки на просадках биткоина из резерва. Включить: «Настройки» → «Изменить правила» → «Лестница докупок».</p></div>
     <div class="card" id="planCard">
       <div class="sec-h"><span class="label">План альткоинов</span><span class="small mute" id="planLbl"></span></div>
@@ -874,9 +890,9 @@ button:focus-visible{outline:2px solid var(--pink);outline-offset:2px}
 
 <div class="toast" id="toast" role="status"><span id="toastMsg"></span><button type="button" id="toastBtn" hidden></button></div>
 
-<script src="config.js?v=20261102204953"></script>
+<script src="config.js?v=20261102230301"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="shim.js?v=20261102204953"></script>
+<script src="shim.js?v=20261102230301"></script>
 <script>
 /* ===== основа ===== */
 const $=id=>document.getElementById(id);
@@ -1054,8 +1070,22 @@ function lvPlan(l,D){const btc=+D.prices.BTC||0,k1=lvKey1(l,btc),alt=altNow();
 function lvState(l,btc,D){if(l.status==='done')return 'done';if(l.status==='skipped')return 'skip';
   if(lvKey1(l,btc)){if(!D)return 'go';const pl=lvPlan(l,D);if(pl.parts.length&&pl.parts.every(x=>x.st==='done'))return 'done';return pl.parts.some(x=>x.st==='go')?'go':'hold';}
   if(btc&&btc<=lvPrice(l)*1.03)return 'near';return 'wait';}
-// доли монет на уровне: процент от суммы уровня и сумма в долларах
-function lvShares(pl){const ps=pl.parts.filter(p=>p.usd>0);if(!ps.length||!(pl.amt>0))return '';return '<br>'+ps.map(p=>`<span style="white-space:nowrap"><b>${esc(p.sym||'альткоин')}</b> ${(r=>nf(r,r%1?1:0))(Math.round(p.usd/pl.amt*1000)/10)}% (${usd(p.usd)})</span>`).join(' · ');}
+/* цена докупки монеты на уровне — из правил стратегии:
+   BTC — цена уровня (ключ 1), но не выше порога ключа 2;
+   ETH и альты покупаются, когда BTC дошёл до уровня: цена — оценка «если упадут вместе с биткоином», но не выше порога ключа 2 */
+function lvTarget(p,l,D){const lp=lvPrice(l),btc=+D.prices.BTC||0,px=+D.prices[p.sym]||0,thr=p.k2&&p.k2.thr;
+  if(p.k==='BTC')return {v:thr&&thr<lp?thr:lp,pre:'≤'};
+  if(!px||!btc)return thr?{v:thr,pre:'≤'}:null;
+  const est=px*Math.min(1,lp/btc);return thr&&thr<est?{v:thr,pre:'≤'}:{v:est,pre:'≈'};}
+/* монеты уровня: значок, цена докупки, сумма */
+function lvCoins(l,pl,D){const ps=pl.parts.filter(p=>p.usd>0||p.st==='done');if(!ps.length)return '';
+  return '<div class="lvc">'+ps.map(p=>{const sym=p.sym||'';let px;
+    if(p.st==='done')px='куплено';
+    else if(!sym)px='выбери монету';
+    else if(p.st==='go')px=usdp(+D.prices[sym]||0);
+    else if(p.st==='hold')px=p.k2&&p.k2.thr?'<i>≤</i> '+usdp(p.k2.thr):'ждём цену';
+    else{const t=lvTarget(p,l,D);px=t?`<i>${t.pre}</i> ${usdp(t.v)}`:'—';}
+    return `<div class="lvc-r ${p.st||''}">${sym?badge(sym):badgeTxt('?')}<b>${esc(sym||'альт')}</b><span class="px">${px}</span><span class="am">${p.st==='done'?'✓ '+usd(p.spent!=null?+p.spent:p.usd):usd(p.usd)}</span></div>`;}).join('')+'</div>';}
 function partTxt(p){const s=esc(p.sym||'альткоин');
   if(p.st==='done')return `${s} куплено${p.spent!=null?' '+usd(+p.spent):''}`;
   if(p.st==='go')return `${s} ${usd(p.usd)} можно`;
@@ -1290,8 +1320,11 @@ function renderStrategy(D){
   $('nextLbl').innerHTML=(next&&btc?`До уровня ${next.n} (${usd(lvPrice(next),0)}) ещё <b>${nf((1-lvPrice(next)/btc)*100,1)}%</b> вниз. Из резерва на нём: <b>${usd(lvPlan(next,D).amt)}</b>. `:'')+(levels.length?'Новый максимум BTC — уровни пересчитаются сами.':(S.ready?'Лестница появится, когда загрузится максимум биткоина.':'Лестница загрузится вместе с данными.'));
   const chip={skip:'<span class="chip">пропущен</span>',done:'<span class="chip pos">выполнен</span>',go:'<span class="chip neg">пора</span>',hold:'<span class="chip warn">ждём ключ 2</span>',near:'<span class="chip warn">близко</span>',wait:'<span class="chip">ждём</span>'};
   $('levels').innerHTML=levels.map(l=>{const st=lvState(l,btc,D),pl=lvPlan(l,D),
-    info=st==='skip'?'биткоин уже был ниже, когда ты начал — ждём следующие уровни':st==='done'?`потрачено ${usd(l.spent!=null?+l.spent:pl.parts.reduce((a,p)=>a+(+p.spent||0),0))}${l.doneAt?' · '+dShort(l.doneAt):''}`:pl.k1?pl.parts.map(partTxt).join(' · '):`${l.pct>=100?'весь остаток':l.pct+'% остатка'} ≈ ${usd(pl.amt)}${lvShares(pl)}${pl.noAlt?' · альты не покупаем':''}`;
-    return `<div class="lv ${st}"><div class="n">${l.n}</div><div class="t">−${l.drop}% · ${usd(lvPrice(l),0)}</div><div class="rr">${chip[st]}${st==='go'?`<button type="button" class="btn sm" data-dip="${l.n}">Записать</button>`:''}</div><div class="d">${info}</div></div>`;}).join('')||'<div class="empty" style="border:0">Лестница загрузится вместе с данными.</div>';
+    info=st==='skip'?'биткоин уже был ниже, когда ты начал — ждём следующие уровни':st==='done'?`потрачено ${usd(l.spent!=null?+l.spent:pl.parts.reduce((a,p)=>a+(+p.spent||0),0))}${l.doneAt?' · '+dShort(l.doneAt):''}`:`${l.pct>=100?'весь резерв':l.pct+'% резерва'} · ${usd(pl.amt)}`,
+    coins=['skip','done'].includes(st)?'':lvCoins(l,pl,D);
+    return `<div class="lv ${st}"><div class="n">${l.n}</div><div class="t">−${l.drop}% · ${usd(lvPrice(l),0)}</div><div class="rr">${chip[st]}${st==='go'?`<button type="button" class="btn sm" data-dip="${l.n}">Записать</button>`:''}</div><div class="d">${info}</div>${coins}</div>`;}).join('')||'<div class="empty" style="border:0">Лестница загрузится вместе с данными.</div>';
+  const k2=k2Cfg();$('lvNote').hidden=!$('levels').querySelector('.lvc');
+  $('lvNote').innerHTML=`<b>≤</b> не дороже · <b>≈</b> ожидаемо, когда BTC дойдёт до уровня · <b class="g">зелёная</b> — можно сейчас. Потолок монеты — на ${k2.pct}% ниже средней покупки за ${k2.days} дней${split().ALT>0?`; альты — на уровнях 1–${ALT_MAX_LV}, пока их меньше ${altCapPct()}% портфеля`:''}.`;
   const capP=+S.settings.capPct||20,cap=D.total*capP/100,flow=budgetUsd()*(1-depShare());
   const sp=split();
   $('rules').innerHTML=`<div><span>Распределение</span><span>BTC ${sp.BTC}% · ETH ${sp.ETH}% · альты ${sp.ALT}%</span></div><div><span>Потолок резерва</span><span>${capP}% от монет${cap?' = '+money(cap,{d:0}):''}</span></div><div><span>Депозит</span><span>${Math.round(depShare()*100)}% в DCA · ${Math.round((1-depShare())*100)}% в резерв</span></div><div><span>Альткоин месяца</span><span>${esc(altNow()||'не выбран')}${planAlt(ymKey(new Date()))?' · по плану':''}</span></div><div><span>Ключ&nbsp;2</span><span>цена на ${k2Cfg().pct}% ниже средней покупки за ${k2Cfg().days} дней</span></div><div><span>Альты в докупке</span><span>ступени 1–${ALT_MAX_LV}, пока альтов меньше ${altCapPct()}% (сейчас ${nf(altShare(D)*100,0)}%)</span></div><div><span>Новый максимум BTC</span><span>лестница пересчитается сама</span></div><div><span>Проверка рынка</span><span>8:41 и 20:41 по Киеву</span></div><div><span>Подбор альткоинов</span><span>1-го числа, 10:13</span></div>`;
@@ -1951,7 +1984,7 @@ function msSync(x){MSC.last=x;if(!msApply())return;if(!S.ready||document.getElem
   if(window.Mascot){try{window.Mascot.sync(msPayload(x));}catch(e){}}else msLoad();}
 function msLoad(){if(MSC.loading||MSC.failed)return;MSC.loading=true;
   const add=(src,ok)=>{try{const s=document.createElement('script');s.src=src;s.async=true;s.onload=ok;s.onerror=()=>{MSC.failed=true;};document.head.appendChild(s);}catch(e){MSC.failed=true;}};
-  const boot=()=>add('mascot.js?v=20261102204953',()=>{try{if(window.Mascot&&window.Mascot.init({host:$('mascot'),app:{audio:ac,buzz}})&&MSC.last&&$('ob').hidden&&!document.getElementById('mlAuth'))window.Mascot.sync(msPayload(MSC.last));}catch(e){}});
+  const boot=()=>add('mascot.js?v=20261102230301',()=>{try{if(window.Mascot&&window.Mascot.init({host:$('mascot'),app:{audio:ac,buzz}})&&MSC.last&&$('ob').hidden&&!document.getElementById('mlAuth'))window.Mascot.sync(msPayload(MSC.last));}catch(e){}});
   setTimeout(()=>{if(window.THREE)boot();else add('three.min.js',boot);},300);}
 function render(){const D=derive();renderHeader();renderHome(D);renderGrowth();renderCoins(D);renderStrategy(D);renderActivity();earnNudge();if(cvSym&&$('coinSheet').classList.contains('open'))renderCoinView();}
 document.body.classList.add('loading');
