@@ -628,6 +628,45 @@ def run_browser():
             else: fail('delete_my_account: чужие записи', str(r))
         scenario('Функция удаления', {'session': True, 'docs': SEED, 'otherDocs': OTHER}, s_delete_rpc)
 
+        # --- З3. ссылка …/#delete без входа → «Войти через Google» → возврат с токеном: окно удаления открывается само
+        GKEY = 'ml-after-login'
+        def s_delete_google(pg, n):
+            pg.wait_for_selector('#mlAuth', state='visible', timeout=8000)
+            if 'Войди, чтобы удалить аккаунт' not in pg.inner_text('#mlAuth'): raise AssertionError('нет подсказки «Войди, чтобы удалить аккаунт»')
+            with pg.expect_navigation(timeout=10000):
+                pg.click('#mlaG')
+            wait_app(pg)
+            try: pg.wait_for_selector('#delSheet.open', timeout=6000); ok('#delete + вход через Google: после возврата окно удаления открыто')
+            except Exception: fail('#delete + вход через Google', 'окно удаления не открылось после возврата'); return
+            st = pg.evaluate(f"()=>({{hash: location.hash, flag: localStorage.getItem('{GKEY}'), ph: document.getElementById('delWord').placeholder, go: document.getElementById('delGo').disabled}})")
+            if not st['hash'] and st['flag'] is None: ok('после открытия окна: адрес чистый, намерение «удалить» стёрто')
+            else: fail('после открытия окна', str(st))
+            if st['ph'] == 'УДАЛИТЬ': ok('поле подтверждения: подсказка-образец «УДАЛИТЬ»')
+            else: fail('поле подтверждения: подсказка', f'placeholder = {st["ph"]!r}')
+            if st['go']: ok('«Удалить навсегда» выключена, пока слово не вписано (подсказка — не значение)')
+            else: fail('кнопка «Удалить навсегда»', 'включена с пустым полем')
+            pg.wait_for_timeout(500)
+            for th in ['dark', 'light']:
+                pg.evaluate(f"document.documentElement.setAttribute('data-theme','{th}')"); pg.wait_for_timeout(300)
+                shot(pg, f'delete-modal-{th}')
+            pg.evaluate("document.documentElement.setAttribute('data-theme','dark')")
+            if pg.evaluate("window.__mlRows.size") > 0 and pg.evaluate("+(sessionStorage.getItem('__mlDelCalls')||0)") == 0: ok('окно только открыто — ничего не удалено без подтверждения')
+            else: fail('окно удаления', 'записи удалены без подтверждения')
+        scenario('Удаление после входа через Google', {'session': False, 'docs': SEED, 'accountDelete': True, 'persist': True, 'oauthReturn': True}, s_delete_google, path='index.html#delete')
+
+        # --- З4. обычный вход через Google (без #delete), даже со старым намерением в памяти — окно удаления НЕ открывается
+        def s_google_plain(pg, n):
+            pg.wait_for_selector('#mlAuth', state='visible', timeout=8000)
+            pg.evaluate(f"localStorage.setItem('{GKEY}', JSON.stringify({{go:'delete', ts: Date.now() - 31*60*1000}}))")   # просроченное
+            with pg.expect_navigation(timeout=10000):
+                pg.click('#mlaG')
+            wait_app(pg); pg.wait_for_timeout(1500)
+            if pg.locator('#delSheet.open').count(): fail('вход через Google без #delete', 'открылось окно удаления')
+            else: ok('вход через Google без #delete: окно удаления не открывается (просроченное намерение не учтено)')
+            if pg.evaluate(f"localStorage.getItem('{GKEY}')") is None: ok('просроченное намерение «удалить» стёрто')
+            else: fail('просроченное намерение', 'осталось в памяти')
+        scenario('Вход через Google без #delete', {'session': False, 'docs': SEED, 'accountDelete': True, 'persist': True, 'oauthReturn': True}, s_google_plain)
+
         browser.close()
     srv.shutdown()
 

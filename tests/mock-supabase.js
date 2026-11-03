@@ -4,6 +4,7 @@
      { session: true|false, docs: [{col,id,data}], failLoad: false,
        otherDocs: [{col,id,data}]   — записи ДРУГОГО пользователя в той же базе (приложению не видны),
        accountDelete: true          — включить кнопку «Удалить аккаунт» (флаг из config.js),
+       oauthReturn: true            — «Войти через Google» перезагружает страницу уже с сессией (нужен persist)
        persist: true                — сохранить состояние базы при перезагрузке страницы (sessionStorage) }
    Все записи хранятся в памяти страницы; сеть не нужна.
    rpc('delete_my_account') — как SQL-функция supabase/delete_my_account.sql: без входа — ошибка,
@@ -75,12 +76,16 @@
     channel() { const ch = { on() { return ch; }, subscribe() { return ch; }, unsubscribe() {} }; return ch; },
     removeChannel() {},
     auth: {
-      getSession: () => ok({ session }),
+      getSession: () => { if (/access_token=/.test(location.hash)) history.replaceState(null, '', location.pathname); return ok({ session }); },   /* Supabase сам убирает токен из адреса */
       getUser: () => ok({ user: session ? session.user : null }),
       onAuthStateChange(cb) { authCbs.push(cb); return { data: { subscription: { unsubscribe() {} } } }; },
       signInWithPassword(c) { log('signIn', { email: c && c.email }); if (deletedUsers.has(USER.id)) return Promise.resolve({ data: { session: null, user: null }, error: { message: 'Invalid login credentials', status: 400 } }); session = { access_token: 'test', user: USER }; setTimeout(() => authCbs.forEach(f => f('SIGNED_IN', session)), 0); return ok({ session, user: USER }); },
       signUp(c) { log('signUp', { email: c && c.email }); return ok({ user: USER, session: null }); },
-      signInWithOAuth() { log('oauth'); return ok({}); },
+      /* как настоящий вход через Google: уход со страницы и возврат с токеном в адресе (#access_token=…), сессия есть.
+         Адрес возврата — эта же страница (siteUrl из config.js указывает на живой сайт, в тестах он недоступен). */
+      signInWithOAuth(o) { log('oauth', { provider: o && o.provider });
+        if (T.oauthReturn) { session = { access_token: 'test', user: USER }; setTimeout(() => { history.replaceState(null, '', location.pathname + '#access_token=test&expires_in=3600&refresh_token=r&token_type=bearer'); location.reload(); }, 50); }
+        return ok({}); },
       signOut() { log('signOut'); session = null; return ok(null); },
       resetPasswordForEmail() { log('reset'); return ok({}); },
       updateUser() { log('updateUser'); return ok({ user: USER }); },

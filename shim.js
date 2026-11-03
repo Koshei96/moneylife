@@ -428,6 +428,13 @@
   const fromMail = URLQ.get('type');                       /* signup | recovery | magiclink | email_change */
   const urlErr = URLQ.get('error_description') || '';
   const SITE = CFG.siteUrl || (location.origin + location.pathname);
+  /* «удалить аккаунт» (…/#delete) должно пережить уход на Google: после возврата в адресе уже токен, а не #delete.
+     Намерение кладём в localStorage на 30 минут и учитываем только при возврате от Google (токен/код без type из письма). */
+  const DEL_KEY = 'ml-after-login', DEL_TTL = 30 * 60 * 1000;
+  const oauthBack = !fromMail && (URLQ.has('access_token') || URLQ.has('error') || new URLSearchParams(location.search).has('code'));
+  window.mlWantDelete = URLH === 'delete' || (oauthBack && (() => { try { const v = JSON.parse(localStorage.getItem(DEL_KEY) || 'null'); return !!v && v.go === 'delete' && Date.now() - v.ts < DEL_TTL; } catch (e) { return false; } })());
+  window.mlWantDeleteDone = () => { window.mlWantDelete = false; try { localStorage.removeItem(DEL_KEY); } catch (e) {} };
+  if (!window.mlWantDelete) { try { localStorage.removeItem(DEL_KEY); } catch (e) {} }   /* обычный запуск — старое намерение не всплывёт */
   const okPass = p => p.length >= 8 && /[A-Za-z]/.test(p) && /\d/.test(p);
   const PASS_HINT = 'От 8 символов: латинские буквы и цифры.';
   function authErr(e, mode) {
@@ -530,7 +537,7 @@
       o.querySelectorAll('[data-to]').forEach(x => x.addEventListener('click', () => { const e = o.querySelector('#mlaEmail'); if (e) { email = e.value.trim(); o.dataset.email = email; } mode = x.dataset.to; clearInterval(waitT); draw(); }));
       o.querySelectorAll('[data-eye]').forEach(x => x.addEventListener('click', () => { const i = o.querySelector('#' + x.dataset.eye); i.type = i.type === 'password' ? 'text' : 'password'; x.setAttribute('aria-label', i.type === 'password' ? 'Показать пароль' : 'Скрыть пароль'); }));
       const a = o.querySelector('#mlaAgain'); if (a) a.addEventListener('click', again);
-      const gg = o.querySelector('#mlaG'); if (gg) gg.addEventListener('click', async () => { busy(gg, true); try { const r = await c.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: SITE } }); if (r.error) { err(authErr(r.error)); busy(gg, false); } } catch (e) { err(authErr(e)); busy(gg, false); } });
+      const gg = o.querySelector('#mlaG'); if (gg) gg.addEventListener('click', async () => { busy(gg, true); if (window.mlWantDelete) { try { localStorage.setItem(DEL_KEY, JSON.stringify({ go: 'delete', ts: Date.now() })); } catch (e) {} } try { const r = await c.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: SITE } }); if (r.error) { err(authErr(r.error)); busy(gg, false); } } catch (e) { err(authErr(e)); busy(gg, false); } });
     }
     draw();
     return o;

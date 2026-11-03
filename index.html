@@ -892,7 +892,7 @@ button:focus-visible{outline:2px solid var(--pink);outline-offset:2px}
   <div class="sh-body"><div class="sh-in">
     <div class="card del-warn"><b>Это нельзя отменить.</b><p>Удалятся аккаунт <span id="delMail"></span> и все записи: покупки, продажи, настройки, история. Сначала можно скачать свои данные.</p></div>
     <button type="button" class="btn block ghost" id="delExp">Скачать мои данные</button>
-    <label class="field"><span>Чтобы подтвердить, впиши слово УДАЛИТЬ</span><input type="text" id="delWord" autocomplete="off" autocapitalize="characters" spellcheck="false"></label>
+    <label class="field"><span>Чтобы подтвердить, впиши слово УДАЛИТЬ</span><input type="text" id="delWord" placeholder="УДАЛИТЬ" autocomplete="off" autocapitalize="characters" spellcheck="false"></label>
     <p class="err" id="delErr" role="alert"></p>
     <button type="button" class="btn block danger" id="delGo" disabled>Удалить навсегда</button>
   </div></div>
@@ -902,9 +902,9 @@ button:focus-visible{outline:2px solid var(--pink);outline-offset:2px}
 
 <div class="toast" id="toast" role="status"><span id="toastMsg"></span><button type="button" id="toastBtn" hidden></button></div>
 
-<script src="config.js?v=20261103030654"></script>
+<script src="config.js?v=20261103145705"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="shim.js?v=20261103030654"></script>
+<script src="shim.js?v=20261103145705"></script>
 <script>
 /* ===== основа ===== */
 const $=id=>document.getElementById(id);
@@ -1955,7 +1955,8 @@ $('delWord').addEventListener('input',()=>{$('delGo').disabled=$('delWord').valu
 $('delGo').addEventListener('click',async()=>{const b=$('delGo');b.disabled=true;$('delErr').textContent='';
   try{await window.mlDeleteAccount();}catch(e){b.disabled=false;$('delErr').textContent=e&&e.code==='offline'?'Нет связи — удалить можно только онлайн.':'Не получилось удалить: '+((e&&e.message)||'ошибка')+'. Попробуй ещё раз.';}});
 /* ссылка для удаления с сайта (Google Play требует её): …/#delete — после входа сразу открываем подтверждение */
-if(location.hash==='#delete'){const t=setInterval(()=>{if(S.ready&&window.mlUser){clearInterval(t);history.replaceState(null,'',location.pathname);if(window.ML_CONFIG&&ML_CONFIG.accountDelete)openDel();}},400);}
+/* после входа через Google адрес уже без #delete — намерение помнит shim.js (window.mlWantDelete) */
+if(location.hash==='#delete'||window.mlWantDelete){const t=setInterval(()=>{if(S.ready&&window.mlUser){clearInterval(t);history.replaceState(null,'',location.pathname);window.mlWantDeleteDone&&mlWantDeleteDone();if(window.ML_CONFIG&&ML_CONFIG.accountDelete)openDel();}},400);}
 else if(location.hash==='#deleted')history.replaceState(null,'',location.pathname);
 $('swLadder').addEventListener('click',()=>{const b=$('swLadder');b.setAttribute('aria-checked',String(b.getAttribute('aria-checked')!=='true'));play('tick');});
 $('eyeBtn').addEventListener('click',()=>{P.hide=!P.hide;savePrefs();play('tick');buzz(8);render();toast(P.hide?'Суммы скрыты':'Суммы видны');});
@@ -2013,7 +2014,7 @@ function msSync(x){MSC.last=x;if(!msApply())return;if(!S.ready||document.getElem
   if(window.Mascot){try{window.Mascot.sync(msPayload(x));}catch(e){}}else msLoad();}
 function msLoad(){if(MSC.loading||MSC.failed)return;MSC.loading=true;
   const add=(src,ok)=>{try{const s=document.createElement('script');s.src=src;s.async=true;s.onload=ok;s.onerror=()=>{MSC.failed=true;};document.head.appendChild(s);}catch(e){MSC.failed=true;}};
-  const boot=()=>add('mascot.js?v=20261103030654',()=>{try{if(window.Mascot&&window.Mascot.init({host:$('mascot'),app:{audio:ac,buzz}})&&MSC.last&&$('ob').hidden&&!document.getElementById('mlAuth'))window.Mascot.sync(msPayload(MSC.last));}catch(e){}});
+  const boot=()=>add('mascot.js?v=20261103145705',()=>{try{if(window.Mascot&&window.Mascot.init({host:$('mascot'),app:{audio:ac,buzz}})&&MSC.last&&$('ob').hidden&&!document.getElementById('mlAuth'))window.Mascot.sync(msPayload(MSC.last));}catch(e){}});
   setTimeout(()=>{if(window.THREE)boot();else add('three.min.js',boot);},300);}
 function render(){const D=derive();renderHeader();renderHome(D);renderGrowth();renderCoins(D);renderStrategy(D);renderActivity();earnNudge();if(cvSym&&$('coinSheet').classList.contains('open'))renderCoinView();}
 document.body.classList.add('loading');
