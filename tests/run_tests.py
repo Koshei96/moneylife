@@ -277,8 +277,8 @@ def run_browser():
     with sync_playwright() as p:
         browser = p.chromium.launch(args=['--no-proxy-server'])
 
-        def page_for(name, test_cfg, prices=True):
-            ctx = browser.new_context(viewport={'width': 390, 'height': 844}, device_scale_factor=2, service_workers='block',
+        def page_for(name, test_cfg, prices=True, dsf=2, theme=None):
+            ctx = browser.new_context(viewport={'width': 390, 'height': 844}, device_scale_factor=dsf, service_workers='block',
                                       locale='ru-RU', timezone_id='Europe/Kyiv', is_mobile=True, has_touch=True)
             def route(r):
                 u = r.request.url
@@ -293,6 +293,7 @@ def run_browser():
                 return r.abort('internetdisconnected')
             ctx.route('**/*', route)
             ctx.add_init_script('window.__ML_TEST=' + json.dumps(test_cfg) + ';' + MOCK)
+            if theme: ctx.add_init_script("try{localStorage.setItem('cp-prefs2',JSON.stringify(Object.assign(JSON.parse(localStorage.getItem('cp-prefs2')||'{}'),{theme:%s})))}catch(e){}" % json.dumps(theme))
             pg = ctx.new_page()
             errs = []
             pg.on('pageerror', lambda e: errs.append('JS-ошибка: ' + str(e)[:300]))
@@ -310,8 +311,8 @@ def run_browser():
         def shot(pg, name):
             pg.screenshot(path=str(OUT / f'{name}.png'))
 
-        def scenario(name, cfg, body, prices=True, path='index.html'):
-            ctx, pg, errs = page_for(name, cfg, prices)
+        def scenario(name, cfg, body, prices=True, path='index.html', dsf=2, theme=None):
+            ctx, pg, errs = page_for(name, cfg, prices, dsf, theme)
             try:
                 pg.goto(base + path, wait_until='load', timeout=30000)
                 pg.wait_for_timeout(1500)
@@ -332,6 +333,46 @@ def run_browser():
                 raise AssertionError('на экране входа нет полей почты/пароля')
             shot(pg, '01-login'); ok('экран входа показан')
         scenario('Вход', {'session': False, 'docs': []}, s_login)
+
+        # --- А2. вид форм для новичка (Вера 03–04.11), обе темы: поля входа ≥ 48 px, «Создать аккаунт» видна без прокрутки,
+        #     подсказки-образцы в полях приглушены (не цвет текста), галочка — цветом приложения, значок календаря по теме
+        PH = "(id)=>{const e=document.getElementById(id);return [getComputedStyle(e).color,getComputedStyle(e,'::placeholder').color,getComputedStyle(e,'::placeholder').fontStyle]}"
+        for th in ('light', 'dark'):
+            def s_login_look(pg, n, th=th):
+                pg.wait_for_selector('#mlaPass', state='visible', timeout=8000)
+                if pg.evaluate("document.documentElement.dataset.theme") != th: raise AssertionError('тема не включилась: ' + th)
+                hs = pg.evaluate("['mlaEmail','mlaPass'].map(i=>Math.round(document.getElementById(i).getBoundingClientRect().height))")
+                ok(f'вход ({th}): поля почты и пароля ≥ 48 px {hs}') if min(hs) >= 48 else fail(f'вход ({th}): высота полей', str(hs))
+                up = pg.evaluate("(()=>{const b=document.querySelector('#mlAuth [data-to=up]');if(!b)return null;const r=b.getBoundingClientRect();return [r.top,r.bottom,r.height,innerHeight,b.textContent.trim()]})()")
+                if up and up[1] <= up[3] and up[2] >= 47.5: ok(f'вход ({th}): «{up[4]}» видна без прокрутки, {round(up[2])} px')
+                else: fail(f'вход ({th}): кнопка регистрации', str(up))
+                pg.screenshot(path=str(OUT / f'fix-login-{th}.png'))
+            scenario(f'Вид входа ({th})', {'session': False, 'docs': []}, s_login_look, dsf=1, theme=th)
+
+            def s_forms_look(pg, n, th=th):
+                wait_app(pg)
+                if pg.evaluate("document.documentElement.dataset.theme") != th: raise AssertionError('тема не включилась: ' + th)
+                pg.evaluate("""()=>{const b=[...document.querySelectorAll('button')].find(x=>x.textContent.trim()==='Купить'&&x.offsetParent);b.click()}""")
+                pg.wait_for_timeout(700)
+                pg.click('#buyMode [data-m=dca]'); pg.wait_for_timeout(300)
+                for i in ('bTotal', 'bAlt'):
+                    c, ph, st = pg.evaluate(PH, i)
+                    ok(f'«Купить» ({th}): подсказка в #{i} приглушена') if c != ph and st == 'italic' else fail(f'«Купить» ({th}): подсказка #{i}', f'текст {c}, подсказка {ph}, {st}')
+                pg.screenshot(path=str(OUT / f'fix-buy-plan-{th}.png'))
+                pg.click('#buyMode [data-m=one]'); pg.wait_for_timeout(300)
+                c, ph, st = pg.evaluate(PH, 'oSym')
+                ok(f'«Купить» ({th}): подсказка в #oSym приглушена') if c != ph else fail(f'«Купить» ({th}): подсказка #oSym', f'{c} = {ph}')
+                cb = pg.evaluate("(()=>{const s=getComputedStyle(document.getElementById('oDca'));return [s.appearance,s.borderTopColor]})()")
+                acc = pg.evaluate("(()=>{const d=document.createElement('i');d.style.color='var(--accent)';document.body.appendChild(d);const c=getComputedStyle(d).color;d.remove();return c})()")
+                ok(f'«Купить» ({th}): галочка DCA — цветом приложения') if cb[0] == 'none' and cb[1] == acc else fail(f'«Купить» ({th}): галочка DCA', f'{cb} ≠ {acc}')
+                pg.screenshot(path=str(OUT / f'fix-buy-one-{th}.png'))
+                bg = pg.evaluate("(()=>{const e=document.getElementById('oDca'),was=e.checked;e.checked=true;const c=getComputedStyle(e).backgroundColor;e.checked=was;return c})()")
+                ok(f'«Купить» ({th}): отмеченная галочка залита цветом приложения') if bg == acc else fail(f'«Купить» ({th}): отмеченная галочка', f'{bg} ≠ {acc}')
+                cs = pg.evaluate("getComputedStyle(document.getElementById('fDate')).colorScheme")
+                ok(f'дата ({th}): значок календаря по теме ({cs})') if cs == th else fail(f'дата ({th}): color-scheme', cs)
+                pg.evaluate("document.getElementById('dateField').scrollIntoView({block:'center'})"); pg.wait_for_timeout(300)
+                pg.screenshot(path=str(OUT / f'fix-date-{th}.png'))
+            scenario(f'Вид форм ({th})', {'session': True, 'docs': SEED}, s_forms_look, dsf=1, theme=th)
 
         # --- Б. новый пользователь → знакомство
         def s_new(pg, n):
