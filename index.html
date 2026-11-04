@@ -905,9 +905,9 @@ button:focus-visible{outline:2px solid var(--pink);outline-offset:2px}
 
 <div class="toast" id="toast" role="status"><span id="toastMsg"></span><button type="button" id="toastBtn" hidden></button></div>
 
-<script src="config.js?v=20261104030816"></script>
+<script src="config.js?v=20261104031134"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="shim.js?v=20261104030816"></script>
+<script src="shim.js?v=20261104031134"></script>
 <script>
 /* ===== основа ===== */
 const $=id=>document.getElementById(id);
@@ -1726,7 +1726,9 @@ function dirAuto(){if(dirAutoDone||!S.ready)return;dirAutoDone=true;setTimeout((
 const formCoinInputs=()=>mode==='buy'?[buyMode==='dca'?'bAlt':'oSym']:mode==='dip'?['dAlt']:mode==='start'?['nsSym']:[];
 function symOptions(){sugHide();}
 function initBuy(opt){const D=derive(),sp=split();symOptions();
-  $('buyMode').children[0].textContent='По плану · '+sp.BTC+'/'+sp.ETH+'/'+sp.ALT;setBuyMode(opt.sym?'one':'dca');
+  $('buyMode').children[0].textContent='По плану · '+sp.BTC+'/'+sp.ETH+'/'+sp.ALT;
+  /* первая покупка (покупок ещё нет) — простой режим «Одна монета»; расчёты те же */
+  setBuyMode(opt.sym||!S.tx.some(t=>['buy','dca','dip'].includes(t.type))?'one':'dca');
   $('dcaHint').innerHTML=D.hasDep?(D.dcaBudget>0.5?'Бюджет DCA: осталось <b>'+usd(D.dcaBudget)+'</b>':'Бюджет DCA уже потрачен — покупка уйдёт в минус бюджета'):'Сумма разложится по монетам по твоему правилу.';
   $('bTotal').value=D.hasDep&&D.dcaBudget>0.5?D.dcaBudget.toFixed(2):'';$('bAlt').value=altNow();fillRows('b');
   $('oSym').value=opt.sym||'';$('oUsd').value='';$('oQty').value='';$('oDca').checked=D.hasDep;oHint();}
@@ -2018,7 +2020,7 @@ function msSync(x){MSC.last=x;if(!msApply())return;if(!S.ready||document.getElem
   if(window.Mascot){try{window.Mascot.sync(msPayload(x));}catch(e){}}else msLoad();}
 function msLoad(){if(MSC.loading||MSC.failed)return;MSC.loading=true;
   const add=(src,ok)=>{try{const s=document.createElement('script');s.src=src;s.async=true;s.onload=ok;s.onerror=()=>{MSC.failed=true;};document.head.appendChild(s);}catch(e){MSC.failed=true;}};
-  const boot=()=>add('mascot.js?v=20261104030816',()=>{try{if(window.Mascot&&window.Mascot.init({host:$('mascot'),app:{audio:ac,buzz}})&&MSC.last&&$('ob').hidden&&!document.getElementById('mlAuth'))window.Mascot.sync(msPayload(MSC.last));}catch(e){}});
+  const boot=()=>add('mascot.js?v=20261104031134',()=>{try{if(window.Mascot&&window.Mascot.init({host:$('mascot'),app:{audio:ac,buzz}})&&MSC.last&&$('ob').hidden&&!document.getElementById('mlAuth'))window.Mascot.sync(msPayload(MSC.last));}catch(e){}});
   setTimeout(()=>{if(window.THREE)boot();else add('three.min.js',boot);},300);}
 function render(){const D=derive();renderHeader();renderHome(D);renderGrowth();renderCoins(D);renderStrategy(D);renderActivity();earnNudge();if(cvSym&&$('coinSheet').classList.contains('open'))renderCoinView();}
 document.body.classList.add('loading');

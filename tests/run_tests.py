@@ -380,6 +380,9 @@ def run_browser():
             opened = pg.evaluate("""()=>{const b=[...document.querySelectorAll('button')].find(x=>x.textContent.trim()==='Купить'&&x.offsetParent);if(!b)return false;b.click();return true;}""")
             if not opened: raise AssertionError('кнопка «Купить» не найдена на главном')
             pg.wait_for_timeout(700)
+            mode = pg.evaluate("document.querySelector('#buyMode [aria-pressed=\"true\"]').dataset.m")
+            if mode == 'one' and pg.locator('#oSym').is_visible(): ok('первая покупка без записей открывается в режиме «Одна монета»')
+            else: fail('первая покупка без записей', f'выбран режим {mode!r}')
             for th in ['dark', 'light']:
                 pg.evaluate(f"document.documentElement.setAttribute('data-theme','{th}')"); pg.wait_for_timeout(300)
                 shot(pg, f'newbie-first-buy-{th}')
@@ -442,6 +445,8 @@ def run_browser():
             opened = pg.evaluate("""()=>{const b=[...document.querySelectorAll('button')].find(x=>x.textContent.trim()==='Купить'&&x.offsetParent);if(!b)return false;b.click();return true;}""")
             if not opened: raise AssertionError('кнопка «Купить» не найдена на главном')
             pg.wait_for_timeout(700); shot(pg, '06-buy-sheet'); ok('шторка «Купить» открывается')
+            if pg.evaluate("document.querySelector('#buyMode [aria-pressed=\"true\"]').dataset.m") == 'dca': ok('есть покупки — шторка открывается в режиме «По плану»')
+            else: fail('шторка «Купить» с покупками', 'режим по умолчанию не «По плану»')
             pg.evaluate("""()=>{const b=[...document.querySelectorAll('#actSheet button')].find(x=>/Одна монета/.test(x.textContent)&&x.offsetParent);if(b)b.click();}""")
             pg.wait_for_timeout(400)
             if not (pg.locator('#oSym').count() and pg.locator('#oSym').is_visible()):
