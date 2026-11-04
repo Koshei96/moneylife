@@ -469,8 +469,8 @@
       let h = '';
       if (mode === 'in') h = `${head}<p class="mla-sub">Вход в личный кабинет</p>${field('mlaEmail', 'Почта', 'email', 'username', email)}${passField('mlaPass', 'Пароль', 'current-password')}
         <p class="err" id="mlaErr" role="alert"></p><button type="button" class="btn block" id="mlaGo">Войти</button>
-        <button type="button" class="mla-link" data-to="forgot">Забыли пароль?</button>${gBtn}
-        ${canUp ? '<p class="mla-foot">Нет аккаунта? <button type="button" class="mla-link" data-to="up">Создать</button></p>' : ''}`;
+        <button type="button" class="mla-link" data-to="forgot">Забыли пароль?</button>
+        ${canUp ? '<button type="button" class="btn block ghost mla-up" data-to="up">Нет аккаунта? Создать аккаунт</button>' : ''}${gBtn}`;
       else if (mode === 'up') h = `${head}<p class="mla-sub">Новый аккаунт</p>${field('mlaEmail', 'Почта', 'email', 'username', email)}${passField('mlaPass', 'Пароль', 'new-password')}
         <p class="mla-hint">${PASS_HINT}</p>
         <label class="mla-check"><input type="checkbox" id="mlaAgree"><span>Понимаю: Money Life — дневник и калькулятор, а не инвестиционный совет. Согласен с ${priv}.</span></label>
