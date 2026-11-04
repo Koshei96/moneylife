@@ -344,6 +344,51 @@ def run_browser():
             ok('настройки сохранены после знакомства')
         scenario('Новый пользователь', {'session': True, 'docs': []}, s_new)
 
+        # --- Б2. путь новичка (Вера 03.11): шаг 4 знакомства — видимая «Пропустить» ≥ 48 px, подсказка «например, BTC»,
+        #     подсказки .ob-note с контрастом ≥ 4,5:1 в обеих темах; первая покупка без записей — «Одна монета»
+        CONTRAST = """(sel)=>{const lum=c=>{const m=c.match(/[\\d.]+/g).map(Number);return m.slice(0,3).map(v=>{v/=255;return v<=.03928?v/12.92:Math.pow((v+.055)/1.055,2.4)}).reduce((a,v,i)=>a+v*[.2126,.7152,.0722][i],0)};
+            const bgOf=e=>{for(;e;e=e.parentElement){const b=getComputedStyle(e).backgroundColor;if(b&&!/rgba\\(.*,\\s*0\\)$/.test(b)&&b!=='transparent')return b;}return 'rgb(0,0,0)'};
+            return [...document.querySelectorAll(sel)].map(e=>{const a=lum(getComputedStyle(e).color),b=lum(bgOf(e.closest('.ob-card')||e));return (Math.max(a,b)+.05)/(Math.min(a,b)+.05)})}"""
+        def s_newbie(pg, n):
+            pg.wait_for_selector('#ob:not([hidden])', timeout=8000)
+            low = []
+            for i in range(3):
+                if i == 1: pg.click('[data-tpl="simple"]'); pg.wait_for_timeout(200)   # новичок выбирает «Простой»
+                for th in ['dark', 'light']:
+                    pg.evaluate(f"document.documentElement.setAttribute('data-theme','{th}')"); pg.wait_for_timeout(80)
+                    low += [f'{th}: {r:.2f}' for r in pg.evaluate(CONTRAST, '#ob .ob-note') if r < 4.5]
+                pg.evaluate("document.documentElement.setAttribute('data-theme','dark')")
+                pg.click('#obNext'); pg.wait_for_timeout(300)
+            if low: fail('знакомство: контраст подсказок ≥ 4,5:1', ', '.join(low))
+            else: ok('знакомство: подсказки читаются (контраст ≥ 4,5:1 в обеих темах)')
+            if 'Что у тебя уже есть' not in pg.inner_text('#obTitle'): raise AssertionError('не дошли до шага 4 знакомства')
+            bad = pg.evaluate("[...document.querySelectorAll('#ob button')].filter(b=>!b.closest('[hidden]')&&!(b.textContent||'').trim()&&!b.getAttribute('aria-label')).map(b=>b.id||b.className)")
+            if not pg.locator('#obSkip').count() and not bad: ok('шаг 4 знакомства: нет «Пропустить» и нет кнопок без названия')
+            else: fail('шаг 4 знакомства: лишние кнопки', f'obSkip={pg.locator("#obSkip").count()}, без названия: {bad}')
+            ph = pg.get_attribute('#obCoins .ob-sym', 'placeholder') or ''
+            if ph.startswith('например') and pg.input_value('#obCoins .ob-sym') == '': ok('шаг 4: поле монеты пустое, подсказка «например, BTC»')
+            else: fail('шаг 4: подсказка в поле монеты', repr(ph))
+            for th in ['dark', 'light']:
+                pg.evaluate(f"document.documentElement.setAttribute('data-theme','{th}')"); pg.wait_for_timeout(300)
+                shot(pg, f'newbie-ob-step4-{th}')
+            pg.evaluate("document.documentElement.setAttribute('data-theme','dark')")
+            pg.click('#obNext'); pg.wait_for_selector('#ob[hidden]', state='attached', timeout=5000)
+            st = pg.evaluate("((window.__mlRows.get('app/settings')||{}).data||{}).template")
+            if st == 'simple': ok('«Готово» на шаге 4 сохраняет выбранный шаблон («Простой»)')
+            else: fail('«Готово» на шаге 4', f'template = {st!r}, ожидался simple')
+            wait_app(pg); pg.wait_for_timeout(2800)   # подсказка «Готово!» уходит
+            opened = pg.evaluate("""()=>{const b=[...document.querySelectorAll('button')].find(x=>x.textContent.trim()==='Купить'&&x.offsetParent);if(!b)return false;b.click();return true;}""")
+            if not opened: raise AssertionError('кнопка «Купить» не найдена на главном')
+            pg.wait_for_timeout(700)
+            for th in ['dark', 'light']:
+                pg.evaluate(f"document.documentElement.setAttribute('data-theme','{th}')"); pg.wait_for_timeout(300)
+                shot(pg, f'newbie-first-buy-{th}')
+            pg.evaluate("document.documentElement.setAttribute('data-theme','dark')")
+            pg.evaluate("document.querySelector('#buyMode [data-m=\"one\"]').click()"); pg.wait_for_timeout(300)
+            if pg.inner_text('#oHint').strip() == '': ok('«Одна монета» с пустым полем: под формой нет подсказки-ошибки')
+            else: fail('«Одна монета» с пустым полем', repr(pg.inner_text('#oHint')))
+        scenario('Путь новичка', {'session': True, 'docs': []}, s_newbie)
+
         # --- В. пользователь с данными: вкладки и шторки
         def s_user(pg, n):
             wait_app(pg)

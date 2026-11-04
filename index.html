@@ -555,7 +555,7 @@ button:focus-visible{outline:2px solid var(--pink);outline-offset:2px}
 .ob-card{width:100%;max-width:420px;display:flex;flex-direction:column;gap:14px;background:linear-gradient(180deg,var(--surface2),var(--surface));border:1px solid var(--line);border-radius:var(--r-xl);padding:22px}
 .ob-top{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:48px}
 .ob-dots{display:flex;gap:6px}.ob-dots i{width:22px;height:5px;border-radius:3px;background:var(--line2)}.ob-dots i.on{background:var(--accent)}
-.ob-skip{background:none;border:0;color:var(--mute);font:inherit;font-size:13px;font-weight:600;min-height:48px;padding:0 4px;cursor:pointer}
+.ob-skip{background:none;border:0;color:var(--mute);font:inherit;font-size:13px;font-weight:600;min-height:48px;min-width:48px;padding:0 8px;cursor:pointer}
 .ob-card h2{font-family:"Sora",var(--ui);font-size:23px;line-height:1.2;margin:0;letter-spacing:-.02em}
 .ob-lead{color:var(--mute);margin:0;line-height:1.5}
 .ob-opts{display:grid;gap:10px}
@@ -571,7 +571,9 @@ button:focus-visible{outline:2px solid var(--pink);outline-offset:2px}
 .ob-coin .ib{width:48px;height:48px}
 .ob-calc{background:var(--raise);border-radius:var(--r-m);padding:12px;font-size:14px;color:var(--mute);line-height:1.5}
 .ob-calc b{color:var(--fg)}
-.ob-note{font-size:12px;color:var(--dim);margin:0;line-height:1.45}
+.ob-note{font-size:13px;color:var(--mute);margin:0;line-height:1.45}
+#ob input::placeholder,#oSym::placeholder{color:var(--mute);opacity:.8;font-style:italic;font-weight:400;font-size:14px}
+.expl{font-size:12px;color:var(--mute);margin:0;line-height:1.4}
 /* монеты уровня лестницы: цена докупки по стратегии и сумма */
 .lvc{grid-column:1/-1;display:grid;margin-top:8px;padding:2px 10px;border-radius:12px;background:var(--surface2);border:1px solid var(--line)}
 .lvc-r{display:grid;grid-template-columns:20px 56px 1fr auto;align-items:center;gap:8px;min-height:34px;font-size:13px;border-top:1px solid var(--line)}
@@ -712,8 +714,8 @@ button:focus-visible{outline:2px solid var(--pink);outline-offset:2px}
   <div class="sh-head"><div class="grab"></div><div class="sh-bar"><button type="button" class="ib" id="actBack" aria-label="Назад" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M15 5l-7 7 7 7"/></svg></button><h3 id="actTitle">Новая запись</h3><button type="button" class="ib" data-close aria-label="Закрыть"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div></div>
   <div class="sh-body"><div class="sh-in">
     <div id="f-menu" class="menu">
-      <button type="button" class="mi main" data-go="buy"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></i><span><b>Купить</b><small>по DCA 50/30/20 или одну монету</small></span></button>
-      <button type="button" class="mi" data-go="dip"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5l6 6 4-3 6 8"/><path d="M15 16h5v-5"/></svg></i><span><b>Докупка</b><small>по уровню из резерва</small></span></button>
+      <button type="button" class="mi main" data-go="buy"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></i><span><b>Купить</b><small>одну монету или по плану (DCA)</small></span></button>
+      <button type="button" class="mi" data-go="dip"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5l6 6 4-3 6 8"/><path d="M15 16h5v-5"/></svg></i><span><b>Докупка</b><small>из резерва, когда биткоин упал</small></span></button>
       <button type="button" class="mi" data-go="sell"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M6 11l6-6 6 6"/></svg></i><span><b>Продать</b><small>зафиксировать прибыль</small></span></button>
       <button type="button" class="mi" data-go="deposit"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M4 20h16"/></svg></i><span><b>Пополнить биржу</b><small>делится на DCA и резерв</small></span></button>
       <button type="button" class="mi" data-go="reserve"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="13" rx="3"/><path d="M8 7V5h8v2M12 11v5"/></svg></i><span><b>Резерв USDT</b><small>пополнение или поправка</small></span></button>
@@ -722,17 +724,18 @@ button:focus-visible{outline:2px solid var(--pink);outline-offset:2px}
     </div>
 
     <div id="f-buy" hidden style="display:flex;flex-direction:column;gap:12px">
-      <div class="seg" id="buyMode"><button type="button" data-m="dca" aria-pressed="true">По DCA</button><button type="button" data-m="one" aria-pressed="false">Одна монета</button></div>
+      <div class="seg" id="buyMode"><button type="button" data-m="dca" aria-pressed="true">По плану</button><button type="button" data-m="one" aria-pressed="false">Одна монета</button></div>
       <div id="buyDca" style="display:flex;flex-direction:column;gap:12px">
+        <p class="expl">По плану (DCA) — покупка на одну и ту же сумму каждый месяц, разложенная по монетам.</p>
         <p class="hint" id="dcaHint"></p>
         <div class="f2"><label class="field"><span>Всего потратил, $</span><input type="number" id="bTotal" step="any" min="0" inputmode="decimal" placeholder="120"></label><label class="field"><span>Альткоин месяца</span><input type="text" id="bAlt" maxlength="12" placeholder="SOL" autocomplete="off"></label></div>
         <div class="rows" id="bRows"></div>
       </div>
       <div id="buyOne" hidden style="display:flex;flex-direction:column;gap:12px">
-        <div class="f2"><label class="field"><span>Монета</span><input type="text" id="oSym" maxlength="12" placeholder="BTC" autocomplete="off"></label><label class="field"><span>Потратил, $</span><input type="number" id="oUsd" step="any" min="0" inputmode="decimal"></label></div>
+        <div class="f2"><label class="field"><span>Монета</span><input type="text" id="oSym" maxlength="12" placeholder="например, BTC" autocomplete="off"></label><label class="field"><span>Потратил, $</span><input type="number" id="oUsd" step="any" min="0" inputmode="decimal"></label></div>
         <label class="field"><span>Получил монет</span><input type="number" id="oQty" step="any" min="0" inputmode="decimal"></label>
         <p class="hint" id="oHint"></p>
-        <label class="check"><input type="checkbox" id="oDca"><span>Покупка из бюджета DCA</span></label>
+        <label class="check"><input type="checkbox" id="oDca"><span>Покупка из бюджета DCA<br><span class="hint">DCA — покупка на одну и ту же сумму каждый месяц. Отметь, если это плановая покупка.</span></span></label>
       </div>
     </div>
 
@@ -902,9 +905,9 @@ button:focus-visible{outline:2px solid var(--pink);outline-offset:2px}
 
 <div class="toast" id="toast" role="status"><span id="toastMsg"></span><button type="button" id="toastBtn" hidden></button></div>
 
-<script src="config.js?v=20261103145705"></script>
+<script src="config.js?v=20261104030816"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="shim.js?v=20261103145705"></script>
+<script src="shim.js?v=20261104030816"></script>
 <script>
 /* ===== основа ===== */
 const $=id=>document.getElementById(id);
@@ -1258,11 +1261,11 @@ function renderHome(D){
   else $('signal').innerHTML='';
   countTo($('tInv'),S.ready?D.inv:null,v=>money(v,{d:0}));$('tInvS').textContent=D.syms.length?pl(D.syms.length,'монета','монеты','монет'):'';
   countTo($('tRes'),S.ready?D.reserve:null,v=>money(v));
-  const capP=+S.settings.capPct||20,cap=D.total*capP/100;$('tResS').textContent=D.total?'потолок '+money(cap,{d:0})+(D.reserve>cap?' · выше!':''):'';$('tResM').style.width=(cap?Math.min(100,D.reserve/cap*100):0)+'%';
+  const capP=+S.settings.capPct||20,cap=D.total*capP/100;$('tResS').textContent=D.total?'потолок '+money(cap,{d:0})+(D.reserve>cap?' · выше!':' — выше не копим'):'доллары для докупок на падении';$('tResM').style.width=(cap?Math.min(100,D.reserve/cap*100):0)+'%';
   countTo($('tBtc'),btc,v=>money(v,{d:0,show:true}));$('tBtcS').textContent=btc&&ath?pct((btc/ath-1)*100)+' от максимума':'';
   const bud=budgetUsd(),ds=depShare();
   if(D.hasDep){$('tDcaK').textContent='Бюджет DCA';countTo($('tDca'),D.dcaBudget,v=>usd(v));$('tDcaS').textContent=D.dcaBudget>0.5?'осталось купить':'всё куплено ✓';}
-  else{$('tDcaK').textContent='DCA в месяц';countTo($('tDca'),bud?bud*ds:(S.ready?0:null),v=>usd(v,0));$('tDcaS').textContent=bud&&ds<1?'и '+usd(bud*(1-ds),0)+' в резерв':'';}
+  else{$('tDcaK').textContent='DCA в месяц';countTo($('tDca'),bud?bud*ds:(S.ready?0:null),v=>usd(v,0));$('tDcaS').textContent=bud&&ds<1?'и '+usd(bud*(1-ds),0)+' в резерв':'одна сумма каждый месяц';}
   {const t=$('tRes').closest('.tile');if(t)t.hidden=!ladderOn()&&!D.reserve;}
   renderMovers(D);renderAlloc(D);renderAlerts();renderTeaser();renderLiveBanner();
   msSync({D,pct:has24&&D.total?d24/(D.total-d24)*100:null,go:!!go});}
@@ -1628,7 +1631,7 @@ function spreadTotal(pf){const sp=split(),tot=+$(pf==='b'?'bTotal':'dTotal').val
   if(pf==='d'&&dipPlan){const goP=dipPlan.pl.parts.filter(p=>p.st==='go'),use=goP.length?goP:dipPlan.pl.parts.filter(p=>p.st!=='done'),w=use.reduce((a,p)=>a+p.usd,0)||1;
     for(const s of ['BTC','ETH','ALT']){const el=$(pf+'u_'+s);if(!el)continue;const p=use.find(x=>x.k===s);el.value=tot&&p?(tot*p.usd/w).toFixed(2):'';}hints(pf);return;}
   for(const s of ['BTC','ETH','ALT']){const el=$(pf+'u_'+s);if(el)el.value=tot?(tot*sp[s]/100).toFixed(2):'';}hints(pf);}
-function hintFor(sym,u,qE,el,qi){const D=derive();if(!sym){el.textContent='впиши тикер альткоина';if(qi)qi.placeholder='';return;}
+function hintFor(sym,u,qE,el,qi){const D=derive();if(!sym){el.textContent=el.id==='oHint'?'':'напиши альткоин месяца, например SOL';if(qi)qi.placeholder='';return;}
   const p=+D.prices[sym]||0,est=p&&u?u/p:0,q=qE||est;if(qi)qi.placeholder=est?'≈ '+qtyRaw(+est.toPrecision(4)):'';
   if(!u&&!qE){el.innerHTML=p?'цена сейчас <b>'+usdp(p)+'</b>':'цены этой монеты нет — впиши количество';return;}
   const c=D.h[sym]||{qty:0,usd:0,cq:0},oA=c.cq?c.usd/c.cq:null,nA=(c.cq+q)?(c.usd+u)/(c.cq+q):null,parts=[];
@@ -1723,7 +1726,7 @@ function dirAuto(){if(dirAutoDone||!S.ready)return;dirAutoDone=true;setTimeout((
 const formCoinInputs=()=>mode==='buy'?[buyMode==='dca'?'bAlt':'oSym']:mode==='dip'?['dAlt']:mode==='start'?['nsSym']:[];
 function symOptions(){sugHide();}
 function initBuy(opt){const D=derive(),sp=split();symOptions();
-  $('buyMode').children[0].textContent='По DCA · '+sp.BTC+'/'+sp.ETH+'/'+sp.ALT;setBuyMode(opt.sym?'one':'dca');
+  $('buyMode').children[0].textContent='По плану · '+sp.BTC+'/'+sp.ETH+'/'+sp.ALT;setBuyMode(opt.sym?'one':'dca');
   $('dcaHint').innerHTML=D.hasDep?(D.dcaBudget>0.5?'Бюджет DCA: осталось <b>'+usd(D.dcaBudget)+'</b>':'Бюджет DCA уже потрачен — покупка уйдёт в минус бюджета'):'Сумма разложится по монетам по твоему правилу.';
   $('bTotal').value=D.hasDep&&D.dcaBudget>0.5?D.dcaBudget.toFixed(2):'';$('bAlt').value=altNow();fillRows('b');
   $('oSym').value=opt.sym||'';$('oUsd').value='';$('oQty').value='';$('oDca').checked=D.hasDep;oHint();}
@@ -1880,7 +1883,7 @@ let obShown=false;
 function obCheck(){if(obShown||!obNeed())return;obShown=true;OB.cur=P.cur||'USD';$('ob').hidden=false;obDraw();}
 function obMoney(v){return OB.amtCur==='USD'?usd(v,0):uah(v);}
 function obDraw(){const st=OB.step,N=4,dots='<div class="ob-dots" aria-hidden="true">'+[0,1,2,3].map(i=>`<i class="${i<=st?'on':''}"></i>`).join('')+'</div>';
-  const top=`<div class="ob-top">${dots}<button type="button" class="ob-skip" id="obSkip">${st<3?'Пропустить':''}</button></div>`;
+  const top=`<div class="ob-top">${dots}${st<3?'<button type="button" class="ob-skip" id="obSkip">Пропустить</button>':''}</div>`;
   const nav=(next,back)=>`<p class="err" id="obErr" role="alert"></p><div class="ob-nav">${back?'<button type="button" class="btn ghost" id="obBack">Назад</button>':''}<button type="button" class="btn" id="obNext">${next}</button></div>`;
   let h='';
   if(st===0)h=`${top}<h2 id="obTitle">Добро пожаловать в Money Life</h2><p class="ob-lead">Здесь удобно копить в крипте по своему плану: записывать покупки, держать распределение и докупать, когда рынок падает.</p>
@@ -1890,7 +1893,8 @@ function obDraw(){const st=OB.step,N=4,dots='<div class="ob-dots" aria-hidden="t
     h=`${top}<h2 id="obTitle">Выбери стратегию</h2><p class="ob-lead">Это правила, по которым приложение подсказывает, что и когда покупать. Всё можно поменять потом в «Настройках».</p>
     <div class="ob-opts">${o('simple','Простой','BTC 70% · ETH 30%','Каждый месяц покупаешь на одну и ту же сумму. Без резерва и докупок на просадках.')}
     ${o('author','Как у автора','BTC 50% · ETH 30% · альткоины 20%','Половина бюджета — покупки по плану, половина — резерв в USDT. Когда биткоин падает на 30–70% от максимума, резерв идёт на докупку по уровням.',true)}
-    ${o('own','Свой','','Начнёшь с правил «Как у автора» и настроишь всё сам: доли монет, резерв, лестницу.')}</div>${nav('Дальше',true)}`;}
+    ${o('own','Свой','','Начнёшь с правил «Как у автора» и настроишь всё сам: доли монет, резерв, лестницу.')}</div>
+    <p class="ob-note">Резерв — доллары (USDT), которые ждут падения цены. Лестница — докупки из резерва, когда биткоин падает на 30–70% от максимума.</p>${nav('Дальше',true)}`;}
   else if(st===2){const a=+OB.amt||0,t=TPL[OB.tpl],ds=t.depositSplit.dca/100;
     h=`${top}<h2 id="obTitle">Сколько в месяц?</h2><p class="ob-lead">Сумма, которую ты откладываешь на крипту каждый месяц. По ней приложение посчитает план покупок.</p>
     <div class="f2"><label class="field"><span>Сумма в месяц</span><input type="number" id="obAmt" min="0" step="any" inputmode="decimal" value="${esc(OB.amt)}" placeholder="${OB.amtCur==='USD'?'100':'4000'}"></label>
@@ -1898,8 +1902,8 @@ function obDraw(){const st=OB.step,N=4,dots='<div class="ob-dots" aria-hidden="t
     <label class="field"><span>В какой день обычно пополняешь биржу?</span><select id="obDay"><option value="">Не важно</option>${Array.from({length:28},(_,i)=>`<option value="${i+1}"${+OB.day===i+1?' selected':''}>${i+1}-го числа</option>`).join('')}</select></label>
     <div class="ob-calc" id="obCalc">${a?(ds<1?`Каждый месяц: <b>${obMoney(a*ds)}</b> на покупки по плану и <b>${obMoney(a*(1-ds))}</b> в резерв для докупок.`:`Каждый месяц: <b>${obMoney(a)}</b> на покупки — BTC ${t.split.BTC}% и ETH ${t.split.ETH}%.`):'Впиши сумму — покажу, как она разделится.'}</div>
     <p class="ob-note">Можно пропустить и вписать позже в «Настройках».</p>${nav('Дальше',true)}`;}
-  else if(st===3){h=`${top}<h2 id="obTitle">Что у тебя уже есть?</h2><p class="ob-lead">Добавь монеты, которые уже купил, — портфель сразу покажет их стоимость. Если только начинаешь, пропусти.</p>
-    <div class="ob-coins" id="obCoins">${OB.coins.map((c,i)=>`<div class="ob-coin" data-i="${i}"><label class="field"><span>Монета</span><input type="text" class="ob-sym" maxlength="12" placeholder="BTC" autocomplete="off" value="${esc(c.sym)}"></label><label class="field"><span>Количество</span><input type="number" class="ob-qty" min="0" step="any" inputmode="decimal" value="${esc(c.qty)}"></label><button type="button" class="ib ob-del" aria-label="Убрать монету"${OB.coins.length<2?' hidden':''}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>`).join('')}</div>
+  else if(st===3){h=`${top}<h2 id="obTitle">Что у тебя уже есть?</h2><p class="ob-lead">Добавь монеты, которые уже купил, — портфель сразу покажет их стоимость. Если только начинаешь — просто нажми «Готово».</p>
+    <div class="ob-coins" id="obCoins">${OB.coins.map((c,i)=>`<div class="ob-coin" data-i="${i}"><label class="field"><span>Монета</span><input type="text" class="ob-sym" maxlength="12" placeholder="например, BTC" autocomplete="off" value="${esc(c.sym)}"></label><label class="field"><span>Количество</span><input type="number" class="ob-qty" min="0" step="any" inputmode="decimal" value="${esc(c.qty)}"></label><button type="button" class="ib ob-del" aria-label="Убрать монету"${OB.coins.length<2?' hidden':''}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>`).join('')}</div>
     <button type="button" class="btn ghost" id="obAdd">+ Ещё монета</button>
     <p class="ob-note">Цену покупки можно добавить позже в «Активности». Без неё прибыль по этим монетам не считается.</p>${nav(OB.busy?'Сохраняю…':'Готово',true)}`;}
   $('obCard').innerHTML=h;obWire();}
@@ -2014,7 +2018,7 @@ function msSync(x){MSC.last=x;if(!msApply())return;if(!S.ready||document.getElem
   if(window.Mascot){try{window.Mascot.sync(msPayload(x));}catch(e){}}else msLoad();}
 function msLoad(){if(MSC.loading||MSC.failed)return;MSC.loading=true;
   const add=(src,ok)=>{try{const s=document.createElement('script');s.src=src;s.async=true;s.onload=ok;s.onerror=()=>{MSC.failed=true;};document.head.appendChild(s);}catch(e){MSC.failed=true;}};
-  const boot=()=>add('mascot.js?v=20261103145705',()=>{try{if(window.Mascot&&window.Mascot.init({host:$('mascot'),app:{audio:ac,buzz}})&&MSC.last&&$('ob').hidden&&!document.getElementById('mlAuth'))window.Mascot.sync(msPayload(MSC.last));}catch(e){}});
+  const boot=()=>add('mascot.js?v=20261104030816',()=>{try{if(window.Mascot&&window.Mascot.init({host:$('mascot'),app:{audio:ac,buzz}})&&MSC.last&&$('ob').hidden&&!document.getElementById('mlAuth'))window.Mascot.sync(msPayload(MSC.last));}catch(e){}});
   setTimeout(()=>{if(window.THREE)boot();else add('three.min.js',boot);},300);}
 function render(){const D=derive();renderHeader();renderHome(D);renderGrowth();renderCoins(D);renderStrategy(D);renderActivity();earnNudge();if(cvSym&&$('coinSheet').classList.contains('open'))renderCoinView();}
 document.body.classList.add('loading');
