@@ -277,7 +277,7 @@ def run_browser():
     with sync_playwright() as p:
         browser = p.chromium.launch(args=['--no-proxy-server'])
 
-        def page_for(name, test_cfg, prices=True, dsf=2, theme=None):
+        def page_for(name, test_cfg, prices=True, dsf=2, theme=None, extra=None):
             ctx = browser.new_context(viewport={'width': 390, 'height': 844}, device_scale_factor=dsf, service_workers='block',
                                       locale='ru-RU', timezone_id='Europe/Kyiv', is_mobile=True, has_touch=True)
             def route(r):
@@ -290,6 +290,7 @@ def run_browser():
                     b = binance_body(u)
                     if b is None: return r.fulfill(status=400, content_type='application/json', headers={'access-control-allow-origin': '*'}, body='{"code":-1121,"msg":"Invalid symbol."}')
                     return r.fulfill(status=200, content_type='application/json', headers={'access-control-allow-origin': '*'}, body=b)
+                if extra and extra(r, u): return
                 return r.abort('internetdisconnected')
             ctx.route('**/*', route)
             ctx.add_init_script('window.__ML_TEST=' + json.dumps(test_cfg) + ';' + MOCK)
@@ -311,8 +312,8 @@ def run_browser():
         def shot(pg, name):
             pg.screenshot(path=str(OUT / f'{name}.png'))
 
-        def scenario(name, cfg, body, prices=True, path='index.html', dsf=2, theme=None):
-            ctx, pg, errs = page_for(name, cfg, prices, dsf, theme)
+        def scenario(name, cfg, body, prices=True, path='index.html', dsf=2, theme=None, extra=None):
+            ctx, pg, errs = page_for(name, cfg, prices, dsf, theme, extra)
             try:
                 pg.goto(base + path, wait_until='load', timeout=30000)
                 pg.wait_for_timeout(1500)
@@ -383,6 +384,9 @@ def run_browser():
             if not pg.evaluate("[...window.__mlRows.keys()].includes('app/settings')"):
                 raise AssertionError('после знакомства не сохранились настройки (app/settings)')
             ok('настройки сохранены после знакомства')
+            pg.evaluate("document.querySelector('nav.tabs [data-tab=\"coins\"]').click()"); pg.wait_for_timeout(400)
+            if pg.locator('#coinRanges').is_hidden() and 'Монет пока нет' in pg.inner_text('#coinList'): ok('«Монеты» без монет: переключатель периода скрыт, подсказка «Монет пока нет»')
+            else: fail('«Монеты» без монет', 'виден переключатель периода или нет подсказки')
         scenario('Новый пользователь', {'session': True, 'docs': []}, s_new)
 
         # --- Б2. путь новичка (Вера 03.11): шаг 4 знакомства — видимая «Пропустить» ≥ 48 px, подсказка «например, BTC»,
@@ -516,6 +520,90 @@ def run_browser():
             if pg.get_attribute('nav.tabs [data-tab="coins"]', 'aria-current') == 'page': ok('открытое приложение: #coins переключает на «Монеты»')
             else: fail('открытое приложение: смена #хэша', 'вкладка «Монеты» не открылась')
         scenario('Ярлык в открытом приложении', {'session': True, 'docs': SEED}, s_hash)
+
+        # --- В4. редизайн, этап 1 (часть 1): «Монеты» — таблица из трёх колонок и переключатель периода 24ч · 1Н · Всё.
+        #     Имитация цен: BTC $110 000, ETH $4000, за 24ч +1,5%, 7-дневный график начинается с 0,97 × цены (за неделю +3,1%).
+        #     Покупки SEED: BTC 0,005 за $500, ETH 0,1 за $300. Расчёты денег не меняются — проверяем только показ.
+        # история цен CoinGecko отвечает «нет данных» (не сбой сети) — тогда CoinGecko не уходит на паузу и цены с 7-дневным графиком
+        # приходят обычным путём, как у владельца; без этого в тестах цены всегда идут с биржи, без графика
+        def cg_chart_404(r, u):
+            if 'api.coingecko.com' in u and '/market_chart' in u:
+                r.fulfill(status=404, content_type='application/json', headers={'access-control-allow-origin': '*'}, body='{"error":"not found"}'); return True
+            return False
+        def cnorm(t): return t.replace(' ', ' ').replace('\xa0', ' ').replace('−', '-')
+        ROWS = """()=>[...document.querySelectorAll('#coinList .row[data-coin]')].map(r=>{const c=r.querySelectorAll('.c');const t=e=>[...e.querySelectorAll('.b,.s')].map(x=>x.textContent);
+            return {s:r.dataset.coin,h:Math.round(r.getBoundingClientRect().height),cols:c.length,a:t(c[0]),p:t(c[1]),v:t(c[2])}})"""
+        def coin_state(pg):
+            rows = {r['s']: r for r in pg.evaluate(ROWS)}
+            for r in rows.values():
+                for k in ('a', 'p', 'v'): r[k] = [cnorm(x) for x in r[k]]
+            return {'per': pg.evaluate("[...document.querySelectorAll('#coinRanges [data-per]')].map(b=>[b.textContent,b.getAttribute('aria-pressed')])"),
+                    'head': cnorm(pg.inner_text('#coinList .thead')).split('\n'), 'tot': cnorm(pg.inner_text('#coinsTot')), 'rows': rows}
+        for th in ('dark', 'light'):
+            def s_coins_table(pg, n, th=th):
+                wait_app(pg)
+                if pg.evaluate("document.documentElement.dataset.theme") != th: raise AssertionError('тема не включилась: ' + th)
+                try: pg.wait_for_function("Object.keys(S.live.spark).length>0", polling=250, timeout=10000)
+                except Exception: pass   # не пришёл график — проверка 1Н ниже честно покажет «—»
+                pg.evaluate("document.querySelector('nav.tabs [data-tab=\"coins\"]').click()"); pg.wait_for_timeout(700)
+                st = coin_state(pg)
+                if [b[0] for b in st['per']] == ['24ч', '1Н', 'Всё'] and [b[1] for b in st['per']] == ['true', 'false', 'false']:
+                    ok(f'«Монеты» ({th}): переключатель периода 24ч · 1Н · Всё, выбран 24ч')
+                else: fail(f'«Монеты» ({th}): переключатель периода', str(st['per']))
+                hh = pg.evaluate("Math.round(document.getElementById('coinRanges').getBoundingClientRect().height)")
+                ok(f'«Монеты» ({th}): переключатель 48 px') if hh >= 48 else fail(f'«Монеты» ({th}): высота переключателя', str(hh))
+                if st['head'] == ['Актив', 'Цена · 24ч', 'Портфель']: ok(f'«Монеты» ({th}): шапка таблицы «Актив · Цена · 24ч · Портфель»')
+                else: fail(f'«Монеты» ({th}): шапка таблицы', str(st['head']))
+                b = st['rows'].get('BTC')
+                if b and b['cols'] == 3 and b['h'] == 60 and b['a'][0] == 'BTC' and b['a'][1] == '0,005' and b['p'] == ['$110 000', '+1,5%'] and b['v'] == ['$550,00', '+$8,13']:
+                    ok(f'«Монеты» ({th}): строка BTC 60 px, три колонки: 0,005 · $110 000 +1,5% · $550,00 +$8,13 за 24ч')
+                else: fail(f'«Монеты» ({th}): строка BTC за 24ч', str(b))
+                order = list(st['rows'])
+                if order[:2] == ['BTC', 'ETH']: ok(f'«Монеты» ({th}): сортировка «По стоимости» осталась (BTC, затем ETH)')
+                else: fail(f'«Монеты» ({th}): сортировка', str(order))
+                chips = pg.evaluate("[...document.querySelectorAll('#sortChips [data-sort]')].map(b=>b.textContent)")
+                if chips == ['По стоимости', 'По прибыли', 'За 24ч', 'А–Я']: ok(f'«Монеты» ({th}): чипы сортировки на месте, «За 24ч» — по выбранному периоду')
+                else: fail(f'«Монеты» ({th}): чипы сортировки', str(chips))
+                if 'за 24ч +$' in st['tot'] and '$950' in st['tot']: ok(f'«Монеты» ({th}): итог над таблицей «{st["tot"]}»')
+                else: fail(f'«Монеты» ({th}): итог над таблицей', st['tot'])
+                shot(pg, f'stage1-coins-app-{th}')
+                # неделя: из 7-дневного графика (0,97 × цены → +3,1%); прибыль = стоимость сейчас − кол-во × цена неделю назад
+                pg.click('#coinRanges [data-per="1w"]'); pg.wait_for_timeout(400)
+                st = coin_state(pg); b = st['rows'].get('BTC'); e = st['rows'].get('ETH')
+                if st['head'][1] == 'Цена · 1Н' and b and b['p'][1] == '+3,1%' and b['v'][1] == '+$16,50' and e and e['v'][1] == '+$12,00':
+                    ok(f'«Монеты» ({th}): 1Н — BTC +3,1% / +$16,50, ETH +$12,00 (из 7-дневного графика)')
+                else: fail(f'«Монеты» ({th}): период 1Н', f'{st["head"]} {b} {e}; графики 7 дней: ' + pg.evaluate("JSON.stringify(Object.keys(S.live.spark))"))
+                pill = pg.evaluate("document.querySelector('#coinRanges .pill').style.transform")
+                ok(f'«Монеты» ({th}): пилюля переехала к 1Н') if pill == 'translateX(100%)' else fail(f'«Монеты» ({th}): пилюля', pill)
+                # всё время: к средней цене покупки — как было раньше (BTC +10%, +$50; ETH +33,3%, +$100; итог +$150)
+                pg.click('#coinRanges [data-per="all"]'); pg.wait_for_timeout(400)
+                st = coin_state(pg); b = st['rows'].get('BTC'); e = st['rows'].get('ETH')
+                if st['head'][1] == 'Цена · к покупке' and b and b['p'][1] == '+10,0%' and b['v'][1] == '+$50,00' and e and e['p'][1] == '+33,3%' and e['v'][1] == '+$100,00' and 'всего +$150' in st['tot']:
+                    ok(f'«Монеты» ({th}): «Всё» — к средней цене покупки: BTC +10,0% / +$50, ETH +33,3% / +$100, всего +$150')
+                else: fail(f'«Монеты» ({th}): период «Всё»', f'{st["head"]} {b} {e} {st["tot"]}')
+                saved = pg.evaluate("JSON.parse(localStorage.getItem('cp-prefs2')||'{}').cper")
+                ok(f'«Монеты» ({th}): выбор периода запомнен в настройках вида') if saved == 'all' else fail(f'«Монеты» ({th}): запоминание периода', repr(saved))
+                if th == 'dark':
+                    # «скрыть суммы»: стоимость и прибыль спрятаны, цена и % видны
+                    pg.click('#eyeBtn'); pg.wait_for_timeout(300)
+                    b = coin_state(pg)['rows'].get('BTC')
+                    if b and b['v'] == ['••••', '••••'] and b['p'][0] == '$110 000' and b['a'][1].startswith('••••'): ok('«Монеты»: «скрыть суммы» прячет стоимость, прибыль и количество, цена видна')
+                    else: fail('«Монеты»: «скрыть суммы»', str(b))
+                    pg.click('#eyeBtn'); pg.wait_for_timeout(300)
+                    # нет графика за неделю (цены с биржи) — «—», а не ошибка
+                    r = pg.evaluate("[coinPer('ZZZ',{usd:10,qty:1},5,5,'1w'),coinPer('ZZZ',{usd:0,qty:1},5,5,'all'),coinPer('ZZZ',{usd:10,qty:1},0,null,'24h')]")
+                    if all(x['ch'] is None and x['pf'] is None for x in r): ok('«Монеты»: нет данных за период (нет графика, монета без затрат, нет цены) — «—»')
+                    else: fail('«Монеты»: нет данных за период', str(r))
+                    # старое содержимое на месте: нажатие на строку открывает карточку монеты с действиями
+                    pg.click('#coinList .row[data-coin="BTC"]'); pg.wait_for_timeout(700)
+                    if pg.locator('#coinSheet.open').count(): ok('«Монеты»: нажатие на строку открывает карточку монеты (действия на месте)')
+                    else: fail('«Монеты»: карточка монеты', 'не открылась по нажатию на строку')
+                    pg.evaluate("closeSheets()"); pg.wait_for_timeout(400)
+                    pg.reload(wait_until='load'); wait_app(pg); pg.wait_for_timeout(800)
+                    pg.evaluate("document.querySelector('nav.tabs [data-tab=\"coins\"]').click()"); pg.wait_for_timeout(500)
+                    pr = pg.evaluate("document.querySelector('#coinRanges [aria-pressed=\"true\"]').dataset.per")
+                    ok('«Монеты»: после перезапуска выбран тот же период («Всё»)') if pr == 'all' else fail('«Монеты»: период после перезапуска', repr(pr))
+            scenario(f'Монеты: таблица и период ({th})', {'session': True, 'docs': SEED}, s_coins_table, theme=th, extra=cg_chart_404)
 
         # --- Г. запись покупки через форму (если форма доступна)
         def s_buy(pg, n):
