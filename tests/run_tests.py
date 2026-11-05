@@ -449,6 +449,26 @@ def run_browser():
             oh = norm(pg.inner_text('#oHint'))
             if oh.replace('.', ',').startswith('всего будет 0,00045 BTC · средняя цена покупки $111 111'): ok(f'«Одна монета»: строка итога понятна («{oh}»)')
             else: fail('«Одна монета»: строка итога', repr(oh))
+            # №5 (Вера 03.11): первая запись не выглядит провалом — расчёты те же, меняется только вид
+            pg.evaluate("""()=>{const b=[...document.querySelectorAll('#actSheet button')].find(x=>x.textContent.trim()==='Сохранить'&&x.offsetParent);if(b)b.click();}""")
+            pg.wait_for_function("!document.querySelector('#actSheet.open')", polling=250, timeout=6000); pg.wait_for_timeout(1500)
+            hs = norm(pg.inner_text('#hSub')).replace('−', '-')
+            if hs == '-$0 · -1,0% результат сейчас' or hs == '-$1 · -1,0% результат сейчас': ok(f'первая покупка в минусе: под суммой «{hs}» (число прежнее, подпись «результат»)')
+            else: fail('первая покупка: строка под суммой', repr(hs))
+            al = pg.evaluate("[...document.querySelectorAll('#alloc .arow')].map(r=>[r.querySelector('.d').innerText.replace(/\\u00a0|\\u202f/g,' '),getComputedStyle(r.querySelector('.adev')).color,getComputedStyle(r.querySelector('.d')).color])")
+            want = ['цель 70% · выше цели на 30,0%', 'цель 30% · ниже цели на 30,0%', 'цель 0% · в цели']   # шаблон «Простой» 70/30/0
+            if [a[0] for a in al] == want and all(a[1] == a[2] for a in al): ok('распределение: отклонение от цели словами и нейтральным цветом')
+            else: fail('распределение: отклонение от цели', repr(al))
+            gx = pg.evaluate("(()=>{const t=[...document.querySelectorAll('#gChart svg text')].map(e=>e.textContent),y=t.filter(s=>/\\$/.test(s)).map(s=>+s.replace(/[^0-9]/g,''));return {x:t.filter(s=>!/\\$/.test(s)),y}})()")
+            if gx['x'] == ['сегодня']: ok('график за один день: по оси X одна подпись «сегодня»')
+            else: fail('график за один день: подписи оси X', repr(gx['x']))
+            if gx['y'] and max(gx['y']) - min(gx['y']) >= 5: ok(f'график: шкала не уже ±5% от суммы ({gx["y"]})')
+            else: fail('график: шкала Y', repr(gx['y']))
+            for th in ['dark', 'light']:
+                pg.evaluate(f"document.documentElement.setAttribute('data-theme','{th}')"); pg.wait_for_timeout(300)
+                pg.evaluate("window.scrollTo(0,0)"); pg.wait_for_timeout(200); shot(pg, f'first-record-top-{th}')
+                pg.evaluate("document.getElementById('alloc').scrollIntoView({block:'center'})"); pg.wait_for_timeout(300); shot(pg, f'first-record-alloc-{th}')
+            pg.evaluate("document.documentElement.setAttribute('data-theme','dark')")
         scenario('Путь новичка', {'session': True, 'docs': []}, s_newbie)
 
         # --- В. пользователь с данными: вкладки и шторки
