@@ -94,6 +94,7 @@ p{margin:0}
 .hero .ms.ms-live .ms-still{opacity:0}
 .hero.has-ms .iso{display:none}
 .hero.has-ms .chips{max-width:74%}
+.hero.has-ms .bal-sub{max-width:calc(100% - 92px)}
 @keyframes float{50%{transform:translateY(-6px)}}
 .bal{position:relative;font-weight:800;font-size:clamp(34px,10vw,44px);letter-spacing:-.02em;line-height:1.05;margin-top:8px;max-width:74%}
 .bal-sub{position:relative;margin-top:6px;color:var(--mute);font-size:14px;max-width:74%}
@@ -743,7 +744,7 @@ input::placeholder{color:var(--mute);opacity:.8;font-weight:400}
       </div>
       <div id="buyOne" hidden style="display:flex;flex-direction:column;gap:12px">
         <div class="f2"><label class="field"><span>Монета</span><input type="text" id="oSym" maxlength="12" placeholder="например, BTC" autocomplete="off"></label><label class="field"><span>Потратил, $</span><input type="number" id="oUsd" step="any" min="0" inputmode="decimal"></label></div>
-        <label class="field"><span>Получил монет</span><input type="number" id="oQty" step="any" min="0" inputmode="decimal"></label>
+        <label class="field"><span>Получил монет</span><input type="number" id="oQty" step="any" min="0" inputmode="decimal" aria-describedby="oQtyHint"><small class="hint" id="oQtyHint">смотри в истории сделок биржи</small></label>
         <p class="hint" id="oHint"></p>
         <label class="check"><input type="checkbox" id="oDca"><span>Покупка из бюджета DCA<br><span class="hint">DCA — покупка на одну и ту же сумму каждый месяц. Отметь, если это плановая покупка.</span></span></label>
       </div>
@@ -915,9 +916,9 @@ input::placeholder{color:var(--mute);opacity:.8;font-weight:400}
 
 <div class="toast" id="toast" role="status"><span id="toastMsg"></span><button type="button" id="toastBtn" hidden></button></div>
 
-<script src="config.js?v=20261104145749"></script>
+<script src="config.js?v=20261105030500"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="shim.js?v=20261104145749"></script>
+<script src="shim.js?v=20261105030500"></script>
 <script>
 /* ===== основа ===== */
 const $=id=>document.getElementById(id);
@@ -1014,7 +1015,7 @@ function play(k){if(!P.sound)return;const c=ac();if(!c)return;const t=c.currentT
   else ping(c,t,1500,.07,.07,'triangle');}
 function buzz(p){if(!P.haptic)return;try{navigator.vibrate&&navigator.vibrate(p);}catch(e){}}
 let toastT=null,toastFn=null;
-function toast(msg,act){$('toastMsg').textContent=msg;const b=$('toastBtn');if(act){b.hidden=false;b.textContent=act.label;toastFn=act.fn;}else{b.hidden=true;toastFn=null;}$('toast').classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>$('toast').classList.remove('show'),act?6500:2600);}
+function toast(msg,act,ms){$('toastMsg').textContent=msg;const b=$('toastBtn');if(act){b.hidden=false;b.textContent=act.label;toastFn=act.fn;}else{b.hidden=true;toastFn=null;}$('toast').classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>$('toast').classList.remove('show'),ms||(act?6500:2600));}
 $('toastBtn').addEventListener('click',()=>{const f=toastFn;toastFn=null;$('toast').classList.remove('show');if(f)f();});
 function coinFly(from,n){if(reduced)return;const r=(from||$('plusBtn')).getBoundingClientRect(),tg=$('hBal').getBoundingClientRect();const vis=!$('v-home').hidden&&tg.top>0&&tg.top<innerHeight;const tx=vis?tg.left+40:innerWidth/2-15,ty=vis?tg.top+10:50;
   for(let i=0;i<n;i++){const d=document.createElement('div');d.className='drop';document.body.appendChild(d);if(!d.animate){d.remove();continue;}const sx=r.left+r.width/2-15+(i*12-n*6),sy=r.top;
@@ -1229,7 +1230,7 @@ function renderGrowth(){const el=$('gChart');
   $('gRanges').innerHTML=RANGES.map(([k,l])=>`<button type="button" data-r="${k}" aria-pressed="${k===gRange}">${l}</button>`).join('');
   if(!S.ready){el.innerHTML='<div class="skel" style="height:180px"></div>';gReadSet(null);return;}
   G=growthData();
-  if((G.val.length<2&&G.inv.length<2)||![...G.val,...G.inv].some(p=>+p.v>0)){/* пустой портфель — без графика из нулей */el.innerHTML=S.ready?'<div class="empty">График появится, когда будут записи о покупках.</div>':'';gReadSet(null);$('gNote').textContent='';return;}
+  if((G.val.length<2&&G.inv.length<2)||![...G.val,...G.inv].some(p=>+p.v>0)){/* пустой портфель — без графика из нулей */el.innerHTML=S.ready?'<div class="empty">'+(S.tx.length?'График появится, когда будут записи о покупках.':'Нажми «Купить» и запиши первую покупку — здесь появится твой портфель.')+'</div>':'';gReadSet(null);$('gNote').textContent='';return;}
   const long=gRange==='365'||gRange==='max';
   lineChart(el,{id:'g',label:'Рост портфеля',lines:[{pts:G.val,stroke:'grad',w:2.6,area:true,glow:true},{pts:G.inv,stroke:'#cfbaff',w:1.6,dash:'5 5',step:true,op:.75}],fmtY:v=>money(v,{d:0}),fmtX:long?dMonY:dShort,onRead:gReadSet});
   gReadSet(null);
@@ -1254,7 +1255,7 @@ function renderHome(D){
   balTo(D.noPrice?(last?+last.value:null):D.syms.length?D.total:(S.ready?0:null));
   const gain=D.total-D.invPriced;
   $('hSub').innerHTML=D.noPrice?(last?`нет актуальных цен · стоимость на ${dShort(+new Date(last.date+'T20:00:00'))}`:priceWait()?'загружаю цены…':'нет актуальных цен — суммы появятся, когда биржи ответят')
-    :D.invPriced>0&&D.total>0?`<span class="${gain>=0?'pos':'neg'}">${money(gain,{sign:true,d:0})} · ${pct(gain/D.invPriced*100)}</span> прибыль сейчас`:(S.ready?(D.syms.length?'Укажи цену покупки':'Добавь монеты через «+»'):'загружаю');
+    :D.invPriced>0&&D.total>0?`<span class="${gain>=0?'pos':'neg'}">${money(gain,{sign:true,d:0})} · ${pct(gain/D.invPriced*100)}</span> прибыль сейчас`:(S.ready?(D.syms.length?'Укажи цену покупки':'Начни с кнопки «Купить»'):'загружаю');
   const ch=[];let d24=0,has24=false;for(const s of D.syms){const c=S.live.change[s],p=+D.prices[s];if(c!=null&&p){has24=true;const v=D.h[s].qty*p;d24+=v-v/(1+c/100);}}
   if(has24&&D.total)ch.push(`<span class="chip ${d24>=0?'pos':'neg'}">24ч ${money(d24,{sign:true,d:0})} · ${pct(d24/(D.total-d24)*100)}</span>`);
   if(r&&D.total)ch.push(`<span class="chip">≈ ${P.hide?'••••':(P.cur==='UAH'?usd(D.total,0):uah(D.total*r))}</span>`);
@@ -1644,11 +1645,11 @@ function spreadTotal(pf){const sp=split(),tot=+$(pf==='b'?'bTotal':'dTotal').val
 function hintFor(sym,u,qE,el,qi){const D=derive();if(!sym){el.textContent=el.id==='oHint'?'':'напиши альткоин месяца, например SOL';if(qi)qi.placeholder='';return;}
   const p=+D.prices[sym]||0,est=p&&u?u/p:0,q=qE||est;if(qi)qi.placeholder=est?'≈ '+qtyRaw(+est.toPrecision(4)):'';
   if(!u&&!qE){el.innerHTML=p?'цена сейчас <b>'+usdp(p)+'</b>':'цены этой монеты нет — впиши количество';return;}
-  const c=D.h[sym]||{qty:0,usd:0,cq:0},oA=c.cq?c.usd/c.cq:null,nA=(c.cq+q)?(c.usd+u)/(c.cq+q):null,parts=[];
+  const c=D.h[sym]||{qty:0,usd:0,cq:0},oA=c.cq?c.usd/c.cq:null,nA=(c.cq+q)?(c.usd+u)/(c.cq+q):null,parts=[],one=el.id==='oHint',avgW=one?'средняя цена покупки':'средняя';
   if(!qE&&est)parts.push(`≈ <b>${qtyRaw(+est.toPrecision(4))} ${esc(sym)}</b> по ${usdp(p)}`);
-  if(qE&&u)parts.push(`цена покупки <b>${usdp(u/qE)}</b>`);
-  if(q)parts.push(`станет ${qtyRaw(+(c.qty+q).toPrecision(6))}`);
-  if(u&&q&&nA)parts.push(oA?`средняя ${usdp(oA)} → <b>${usdp(nA)}</b>`:`средняя <b>${usdp(nA)}</b>`);
+  if(qE&&u&&!(one&&!oA&&nA))parts.push(`цена покупки <b>${usdp(u/qE)}</b>`);/* первая покупка в «Одна монета»: цена = средней, не повторяем */
+  if(q)parts.push(one?`всего будет ${qtyRaw(+(c.qty+q).toPrecision(6))} ${esc(sym)}`:`станет ${qtyRaw(+(c.qty+q).toPrecision(6))}`);
+  if(u&&q&&nA)parts.push(oA?`${avgW} ${usdp(oA)} → <b>${usdp(nA)}</b>`:`${avgW} <b>${usdp(nA)}</b>`);
   el.innerHTML=parts.join(' · ');}
 function hints(pf){for(const s of ['BTC','ETH','ALT']){const el=$(pf+'h_'+s);if(!el)continue;if(s==='ALT'){const l=$(pf+'s_ALT');if(l)l.textContent=altSym(pf)||'ALT';}hintFor(rowSym(pf,s),+$(pf+'u_'+s).value||0,+$(pf+'q_'+s).value||0,el,$(pf+'q_'+s));}}
 ['b','d'].forEach(pf=>{$(pf==='b'?'bRows':'dRows').addEventListener('input',()=>hints(pf));$(pf==='b'?'bTotal':'dTotal').addEventListener('input',()=>spreadTotal(pf));$(pf==='b'?'bAlt':'dAlt').addEventListener('input',()=>hints(pf));});
@@ -1952,7 +1953,7 @@ async function obFinish(skip){if(OB.busy||!db)return;OB.busy=true;const ts=new D
     if(set.ladder)await cycleCreate();
     $('ob').hidden=true;startLive(true);render();
     if(!skip&&OB.tpl==='own'){openSheet('setSheet');fillSettings();setTimeout(()=>{const l=$('stratLbl');if(l)l.scrollIntoView({block:'start'});},350);toast('Настрой правила под себя');}
-    else toast(coins.length?'Готово! Портфель настроен':'Готово! Нажми «+», чтобы записать первую покупку');
+    else if(coins.length)toast('Готово! Портфель настроен');else toast('Готово! Нажми «Купить» и запиши покупку',null,7000);
     play('coin');buzz([12,40,18]);}
   catch(e){const er=$('obErr');if(er)er.textContent=failMsg(e,'Не сохранилось');}
   finally{OB.busy=false;}}
@@ -2028,7 +2029,7 @@ function msSync(x){MSC.last=x;if(!msApply())return;if(!S.ready||document.getElem
   if(window.Mascot){try{window.Mascot.sync(msPayload(x));}catch(e){}}else msLoad();}
 function msLoad(){if(MSC.loading||MSC.failed)return;MSC.loading=true;
   const add=(src,ok)=>{try{const s=document.createElement('script');s.src=src;s.async=true;s.onload=ok;s.onerror=()=>{MSC.failed=true;};document.head.appendChild(s);}catch(e){MSC.failed=true;}};
-  const boot=()=>add('mascot.js?v=20261104145749',()=>{try{if(window.Mascot&&window.Mascot.init({host:$('mascot'),app:{audio:ac,buzz}})&&MSC.last&&$('ob').hidden&&!document.getElementById('mlAuth'))window.Mascot.sync(msPayload(MSC.last));}catch(e){}});
+  const boot=()=>add('mascot.js?v=20261105030500',()=>{try{if(window.Mascot&&window.Mascot.init({host:$('mascot'),app:{audio:ac,buzz}})&&MSC.last&&$('ob').hidden&&!document.getElementById('mlAuth'))window.Mascot.sync(msPayload(MSC.last));}catch(e){}});
   setTimeout(()=>{if(window.THREE)boot();else add('three.min.js',boot);},300);}
 function render(){const D=derive();renderHeader();renderHome(D);renderGrowth();renderCoins(D);renderStrategy(D);renderActivity();earnNudge();if(cvSym&&$('coinSheet').classList.contains('open'))renderCoinView();}
 document.body.classList.add('loading');

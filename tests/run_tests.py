@@ -391,6 +391,7 @@ def run_browser():
             const bgOf=e=>{for(;e;e=e.parentElement){const b=getComputedStyle(e).backgroundColor;if(b&&!/rgba\\(.*,\\s*0\\)$/.test(b)&&b!=='transparent')return b;}return 'rgb(0,0,0)'};
             return [...document.querySelectorAll(sel)].map(e=>{const a=lum(getComputedStyle(e).color),b=lum(bgOf(e.closest('.ob-card')||e));return (Math.max(a,b)+.05)/(Math.min(a,b)+.05)})}"""
         def s_newbie(pg, n):
+            norm = lambda t: t.replace('\u202f', ' ').replace('\xa0', ' ').strip()
             pg.wait_for_selector('#ob:not([hidden])', timeout=8000)
             low = []
             for i in range(3):
@@ -417,7 +418,17 @@ def run_browser():
             st = pg.evaluate("((window.__mlRows.get('app/settings')||{}).data||{}).template")
             if st == 'simple': ok('«Готово» на шаге 4 сохраняет выбранный шаблон («Простой»)')
             else: fail('«Готово» на шаге 4', f'template = {st!r}, ожидался simple')
-            wait_app(pg); pg.wait_for_timeout(2800)   # подсказка «Готово!» уходит
+            wait_app(pg); pg.wait_for_timeout(4500)
+            # №4 (Вера 03.11): подсказка после знакомства живёт ~7 с, пустой график и строка под суммой ведут к «Купить»
+            tt = norm(pg.inner_text('#toastMsg')) if pg.locator('#toast.show').count() else ''
+            if 'Купить' in tt: ok('после знакомства подсказка «Нажми «Купить»…» ещё видна через 4,5 с')
+            else: fail('подсказка после знакомства держится ~7 с', repr(tt))
+            ge, hs = norm(pg.inner_text('#gChart')), norm(pg.inner_text('#hSub'))
+            if 'Нажми «Купить» и запиши первую покупку' in ge: ok('пустой график: «Нажми «Купить» и запиши первую покупку…»')
+            else: fail('пустой график: подсказка новичку', repr(ge))
+            if hs == 'Начни с кнопки «Купить»': ok('пустой портфель: под суммой «Начни с кнопки «Купить»»')
+            else: fail('пустой портфель: строка под суммой', repr(hs))
+            pg.wait_for_function("!document.querySelector('#toast.show')", polling=250, timeout=6000)
             opened = pg.evaluate("""()=>{const b=[...document.querySelectorAll('button')].find(x=>x.textContent.trim()==='Купить'&&x.offsetParent);if(!b)return false;b.click();return true;}""")
             if not opened: raise AssertionError('кнопка «Купить» не найдена на главном')
             pg.wait_for_timeout(700)
@@ -428,6 +439,13 @@ def run_browser():
             pg.evaluate("document.querySelector('#buyMode [data-m=\"one\"]').click()"); pg.wait_for_timeout(300)
             if pg.inner_text('#oHint').strip() == '': ok('«Одна монета» с пустым полем: под формой нет подсказки-ошибки')
             else: fail('«Одна монета» с пустым полем', repr(pg.inner_text('#oHint')))
+            # №9: подсказка у «Получил монет» и понятная строка итога (расчёт прежний)
+            if 'истории сделок биржи' in pg.inner_text('#oQtyHint'): ok('«Одна монета»: у «Получил монет» подсказка «смотри в истории сделок биржи»')
+            else: fail('«Одна монета»: подсказка у «Получил монет»', repr(pg.inner_text('#oQtyHint')))
+            pg.fill('#oSym', 'BTC'); pg.fill('#oUsd', '50'); pg.fill('#oQty', '0.00045'); pg.wait_for_timeout(300)
+            oh = norm(pg.inner_text('#oHint'))
+            if oh.replace('.', ',').startswith('всего будет 0,00045 BTC · средняя цена покупки $111 111'): ok(f'«Одна монета»: строка итога понятна («{oh}»)')
+            else: fail('«Одна монета»: строка итога', repr(oh))
         scenario('Путь новичка', {'session': True, 'docs': []}, s_newbie)
 
         # --- В. пользователь с данными: вкладки и шторки
