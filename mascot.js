@@ -2554,7 +2554,9 @@
     /* потеря контекста: прячем 3D (видна заглушка .ms-still); после восстановления первый кадр снова ставит ms-live —
        иначе заглушка и живой Слиток были бы видны одновременно */
     cv.addEventListener('webglcontextlost', e => { e.preventDefault(); lost = true; firstFrame = false; host.classList.remove('ms-live'); cancelAnimationFrame(raf); raf = 0; });
-    cv.addEventListener('webglcontextrestored', () => { lost = false; wakeLoop(); });
+    /* после восстановления three.js заново загружает обычные текстуры, но «окружение» (PMREM) — результат отрисовки, его нет:
+       без него куртка темнеет и краснеет, шлем чернеет — Слиток «теряет вид» (владелец 05.11). Строим окружение заново. */
+    cv.addEventListener('webglcontextrestored', () => { lost = false; try { const old = scene.environment; scene.environment = envMap(renderer); if (old) old.dispose(); } catch (e) {} wakeLoop(); });
     setInterval(() => { if (!raf) wakeLoop(); }, 700);
     ST.nextBlink = now() + 1.5; ST.nextGaze = now() + 1; ST.nextAct = now() + 9;
     setTimeout(loadPack, 2500);
@@ -2573,6 +2575,7 @@
       mood: m => { if (ST.forceHour == null) ST.forceHour = 12; ST.pct = { calm: 0, up: 3, rocket: 9, down: -3, crash: -9 }[m]; ST.go = m === 'hunter'; ST.hide = m === 'hide'; if (m === 'sleep') { ST.lastInput = ST.lastEvent = now() - 400; } else ST.lastInput = now(); if (m === 'offline') { ST.offline = true; ST.offSince = now() - 120; } else ST.offline = false; },
       say: (g, o) => say(g, Object.assign({ user: true }, o || {})),
       state: () => ({ mood: ST.mood, act: act && act.name, job: JOB && JOB.name, loc: LOC.mode, x: +LOC.x.toFixed(2), y: +LOC.y.toFixed(2), queue: queue.map(q => q.name), raf: !!raf, frame: firstFrame, voice: !!AU.pack, talk: +ST.talk.toFixed(2), said: ST.lastSay || '', hobby: HS.cur ? HS.cur.name : '', hw: Object.fromEntries(Object.entries(HS.w).filter(e => e[1] > 0).map(e => [e[0], +e[1].toFixed(2)])), calls: renderer ? renderer.info.render.calls : 0, tris: renderer ? renderer.info.render.triangles : 0, ly: { W: LY.W, H: LY.H, ground: +LY.ground.toFixed(2), edge: +LY.edge.toFixed(2), minX: +LY.minX.toFixed(2), maxX: +LY.maxX.toFixed(2), home: +LY.home.toFixed(2), heroR: +LY.heroR.toFixed(2) } }),
+      env: () => (scene && scene.environment ? scene.environment.uuid : ''),
       render: () => { if (renderer) { update(1 / 30, now()); renderer.render(scene, camera); } },
       box: () => { const r = host.getBoundingClientRect(); return { x: r.left + pxX(LOC.x) - 1.05 * LY.U, y: r.top + pxY(LOC.y + R.topY + 0.15), w: 2.1 * LY.U, h: pxY(LOC.y - 0.25) - pxY(LOC.y + R.topY + 0.15) }; },
       pr: v => { QG.off = true; renderer.setPixelRatio(v); measure(); },

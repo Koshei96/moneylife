@@ -640,6 +640,7 @@ def run_browser():
             has = pg.evaluate("""()=>{const c=document.querySelector('#mascot .ms-cv');if(!c)return false;const g=c.getContext('webgl2')||c.getContext('webgl');
                 const x=g&&g.getExtension('WEBGL_lose_context');if(!x)return false;window.__msLC=x;return true}""")
             if not has: ok('(Слиток: WEBGL_lose_context недоступно в тестовом браузере — проверка потери контекста пропущена)'); return
+            env0 = pg.evaluate("Mascot.debug.env()")
             pg.evaluate("window.__msLC.loseContext()"); pg.wait_for_timeout(1500)
             b = pg.evaluate(MS)
             if not b['live'] and b['still'] == 1 and not b['frame']: ok('потеря WebGL-контекста: 3D спрятан, видна только заглушка')
@@ -650,6 +651,11 @@ def run_browser():
             pg.wait_for_timeout(2000)
             c = pg.evaluate(MS)
             shot(pg, '15-mascot-after-restore')
+            # окружение (блики и мягкий свет) — результат отрисовки, при потере контекста оно пропадает; без него Слиток
+            # темнеет: бордовая куртка, чёрный шлем (владелец 05.11, «потерял вид при плохом интернете»)
+            env1 = pg.evaluate("Mascot.debug.env()")
+            if env0 and env1 and env1 != env0: ok('после восстановления контекста окружение Слитка построено заново (цвета не темнеют)')
+            else: fail('после восстановления контекста — окружение Слитка', f'было {env0!r}, стало {env1!r}')
             both = c['frame'] and c['still'] > 0          # 3D уже рисует, а заглушка всё ещё видна — «два Слитка»
             if c['cv'] != 1 or c['mscv'] != 1: fail('после восстановления контекста — один canvas', str(c))
             elif both or c['live'] != c['frame']: fail('после восстановления контекста — не видно двух Слитков', str(c))
