@@ -268,7 +268,7 @@ def binance_body(url):
     one = t(q.get('symbol', [''])[0])
     return json.dumps(one) if one else None
 
-IGNORE_CONSOLE = re.compile(r'Failed to load resource|net::ERR_|ERR_INTERNET_DISCONNECTED|ERR_FAILED|ERR_ABORTED|favicon|Failed to fetch|NetworkError|Load failed|AbortError|The user aborted|signal is aborted', re.I)
+IGNORE_CONSOLE = re.compile(r'Failed to load resource|net::ERR_|ERR_INTERNET_DISCONNECTED|ERR_FAILED|ERR_ABORTED|favicon|Failed to fetch|NetworkError|Load failed|AbortError|The user aborted|signal is aborted|Blocked call to navigator\.vibrate', re.I)
 
 def run_browser():
     print('\n[2] Приложение в браузере (без интернета, Supabase — имитация)')
@@ -728,6 +728,7 @@ def run_browser():
             has = pg.evaluate("""()=>{const c=document.querySelector('#mascot .ms-cv');if(!c)return false;const g=c.getContext('webgl2')||c.getContext('webgl');
                 const x=g&&g.getExtension('WEBGL_lose_context');if(!x)return false;window.__msLC=x;return true}""")
             if not has: ok('(Слиток: WEBGL_lose_context недоступно в тестовом браузере — проверка потери контекста пропущена)'); return
+            env0 = pg.evaluate("Mascot.debug.env()")
             pg.evaluate("window.__msLC.loseContext()"); pg.wait_for_timeout(1500)
             b = pg.evaluate(MS)
             if not b['live'] and b['still'] == 1 and not b['frame']: ok('потеря WebGL-контекста: 3D спрятан, видна только заглушка')
@@ -738,6 +739,11 @@ def run_browser():
             pg.wait_for_timeout(2000)
             c = pg.evaluate(MS)
             shot(pg, '15-mascot-after-restore')
+            # окружение (блики и мягкий свет) — результат отрисовки, при потере контекста оно пропадает; без него Слиток
+            # темнеет: бордовая куртка, чёрный шлем (владелец 05.11, «потерял вид при плохом интернете»)
+            env1 = pg.evaluate("Mascot.debug.env()")
+            if env0 and env1 and env1 != env0: ok('после восстановления контекста окружение Слитка построено заново (цвета не темнеют)')
+            else: fail('после восстановления контекста — окружение Слитка', f'было {env0!r}, стало {env1!r}')
             both = c['frame'] and c['still'] > 0          # 3D уже рисует, а заглушка всё ещё видна — «два Слитка»
             if c['cv'] != 1 or c['mscv'] != 1: fail('после восстановления контекста — один canvas', str(c))
             elif both or c['live'] != c['frame']: fail('после восстановления контекста — не видно двух Слитков', str(c))
@@ -745,6 +751,30 @@ def run_browser():
             elif not c['live'] and c['still'] == 1: ok('после восстановления контекста: 3D не ожил, видна только заглушка (двух Слитков нет)')
             else: fail('после восстановления контекста', str(c))
         scenario('Слиток один', {'session': True, 'docs': SEED}, s_mascot)
+
+        # --- Г4. карточка докупки «ждём ключ 2» (владелец 05.11): в чипе «BTC $38,39» сумму покупки приняли за цену BTC —
+        #     теперь «BTC на $… · когда цена ≤ $…»: видно, что $ — сумма, а порог — цена монеты
+        import datetime as _dt
+        recent = (_dt.datetime.now(_dt.timezone.utc) - _dt.timedelta(days=10)).strftime('%Y-%m-%dT10:00:00.000Z')
+        HOLD = SEED + [
+            {'col': 'app', 'id': 'cycle', 'data': {'ath': 200000, 'athDate': '2026-10-06', 'levels': [
+                {'n': i + 1, 'drop': d, 'pct': p, 'status': 'pending'} for i, (d, p) in enumerate([(30, 20), (40, 25), (50, 33), (60, 50), (70, 100)])]}},
+            {'col': 'tx', 'id': 't5', 'data': {'ts': recent, 'type': 'buy', 'symbol': 'BTC', 'qty': 0.001, 'usd': 112, 'price': 112000}},
+            {'col': 'tx', 'id': 't6', 'data': {'ts': recent, 'type': 'buy', 'symbol': 'ETH', 'qty': 0.01, 'usd': 41, 'price': 4100}},
+        ]
+        for th in ('dark', 'light'):
+            def s_hold(pg, n, th=th):
+                wait_app(pg)
+                pg.wait_for_function("()=>!!document.querySelector('#signal .signal.soft .chip:not(.warn)')", polling=250, timeout=10000)
+                chips = [c.replace(' ', ' ').replace('\xa0', ' ') for c in pg.eval_on_selector_all('#signal .chips .chip', 'es=>es.map(e=>e.textContent.trim())')]
+                btc = next((c for c in chips if c.startswith('BTC')), '')
+                if re.match(r'^BTC на \$[\d ,]+ · когда цена ≤ \$[\d ,]+$', btc): ok(f'докупка ({th}): чип «{btc}» — сумма и цена не путаются')
+                else: fail(f'докупка ({th}): текст чипа BTC', repr(chips))
+                bad = [c for c in chips if re.match(r'^\S+ \$', c)]
+                ok(f'докупка ({th}): ни один чип не читается как «монета $цена»') if not bad else fail(f'докупка ({th}): двусмысленный чип', repr(bad))
+                pg.evaluate("document.getElementById('signal').scrollIntoView({block:'center'})"); pg.wait_for_timeout(300)
+                pg.locator('#signal').screenshot(path=str(OUT / f'fix-ladder-chip-{th}.png'))
+            scenario(f'Карточка докупки ({th})', {'session': True, 'docs': HOLD}, s_hold, theme=th)
 
         # --- Д. база недоступна: приложение не падает
         def s_off(pg, n):
