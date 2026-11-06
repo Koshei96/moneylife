@@ -917,9 +917,9 @@ input::placeholder{color:var(--mute);opacity:.8;font-weight:400}
 
 <div class="toast" id="toast" role="status"><span id="toastMsg"></span><button type="button" id="toastBtn" hidden></button></div>
 
-<script src="config.js?v=20261105150000"></script>
+<script src="config.js?v=20261106030000"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="shim.js?v=20261105150000"></script>
+<script src="shim.js?v=20261106030000"></script>
 <script>
 /* ===== основа ===== */
 const $=id=>document.getElementById(id);
@@ -1113,11 +1113,12 @@ function lvCoins(l,pl,D){const ps=pl.parts.filter(p=>p.usd>0||p.st==='done');if(
     else if(p.st==='hold')px=p.k2&&p.k2.thr?'<i>≤</i> '+usdp(p.k2.thr):'ждём цену';
     else{const t=lvTarget(p,l,D);px=t?`<i>${t.pre}</i> ${usdp(t.v)}`:'—';}
     return `<div class="lvc-r ${p.st||''}">${sym?badge(sym):badgeTxt('?')}<b>${esc(sym||'альт')}</b><span class="px">${px}</span><span class="am">${p.st==='done'?'✓ '+usd(p.spent!=null?+p.spent:p.usd):usd(p.usd)}</span></div>`;}).join('')+'</div>';}
+/* «BTC на $38» — сумма покупки, а не цена монеты (владелец 05.11 принял сумму за цену BTC) */
 function partTxt(p){const s=esc(p.sym||'альткоин');
-  if(p.st==='done')return `${s} куплено${p.spent!=null?' '+usd(+p.spent):''}`;
-  if(p.st==='go')return `${s} ${usd(p.usd)} можно`;
-  if(p.st==='hold'){if(!p.sym)return `альткоин ${usd(p.usd)} · выбери монету`;if(p.k2&&p.k2.thr)return `${s} ${usd(p.usd)} ждём ≤ ${usdp(p.k2.thr)}`;return `${s} ${usd(p.usd)} ждём цену`;}
-  return `${s} ${usd(p.usd)}`;}
+  if(p.st==='done')return `${s} куплено${p.spent!=null?' на '+usd(+p.spent):''}`;
+  if(p.st==='go')return `${s} на ${usd(p.usd)} · можно`;
+  if(p.st==='hold'){if(!p.sym)return `альткоин на ${usd(p.usd)} · выбери монету`;if(p.k2&&p.k2.thr)return `${s} на ${usd(p.usd)} · когда цена ≤ ${usdp(p.k2.thr)}`;return `${s} на ${usd(p.usd)} · ждём цену`;}
+  return `${s} на ${usd(p.usd)}`;}
 /* новый максимум BTC → пересчёт лестницы */
 function athUpdate(pk,day){const c=S.cycle||{},cur=(c.levels&&c.levels.length)?c.levels:LV_DEF.map(([d,p],i)=>({n:i+1,drop:d,pct:p,status:'pending'}));
   const used=cur.some(l=>(l.status&&l.status!=='pending')||l.amt!=null||!!l.parts);
@@ -1271,7 +1272,7 @@ function renderHome(D){
   const act=levels.filter(l=>l.status!=='done'&&l.status!=='skipped'&&lvKey1(l,btc)).map(l=>({l,pl:lvPlan(l,D)})).filter(o=>!o.pl.parts.every(p=>p.st==='done'));
   const go=act.find(o=>o.pl.parts.some(p=>p.st==='go'));
   if(go){const goP=go.pl.parts.filter(p=>p.st==='go'),sum=goP.reduce((a,p)=>a+p.usd,0),rest=go.pl.parts.filter(p=>p.st==='hold');
-    $('signal').innerHTML=`<div class="signal"><span class="chip neg" style="align-self:flex-start">Сигнал · уровень ${go.l.n} · −${go.l.drop}%</span><div class="t">Можно докупить: ${usd(sum)}</div><div class="chips">${goP.map(p=>`<span class="chip pos">${esc(p.sym)} ${usd(p.usd)}</span>`).join('')}${rest.map(p=>`<span class="chip">${partTxt(p)}</span>`).join('')}</div><button type="button" class="btn sm" data-dip="${go.l.n}" style="align-self:flex-start">Записать докупку</button></div>`;}
+    $('signal').innerHTML=`<div class="signal"><span class="chip neg" style="align-self:flex-start">Сигнал · уровень ${go.l.n} · −${go.l.drop}%</span><div class="t">Можно докупить: ${usd(sum)}</div><div class="chips">${goP.map(p=>`<span class="chip pos">${esc(p.sym)} на ${usd(p.usd)}</span>`).join('')}${rest.map(p=>`<span class="chip">${partTxt(p)}</span>`).join('')}</div><button type="button" class="btn sm" data-dip="${go.l.n}" style="align-self:flex-start">Записать докупку</button></div>`;}
   else if(act.length){const o=act[0],k=k2Cfg();
     $('signal').innerHTML=`<div class="signal soft"><span class="chip warn" style="align-self:flex-start">Уровень ${o.l.n} · −${o.l.drop}% · ждём ключ 2</span><div class="t">Докупка ждёт цену ниже твоих покупок</div><div class="chips">${o.pl.parts.filter(p=>p.st==='hold').map(p=>`<span class="chip">${partTxt(p)}</span>`).join('')}</div><p class="small mute">Цена должна быть на ${k.pct}% ниже средней цены твоих покупок этой монеты за ${k.days} дней. Как только станет, здесь появится кнопка.</p></div>`;}
   else $('signal').innerHTML='';
@@ -1761,7 +1762,7 @@ function dipAmount(){const D=derive(),n=+$('dLevel').value,l=((S.cycle&&S.cycle.
   $('dTotal').value=sum?sum.toFixed(2):'';fillRows('d');
   for(const k of ['BTC','ETH','ALT']){const el=$('du_'+k);if(!el)continue;const p=pl.parts.find(x=>x.k===k);el.value=p&&p.st==='go'?p.usd.toFixed(2):'';}
   hints('d');
-  $('dInfo').innerHTML=`Резерв <b>${usd(D.reserve)}</b> · бюджет уровня ${l.n}: <b>${usd(pl.amt)}</b>${l.amt==null?' ('+(l.pct>=100?'весь свободный резерв':l.pct+'% свободного резерва')+')':''}<br>${pl.parts.map(partTxt).join(' · ')}${pl.noAlt?'<br>Альты на этой ступени не покупаем: только BTC и ETH.':''}${pl.k1?'':'<br>Уровень ещё не пройден: BTC выше '+usd(lvPrice(l),0)+'.'}${goP.length?'':'<br>Сейчас ни одна монета не прошла ключ 2 — запись можно сделать вручную.'}`;}
+  $('dInfo').innerHTML=`Резерв <b>${usd(D.reserve)}</b> · бюджет уровня ${l.n}: <b>${usd(pl.amt)}</b>${l.amt==null?' ('+(l.pct>=100?'весь свободный резерв':l.pct+'% свободного резерва')+')':''}<br>${pl.parts.map(partTxt).join('<br>')}${pl.noAlt?'<br>Альты на этой ступени не покупаем: только BTC и ETH.':''}${pl.k1?'':'<br>Уровень ещё не пройден: BTC выше '+usd(lvPrice(l),0)+'.'}${goP.length?'':'<br>Сейчас ни одна монета не прошла ключ 2 — запись можно сделать вручную.'}`;}
 $('dLevel').addEventListener('change',dipAmount);
 function initSell(opt){const D=derive(),list=D.syms;$('sSym').innerHTML=list.map(s=>`<option value="${esc(s)}">${esc(s)} · ${qtyRaw(D.h[s].qty)}</option>`).join('');if(opt.sym&&list.includes(opt.sym))$('sSym').value=opt.sym;$('sQty').value='';$('sUsd').value='';delete $('sUsd').dataset.touched;sellCalc();}
 function sellCalc(){const D=derive(),sym=$('sSym').value,c=D.h[sym];if(!c){$('sCalc').innerHTML='<p class="hint">Монет для продажи пока нет.</p>';return;}
@@ -2036,7 +2037,7 @@ function msSync(x){MSC.last=x;if(!msApply())return;if(!S.ready||document.getElem
   if(window.Mascot){try{window.Mascot.sync(msPayload(x));}catch(e){}}else msLoad();}
 function msLoad(){if(MSC.loading||MSC.failed)return;MSC.loading=true;
   const add=(src,ok)=>{try{const s=document.createElement('script');s.src=src;s.async=true;s.onload=ok;s.onerror=()=>{MSC.failed=true;};document.head.appendChild(s);}catch(e){MSC.failed=true;}};
-  const boot=()=>add('mascot.js?v=20261105150000',()=>{try{if(window.Mascot&&window.Mascot.init({host:$('mascot'),app:{audio:ac,buzz}})&&MSC.last&&$('ob').hidden&&!document.getElementById('mlAuth'))window.Mascot.sync(msPayload(MSC.last));}catch(e){}});
+  const boot=()=>add('mascot.js?v=20261106030000',()=>{try{if(window.Mascot&&window.Mascot.init({host:$('mascot'),app:{audio:ac,buzz}})&&MSC.last&&$('ob').hidden&&!document.getElementById('mlAuth'))window.Mascot.sync(msPayload(MSC.last));}catch(e){}});
   setTimeout(()=>{if(window.THREE)boot();else add('three.min.js',boot);},300);}
 function render(){const D=derive();renderHeader();renderHome(D);renderGrowth();renderCoins(D);renderStrategy(D);renderActivity();earnNudge();if(cvSym&&$('coinSheet').classList.contains('open'))renderCoinView();}
 document.body.classList.add('loading');
