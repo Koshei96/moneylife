@@ -459,6 +459,14 @@ def run_browser():
             hs = norm(pg.inner_text('#hSub')).replace('−', '-')
             if hs == '-$0 · -1,0% результат сейчас' or hs == '-$1 · -1,0% результат сейчас': ok(f'первая покупка в минусе: под суммой «{hs}» (число прежнее, подпись «результат»)')
             else: fail('первая покупка: строка под суммой', repr(hs))
+            # Вера 05.11: первая покупка моложе суток — рядом с «результат сейчас» нет плашки «24ч» (расчёт прежний)
+            hc = norm(pg.inner_text('#hChips'))
+            if '24ч' not in hc: ok(f'первая покупка моложе суток: плашки «24ч» нет ({hc!r})')
+            else: fail('первая покупка моложе суток: плашка «24ч»', repr(hc))
+            for th in ['dark', 'light']:
+                pg.evaluate(f"document.documentElement.setAttribute('data-theme','{th}')"); pg.wait_for_timeout(300)
+                pg.evaluate("window.scrollTo(0,0)"); pg.wait_for_timeout(200); shot(pg, f'newbie-24h-{th}')
+            pg.evaluate("document.documentElement.setAttribute('data-theme','dark')")
             al = pg.evaluate("[...document.querySelectorAll('#alloc .arow')].map(r=>[r.querySelector('.d').innerText.replace(/\\u00a0|\\u202f/g,' '),getComputedStyle(r.querySelector('.adev')).color,getComputedStyle(r.querySelector('.d')).color])")
             want = ['цель 70% · выше цели на 30,0%', 'цель 30% · ниже цели на 30,0%', 'цель 0% · в цели']   # шаблон «Простой» 70/30/0
             if [a[0] for a in al] == want and all(a[1] == a[2] for a in al): ok('распределение: отклонение от цели словами и нейтральным цветом')
@@ -487,6 +495,9 @@ def run_browser():
             sub = pg.inner_text('#hSub').replace('\u202f', ' ').replace('\xa0', ' ')
             if '+$150' in sub: ok('прибыль с ценами посчитана: +$150 (950 − 800)')
             else: fail('прибыль с ценами', f'показано «{sub}», ожидалось +$150')
+            hc = pg.inner_text('#hChips').replace('\u202f', ' ').replace('\xa0', ' ')
+            if '24ч +' in hc: ok(f'покупки старше суток: плашка «24ч» на месте ({hc.split(chr(10))[0]!r})')
+            else: fail('покупки старше суток: плашка «24ч»', repr(hc))
             for tab, title in [('coins', 'Монеты'), ('strategy', 'Стратегия'), ('activity', 'Активность'), ('home', 'Главная')]:
                 b = pg.locator(f'nav.tabs [data-tab="{tab}"]')
                 if not b.count(): fail(f'вкладка «{title}»', 'кнопка не найдена'); continue

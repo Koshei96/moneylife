@@ -1297,7 +1297,9 @@ function renderHome(D){
   $('hSub').innerHTML=D.noPrice?(last?`нет актуальных цен · стоимость на ${dShort(+new Date(last.date+'T20:00:00'))}`:priceWait()?'загружаю цены…':'нет актуальных цен — суммы появятся, когда биржи ответят')
     :D.invPriced>0&&D.total>0?`<span class="${gain>=0?'pos':'neg'}">${money(gain,{sign:true,d:0})} · ${pct(gain/D.invPriced*100)}</span> ${gain>=0?'прибыль':'результат'} сейчас`:(S.ready?(D.syms.length?'Укажи цену покупки':'Начни с кнопки «Купить»'):'загружаю');
   const ch=[];let d24=0,has24=false;for(const s of D.syms){const c=S.live.change[s],p=+D.prices[s];if(c!=null&&p){has24=true;const v=D.h[s].qty*p;d24+=v-v/(1+c/100);}}
-  if(has24&&D.total)ch.push(`<span class="chip ${d24>=0?'pos':'neg'}">24ч ${money(d24,{sign:true,d:0})} · ${pct(d24/(D.total-d24)*100)}</span>`);
+  /* «24ч» — только когда монеты есть дольше суток: у первой покупки моложе 24 ч изменение за сутки сбивает с толку */
+  let t0=Infinity;for(const t of S.tx)if(BUYS.includes(t.type)){const x=Date.parse(t.ts);t0=Math.min(t0,isNaN(x)?0:x);}
+  if(has24&&D.total&&Date.now()-t0>=864e5)ch.push(`<span class="chip ${d24>=0?'pos':'neg'}">24ч ${money(d24,{sign:true,d:0})} · ${pct(d24/(D.total-d24)*100)}</span>`);
   if(r&&D.total)ch.push(`<span class="chip">≈ ${P.hide?'••••':(P.cur==='UAH'?usd(D.total,0):uah(D.total*r))}</span>`);
   if(Math.abs(D.realized)>=1)ch.push(`<span class="chip ${D.realized>=0?'pos':'neg'}">зафиксировано ${money(D.realized,{sign:true,d:0})}</span>`);
   if(!D.valued&&!D.noPrice)ch.push('<span class="chip warn">не у всех монет есть цена</span>');
