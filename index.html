@@ -613,10 +613,14 @@ input::placeholder{color:var(--mute);opacity:.8;font-weight:400}
 .pranges button::after{content:"";position:absolute;inset:-3px 0}
 .pranges button[aria-pressed="true"]{color:var(--fg)}
 .ctab .cg{display:grid;grid-template-columns:32px minmax(0,1fr) 96px 104px;column-gap:8px;align-items:center;padding:0 12px}
-.ctab .thead{height:36px;border-bottom:1px solid var(--line);font-size:12px;font-weight:600;color:var(--mute);white-space:nowrap}
-.ctab .thead .a{grid-column:1/3}
-.ctab .thead .rt{text-align:right;overflow:hidden;text-overflow:ellipsis}
-.ctab .thead .on{color:var(--lav)}
+.ctab .thead{height:48px;border-bottom:1px solid var(--line);font-size:12px;font-weight:600;color:var(--mute);white-space:nowrap}
+.ctab .th{height:48px;min-width:0;border:0;background:none;padding:0;margin:0;font:inherit;color:inherit;cursor:pointer;display:flex;align-items:center;gap:3px;white-space:nowrap;-webkit-tap-highlight-color:transparent}
+.ctab .th.a{grid-column:1/3;justify-content:flex-start}
+.ctab .th.rt{justify-content:flex-end}
+.ctab .th.on{color:var(--lav)}
+.ctab .th i{font-style:normal;font-size:10px;line-height:1}
+.ctab .th:focus-visible{outline:2px solid var(--lav);outline-offset:-2px;border-radius:var(--r-s)}
+#coinsTot{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
 .ctab .row.cg{height:60px;padding:0 12px;gap:0 8px}
 .ctab .thead+.row{border-top:0}
 .ctab .badge{width:32px;height:32px;font-size:9.5px}
@@ -701,8 +705,7 @@ input::placeholder{color:var(--mute);opacity:.8;font-weight:400}
       <button type="button" class="ib" id="dustBtn" aria-label="Скрыть мелочь" aria-pressed="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h18l-7 8v6l-4 2v-8z"/></svg></button>
     </div>
     <div class="pranges" id="coinRanges" role="group" aria-label="Период" hidden></div>
-    <div class="chipsrow" id="sortChips"></div>
-    <div><div class="sec-h"><span class="label">Активы</span><span class="small mute" id="coinsTot"></span></div><div class="list ctab" id="coinList"></div><p class="note" id="dustNote"></p></div>
+    <div><div class="sec-h"><span class="label" id="coinsLbl">Активы</span><span class="small mute" id="coinsTot"></span></div><div class="list ctab" id="coinList"></div><p class="note" id="dustNote"></p></div>
   </section>
 
   <!-- СТРАТЕГИЯ -->
@@ -948,9 +951,9 @@ input::placeholder{color:var(--mute);opacity:.8;font-weight:400}
 
 <div class="toast" id="toast" role="status"><span id="toastMsg"></span><button type="button" id="toastBtn" hidden></button></div>
 
-<script src="config.js?v=20261106040000"></script>
+<script src="config.js?v=20261106151000"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="shim.js?v=20261106040000"></script>
+<script src="shim.js?v=20261106151000"></script>
 <script>
 /* ===== основа ===== */
 const $=id=>document.getElementById(id);
@@ -1357,9 +1360,15 @@ function coinPer(s,c,p,v,per){
   if(ch==null||v==null||ch<=-100)return {ch,pf:null};
   return {ch,pf:v-v/(1+ch/100)};}
 const SORTS=[['value','По стоимости'],['pnl','По прибыли'],['chg','За период'],['name','А–Я']];
+/* Сортировка — нажатием на подписи колонок (ряд чипов убран, этап 1, часть 2). Те же 4 способа, что были у чипов:
+   «Актив» — А–Я; «Цена» — по изменению за период; «Портфель» — по стоимости, повторное нажатие — по прибыли, и обратно. */
+const SORT_COL={a:['name'],p:['chg'],v:['value','pnl']};
+const sortNext=c=>{const o=SORT_COL[c];if(!o)return P.sort;const i=o.indexOf(P.sort);return i<0?o[0]:o[(i+1)%o.length];};
+/* суммы в таблице «Монеты»: от $1 000 (₴1 000) — без копеек, в том числе когда 999,996 округляется до 1 000.
+   Только показ в этой таблице: money() и расчёты не меняются. */
+function tmoney(v,o){o=Object.assign({},o);if(v!=null&&isFinite(v)){const a=Math.abs(P.cur==='UAH'&&rate()>0?v*rate():v);if(Math.round(a*100)/100>=1000)o.d=0;}return money(v,o);}
 function renderCoins(D){
   const per=cperOk(),pi=CPER.findIndex(x=>x[0]===per),plb=CPER[pi][1];
-  $('sortChips').innerHTML=SORTS.map(([k,l])=>`<button type="button" class="fchip" data-sort="${k}" aria-pressed="${P.sort===k}">${k==='chg'?(per==='all'?'К покупке':'За '+plb):l}</button>`).join('');
   $('dustBtn').setAttribute('aria-pressed',String(P.dust));
   const rg=$('coinRanges');rg.hidden=!D.syms.length;rg.style.setProperty('--n',CPER.length);
   rg.innerHTML=`<span class="pill" style="transform:translateX(${pi*100}%)"></span>`+CPER.map(([k,l])=>`<button type="button" data-per="${k}" aria-pressed="${k===per}">${l}</button>`).join('');
@@ -1371,17 +1380,21 @@ function renderCoins(D){
   const dust=list.filter(o=>o.v!=null&&o.v<10);let shown=list;if(P.dust&&!q)shown=list.filter(o=>o.v==null||o.v>=10);
   COIN_ORDER={shown:shown.map(o=>o.s),all:list.map(o=>o.s)};
   const withPf=shown.filter(o=>o.pf!=null),tpf=withPf.reduce((a,o)=>a+o.pf,0),pcl=v=>v==null?'mute':v>=0?'pos':'neg';
-  $('coinsTot').innerHTML=shown.length?`${shown.length} · <b class="v">${money(shown.reduce((a,o)=>a+(o.v||0),0),{d:0})}</b>${withPf.length?` · <span class="v ${pcl(tpf)}">${per==='all'?'всего':'за '+plb} ${money(tpf,{sign:true})}</span>`:''}`:'';
+  $('coinsLbl').textContent=shown.length?'Активы · '+shown.length:'Активы';
+  $('coinsTot').innerHTML=shown.length?`<b class="v">${shown.some(o=>o.v!=null)?money(shown.reduce((a,o)=>a+(o.v||0),0),{d:0}):'—'}</b>${withPf.length?` · <span class="v ${pcl(tpf)}">${per==='all'?'всего':'за '+plb} ${tmoney(tpf,{sign:true})}</span>`:''}`:'';
   if(!D.syms.length){$('coinList').innerHTML=`<div class="empty" style="border:0">${S.ready?'Монет пока нет. Нажми «+» → «Остаток монеты», чтобы внести то, что у тебя уже есть.':'Загружаю…'}</div>`;$('dustNote').innerHTML='';return;}
   if(!shown.length){$('coinList').innerHTML='<div class="empty" style="border:0">Ничего не найдено.</div>';}
-  else{const on=k=>(k==='a'&&P.sort==='name')||(k==='p'&&P.sort==='chg')||(k==='v'&&(P.sort==='value'||P.sort==='pnl'))?' on':'';
-    $('coinList').innerHTML=`<div class="cg thead" aria-hidden="true"><span class="a${on('a')}">Актив</span><span class="rt${on('p')}">${per==='all'?'Цена · к покупке':'Цена · '+plb}</span><span class="rt${on('v')}">Портфель</span></div>`+shown.map(o=>{
+  else{const plab=per==='all'?'Цена · к покупке':'Цена · '+plb,vlab=P.sort==='pnl'?'Прибыль':'Портфель',
+      hint={name:'по названию, А–Я',chg:per==='all'?'по изменению к покупке':'по изменению за '+plb,value:'по стоимости',pnl:'по прибыли'},
+      th=(c,cls,lab)=>{const on=SORT_COL[c].includes(P.sort),nx=sortNext(c);return `<button type="button" class="th ${cls}${on?' on':''}" data-sortcol="${c}" aria-pressed="${on}" aria-label="${esc(lab)}${on?' — сортировка '+hint[P.sort]:''}. Нажми — сортировать ${hint[nx]}">${esc(lab)}${on?`<i aria-hidden="true">${P.sort==='name'?'▴':'▾'}</i>`:''}</button>`;};
+    $('coinList').innerHTML=`<div class="cg thead">${th('a','a','Актив')}${th('p','rt',plab)}${th('v','rt',vlab)}</div>`+shown.map(o=>{
       return `<button type="button" class="row cg" data-coin="${esc(o.s)}">${badge(o.s)}<span class="c"><span class="b">${esc(o.s)}</span><span class="s q">${qtyS(o.c.qty)}</span></span>`+
-        `<span class="c rt"><span class="b${o.p?'':' np'}">${o.p?money(o.p,{price:true,show:true}):'нет цены'}</span><span class="s v ${pcl(o.ch)}">${pct(o.ch)}</span></span>`+
-        `<span class="c rt c3"><span class="b${o.v!=null?'':' np'}">${o.v!=null?money(o.v):'—'}</span><span class="s v ${pcl(o.pf)}">${money(o.pf,{sign:true})}</span></span></button>`;}).join('');}
+        `<span class="c rt"><span class="b${o.p?'':' np'}">${o.p?tmoney(o.p,{price:true,show:true}):'нет цены'}</span><span class="s v ${pcl(o.ch)}">${pct(o.ch)}</span></span>`+
+        `<span class="c rt c3"><span class="b${o.v!=null?'':' np'}">${o.v!=null?tmoney(o.v):'—'}</span><span class="s v ${pcl(o.pf)}">${tmoney(o.pf,{sign:true})}</span></span></button>`;}).join('');}
   $('dustNote').innerHTML=P.dust&&!q&&dust.length?`Скрыто ${pl(dust.length,'мелкая монета','мелкие монеты','мелких монет')} на ${money(dust.reduce((a,o)=>a+(o.v||0),0))} · <button type="button" class="more" id="showDust">показать</button>`:(!P.dust&&dust.length?`<button type="button" class="more" id="hideDust">Скрыть мелочь до $10</button>`:'');}
 $('coinSearch').addEventListener('input',()=>renderCoins(derive()));
-$('sortChips').addEventListener('click',e=>{const b=e.target.closest('[data-sort]');if(!b)return;P.sort=b.dataset.sort;savePrefs();play('tick');renderCoins(derive());});
+$('coinList').addEventListener('click',e=>{const b=e.target.closest('[data-sortcol]');if(!b)return;e.stopPropagation();const c=b.dataset.sortcol;P.sort=sortNext(c);savePrefs();play('tick');renderCoins(derive());
+  const f=$('coinList').querySelector(`[data-sortcol="${c}"]`);if(f)try{f.focus({preventScroll:true});}catch(x){}});
 $('coinRanges').addEventListener('click',e=>{const b=e.target.closest('[data-per]');if(!b||b.dataset.per===cperOk())return;P.cper=b.dataset.per;savePrefs();play('tick');
   const L=$('coinList');L.classList.add('blink');$('coinsTot').classList.add('blink');renderCoins(derive());
   requestAnimationFrame(()=>requestAnimationFrame(()=>{L.classList.remove('blink');$('coinsTot').classList.remove('blink');}));});
@@ -2089,7 +2102,7 @@ function msSync(x){MSC.last=x;if(!msApply())return;if(!S.ready||document.getElem
   if(window.Mascot){try{window.Mascot.sync(msPayload(x));}catch(e){}}else msLoad();}
 function msLoad(){if(MSC.loading||MSC.failed)return;MSC.loading=true;
   const add=(src,ok)=>{try{const s=document.createElement('script');s.src=src;s.async=true;s.onload=ok;s.onerror=()=>{MSC.failed=true;};document.head.appendChild(s);}catch(e){MSC.failed=true;}};
-  const boot=()=>add('mascot.js?v=20261106040000',()=>{try{if(window.Mascot&&window.Mascot.init({host:$('mascot'),app:{audio:ac,buzz}})&&MSC.last&&$('ob').hidden&&!document.getElementById('mlAuth'))window.Mascot.sync(msPayload(MSC.last));}catch(e){}});
+  const boot=()=>add('mascot.js?v=20261106151000',()=>{try{if(window.Mascot&&window.Mascot.init({host:$('mascot'),app:{audio:ac,buzz}})&&MSC.last&&$('ob').hidden&&!document.getElementById('mlAuth'))window.Mascot.sync(msPayload(MSC.last));}catch(e){}});
   setTimeout(()=>{if(window.THREE)boot();else add('three.min.js',boot);},300);}
 function render(){const D=derive();renderHeader();renderHome(D);renderGrowth();renderCoins(D);renderStrategy(D);renderActivity();earnNudge();if(cvSym&&$('coinSheet').classList.contains('open'))renderCoinView();}
 document.body.classList.add('loading');
