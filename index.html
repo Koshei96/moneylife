@@ -631,10 +631,12 @@ input::placeholder{color:var(--mute);opacity:.8;font-weight:400}
 .ctab .s{font-size:12px;line-height:16px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
 .ctab .s.q{font-weight:400;color:var(--mute)}
 .ctab .np{color:var(--mute);font-weight:600}
+.npnote{margin:10px 0 0;padding:12px 14px;border-radius:var(--r-l);background:var(--warn-soft);border:1px solid #ffc65c44;font-size:13px;line-height:18px;color:var(--fg)}
+.npnote b{color:var(--warn);font-weight:700}
 .ctab .v{transition:opacity var(--dur-xs) linear}
 .ctab.blink .v,#coinsTot.blink .v{opacity:.35;transition:none}
 #coinsTot .v{transition:opacity var(--dur-xs) linear}
-#coinsTot b{font-weight:600;color:var(--fg)}
+#coinsTot b{font-weight:600;color:var(--fg)} #coinsTot b.mute{color:var(--mute)}
 [data-theme="light"] .ctab{background:#fff;box-shadow:0 1px 2px #1b153008,0 8px 24px -18px #1b153030}
 @media (max-width:370px){.ctab .cg{grid-template-columns:32px minmax(0,1fr) 88px 96px}}
 </style>
@@ -705,7 +707,7 @@ input::placeholder{color:var(--mute);opacity:.8;font-weight:400}
       <button type="button" class="ib" id="dustBtn" aria-label="Скрыть мелочь" aria-pressed="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h18l-7 8v6l-4 2v-8z"/></svg></button>
     </div>
     <div class="pranges" id="coinRanges" role="group" aria-label="Период" hidden></div>
-    <div><div class="sec-h"><span class="label" id="coinsLbl">Активы</span><span class="small mute" id="coinsTot"></span></div><div class="list ctab" id="coinList"></div><p class="note" id="dustNote"></p></div>
+    <div><div class="sec-h"><span class="label" id="coinsLbl">Активы</span><span class="small mute" id="coinsTot"></span></div><div class="list ctab" id="coinList"></div><p class="npnote" id="npNote" hidden></p><p class="note" id="dustNote"></p></div>
   </section>
 
   <!-- СТРАТЕГИЯ -->
@@ -951,9 +953,9 @@ input::placeholder{color:var(--mute);opacity:.8;font-weight:400}
 
 <div class="toast" id="toast" role="status"><span id="toastMsg"></span><button type="button" id="toastBtn" hidden></button></div>
 
-<script src="config.js?v=20261106151000"></script>
+<script src="config.js?v=20261107031000"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="shim.js?v=20261106151000"></script>
+<script src="shim.js?v=20261107031000"></script>
 <script>
 /* ===== основа ===== */
 const $=id=>document.getElementById(id);
@@ -1361,14 +1363,22 @@ function coinPer(s,c,p,v,per){
   else if(per==='1w'){const sp=S.live.spark[s],p0=sp&&sp.length>1?+sp[0]:0;if(p0>0&&p)ch=(p/p0-1)*100;}
   if(ch==null||v==null||ch<=-100)return {ch,pf:null};
   return {ch,pf:v-v/(1+ch/100)};}
-const SORTS=[['value','По стоимости'],['pnl','По прибыли'],['chg','За период'],['name','А–Я']];
 /* Сортировка — нажатием на подписи колонок (ряд чипов убран, этап 1, часть 2). Те же 4 способа, что были у чипов:
-   «Актив» — А–Я; «Цена» — по изменению за период; «Портфель» — по стоимости, повторное нажатие — по прибыли, и обратно. */
-const SORT_COL={a:['name'],p:['chg'],v:['value','pnl']};
+   «Актив» — А–Я; «Цена» — по изменению за период; «Портфель» — по стоимости, ещё раз — по прибыли (▾, больше сверху),
+   ещё раз — по прибыли обратно (▴, меньше сверху), и снова по стоимости (часть 3). Прибыль — та же, что видна в ячейке:
+   за выбранный период. Монеты без данных — всегда в конце. */
+const SORT_COL={a:['name'],p:['chg'],v:['value','pnl','pnlUp']};
+const SORT_UP=['name','pnlUp'];
 const sortNext=c=>{const o=SORT_COL[c];if(!o)return P.sort;const i=o.indexOf(P.sort);return i<0?o[0]:o[(i+1)%o.length];};
-/* суммы в таблице «Монеты»: от $1 000 (₴1 000) — без копеек, в том числе когда 999,996 округляется до 1 000.
-   Только показ в этой таблице: money() и расчёты не меняются. */
-function tmoney(v,o){o=Object.assign({},o);if(v!=null&&isFinite(v)){const a=Math.abs(P.cur==='UAH'&&rate()>0?v*rate():v);if(Math.round(a*100)/100>=1000)o.d=0;}return money(v,o);}
+/* суммы в таблице «Монеты» и в итоге над ней — один формат (часть 3): от $1 000 (₴1 000) и целые — без копеек
+   ($200, $1 235, в том числе когда 999,996 округляется до 1 000), нецелые — с копейками ($950,50; цена < $1 — 4–6 знаков).
+   Ненулевое, что округляется до 0, оставляет знаки («+$0,00», а не «+$0»). Только показ: money() и расчёты не меняются. */
+function tmoney(v,o){o=Object.assign({},o);if(v!=null&&isFinite(v)&&o.d==null){const a=Math.abs(P.cur==='UAH'&&rate()>0?v*rate():v);
+  let d=o.price?(a>=1000?0:a>=1?2:a>=0.01?4:6):(a>=1000?0:2);const r=Math.round(a*10**d)/10**d;
+  if(r>=1000||(Number.isInteger(r)&&(r>0||a===0)))d=0;o.d=d;}return money(v,o);}
+/* строка под таблицей: у каких монет нет цены (биржи не ответили) */
+function npNote(ns){if(!ns.length)return '';const t=ns.length>6?ns.slice(0,5).join(', ')+' и ещё '+(ns.length-5):ns.join(', ');
+  return `<b>${esc(t)}</b> — нет цены: биржи не ответили. Количество сохранено, в итог и прибыль не ${ns.length>1?'входят':'входит'}.`;}
 function renderCoins(D){
   const per=cperOk(),pi=CPER.findIndex(x=>x[0]===per),plb=CPER[pi][1];
   $('dustBtn').setAttribute('aria-pressed',String(P.dust));
@@ -1378,22 +1388,25 @@ function renderCoins(D){
   let list=D.syms.map(s=>{const c=D.h[s],p=+D.prices[s]||0,v=p?c.qty*p:null,r=coinPer(s,c,p,v,per);return {s,c,p,v,pl:v!=null&&c.usd>0?(v-c.usd)/c.usd*100:null,ch:r.ch,pf:r.pf};});
   if(q)list=list.filter(o=>o.s.toLowerCase().includes(q)||coinName(o.s).toLowerCase().includes(q));
   const nz=(v,dflt)=>v==null?dflt:v;
-  if(P.sort==='pnl')list.sort((a,b)=>nz(b.pl,-1e9)-nz(a.pl,-1e9));else if(P.sort==='chg')list.sort((a,b)=>nz(b.ch,-1e9)-nz(a.ch,-1e9));else if(P.sort==='name')list.sort((a,b)=>a.s.localeCompare(b.s));else list.sort((a,b)=>nz(b.v,-1)-nz(a.v,-1));
+  if(P.sort==='pnl')list.sort((a,b)=>nz(b.pf,-1e15)-nz(a.pf,-1e15));else if(P.sort==='pnlUp')list.sort((a,b)=>nz(a.pf,1e15)-nz(b.pf,1e15));else if(P.sort==='chg')list.sort((a,b)=>nz(b.ch,-1e9)-nz(a.ch,-1e9));else if(P.sort==='name')list.sort((a,b)=>a.s.localeCompare(b.s));else list.sort((a,b)=>nz(b.v,-1)-nz(a.v,-1));
   const dust=list.filter(o=>o.v!=null&&o.v<10);let shown=list;if(P.dust&&!q)shown=list.filter(o=>o.v==null||o.v>=10);
   COIN_ORDER={shown:shown.map(o=>o.s),all:list.map(o=>o.s)};
+  /* нет цены ни у одной монеты — в ячейках «нет цены» вместо «—» (часть 3) */
+  const noAll=D.syms.length>0&&D.syms.every(s=>!(+D.prices[s]>0)),dash=noAll?'нет цены':'—',dsh=t=>t==='—'?dash:t;
+  const npc=shown.filter(o=>!o.p).map(o=>o.s),npEl=$('npNote');npEl.innerHTML=npNote(npc);npEl.hidden=!npc.length;
   const withPf=shown.filter(o=>o.pf!=null),tpf=withPf.reduce((a,o)=>a+o.pf,0),pcl=v=>v==null?'mute':v>=0?'pos':'neg';
   $('coinsLbl').textContent=shown.length?'Активы · '+shown.length:'Активы';
-  $('coinsTot').innerHTML=shown.length?`<b class="v">${shown.some(o=>o.v!=null)?money(shown.reduce((a,o)=>a+(o.v||0),0),{d:0}):'—'}</b>${withPf.length?` · <span class="v ${pcl(tpf)}">${per==='all'?'всего':'за '+plb} ${tmoney(tpf,{sign:true})}</span>`:''}`:'';
-  if(!D.syms.length){$('coinList').innerHTML=`<div class="empty" style="border:0">${S.ready?'Монет пока нет. Нажми «+» → «Остаток монеты», чтобы внести то, что у тебя уже есть.':'Загружаю…'}</div>`;$('dustNote').innerHTML='';return;}
+  $('coinsTot').innerHTML=shown.length?`<b class="v${noAll?' mute':''}">${shown.some(o=>o.v!=null)?tmoney(shown.reduce((a,o)=>a+(o.v||0),0)):dash}</b>${withPf.length?` · <span class="v ${pcl(tpf)}">${per==='all'?'всего':'за '+plb} ${tmoney(tpf,{sign:true})}</span>`:''}`:'';
+  if(!D.syms.length){$('coinList').innerHTML=`<div class="empty" style="border:0">${S.ready?'Монет пока нет. Нажми «+» → «Остаток монеты», чтобы внести то, что у тебя уже есть.':'Загружаю…'}</div>`;$('dustNote').innerHTML='';$('npNote').hidden=true;return;}
   if(!shown.length){$('coinList').innerHTML='<div class="empty" style="border:0">Ничего не найдено.</div>';}
-  else{const plab=per==='all'?'Цена · к покупке':'Цена · '+plb,vlab=P.sort==='pnl'?'Прибыль':'Портфель',
-      hint={name:'по названию, А–Я',chg:per==='all'?'по изменению к покупке':'по изменению за '+plb,value:'по стоимости',pnl:'по прибыли'},
-      th=(c,cls,lab)=>{const on=SORT_COL[c].includes(P.sort),nx=sortNext(c);return `<button type="button" class="th ${cls}${on?' on':''}" data-sortcol="${c}" aria-pressed="${on}" aria-label="${esc(lab)}${on?' — сортировка '+hint[P.sort]:''}. Нажми — сортировать ${hint[nx]}">${esc(lab)}${on?`<i aria-hidden="true">${P.sort==='name'?'▴':'▾'}</i>`:''}</button>`;};
+  else{const plab=per==='all'?'Цена · к покупке':'Цена · '+plb,vlab=P.sort==='pnl'||P.sort==='pnlUp'?'Прибыль':'Портфель',
+      pfor=per==='all'?'к покупке':'за '+plb,hint={name:'по названию, А–Я',chg:'по изменению '+pfor,value:'по стоимости',pnl:'по прибыли '+pfor+', больше сверху',pnlUp:'по прибыли '+pfor+', меньше сверху'},
+      th=(c,cls,lab)=>{const on=SORT_COL[c].includes(P.sort),nx=sortNext(c);return `<button type="button" class="th ${cls}${on?' on':''}" data-sortcol="${c}" aria-pressed="${on}" aria-label="${esc(lab)}${on?' — сортировка '+hint[P.sort]:''}. Нажми — сортировать ${hint[nx]}">${esc(lab)}${on?`<i aria-hidden="true">${SORT_UP.includes(P.sort)?'▴':'▾'}</i>`:''}</button>`;};
     $('coinList').innerHTML=`<div class="cg thead">${th('a','a','Актив')}${th('p','rt',plab)}${th('v','rt',vlab)}</div>`+shown.map(o=>{
       return `<button type="button" class="row cg" data-coin="${esc(o.s)}">${badge(o.s)}<span class="c"><span class="b">${esc(o.s)}</span><span class="s q">${qtyS(o.c.qty)}</span></span>`+
-        `<span class="c rt"><span class="b${o.p?'':' np'}">${o.p?tmoney(o.p,{price:true,show:true}):'нет цены'}</span><span class="s v ${pcl(o.ch)}">${pct(o.ch)}</span></span>`+
-        `<span class="c rt c3"><span class="b${o.v!=null?'':' np'}">${o.v!=null?tmoney(o.v):'—'}</span><span class="s v ${pcl(o.pf)}">${tmoney(o.pf,{sign:true})}</span></span></button>`;}).join('');}
-  $('dustNote').innerHTML=P.dust&&!q&&dust.length?`Скрыто ${pl(dust.length,'мелкая монета','мелкие монеты','мелких монет')} на ${money(dust.reduce((a,o)=>a+(o.v||0),0))} · <button type="button" class="more" id="showDust">показать</button>`:(!P.dust&&dust.length?`<button type="button" class="more" id="hideDust">Скрыть мелочь до $10</button>`:'');}
+        `<span class="c rt"><span class="b${o.p?'':' np'}">${o.p?tmoney(o.p,{price:true,show:true}):'нет цены'}</span><span class="s v ${pcl(o.ch)}">${dsh(pct(o.ch))}</span></span>`+
+        `<span class="c rt c3"><span class="b${o.v!=null?'':' np'}">${o.v!=null?tmoney(o.v):dash}</span><span class="s v ${pcl(o.pf)}">${dsh(tmoney(o.pf,{sign:true}))}</span></span></button>`;}).join('');}
+  $('dustNote').innerHTML=P.dust&&!q&&dust.length?`Скрыто ${pl(dust.length,'мелкая монета','мелкие монеты','мелких монет')} на ${tmoney(dust.reduce((a,o)=>a+(o.v||0),0))} · <button type="button" class="more" id="showDust">показать</button>`:(!P.dust&&dust.length?`<button type="button" class="more" id="hideDust">Скрыть мелочь до $10</button>`:'');}
 $('coinSearch').addEventListener('input',()=>renderCoins(derive()));
 $('coinList').addEventListener('click',e=>{const b=e.target.closest('[data-sortcol]');if(!b)return;e.stopPropagation();const c=b.dataset.sortcol;P.sort=sortNext(c);savePrefs();play('tick');renderCoins(derive());
   const f=$('coinList').querySelector(`[data-sortcol="${c}"]`);if(f)try{f.focus({preventScroll:true});}catch(x){}});
@@ -2104,7 +2117,7 @@ function msSync(x){MSC.last=x;if(!msApply())return;if(!S.ready||document.getElem
   if(window.Mascot){try{window.Mascot.sync(msPayload(x));}catch(e){}}else msLoad();}
 function msLoad(){if(MSC.loading||MSC.failed)return;MSC.loading=true;
   const add=(src,ok)=>{try{const s=document.createElement('script');s.src=src;s.async=true;s.onload=ok;s.onerror=()=>{MSC.failed=true;};document.head.appendChild(s);}catch(e){MSC.failed=true;}};
-  const boot=()=>add('mascot.js?v=20261106151000',()=>{try{if(window.Mascot&&window.Mascot.init({host:$('mascot'),app:{audio:ac,buzz}})&&MSC.last&&$('ob').hidden&&!document.getElementById('mlAuth'))window.Mascot.sync(msPayload(MSC.last));}catch(e){}});
+  const boot=()=>add('mascot.js?v=20261107031000',()=>{try{if(window.Mascot&&window.Mascot.init({host:$('mascot'),app:{audio:ac,buzz}})&&MSC.last&&$('ob').hidden&&!document.getElementById('mlAuth'))window.Mascot.sync(msPayload(MSC.last));}catch(e){}});
   setTimeout(()=>{if(window.THREE)boot();else add('three.min.js',boot);},300);}
 function render(){const D=derive();renderHeader();renderHome(D);renderGrowth();renderCoins(D);renderStrategy(D);renderActivity();earnNudge();if(cvSym&&$('coinSheet').classList.contains('open'))renderCoinView();}
 document.body.classList.add('loading');

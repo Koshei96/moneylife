@@ -567,8 +567,8 @@ def run_browser():
                 if st['head'] == ['Актив', 'Цена · 24ч', 'Портфель▾']: ok(f'«Монеты» ({th}): шапка таблицы «Актив · Цена · 24ч · Портфель ▾»')
                 else: fail(f'«Монеты» ({th}): шапка таблицы', str(st['head']))
                 b = st['rows'].get('BTC')
-                if b and b['cols'] == 3 and b['h'] == 60 and b['a'][0] == 'BTC' and b['a'][1] == '0,005' and b['p'] == ['$110 000', '+1,5%'] and b['v'] == ['$550,00', '+$8,13']:
-                    ok(f'«Монеты» ({th}): строка BTC 60 px, три колонки: 0,005 · $110 000 +1,5% · $550,00 +$8,13 за 24ч')
+                if b and b['cols'] == 3 and b['h'] == 60 and b['a'][0] == 'BTC' and b['a'][1] == '0,005' and b['p'] == ['$110 000', '+1,5%'] and b['v'] == ['$550', '+$8,13']:
+                    ok(f'«Монеты» ({th}): строка BTC 60 px, три колонки: 0,005 · $110 000 +1,5% · $550 +$8,13 за 24ч')
                 else: fail(f'«Монеты» ({th}): строка BTC за 24ч', str(b))
                 order = list(st['rows'])
                 if order[:2] == ['BTC', 'ETH']: ok(f'«Монеты» ({th}): сортировка «По стоимости» осталась (BTC, затем ETH)')
@@ -586,15 +586,15 @@ def run_browser():
                 # неделя: из 7-дневного графика (0,97 × цены → +3,1%); прибыль = стоимость сейчас − кол-во × цена неделю назад
                 pg.click('#coinRanges [data-per="1w"]'); pg.wait_for_timeout(400)
                 st = coin_state(pg); b = st['rows'].get('BTC'); e = st['rows'].get('ETH')
-                if st['head'][1] == 'Цена · 1Н' and b and b['p'][1] == '+3,1%' and b['v'][1] == '+$16,50' and e and e['v'][1] == '+$12,00':
-                    ok(f'«Монеты» ({th}): 1Н — BTC +3,1% / +$16,50, ETH +$12,00 (из 7-дневного графика)')
+                if st['head'][1] == 'Цена · 1Н' and b and b['p'][1] == '+3,1%' and b['v'][1] == '+$16,50' and e and e['v'][1] == '+$12':
+                    ok(f'«Монеты» ({th}): 1Н — BTC +3,1% / +$16,50, ETH +$12 (из 7-дневного графика)')
                 else: fail(f'«Монеты» ({th}): период 1Н', f'{st["head"]} {b} {e}; графики 7 дней: ' + pg.evaluate("JSON.stringify(Object.keys(S.live.spark))"))
                 pill = pg.evaluate("document.querySelector('#coinRanges .pill').style.transform")
                 ok(f'«Монеты» ({th}): пилюля переехала к 1Н') if pill == 'translateX(100%)' else fail(f'«Монеты» ({th}): пилюля', pill)
                 # всё время: к средней цене покупки — как было раньше (BTC +10%, +$50; ETH +33,3%, +$100; итог +$150)
                 pg.click('#coinRanges [data-per="all"]'); pg.wait_for_timeout(400)
                 st = coin_state(pg); b = st['rows'].get('BTC'); e = st['rows'].get('ETH')
-                if st['head'][1] == 'Цена · к покупке' and b and b['p'][1] == '+10,0%' and b['v'][1] == '+$50,00' and e and e['p'][1] == '+33,3%' and e['v'][1] == '+$100,00' and 'всего +$150' in st['tot']:
+                if st['head'][1] == 'Цена · к покупке' and b and b['p'][1] == '+10,0%' and b['v'][1] == '+$50' and e and e['p'][1] == '+33,3%' and e['v'][1] == '+$100' and 'всего +$150' in st['tot']:
                     ok(f'«Монеты» ({th}): «Всё» — к средней цене покупки: BTC +10,0% / +$50, ETH +33,3% / +$100, всего +$150')
                 else: fail(f'«Монеты» ({th}): период «Всё»', f'{st["head"]} {b} {e} {st["tot"]}')
                 saved = pg.evaluate("JSON.parse(localStorage.getItem('cp-prefs2')||'{}').cper")
@@ -611,17 +611,18 @@ def run_browser():
                         pg.click(f'#coinList .thead [data-sortcol="{col}"]'); pg.wait_for_timeout(250)
                         on = pg.evaluate("[...document.querySelectorAll('#coinList .thead [data-sortcol][aria-pressed=\"true\"]')].map(b=>b.dataset.sortcol+':'+b.textContent)")
                         return pg.evaluate("P.sort"), list(coin_state(pg)['rows']), [cnorm(x) for x in on]
-                    r1 = sort_after('a'); r2 = sort_after('p'); r3 = sort_after('v'); r4 = sort_after('v'); r5 = sort_after('v')
+                    r1 = sort_after('a'); r2 = sort_after('p'); r3 = sort_after('v'); r4 = sort_after('v'); r5 = sort_after('v'); r6 = sort_after('v')
                     if r1 == ('name', ['BTC', 'ETH'], ['a:Актив▴']) and r2 == ('chg', ['ETH', 'BTC'], ['p:Цена · к покупке▾']) \
-                       and r3 == ('value', ['BTC', 'ETH'], ['v:Портфель▾']) and r4 == ('pnl', ['ETH', 'BTC'], ['v:Прибыль▾']) and r5[0] == 'value':
-                        ok('«Монеты»: сортировка по подписям — «Актив» А–Я ▴, «Цена» по изменению ▾, «Портфель» по стоимости ▾, ещё раз — по прибыли ▾')
-                    else: fail('«Монеты»: сортировка по подписям колонок', f'{r1} {r2} {r3} {r4} {r5}')
+                       and r3 == ('value', ['BTC', 'ETH'], ['v:Портфель▾']) and r4 == ('pnl', ['ETH', 'BTC'], ['v:Прибыль▾']) \
+                       and r5 == ('pnlUp', ['BTC', 'ETH'], ['v:Прибыль▴']) and r6[0] == 'value':
+                        ok('«Монеты»: сортировка по подписям — «Актив» А–Я ▴, «Цена» по изменению ▾, «Портфель» по стоимости ▾, ещё раз — по прибыли ▾, ещё раз — обратно ▴')
+                    else: fail('«Монеты»: сортировка по подписям колонок', f'{r1} {r2} {r3} {r4} {r5} {r6}')
                     if pg.evaluate("JSON.parse(localStorage.getItem('cp-prefs2')||'{}').sort") == 'value': ok('«Монеты»: выбор сортировки запомнен, как раньше')
                     else: fail('«Монеты»: запоминание сортировки', pg.evaluate("localStorage.getItem('cp-prefs2')"))
                     # суммы в таблице от $1 000 — без копеек (и при округлении 999,996 → 1 000); мелкое — как было; money() не тронут
-                    tm = [cnorm(x) for x in pg.evaluate("[tmoney(1234.56),tmoney(999.996),tmoney(950.5),tmoney(-1500.4,{sign:true}),tmoney(12.34,{sign:true}),tmoney(0.2,{price:true,show:true}),tmoney(110000,{price:true,show:true}),money(999.996),money(1234.56)]")]
-                    if tm == ['$1 235', '$1 000', '$950,50', '-$1 500', '+$12,34', '$0,2000', '$110 000', '$1 000,00', '$1 235']:
-                        ok('«Монеты»: суммы от $1 000 без копеек ($1 235, 999,996 → $1 000), меньше — с копейками, DOGE $0,2000; общий формат денег не изменён')
+                    tm = [cnorm(x) for x in pg.evaluate("[tmoney(1234.56),tmoney(999.996),tmoney(950.5),tmoney(-1500.4,{sign:true}),tmoney(12.34,{sign:true}),tmoney(0.2,{price:true,show:true}),tmoney(110000,{price:true,show:true}),money(999.996),money(1234.56),tmoney(200),tmoney(199.996),tmoney(-8,{sign:true}),tmoney(0.001,{sign:true}),tmoney(0),tmoney(200,{price:true,show:true}),money(200)]")]
+                    if tm == ['$1 235', '$1 000', '$950,50', '-$1 500', '+$12,34', '$0,2000', '$110 000', '$1 000,00', '$1 235', '$200', '$200', '-$8', '+$0,00', '$0', '$200', '$200,00']:
+                        ok('«Монеты»: один формат сумм — от $1 000 и целые без копеек ($1 235, $200, 199,996 → $200), нецелые — с копейками ($950,50), DOGE $0,2000; общий money() не изменён')
                     else: fail('«Монеты»: суммы без копеек', str(tm))
                     # нет графика за неделю (цены с биржи) — «—», а не ошибка
                     r = pg.evaluate("[coinPer('ZZZ',{usd:10,qty:1},5,5,'1w'),coinPer('ZZZ',{usd:0,qty:1},5,5,'all'),coinPer('ZZZ',{usd:10,qty:1},0,null,'24h')]")
@@ -666,10 +667,35 @@ def run_browser():
                 else: fail(f'кадры «Монет» ({th}): BTC от $1 000', str(b))
                 if e and e['v'] == ['$2 000', '-$47,08'] and e['p'] == ['$4 000', '-2,3%']: ok(f'кадры «Монет» ({th}): ETH в минусе за 24ч — $2 000 −$47,08, −2,3%')
                 else: fail(f'кадры «Монет» ({th}): монета в минусе', str(e))
-                if d and d['p'] == ['$0,2000', '+5,0%'] and d['v'][0] == '$200,00': ok(f'кадры «Монет» ({th}): DOGE $0,2000 — 4 знака у мелкой цены')
+                if d and d['p'] == ['$0,2000', '+5,0%'] and d['v'][0] == '$200': ok(f'кадры «Монет» ({th}): DOGE $0,2000 — 4 знака у мелкой цены, стоимость $200 без «,00»')
                 else: fail(f'кадры «Монет» ({th}): DOGE', str(d))
                 if h and h['p'] == ['нет цены', '—'] and h['v'] == ['—', '—']: ok(f'кадры «Монет» ({th}): HMSTR без цены — «нет цены» и «—»')
                 else: fail(f'кадры «Монет» ({th}): монета без цены', str(h))
+                # часть 3: один формат — целые без «,00» и в строках, и в итоге (SOL $200 / $600)
+                s_ = rw.get('SOL')
+                if s_ and s_['p'][0] == '$200' and s_['v'][0] == '$600': ok(f'кадры «Монет» ({th}): SOL $200 · $600 — целые без «,00», как в итоге')
+                else: fail(f'кадры «Монет» ({th}): формат целых сумм', str(s_))
+                # часть 3: строка под таблицей о монете без цены (--warn-soft)
+                npn = pg.evaluate("(()=>{const e=document.getElementById('npNote');return e&&!e.hidden?[e.textContent,getComputedStyle(e).backgroundColor,getComputedStyle(e).getPropertyValue('--warn-soft').trim()]:null})()")
+                if npn and cnorm(npn[0]) == 'HMSTR — нет цены: биржи не ответили. Количество сохранено, в итог и прибыль не входит.' and npn[1] != 'rgba(0, 0, 0, 0)':
+                    ok(f'кадры «Монет» ({th}): под таблицей «HMSTR — нет цены: биржи не ответили…» на фоне --warn-soft')
+                else: fail(f'кадры «Монет» ({th}): строка «нет цены» под таблицей', str(npn))
+                shot(pg, f'coins3-{th}')
+                # часть 3: «Прибыль» сортирует по тому, что видно в ячейке, — за выбранный период (24ч), а не за всё время.
+                # За 24ч: BTC +$32,51, DOGE +$9,52, SOL −$25,65, ETH −$47,08; за всё время порядок другой (DOGE, BTC, ETH, SOL). Без цены — в конце.
+                pg.click('#coinList .thead [data-sortcol="v"]'); pg.wait_for_timeout(250)
+                o1 = (pg.evaluate("P.sort"), list(coin_state(pg)['rows']), cnorm(pg.evaluate("document.querySelector('#coinList .thead [data-sortcol=v]').textContent")))
+                if o1 == ('pnl', ['BTC', 'DOGE', 'SOL', 'ETH', 'HMSTR'], 'Прибыль▾'): ok(f'кадры «Монет» ({th}): «Прибыль ▾» — по прибыли за 24ч, как в ячейке: BTC, DOGE, SOL, ETH, без цены в конце')
+                else: fail(f'кадры «Монет» ({th}): «Прибыль ▾» за период', str(o1))
+                shot(pg, f'coins3-profit-desc-{th}')
+                pg.click('#coinList .thead [data-sortcol="v"]'); pg.wait_for_timeout(250)
+                o2 = (pg.evaluate("P.sort"), list(coin_state(pg)['rows']), cnorm(pg.evaluate("document.querySelector('#coinList .thead [data-sortcol=v]').textContent")))
+                if o2 == ('pnlUp', ['ETH', 'SOL', 'DOGE', 'BTC', 'HMSTR'], 'Прибыль▴'): ok(f'кадры «Монет» ({th}): «Прибыль ▴» — обратно: ETH, SOL, DOGE, BTC, без цены всё равно в конце')
+                else: fail(f'кадры «Монет» ({th}): «Прибыль ▴»', str(o2))
+                shot(pg, f'coins3-profit-asc-{th}')
+                pg.click('#coinList .thead [data-sortcol="v"]'); pg.wait_for_timeout(250)
+                if pg.evaluate("P.sort") == 'value': ok(f'кадры «Монет» ({th}): третье нажатие — снова «Портфель ▾»')
+                else: fail(f'кадры «Монет» ({th}): возврат к сортировке по стоимости', pg.evaluate("P.sort"))
                 if st['lbl'] == 'АКТИВЫ · 5' and st['tot'].startswith('$5 000 · за 24ч'): ok(f'кадры «Монет» ({th}): итог «{st["lbl"]}» · «{st["tot"]}»')
                 else: fail(f'кадры «Монет» ({th}): итог', f'{st["lbl"]!r} | {st["tot"]!r}')
                 fits = pg.evaluate('''()=>{const L=document.getElementById('coinList').getBoundingClientRect();return [...document.querySelectorAll('#coinList .thead [data-sortcol], #coinList .row .b, #coinList .row .s, #coinsTot, #coinsLbl')].every(x=>{const r=x.getBoundingClientRect();return x.scrollWidth<=x.clientWidth+1&&r.left>=L.left-1&&r.right<=L.right+1||x.id==='coinsTot'||x.id==='coinsLbl'})&&document.documentElement.scrollWidth<=390}''')
@@ -677,16 +703,31 @@ def run_browser():
                 shot(pg, f'stage1-list-{th}')
                 pg.click('#coinRanges [data-per="all"]'); pg.wait_for_timeout(400)
                 st = coin_state(pg); s_ = st['rows'].get('SOL')
-                if s_ and s_['p'][1] == '-20,0%' and s_['v'] == ['$600,00', '-$150,00'] and 'всего +$50,00' in st['tot']: ok(f'кадры «Монет» ({th}): «Всё» — SOL −20,0% / −$150,00 к покупке, всего +$50,00')
+                if s_ and s_['p'][1] == '-20,0%' and s_['v'] == ['$600', '-$150'] and st['tot'].endswith('всего +$50'): ok(f'кадры «Монет» ({th}): «Всё» — SOL −20,0% / −$150 к покупке, всего +$50')
                 else: fail(f'кадры «Монет» ({th}): минус к покупке', f'{s_} {st["tot"]}')
                 shot(pg, f'stage1-minus-{th}')
                 pg.click('#coinRanges [data-per="24h"]'); pg.wait_for_timeout(300)
-                pg.fill('#coinSearch', 'HMSTR'); pg.wait_for_timeout(300); shot(pg, f'stage1-noprice-{th}')
+                pg.fill('#coinSearch', 'HMSTR'); pg.wait_for_timeout(300); shot(pg, f'stage1-noprice-{th}'); shot(pg, f'coins3-noprice-{th}')
                 tt = cnorm(pg.inner_text('#coinsTot'))
                 ok(f'кадры «Монет» ({th}): в поиске только монета без цены — итог «—», а не «$0»') if tt == '—' else fail(f'кадры «Монет» ({th}): итог без цены', repr(tt))
                 pg.fill('#coinSearch', 'DOGE'); pg.wait_for_timeout(300); shot(pg, f'stage1-doge-{th}')
                 pg.fill('#coinSearch', ''); pg.wait_for_timeout(200)
             scenario(f'Монеты: кадры для Веры ({th})', {'session': True, 'docs': SHOW}, s_coins_show, prices=False, theme=th, extra=show_prices)
+            # часть 3: нет цен ни у одной монеты (биржи молчат) — в ячейках «нет цены» вместо «—», под таблицей все тикеры
+            def s_coins_noall(pg, n, th=th):
+                wait_app(pg); pg.wait_for_timeout(1500)
+                pg.evaluate("document.querySelector('nav.tabs [data-tab=\"coins\"]').click()"); pg.wait_for_timeout(700)
+                rw = coin_state(pg)['rows']
+                cells = [x for r in rw.values() for x in r['p'] + r['v']]
+                if len(rw) == 5 and cells and all(x == 'нет цены' for x in cells): ok(f'нет цен ни у одной монеты ({th}): во всех ячейках «нет цены» вместо «—»')
+                else: fail(f'нет цен ни у одной монеты ({th}): ячейки', str(rw)[:400])
+                col = pg.evaluate("[getComputedStyle(document.querySelector('#coinList .row .c3 .b')).color,getComputedStyle(document.querySelector('.ctab .s.q')).color,getComputedStyle(document.querySelector('#coinsTot b')).color,document.querySelector('#coinsTot b').textContent]")
+                ok(f'нет цен ни у одной монеты ({th}): «нет цены» в ячейках и в итоге приглушённым цветом --mute') if col[0] == col[1] == col[2] and col[3] == 'нет цены' else fail(f'нет цен ({th}): цвет «нет цены»', str(col))
+                t = cnorm(pg.evaluate("document.getElementById('npNote').hidden?'':document.getElementById('npNote').textContent"))
+                if t.startswith('BTC, DOGE, ETH, HMSTR, SOL — нет цены') or (t.count(',') >= 4 and t.endswith('не входят.')): ok(f'нет цен ни у одной монеты ({th}): под таблицей все тикеры через запятую, «не входят»')
+                else: fail(f'нет цен ни у одной монеты ({th}): строка под таблицей', repr(t))
+                shot(pg, f'coins3-noprice-all-{th}')
+            scenario(f'Монеты: нет ни одной цены ({th})', {'session': True, 'docs': SHOW}, s_coins_noall, prices=False, theme=th)
             def s_coins_empty(pg, n, th=th):
                 wait_app(pg)
                 pg.evaluate("document.querySelector('nav.tabs [data-tab=\"coins\"]').click()"); pg.wait_for_timeout(700)
