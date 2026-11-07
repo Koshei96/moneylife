@@ -1021,6 +1021,8 @@ function money(v,o){o=o||{};if(v==null||!isFinite(v))return '—';if(P.hide&&!o.
   let d=o.d;if(d==null)d=o.price?(a>=1000?0:a>=1?2:a>=0.01?4:6):(a>=1000?0:2);
   const sg=x<0?'−':(o.sign&&x>0?'+':'');return toU?sg+nf(a,d)+NB+'₴':sg+'$'+nf(a,d);}
 const usd=(v,d)=>{if(v==null||!isFinite(v))return '—';d=d==null?2:d;return (v<0?'−':'')+'$'+nf(Math.abs(v),d);};
+// Бюджет DCA для показа: перерасход меньше $0,50 — копейки округления (тот же порог, что у «всё куплено ✓») — показываем как $0; расчёт не меняется
+const dcaShow=v=>v<0&&v>-0.5?0:v;
 const usdp=v=>{const a=Math.abs(v);return usd(v,a>=1000?0:a>=1?2:a>=0.01?4:6);};
 const pct=(v,d)=>v==null||!isFinite(v)?'—':(v>0?'+':v<0?'−':'')+nf(Math.abs(v),d==null?1:d)+'%';
 const qtyRaw=v=>Number(v).toLocaleString('ru-RU',{maximumFractionDigits:8});
@@ -1319,7 +1321,7 @@ function renderHome(D){
   const capP=+S.settings.capPct||20,cap=D.total*capP/100;$('tResS').textContent=D.total?'потолок '+money(cap,{d:0})+(D.reserve>cap?' · выше!':' — выше не копим'):'доллары для докупок на падении';$('tResM').style.width=(cap?Math.min(100,D.reserve/cap*100):0)+'%';
   countTo($('tBtc'),btc,v=>money(v,{d:0,show:true}));$('tBtcS').textContent=btc&&ath?pct((btc/ath-1)*100)+' от максимума':'';
   const bud=budgetUsd(),ds=depShare();
-  if(D.hasDep){$('tDcaK').textContent='Бюджет DCA';countTo($('tDca'),D.dcaBudget,v=>usd(v));$('tDcaS').textContent=D.dcaBudget>0.5?'осталось купить':'всё куплено ✓';}
+  if(D.hasDep){$('tDcaK').textContent='Бюджет DCA';countTo($('tDca'),D.dcaBudget,v=>usd(dcaShow(v)));$('tDcaS').textContent=D.dcaBudget>0.5?'осталось купить':'всё куплено ✓';}
   else{$('tDcaK').textContent='DCA в месяц';countTo($('tDca'),bud?bud*ds:(S.ready?0:null),v=>usd(v,0));$('tDcaS').textContent=bud&&ds<1?'и '+usd(bud*(1-ds),0)+' в резерв':'одна сумма каждый месяц';}
   {const t=$('tRes').closest('.tile');if(t)t.hidden=!ladderOn()&&!D.reserve;}
   renderMovers(D);renderAlloc(D);renderAlerts();renderTeaser();renderLiveBanner();
@@ -1475,7 +1477,7 @@ $('stMenu').addEventListener('click',e=>{const b=e.target.closest('[data-st]');i
 function resInfo(D){const E=earnCfg(),er=earnRate(E),due=earnDue(E);
   const earnHtml=E?`<div class="tile earn" style="margin-top:10px"><div class="k">Резерв в стейкинге · ${esc(E.place||'')}</div><div class="v" style="font-size:20px">~${nf(er*100,1)}% <span class="small mute" style="font-weight:600">годовых · +${money(D.reserve*er/365,{d:3})}/день</span></div><div class="s">заработано ${money(D.earned,{sign:true})}${E.fact?' · по факту ~'+nf(E.fact,1)+'%':''} · сверено ${dShort(E.at)}</div>${due?'<p class="hint" style="color:var(--warn);margin-top:6px">Прошёл месяц — пора сверить с биржей</p>':''}<button type="button" class="btn sm ${due?'':'ghost'}" data-act="earn" style="margin-top:10px;width:100%">Сверить с биржей</button></div>`:`<button type="button" class="btn sm ghost" data-act="earn" style="margin-top:10px;width:100%">Резерв лежит в стейкинге? Настроить учёт</button>`;
   const capP=+S.settings.capPct||20,cap=D.total*capP/100,bud=budgetUsd(),flow=bud*(1-depShare());
-  const dk=D.hasDep?'Бюджет DCA':'DCA в месяц',dv=D.hasDep?usd(D.dcaBudget):(bud?usd(bud*depShare(),0):'—'),ds=D.hasDep?(D.dcaBudget>0.5?'осталось купить':'всё куплено ✓'):(bud?(S.settings.budget?'по твоему бюджету':'оценка по доходу'):'');
+  const dk=D.hasDep?'Бюджет DCA':'DCA в месяц',dv=D.hasDep?usd(dcaShow(D.dcaBudget)):(bud?usd(bud*depShare(),0):'—'),ds=D.hasDep?(D.dcaBudget>0.5?'осталось купить':'всё куплено ✓'):(bud?(S.settings.budget?'по твоему бюджету':'оценка по доходу'):'');
   return {dk,dv,html:`<div class="grid2"><div class="tile"><div class="k">Резерв USDT</div><div class="v">${money(D.reserve)}</div><div class="s">${cap?'потолок '+money(cap,{d:0}):''}${flow?' · +'+usd(flow,0)+'/мес':''}</div><div class="meter"><i style="width:${cap?Math.min(100,D.reserve/cap*100):0}%"></i></div><button type="button" class="btn sm" data-act="reserve" style="margin-top:12px;width:100%">Пополнить</button></div><div class="tile"><div class="k">${dk}</div><div class="v">${dv}</div><div class="s">${ds}</div><button type="button" class="btn sm ghost" data-act="buy" style="margin-top:12px;width:100%">Купить</button></div></div>${earnHtml}<p class="hint">Резерв USDT — деньги для докупок по лестнице. Выше потолка (${capP}% от стоимости монет) резерв не копим: излишек идёт в DCA.</p>`};}
 function renderPick(D){const sc=S.screen,ap=S.altplan||{},yr=ap.draftYear||'',run=screenRunning(),req=S.screenreq||{};
   const dr=ap.draft||{},dk=Object.keys(dr).sort(),uniq=[...new Set(dk.map(k=>dr[k].sym))],RS=resInfo(D);
