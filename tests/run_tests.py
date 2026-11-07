@@ -699,6 +699,39 @@ def run_browser():
                 pg.locator('#signal').screenshot(path=str(OUT / f'fix-ladder-chip-{th}.png'))
             scenario(f'Карточка докупки ({th})', {'session': True, 'docs': HOLD}, s_hold, theme=th)
 
+        # --- Г2. «Бюджет DCA» (жалоба владельца 06.11): копейка перерасхода от округления не показывается как «−$0,01»,
+        #     а настоящий перерасход (−$12,00) виден как есть. Расчёт D.dcaBudget не меняется — только показ.
+        def dca_seed(spent):
+            return [
+                {'col': 'app', 'id': 'settings', 'data': {'onboardedAt': NOW, 'split': {'btc': 50, 'eth': 30, 'alt': 20}, 'monthlyUsd': 300, 'currency': 'USD'}},
+                {'col': 'tx', 'id': 'd1', 'data': {'ts': '2026-08-01T10:00:00.000Z', 'type': 'deposit', 'usd': 1000, 'uah': 41500, 'dcaUsd': 300, 'reserveUsd': 700}},
+                {'col': 'tx', 'id': 'd2', 'data': {'ts': '2026-08-02T10:00:00.000Z', 'type': 'dca', 'symbol': 'BTC', 'qty': 0.00150005, 'usd': spent[0], 'price': 100000}},
+                {'col': 'tx', 'id': 'd3', 'data': {'ts': '2026-08-02T10:05:00.000Z', 'type': 'dca', 'symbol': 'ETH', 'qty': 0.05, 'usd': spent[1], 'price': 3000}},
+            ]
+        def dnorm(t): return t.replace('\u202f', ' ').replace('\xa0', ' ').replace('\u2212', '-')
+        def dca_read(pg):
+            wait_app(pg)
+            pg.wait_for_function("()=>document.getElementById('tDcaS').textContent.length>0", polling=250, timeout=10000)
+            pg.wait_for_timeout(1000)   # countTo доигрывает анимацию
+            return (dnorm(pg.inner_text('#tDca')), dnorm(pg.inner_text('#tDcaS')), dnorm(pg.evaluate("resInfo(derive()).dv")), pg.evaluate("derive().dcaBudget"))
+        for th in ('dark', 'light'):
+            def s_dca_cent(pg, n, th=th):
+                v, sub, dv, raw = dca_read(pg)
+                if raw < 0 and abs(raw) < 0.02: ok(f'DCA-копейка ({th}): расчёт не тронут, остаток {raw:.4f}')
+                else: fail(f'DCA-копейка ({th}): расчёт', f'dcaBudget={raw}')
+                if v == '$0,00' and 'всё куплено' in sub: ok(f'DCA-копейка ({th}): плитка «{v} · {sub}» без минуса')
+                else: fail(f'DCA-копейка ({th}): плитка', f'«{v}» · «{sub}»')
+                ok(f'DCA-копейка ({th}): в «Резерв и DCA» тоже {dv}') if dv == '$0,00' else fail(f'DCA-копейка ({th}): resInfo', dv)
+                tile = pg.locator('#tDca').locator('xpath=ancestor::div[contains(@class,"tile")][1]/..')
+                tile.scroll_into_view_if_needed(); pg.wait_for_timeout(300)
+                tile.screenshot(path=str(OUT / f'dca-cent-{th}.png'))
+            scenario(f'Бюджет DCA: копейка округления ({th})', {'session': True, 'docs': dca_seed([150.01, 150])}, s_dca_cent, theme=th)
+        def s_dca_over(pg, n):
+            v, sub, dv, raw = dca_read(pg)
+            if v == '-$12,00' and dv == '-$12,00' and 'всё куплено' in sub: ok(f'DCA-перерасход: виден как есть «{v}» (и в «Резерв и DCA»)')
+            else: fail('DCA-перерасход: показ', f'плитка «{v}» · «{sub}», resInfo «{dv}», расчёт {raw}')
+        scenario('Бюджет DCA: настоящий перерасход', {'session': True, 'docs': dca_seed([162, 150])}, s_dca_over)
+
         # --- Д. база недоступна: приложение не падает
         def s_off(pg, n):
             pg.wait_for_timeout(1500); shot(pg, '08-db-down')
