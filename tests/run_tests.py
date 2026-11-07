@@ -375,6 +375,22 @@ def run_browser():
                 pg.screenshot(path=str(OUT / f'fix-date-{th}.png'))
             scenario(f'Вид форм ({th})', {'session': True, 'docs': SEED}, s_forms_look, dsf=1, theme=th)
 
+        # --- А3. нижняя панель (Вера 04.11, 07.11), обе темы: подписи неактивных вкладок цветом --mute (≥ 4,5:1),
+        #     значки неактивных — по-прежнему --dim, активная вкладка — как была (--fg)
+        NAV = """()=>{const v=n=>{const e=document.createElement('i');e.style.color='var('+n+')';document.body.appendChild(e);const c=getComputedStyle(e).color;e.remove();return c};
+            const t=[...document.querySelectorAll('nav.tabs .tab')],off=t.filter(b=>!b.hasAttribute('aria-current')),on=t.find(b=>b.hasAttribute('aria-current'));
+            return {mute:v('--mute'),dim:v('--dim'),fg:v('--fg'),lab:off.map(b=>getComputedStyle(b).color),ico:off.map(b=>getComputedStyle(b.querySelector('svg')).color),on:getComputedStyle(on).color}}"""
+        for th in ('light', 'dark'):
+            def s_nav_look(pg, n, th=th):
+                wait_app(pg)
+                if pg.evaluate("document.documentElement.dataset.theme") != th: raise AssertionError('тема не включилась: ' + th)
+                r = pg.evaluate(NAV)
+                if len(r['lab']) == 3 and all(c == r['mute'] for c in r['lab']): ok(f'нижняя панель ({th}): подписи неактивных вкладок цветом --mute')
+                else: fail(f'нижняя панель ({th}): подписи', f"{r['lab']} ≠ {r['mute']}")
+                ok(f'нижняя панель ({th}): значки неактивных — --dim, активная — --fg') if all(c == r['dim'] for c in r['ico']) and r['on'] == r['fg'] else fail(f'нижняя панель ({th}): значки/активная', str(r))
+                shot(pg, f'nav-{th}')
+            scenario(f'Нижняя панель ({th})', {'session': True, 'docs': SEED}, s_nav_look, dsf=1, theme=th)
+
         # --- Б. новый пользователь → знакомство
         def s_new(pg, n):
             pg.wait_for_selector('#ob:not([hidden])', timeout=8000)
