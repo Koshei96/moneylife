@@ -277,7 +277,7 @@ def run_browser():
     with sync_playwright() as p:
         browser = p.chromium.launch(args=['--no-proxy-server'])
 
-        def page_for(name, test_cfg, prices=True, dsf=2, theme=None):
+        def page_for(name, test_cfg, prices=True, dsf=2, theme=None, extra=None):
             ctx = browser.new_context(viewport={'width': 390, 'height': 844}, device_scale_factor=dsf, service_workers='block',
                                       locale='ru-RU', timezone_id='Europe/Kyiv', is_mobile=True, has_touch=True)
             def route(r):
@@ -290,6 +290,7 @@ def run_browser():
                     b = binance_body(u)
                     if b is None: return r.fulfill(status=400, content_type='application/json', headers={'access-control-allow-origin': '*'}, body='{"code":-1121,"msg":"Invalid symbol."}')
                     return r.fulfill(status=200, content_type='application/json', headers={'access-control-allow-origin': '*'}, body=b)
+                if extra and extra(r, u): return
                 return r.abort('internetdisconnected')
             ctx.route('**/*', route)
             ctx.add_init_script('window.__ML_TEST=' + json.dumps(test_cfg) + ';' + MOCK)
@@ -311,8 +312,8 @@ def run_browser():
         def shot(pg, name):
             pg.screenshot(path=str(OUT / f'{name}.png'))
 
-        def scenario(name, cfg, body, prices=True, path='index.html', dsf=2, theme=None):
-            ctx, pg, errs = page_for(name, cfg, prices, dsf, theme)
+        def scenario(name, cfg, body, prices=True, path='index.html', dsf=2, theme=None, extra=None):
+            ctx, pg, errs = page_for(name, cfg, prices, dsf, theme, extra)
             try:
                 pg.goto(base + path, wait_until='load', timeout=30000)
                 pg.wait_for_timeout(1500)
@@ -399,6 +400,9 @@ def run_browser():
             if not pg.evaluate("[...window.__mlRows.keys()].includes('app/settings')"):
                 raise AssertionError('после знакомства не сохранились настройки (app/settings)')
             ok('настройки сохранены после знакомства')
+            pg.evaluate("document.querySelector('nav.tabs [data-tab=\"coins\"]').click()"); pg.wait_for_timeout(400)
+            if pg.locator('#coinRanges').is_hidden() and 'Монет пока нет' in pg.inner_text('#coinList'): ok('«Монеты» без монет: переключатель периода скрыт, подсказка «Монет пока нет»')
+            else: fail('«Монеты» без монет', 'виден переключатель периода или нет подсказки')
         scenario('Новый пользователь', {'session': True, 'docs': []}, s_new)
 
         # --- Б2. путь новичка (Вера 03.11): шаг 4 знакомства — видимая «Пропустить» ≥ 48 px, подсказка «например, BTC»,
@@ -543,6 +547,223 @@ def run_browser():
             if pg.get_attribute('nav.tabs [data-tab="coins"]', 'aria-current') == 'page': ok('открытое приложение: #coins переключает на «Монеты»')
             else: fail('открытое приложение: смена #хэша', 'вкладка «Монеты» не открылась')
         scenario('Ярлык в открытом приложении', {'session': True, 'docs': SEED}, s_hash)
+
+        # --- В4. редизайн, этап 1 (часть 1): «Монеты» — таблица из трёх колонок и переключатель периода 24ч · 1Н · Всё.
+        #     Имитация цен: BTC $110 000, ETH $4000, за 24ч +1,5%, 7-дневный график начинается с 0,97 × цены (за неделю +3,1%).
+        #     Покупки SEED: BTC 0,005 за $500, ETH 0,1 за $300. Расчёты денег не меняются — проверяем только показ.
+        # история цен CoinGecko отвечает «нет данных» (не сбой сети) — тогда CoinGecko не уходит на паузу и цены с 7-дневным графиком
+        # приходят обычным путём, как у владельца; без этого в тестах цены всегда идут с биржи, без графика
+        def cg_chart_404(r, u):
+            if 'api.coingecko.com' in u and '/market_chart' in u:
+                r.fulfill(status=404, content_type='application/json', headers={'access-control-allow-origin': '*'}, body='{"error":"not found"}'); return True
+            return False
+        def cnorm(t): return t.replace(' ', ' ').replace('\xa0', ' ').replace('−', '-')
+        ROWS = """()=>[...document.querySelectorAll('#coinList .row[data-coin]')].map(r=>{const c=r.querySelectorAll('.c');const t=e=>[...e.querySelectorAll('.b,.s')].map(x=>x.textContent);
+            return {s:r.dataset.coin,h:Math.round(r.getBoundingClientRect().height),cols:c.length,a:t(c[0]),p:t(c[1]),v:t(c[2])}})"""
+        def coin_state(pg):
+            rows = {r['s']: r for r in pg.evaluate(ROWS)}
+            for r in rows.values():
+                for k in ('a', 'p', 'v'): r[k] = [cnorm(x) for x in r[k]]
+            return {'per': pg.evaluate("[...document.querySelectorAll('#coinRanges [data-per]')].map(b=>[b.textContent,b.getAttribute('aria-pressed')])"),
+                    'head': [cnorm(x) for x in pg.evaluate("[...document.querySelectorAll('#coinList .thead [data-sortcol]')].map(b=>b.textContent)")],
+                    'tot': cnorm(pg.inner_text('#coinsTot')), 'lbl': cnorm(pg.inner_text('#coinsLbl')), 'rows': rows}
+        for th in ('dark', 'light'):
+            def s_coins_table(pg, n, th=th):
+                wait_app(pg)
+                if pg.evaluate("document.documentElement.dataset.theme") != th: raise AssertionError('тема не включилась: ' + th)
+                try: pg.wait_for_function("Object.keys(S.live.spark).length>0", polling=250, timeout=10000)
+                except Exception: pass   # не пришёл график — проверка 1Н ниже честно покажет «—»
+                pg.evaluate("document.querySelector('nav.tabs [data-tab=\"coins\"]').click()"); pg.wait_for_timeout(700)
+                st = coin_state(pg)
+                if [b[0] for b in st['per']] == ['24ч', '1Н', 'Всё'] and [b[1] for b in st['per']] == ['true', 'false', 'false']:
+                    ok(f'«Монеты» ({th}): переключатель периода 24ч · 1Н · Всё, выбран 24ч')
+                else: fail(f'«Монеты» ({th}): переключатель периода', str(st['per']))
+                hh = pg.evaluate("Math.round(document.getElementById('coinRanges').getBoundingClientRect().height)")
+                ok(f'«Монеты» ({th}): переключатель 48 px') if hh >= 48 else fail(f'«Монеты» ({th}): высота переключателя', str(hh))
+                if st['head'] == ['Актив', 'Цена · 24ч', 'Портфель▾']: ok(f'«Монеты» ({th}): шапка таблицы «Актив · Цена · 24ч · Портфель ▾»')
+                else: fail(f'«Монеты» ({th}): шапка таблицы', str(st['head']))
+                b = st['rows'].get('BTC')
+                if b and b['cols'] == 3 and b['h'] == 60 and b['a'][0] == 'BTC' and b['a'][1] == '0,005' and b['p'] == ['$110 000', '+1,5%'] and b['v'] == ['$550', '+$8,13']:
+                    ok(f'«Монеты» ({th}): строка BTC 60 px, три колонки: 0,005 · $110 000 +1,5% · $550 +$8,13 за 24ч')
+                else: fail(f'«Монеты» ({th}): строка BTC за 24ч', str(b))
+                order = list(st['rows'])
+                if order[:2] == ['BTC', 'ETH']: ok(f'«Монеты» ({th}): сортировка «По стоимости» осталась (BTC, затем ETH)')
+                else: fail(f'«Монеты» ({th}): сортировка', str(order))
+                # этап 1, часть 2: ряда чипов сортировки нет — сортировка по подписям колонок (зона ≥ 48 px, стрелка у активной)
+                if pg.locator('#sortChips, #coinsTab .fchip[data-sort], section .fchip[data-sort]').count() == 0: ok(f'«Монеты» ({th}): ряда чипов сортировки нет')
+                else: fail(f'«Монеты» ({th}): ряд чипов сортировки', 'ещё на странице')
+                hz = pg.evaluate("[...document.querySelectorAll('#coinList .thead [data-sortcol]')].map(b=>{const r=b.getBoundingClientRect();return [Math.round(r.height),Math.round(r.width)]})")
+                if len(hz) == 3 and all(h >= 48 and w >= 48 for h, w in hz): ok(f'«Монеты» ({th}): подписи колонок — кнопки, зона нажатия ≥ 48 px ({hz})')
+                else: fail(f'«Монеты» ({th}): зона нажатия подписей', str(hz))
+                # итог: «АКТИВЫ · 2» слева, справа сумма и прибыль за период
+                if st['lbl'] == 'АКТИВЫ · 2' and st['tot'].startswith('$950 · за 24ч +$'): ok(f'«Монеты» ({th}): итог «{st["lbl"]}» слева, «{st["tot"]}» справа')
+                else: fail(f'«Монеты» ({th}): итог над таблицей', f'{st["lbl"]!r} | {st["tot"]!r}')
+                shot(pg, f'stage1-coins-app-{th}')
+                # неделя: из 7-дневного графика (0,97 × цены → +3,1%); прибыль = стоимость сейчас − кол-во × цена неделю назад
+                pg.click('#coinRanges [data-per="1w"]'); pg.wait_for_timeout(400)
+                st = coin_state(pg); b = st['rows'].get('BTC'); e = st['rows'].get('ETH')
+                if st['head'][1] == 'Цена · 1Н' and b and b['p'][1] == '+3,1%' and b['v'][1] == '+$16,50' and e and e['v'][1] == '+$12':
+                    ok(f'«Монеты» ({th}): 1Н — BTC +3,1% / +$16,50, ETH +$12 (из 7-дневного графика)')
+                else: fail(f'«Монеты» ({th}): период 1Н', f'{st["head"]} {b} {e}; графики 7 дней: ' + pg.evaluate("JSON.stringify(Object.keys(S.live.spark))"))
+                pill = pg.evaluate("document.querySelector('#coinRanges .pill').style.transform")
+                ok(f'«Монеты» ({th}): пилюля переехала к 1Н') if pill == 'translateX(100%)' else fail(f'«Монеты» ({th}): пилюля', pill)
+                # всё время: к средней цене покупки — как было раньше (BTC +10%, +$50; ETH +33,3%, +$100; итог +$150)
+                pg.click('#coinRanges [data-per="all"]'); pg.wait_for_timeout(400)
+                st = coin_state(pg); b = st['rows'].get('BTC'); e = st['rows'].get('ETH')
+                if st['head'][1] == 'Цена · к покупке' and b and b['p'][1] == '+10,0%' and b['v'][1] == '+$50' and e and e['p'][1] == '+33,3%' and e['v'][1] == '+$100' and 'всего +$150' in st['tot']:
+                    ok(f'«Монеты» ({th}): «Всё» — к средней цене покупки: BTC +10,0% / +$50, ETH +33,3% / +$100, всего +$150')
+                else: fail(f'«Монеты» ({th}): период «Всё»', f'{st["head"]} {b} {e} {st["tot"]}')
+                saved = pg.evaluate("JSON.parse(localStorage.getItem('cp-prefs2')||'{}').cper")
+                ok(f'«Монеты» ({th}): выбор периода запомнен в настройках вида') if saved == 'all' else fail(f'«Монеты» ({th}): запоминание периода', repr(saved))
+                if th == 'dark':
+                    # «скрыть суммы»: стоимость и прибыль спрятаны, цена и % видны
+                    pg.click('#eyeBtn'); pg.wait_for_timeout(300)
+                    b = coin_state(pg)['rows'].get('BTC')
+                    if b and b['v'] == ['••••', '••••'] and b['p'][0] == '$110 000' and b['a'][1].startswith('••••'): ok('«Монеты»: «скрыть суммы» прячет стоимость, прибыль и количество, цена видна')
+                    else: fail('«Монеты»: «скрыть суммы»', str(b))
+                    pg.click('#eyeBtn'); pg.wait_for_timeout(300)
+                    # сортировка по подписям колонок (период «Всё»: BTC +10%, ETH +33,3%) — те же 4 способа, что были у чипов
+                    def sort_after(col):
+                        pg.click(f'#coinList .thead [data-sortcol="{col}"]'); pg.wait_for_timeout(250)
+                        on = pg.evaluate("[...document.querySelectorAll('#coinList .thead [data-sortcol][aria-pressed=\"true\"]')].map(b=>b.dataset.sortcol+':'+b.textContent)")
+                        return pg.evaluate("P.sort"), list(coin_state(pg)['rows']), [cnorm(x) for x in on]
+                    r1 = sort_after('a'); r2 = sort_after('p'); r3 = sort_after('v'); r4 = sort_after('v'); r5 = sort_after('v'); r6 = sort_after('v')
+                    if r1 == ('name', ['BTC', 'ETH'], ['a:Актив▴']) and r2 == ('chg', ['ETH', 'BTC'], ['p:Цена · к покупке▾']) \
+                       and r3 == ('value', ['BTC', 'ETH'], ['v:Портфель▾']) and r4 == ('pnl', ['ETH', 'BTC'], ['v:Прибыль▾']) \
+                       and r5 == ('pnlUp', ['BTC', 'ETH'], ['v:Прибыль▴']) and r6[0] == 'value':
+                        ok('«Монеты»: сортировка по подписям — «Актив» А–Я ▴, «Цена» по изменению ▾, «Портфель» по стоимости ▾, ещё раз — по прибыли ▾, ещё раз — обратно ▴')
+                    else: fail('«Монеты»: сортировка по подписям колонок', f'{r1} {r2} {r3} {r4} {r5} {r6}')
+                    if pg.evaluate("JSON.parse(localStorage.getItem('cp-prefs2')||'{}').sort") == 'value': ok('«Монеты»: выбор сортировки запомнен, как раньше')
+                    else: fail('«Монеты»: запоминание сортировки', pg.evaluate("localStorage.getItem('cp-prefs2')"))
+                    # суммы в таблице от $1 000 — без копеек (и при округлении 999,996 → 1 000); мелкое — как было; money() не тронут
+                    tm = [cnorm(x) for x in pg.evaluate("[tmoney(1234.56),tmoney(999.996),tmoney(950.5),tmoney(-1500.4,{sign:true}),tmoney(12.34,{sign:true}),tmoney(0.2,{price:true,show:true}),tmoney(110000,{price:true,show:true}),money(999.996),money(1234.56),tmoney(200),tmoney(199.996),tmoney(-8,{sign:true}),tmoney(0.001,{sign:true}),tmoney(0),tmoney(200,{price:true,show:true}),money(200)]")]
+                    if tm == ['$1 235', '$1 000', '$950,50', '-$1 500', '+$12,34', '$0,2000', '$110 000', '$1 000,00', '$1 235', '$200', '$200', '-$8', '+$0,00', '$0', '$200', '$200,00']:
+                        ok('«Монеты»: один формат сумм — от $1 000 и целые без копеек ($1 235, $200, 199,996 → $200), нецелые — с копейками ($950,50), DOGE $0,2000; общий money() не изменён')
+                    else: fail('«Монеты»: суммы без копеек', str(tm))
+                    # нет графика за неделю (цены с биржи) — «—», а не ошибка
+                    r = pg.evaluate("[coinPer('ZZZ',{usd:10,qty:1},5,5,'1w'),coinPer('ZZZ',{usd:0,qty:1},5,5,'all'),coinPer('ZZZ',{usd:10,qty:1},0,null,'24h')]")
+                    if all(x['ch'] is None and x['pf'] is None for x in r): ok('«Монеты»: нет данных за период (нет графика, монета без затрат, нет цены) — «—»')
+                    else: fail('«Монеты»: нет данных за период', str(r))
+                    # старое содержимое на месте: нажатие на строку открывает карточку монеты с действиями
+                    pg.click('#coinList .row[data-coin="BTC"]'); pg.wait_for_timeout(700)
+                    if pg.locator('#coinSheet.open').count(): ok('«Монеты»: нажатие на строку открывает карточку монеты (действия на месте)')
+                    else: fail('«Монеты»: карточка монеты', 'не открылась по нажатию на строку')
+                    pg.evaluate("closeSheets()"); pg.wait_for_timeout(400)
+                    pg.reload(wait_until='load'); wait_app(pg); pg.wait_for_timeout(800)
+                    pg.evaluate("document.querySelector('nav.tabs [data-tab=\"coins\"]').click()"); pg.wait_for_timeout(500)
+                    pr = pg.evaluate("document.querySelector('#coinRanges [aria-pressed=\"true\"]').dataset.per")
+                    ok('«Монеты»: после перезапуска выбран тот же период («Всё»)') if pr == 'all' else fail('«Монеты»: период после перезапуска', repr(pr))
+            scenario(f'Монеты: таблица и период ({th})', {'session': True, 'docs': SEED}, s_coins_table, theme=th, extra=cg_chart_404)
+
+        # --- В5. редизайн, этап 1 (часть 2): кадры «Монет» для Веры — обычный список, монета без цены, DOGE $0,2000,
+        #     монета в минусе, пустая вкладка; обе темы, 390 px. Цены свои: ETH и SOL за сутки в минусе, HMSTR без цены.
+        SHOW_PX = {'bitcoin': ('btc', 'Bitcoin', 110000, 1.5), 'ethereum': ('eth', 'Ethereum', 4000, -2.3), 'solana': ('sol', 'Solana', 200, -4.1),
+                   'dogecoin': ('doge', 'Dogecoin', 0.2, 5.0)}
+        def show_prices(r, u):
+            if 'api.coingecko.com' in u and '/market_chart' in u: return cg_chart_404(r, u)
+            if 'api.coingecko.com' in u and '/coins/markets' in u:
+                from urllib.parse import urlparse, parse_qs, unquote
+                ids = unquote(parse_qs(urlparse(u).query).get('ids', [''])[0]).split(',')
+                out = [{'id': i, 'symbol': v[0], 'name': v[1], 'image': '', 'current_price': v[2], 'price_change_percentage_24h': v[3],
+                        'sparkline_in_7d': {'price': [v[2] * (1.05 - k * 0.001) for k in range(60)]}} for i in ids if i in SHOW_PX for v in [SHOW_PX[i]]]
+                r.fulfill(status=200, content_type='application/json', headers={'access-control-allow-origin': '*'}, body=json.dumps(out)); return True
+            return False
+        def tx(i, sym, q, usd): return {'col': 'tx', 'id': i, 'data': {'ts': '2026-08-02T10:00:00.000Z', 'type': 'buy', 'symbol': sym, 'qty': q, 'usd': usd, 'price': usd / q}}
+        SHOW = [SEED[0], {'col': 'tx', 'id': 'd1', 'data': {'ts': '2026-08-01T10:00:00.000Z', 'type': 'deposit', 'usd': 6000, 'uah': 249000}},
+                tx('s1', 'BTC', 0.02, 1800), tx('s2', 'ETH', 0.5, 2250), tx('s3', 'SOL', 3, 750), tx('s4', 'DOGE', 1000, 150), tx('s5', 'HMSTR', 50000, 100)]
+        for th in ('dark', 'light'):
+            def s_coins_show(pg, n, th=th):
+                wait_app(pg)
+                try: pg.wait_for_function("S.live.prices.DOGE>0&&S.live.prices.ETH>0", polling=250, timeout=10000)
+                except Exception: pass
+                pg.evaluate("document.querySelector('nav.tabs [data-tab=\"coins\"]').click()"); pg.wait_for_timeout(800)
+                st = coin_state(pg); rw = st['rows']
+                b, e, d, h = rw.get('BTC'), rw.get('ETH'), rw.get('DOGE'), rw.get('HMSTR')
+                if b and b['v'] == ['$2 200', '+$32,51'] and b['p'][0] == '$110 000': ok(f'кадры «Монет» ({th}): BTC $2 200 — без копеек')
+                else: fail(f'кадры «Монет» ({th}): BTC от $1 000', str(b))
+                if e and e['v'] == ['$2 000', '-$47,08'] and e['p'] == ['$4 000', '-2,3%']: ok(f'кадры «Монет» ({th}): ETH в минусе за 24ч — $2 000 −$47,08, −2,3%')
+                else: fail(f'кадры «Монет» ({th}): монета в минусе', str(e))
+                if d and d['p'] == ['$0,2000', '+5,0%'] and d['v'][0] == '$200': ok(f'кадры «Монет» ({th}): DOGE $0,2000 — 4 знака у мелкой цены, стоимость $200 без «,00»')
+                else: fail(f'кадры «Монет» ({th}): DOGE', str(d))
+                if h and h['p'] == ['нет цены', '—'] and h['v'] == ['—', '—']: ok(f'кадры «Монет» ({th}): HMSTR без цены — «нет цены» и «—»')
+                else: fail(f'кадры «Монет» ({th}): монета без цены', str(h))
+                # часть 3: один формат — целые без «,00» и в строках, и в итоге (SOL $200 / $600)
+                s_ = rw.get('SOL')
+                if s_ and s_['p'][0] == '$200' and s_['v'][0] == '$600': ok(f'кадры «Монет» ({th}): SOL $200 · $600 — целые без «,00», как в итоге')
+                else: fail(f'кадры «Монет» ({th}): формат целых сумм', str(s_))
+                # часть 3: строка под таблицей о монете без цены (--warn-soft)
+                npn = pg.evaluate("(()=>{const e=document.getElementById('npNote');return e&&!e.hidden?[e.textContent,getComputedStyle(e).backgroundColor,getComputedStyle(e).getPropertyValue('--warn-soft').trim()]:null})()")
+                if npn and cnorm(npn[0]) == 'HMSTR — нет цены: биржи не ответили. Количество сохранено, в итог и прибыль не входит.' and npn[1] != 'rgba(0, 0, 0, 0)':
+                    ok(f'кадры «Монет» ({th}): под таблицей «HMSTR — нет цены: биржи не ответили…» на фоне --warn-soft')
+                else: fail(f'кадры «Монет» ({th}): строка «нет цены» под таблицей', str(npn))
+                shot(pg, f'coins3-{th}')
+                # часть 4: цены нет только у части монет — плашка с перечнем тикеров остаётся, «нет цены» — один раз в ячейке и один в плашке
+                cnt = pg.evaluate("(document.getElementById('v-coins').innerText.match(/нет цены/gi)||[]).length")
+                ok(f'цены нет у части монет ({th}): «нет цены» на экране {cnt} раза (ячейка HMSTR и плашка)') if cnt == 2 else fail(f'цены нет у части ({th}): число «нет цены»', str(cnt))
+                shot(pg, f'coins4-noprice-part-{th}')
+                # часть 3: «Прибыль» сортирует по тому, что видно в ячейке, — за выбранный период (24ч), а не за всё время.
+                # За 24ч: BTC +$32,51, DOGE +$9,52, SOL −$25,65, ETH −$47,08; за всё время порядок другой (DOGE, BTC, ETH, SOL). Без цены — в конце.
+                pg.click('#coinList .thead [data-sortcol="v"]'); pg.wait_for_timeout(250)
+                o1 = (pg.evaluate("P.sort"), list(coin_state(pg)['rows']), cnorm(pg.evaluate("document.querySelector('#coinList .thead [data-sortcol=v]').textContent")))
+                if o1 == ('pnl', ['BTC', 'DOGE', 'SOL', 'ETH', 'HMSTR'], 'Прибыль▾'): ok(f'кадры «Монет» ({th}): «Прибыль ▾» — по прибыли за 24ч, как в ячейке: BTC, DOGE, SOL, ETH, без цены в конце')
+                else: fail(f'кадры «Монет» ({th}): «Прибыль ▾» за период', str(o1))
+                shot(pg, f'coins3-profit-desc-{th}')
+                pg.click('#coinList .thead [data-sortcol="v"]'); pg.wait_for_timeout(250)
+                o2 = (pg.evaluate("P.sort"), list(coin_state(pg)['rows']), cnorm(pg.evaluate("document.querySelector('#coinList .thead [data-sortcol=v]').textContent")))
+                if o2 == ('pnlUp', ['ETH', 'SOL', 'DOGE', 'BTC', 'HMSTR'], 'Прибыль▴'): ok(f'кадры «Монет» ({th}): «Прибыль ▴» — обратно: ETH, SOL, DOGE, BTC, без цены всё равно в конце')
+                else: fail(f'кадры «Монет» ({th}): «Прибыль ▴»', str(o2))
+                shot(pg, f'coins3-profit-asc-{th}')
+                pg.click('#coinList .thead [data-sortcol="v"]'); pg.wait_for_timeout(250)
+                if pg.evaluate("P.sort") == 'value': ok(f'кадры «Монет» ({th}): третье нажатие — снова «Портфель ▾»')
+                else: fail(f'кадры «Монет» ({th}): возврат к сортировке по стоимости', pg.evaluate("P.sort"))
+                if st['lbl'] == 'АКТИВЫ · 5' and st['tot'].startswith('$5 000 · за 24ч'): ok(f'кадры «Монет» ({th}): итог «{st["lbl"]}» · «{st["tot"]}»')
+                else: fail(f'кадры «Монет» ({th}): итог', f'{st["lbl"]!r} | {st["tot"]!r}')
+                fits = pg.evaluate('''()=>{const L=document.getElementById('coinList').getBoundingClientRect();return [...document.querySelectorAll('#coinList .thead [data-sortcol], #coinList .row .b, #coinList .row .s, #coinsTot, #coinsLbl')].every(x=>{const r=x.getBoundingClientRect();return x.scrollWidth<=x.clientWidth+1&&r.left>=L.left-1&&r.right<=L.right+1||x.id==='coinsTot'||x.id==='coinsLbl'})&&document.documentElement.scrollWidth<=390}''')
+                ok(f'кадры «Монет» ({th}): подписи и цифры не обрезаны, без сдвига вбок') if fits else fail(f'кадры «Монет» ({th}): обрезанный текст', 'есть многоточие или выход за таблицу')
+                shot(pg, f'stage1-list-{th}')
+                pg.click('#coinRanges [data-per="all"]'); pg.wait_for_timeout(400)
+                st = coin_state(pg); s_ = st['rows'].get('SOL')
+                if s_ and s_['p'][1] == '-20,0%' and s_['v'] == ['$600', '-$150'] and st['tot'].endswith('всего +$50'): ok(f'кадры «Монет» ({th}): «Всё» — SOL −20,0% / −$150 к покупке, всего +$50')
+                else: fail(f'кадры «Монет» ({th}): минус к покупке', f'{s_} {st["tot"]}')
+                shot(pg, f'stage1-minus-{th}')
+                pg.click('#coinRanges [data-per="24h"]'); pg.wait_for_timeout(300)
+                pg.fill('#coinSearch', 'HMSTR'); pg.wait_for_timeout(300); shot(pg, f'stage1-noprice-{th}'); shot(pg, f'coins3-noprice-{th}')
+                tt = cnorm(pg.inner_text('#coinsTot'))
+                ok(f'кадры «Монет» ({th}): в поиске только монета без цены — итог «—», а не «$0»') if tt == '—' else fail(f'кадры «Монет» ({th}): итог без цены', repr(tt))
+                pg.fill('#coinSearch', 'DOGE'); pg.wait_for_timeout(300); shot(pg, f'stage1-doge-{th}')
+                pg.fill('#coinSearch', ''); pg.wait_for_timeout(200)
+            scenario(f'Монеты: кадры для Веры ({th})', {'session': True, 'docs': SHOW}, s_coins_show, prices=False, theme=th, extra=show_prices)
+            # часть 4 (поправка Веры): нет цен ни у одной монеты — «нет цены» только в колонке «Цена», остальное «—» (--mute),
+            # в итоге «—», под таблицей одна общая плашка без перечня тикеров
+            def s_coins_noall(pg, n, th=th):
+                wait_app(pg); pg.wait_for_timeout(1500)
+                pg.evaluate("document.querySelector('nav.tabs [data-tab=\"coins\"]').click()"); pg.wait_for_timeout(700)
+                rw = coin_state(pg)['rows']
+                if len(rw) == 5 and all(r['p'] == ['нет цены', '—'] and r['v'] == ['—', '—'] for r in rw.values()):
+                    ok(f'нет цен ни у одной монеты ({th}): «нет цены» только в колонке «Цена», в остальных ячейках «—»')
+                else: fail(f'нет цен ни у одной монеты ({th}): ячейки', str(rw)[:400])
+                cnt = pg.evaluate("(document.getElementById('v-coins').innerText.match(/нет цены/gi)||[]).length")
+                ok(f'нет цен ни у одной монеты ({th}): «нет цены» на экране {cnt} раз — не больше числа монет (5)') if 0 < cnt <= 5 else fail(f'нет цен ({th}): «нет цены» слишком часто', str(cnt))
+                col = pg.evaluate("[getComputedStyle(document.querySelector('#coinList .row .c3 .b')).color,getComputedStyle(document.querySelector('.ctab .s.q')).color,getComputedStyle(document.querySelector('#coinsTot b')).color,document.querySelector('#coinsTot b').textContent]")
+                ok(f'нет цен ни у одной монеты ({th}): в ячейках и в итоге «—» приглушённым цветом --mute') if col[0] == col[1] == col[2] and col[3] == '—' else fail(f'нет цен ({th}): цвет и текст итога', str(col))
+                lbl = cnorm(pg.inner_text('#coinsLbl'))
+                ok(f'нет цен ни у одной монеты ({th}): «{lbl}»') if lbl == 'АКТИВЫ · 5' else fail(f'нет цен ({th}): подпись итога', repr(lbl))
+                npn = pg.evaluate("(()=>{const e=document.getElementById('npNote');return e&&!e.hidden?[e.textContent,getComputedStyle(e).backgroundColor]:null})()")
+                if npn and cnorm(npn[0]) == 'Цен пока нет — проверьте связь. Количества сохранены, итог появится, когда цены придут.' and npn[1] != 'rgba(0, 0, 0, 0)':
+                    ok(f'нет цен ни у одной монеты ({th}): под таблицей одна общая плашка «Цен пока нет — проверьте связь…», без тикеров')
+                else: fail(f'нет цен ни у одной монеты ({th}): общая плашка', str(npn))
+                fits = pg.evaluate("document.documentElement.scrollWidth<=390")
+                ok(f'нет цен ни у одной монеты ({th}): без сдвига вбок на 390 px') if fits else fail(f'нет цен ({th}): сдвиг вбок', 'scrollWidth > 390')
+                shot(pg, f'coins3-noprice-all-{th}'); shot(pg, f'coins4-noprice-all-{th}')
+            scenario(f'Монеты: нет ни одной цены ({th})', {'session': True, 'docs': SHOW}, s_coins_noall, prices=False, theme=th)
+            def s_coins_empty(pg, n, th=th):
+                wait_app(pg)
+                pg.evaluate("document.querySelector('nav.tabs [data-tab=\"coins\"]').click()"); pg.wait_for_timeout(700)
+                lbl, txt = cnorm(pg.inner_text('#coinsLbl')), pg.inner_text('#coinList')
+                if lbl == 'АКТИВЫ' and 'Монет пока нет' in txt and pg.locator('#coinRanges').is_hidden(): ok(f'пустая вкладка «Монеты» ({th}): «АКТИВЫ» без счётчика, подсказка, переключатель периода скрыт')
+                else: fail(f'пустая вкладка «Монеты» ({th})', f'{lbl!r} | {txt[:80]!r}')
+                shot(pg, f'stage1-empty-{th}')
+            scenario(f'Монеты: пустая вкладка ({th})', {'session': True, 'docs': [SEED[0]]}, s_coins_empty, theme=th)
 
         # --- Г. запись покупки через форму (если форма доступна)
         def s_buy(pg, n):
