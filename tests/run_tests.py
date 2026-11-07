@@ -681,6 +681,10 @@ def run_browser():
                     ok(f'кадры «Монет» ({th}): под таблицей «HMSTR — нет цены: биржи не ответили…» на фоне --warn-soft')
                 else: fail(f'кадры «Монет» ({th}): строка «нет цены» под таблицей', str(npn))
                 shot(pg, f'coins3-{th}')
+                # часть 4: цены нет только у части монет — плашка с перечнем тикеров остаётся, «нет цены» — один раз в ячейке и один в плашке
+                cnt = pg.evaluate("(document.getElementById('v-coins').innerText.match(/нет цены/gi)||[]).length")
+                ok(f'цены нет у части монет ({th}): «нет цены» на экране {cnt} раза (ячейка HMSTR и плашка)') if cnt == 2 else fail(f'цены нет у части ({th}): число «нет цены»', str(cnt))
+                shot(pg, f'coins4-noprice-part-{th}')
                 # часть 3: «Прибыль» сортирует по тому, что видно в ячейке, — за выбранный период (24ч), а не за всё время.
                 # За 24ч: BTC +$32,51, DOGE +$9,52, SOL −$25,65, ETH −$47,08; за всё время порядок другой (DOGE, BTC, ETH, SOL). Без цены — в конце.
                 pg.click('#coinList .thead [data-sortcol="v"]'); pg.wait_for_timeout(250)
@@ -713,20 +717,28 @@ def run_browser():
                 pg.fill('#coinSearch', 'DOGE'); pg.wait_for_timeout(300); shot(pg, f'stage1-doge-{th}')
                 pg.fill('#coinSearch', ''); pg.wait_for_timeout(200)
             scenario(f'Монеты: кадры для Веры ({th})', {'session': True, 'docs': SHOW}, s_coins_show, prices=False, theme=th, extra=show_prices)
-            # часть 3: нет цен ни у одной монеты (биржи молчат) — в ячейках «нет цены» вместо «—», под таблицей все тикеры
+            # часть 4 (поправка Веры): нет цен ни у одной монеты — «нет цены» только в колонке «Цена», остальное «—» (--mute),
+            # в итоге «—», под таблицей одна общая плашка без перечня тикеров
             def s_coins_noall(pg, n, th=th):
                 wait_app(pg); pg.wait_for_timeout(1500)
                 pg.evaluate("document.querySelector('nav.tabs [data-tab=\"coins\"]').click()"); pg.wait_for_timeout(700)
                 rw = coin_state(pg)['rows']
-                cells = [x for r in rw.values() for x in r['p'] + r['v']]
-                if len(rw) == 5 and cells and all(x == 'нет цены' for x in cells): ok(f'нет цен ни у одной монеты ({th}): во всех ячейках «нет цены» вместо «—»')
+                if len(rw) == 5 and all(r['p'] == ['нет цены', '—'] and r['v'] == ['—', '—'] for r in rw.values()):
+                    ok(f'нет цен ни у одной монеты ({th}): «нет цены» только в колонке «Цена», в остальных ячейках «—»')
                 else: fail(f'нет цен ни у одной монеты ({th}): ячейки', str(rw)[:400])
+                cnt = pg.evaluate("(document.getElementById('v-coins').innerText.match(/нет цены/gi)||[]).length")
+                ok(f'нет цен ни у одной монеты ({th}): «нет цены» на экране {cnt} раз — не больше числа монет (5)') if 0 < cnt <= 5 else fail(f'нет цен ({th}): «нет цены» слишком часто', str(cnt))
                 col = pg.evaluate("[getComputedStyle(document.querySelector('#coinList .row .c3 .b')).color,getComputedStyle(document.querySelector('.ctab .s.q')).color,getComputedStyle(document.querySelector('#coinsTot b')).color,document.querySelector('#coinsTot b').textContent]")
-                ok(f'нет цен ни у одной монеты ({th}): «нет цены» в ячейках и в итоге приглушённым цветом --mute') if col[0] == col[1] == col[2] and col[3] == 'нет цены' else fail(f'нет цен ({th}): цвет «нет цены»', str(col))
-                t = cnorm(pg.evaluate("document.getElementById('npNote').hidden?'':document.getElementById('npNote').textContent"))
-                if t.startswith('BTC, DOGE, ETH, HMSTR, SOL — нет цены') or (t.count(',') >= 4 and t.endswith('не входят.')): ok(f'нет цен ни у одной монеты ({th}): под таблицей все тикеры через запятую, «не входят»')
-                else: fail(f'нет цен ни у одной монеты ({th}): строка под таблицей', repr(t))
-                shot(pg, f'coins3-noprice-all-{th}')
+                ok(f'нет цен ни у одной монеты ({th}): в ячейках и в итоге «—» приглушённым цветом --mute') if col[0] == col[1] == col[2] and col[3] == '—' else fail(f'нет цен ({th}): цвет и текст итога', str(col))
+                lbl = cnorm(pg.inner_text('#coinsLbl'))
+                ok(f'нет цен ни у одной монеты ({th}): «{lbl}»') if lbl == 'АКТИВЫ · 5' else fail(f'нет цен ({th}): подпись итога', repr(lbl))
+                npn = pg.evaluate("(()=>{const e=document.getElementById('npNote');return e&&!e.hidden?[e.textContent,getComputedStyle(e).backgroundColor]:null})()")
+                if npn and cnorm(npn[0]) == 'Цен пока нет — проверьте связь. Количества сохранены, итог появится, когда цены придут.' and npn[1] != 'rgba(0, 0, 0, 0)':
+                    ok(f'нет цен ни у одной монеты ({th}): под таблицей одна общая плашка «Цен пока нет — проверьте связь…», без тикеров')
+                else: fail(f'нет цен ни у одной монеты ({th}): общая плашка', str(npn))
+                fits = pg.evaluate("document.documentElement.scrollWidth<=390")
+                ok(f'нет цен ни у одной монеты ({th}): без сдвига вбок на 390 px') if fits else fail(f'нет цен ({th}): сдвиг вбок', 'scrollWidth > 390')
+                shot(pg, f'coins3-noprice-all-{th}'); shot(pg, f'coins4-noprice-all-{th}')
             scenario(f'Монеты: нет ни одной цены ({th})', {'session': True, 'docs': SHOW}, s_coins_noall, prices=False, theme=th)
             def s_coins_empty(pg, n, th=th):
                 wait_app(pg)

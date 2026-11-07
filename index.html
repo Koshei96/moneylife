@@ -953,9 +953,9 @@ input::placeholder{color:var(--mute);opacity:.8;font-weight:400}
 
 <div class="toast" id="toast" role="status"><span id="toastMsg"></span><button type="button" id="toastBtn" hidden></button></div>
 
-<script src="config.js?v=20261107031000"></script>
+<script src="config.js?v=20261107145800"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="shim.js?v=20261107031000"></script>
+<script src="shim.js?v=20261107145800"></script>
 <script>
 /* ===== основа ===== */
 const $=id=>document.getElementById(id);
@@ -1378,8 +1378,9 @@ const sortNext=c=>{const o=SORT_COL[c];if(!o)return P.sort;const i=o.indexOf(P.s
 function tmoney(v,o){o=Object.assign({},o);if(v!=null&&isFinite(v)&&o.d==null){const a=Math.abs(P.cur==='UAH'&&rate()>0?v*rate():v);
   let d=o.price?(a>=1000?0:a>=1?2:a>=0.01?4:6):(a>=1000?0:2);const r=Math.round(a*10**d)/10**d;
   if(r>=1000||(Number.isInteger(r)&&(r>0||a===0)))d=0;o.d=d;}return money(v,o);}
-/* строка под таблицей: у каких монет нет цены (биржи не ответили) */
-function npNote(ns){if(!ns.length)return '';const t=ns.length>6?ns.slice(0,5).join(', ')+' и ещё '+(ns.length-5):ns.join(', ');
+/* строка под таблицей: у каких монет нет цены (биржи не ответили). Нет цены ни у одной монеты — одна общая плашка
+   без перечня тикеров (часть 4): «биржи не ответили» тут неточно, вероятнее нет связи. */
+function npNote(ns,all){if(all)return 'Цен пока нет — проверьте связь. Количества сохранены, итог появится, когда цены придут.';if(!ns.length)return '';const t=ns.length>6?ns.slice(0,5).join(', ')+' и ещё '+(ns.length-5):ns.join(', ');
   return `<b>${esc(t)}</b> — нет цены: биржи не ответили. Количество сохранено, в итог и прибыль не ${ns.length>1?'входят':'входит'}.`;}
 function renderCoins(D){
   const per=cperOk(),pi=CPER.findIndex(x=>x[0]===per),plb=CPER[pi][1];
@@ -1393,9 +1394,10 @@ function renderCoins(D){
   if(P.sort==='pnl')list.sort((a,b)=>nz(b.pf,-1e15)-nz(a.pf,-1e15));else if(P.sort==='pnlUp')list.sort((a,b)=>nz(a.pf,1e15)-nz(b.pf,1e15));else if(P.sort==='chg')list.sort((a,b)=>nz(b.ch,-1e9)-nz(a.ch,-1e9));else if(P.sort==='name')list.sort((a,b)=>a.s.localeCompare(b.s));else list.sort((a,b)=>nz(b.v,-1)-nz(a.v,-1));
   const dust=list.filter(o=>o.v!=null&&o.v<10);let shown=list;if(P.dust&&!q)shown=list.filter(o=>o.v==null||o.v>=10);
   COIN_ORDER={shown:shown.map(o=>o.s),all:list.map(o=>o.s)};
-  /* нет цены ни у одной монеты — в ячейках «нет цены» вместо «—» (часть 3) */
-  const noAll=D.syms.length>0&&D.syms.every(s=>!(+D.prices[s]>0)),dash=noAll?'нет цены':'—',dsh=t=>t==='—'?dash:t;
-  const npc=shown.filter(o=>!o.p).map(o=>o.s),npEl=$('npNote');npEl.innerHTML=npNote(npc);npEl.hidden=!npc.length;
+  /* нет цены ни у одной монеты (часть 4): «нет цены» — только в колонке «Цена», в остальных ячейках и в итоге «—» (--mute),
+     под таблицей одна общая плашка вместо перечня тикеров */
+  const noAll=D.syms.length>0&&D.syms.every(s=>!(+D.prices[s]>0)),dash='—',dsh=t=>t;
+  const npc=shown.filter(o=>!o.p).map(o=>o.s),npEl=$('npNote');npEl.innerHTML=npNote(npc,noAll);npEl.hidden=!npc.length&&!noAll;
   const withPf=shown.filter(o=>o.pf!=null),tpf=withPf.reduce((a,o)=>a+o.pf,0),pcl=v=>v==null?'mute':v>=0?'pos':'neg';
   $('coinsLbl').textContent=shown.length?'Активы · '+shown.length:'Активы';
   $('coinsTot').innerHTML=shown.length?`<b class="v${noAll?' mute':''}">${shown.some(o=>o.v!=null)?tmoney(shown.reduce((a,o)=>a+(o.v||0),0)):dash}</b>${withPf.length?` · <span class="v ${pcl(tpf)}">${per==='all'?'всего':'за '+plb} ${tmoney(tpf,{sign:true})}</span>`:''}`:'';
@@ -2119,7 +2121,7 @@ function msSync(x){MSC.last=x;if(!msApply())return;if(!S.ready||document.getElem
   if(window.Mascot){try{window.Mascot.sync(msPayload(x));}catch(e){}}else msLoad();}
 function msLoad(){if(MSC.loading||MSC.failed)return;MSC.loading=true;
   const add=(src,ok)=>{try{const s=document.createElement('script');s.src=src;s.async=true;s.onload=ok;s.onerror=()=>{MSC.failed=true;};document.head.appendChild(s);}catch(e){MSC.failed=true;}};
-  const boot=()=>add('mascot.js?v=20261107031000',()=>{try{if(window.Mascot&&window.Mascot.init({host:$('mascot'),app:{audio:ac,buzz}})&&MSC.last&&$('ob').hidden&&!document.getElementById('mlAuth'))window.Mascot.sync(msPayload(MSC.last));}catch(e){}});
+  const boot=()=>add('mascot.js?v=20261107145800',()=>{try{if(window.Mascot&&window.Mascot.init({host:$('mascot'),app:{audio:ac,buzz}})&&MSC.last&&$('ob').hidden&&!document.getElementById('mlAuth'))window.Mascot.sync(msPayload(MSC.last));}catch(e){}});
   setTimeout(()=>{if(window.THREE)boot();else add('three.min.js',boot);},300);}
 function render(){const D=derive();renderHeader();renderHome(D);renderGrowth();renderCoins(D);renderStrategy(D);renderActivity();earnNudge();if(cvSym&&$('coinSheet').classList.contains('open'))renderCoinView();}
 document.body.classList.add('loading');
