@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="ru" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>14 дней — макет</title>
+<meta name="description" content="Макет карточки «14 дней с MoneyLife» на главной: полная карточка дня, свёрнутая строка, приглашение для давнего аккаунта и «14 из 14». Для разработчика. Суммы выдуманы.">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700;800&family=Unbounded:wght@400;600&display=swap">
+<style>
+/* Макет «14 дней с MoneyLife» (Вера, 08.11.2026) по спецификации Льва company/research/14days-spec-2026-11-08.md.
+   Токены — копия :root и светлой темы из index.html, новых цветов нет. Суммы и проценты — демо. */
+:root{
+  --bg:#06040e; --bg2:#0b0818; --surface:#100b21; --surface2:#160f2e; --raise:#1e1641; --field:#1a1336;
+  --line:#241b47; --line2:#372a68;
+  --fg:#f5f1ff; --mute:#a99dcc; --dim:#6d6396;
+  --violet:#6a35ff; --purple:#a64dff; --magenta:#e04dff; --pink:#ff52d9; --lav:#cfbaff;
+  --accent:#b15cff; --accent-soft:#b15cff24; --glow:#a64dff70;
+  --grad:linear-gradient(135deg,#6a35ff 0%,#a64dff 48%,#ff52d9 100%);
+  --pos:#34e0a1; --pos-soft:#34e0a11f; --neg:#ff5f6d; --neg-soft:#ff5f6d1f; --warn:#ffc65c; --warn-soft:#ffc65c1f;
+  --ui:"Onest","Golos Text",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --display:"Unbounded","Onest",system-ui,sans-serif;
+  --r-s:8px; --r-m:12px; --r-l:18px; --r-xl:24px; --r-pill:999px;
+  --ease:cubic-bezier(.2,.8,.2,1); --dur-s:180ms; --dur-m:260ms;
+  /* новое только для карточки (производные от существующих) */
+  --d14-ring:#b15cff55; --d14-seg:#372a68;
+  color-scheme:dark;
+}
+:root[data-theme="light"]{--bg:#f5f2fc;--bg2:#ffffff;--surface:#ffffff;--surface2:#faf8ff;--raise:#efe9fb;--field:#f0ebfa;--line:#e6dff5;--line2:#d4c8ee;
+  --fg:#1b1530;--mute:#665c86;--dim:#958cb0;--lav:#5b2fe0;--accent:#7a3cf0;--accent-soft:#7a3cf01a;--glow:#7a3cf040;
+  --pos:#0a8a5c;--pos-soft:#0a8a5c17;--neg:#e2364b;--neg-soft:#e2364b14;--warn:#b7791f;--warn-soft:#d9a1351c;
+  --d14-ring:#7a3cf04d; --d14-seg:#e1d8f5; color-scheme:light}
+
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg)}
+body{color:var(--fg);font-family:var(--ui);font-size:15px;line-height:1.45;font-variant-numeric:tabular-nums;-webkit-tap-highlight-color:transparent}
+button{font:inherit;color:inherit}
+p{margin:0}
+
+/* страница макета */
+.spec-top{max-width:820px;margin:0 auto;padding:16px 16px 4px;display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between}
+.spec-top h1{margin:0;font-family:var(--display);font-weight:600;font-size:16px;line-height:1.3}
+.spec-top p{font-size:13px;color:var(--mute);margin-top:4px}
+.seg{display:flex;gap:2px;background:var(--field);border-radius:var(--r-m);padding:3px}
+.seg button{min-height:48px;min-width:96px;border:0;background:none;border-radius:var(--r-s);color:var(--mute);font-weight:700;font-size:13px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--raise);color:var(--fg);box-shadow:inset 0 0 0 1px var(--line2)}
+.page{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,390px),390px));gap:24px 24px;justify-content:center;padding:8px 0 32px}
+
+/* «телефон» 390 px — верх главной */
+.phone{width:390px;max-width:100%;position:relative;overflow:hidden;background:var(--bg);border-radius:20px;outline:1px solid var(--line)}
+.cap{font-family:var(--display);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--lav);padding:14px 16px 0;position:relative;z-index:1}
+.bgfx{position:absolute;inset:0;pointer-events:none;background:
+  radial-gradient(420px 300px at 105% -8%,#7c3aed33,transparent 60%),
+  radial-gradient(340px 280px at -12% 42%,#e04dff14,transparent 60%)}
+[data-theme="light"] .bgfx{background:radial-gradient(420px 300px at 105% -8%,#a64dff1f,transparent 60%),radial-gradient(340px 280px at -12% 42%,#e04dff0d,transparent 60%)}
+.app{position:relative;z-index:1;padding:12px 16px 0;display:flex;flex-direction:column;gap:14px}
+.note{position:relative;z-index:1;padding:12px 16px 16px;font-size:12.5px;color:var(--mute);border-top:1px dashed var(--line2);margin-top:14px;background:var(--bg)}
+.note b{color:var(--fg);font-weight:700}
+.note ul{margin:6px 0 0;padding-left:18px}
+.note li{margin:2px 0}
+
+/* копии блоков главной (упрощённо) */
+.card{background:linear-gradient(180deg,var(--surface2),var(--surface));border:1px solid var(--line);border-radius:var(--r-l);padding:16px;min-width:0}
+[data-theme="light"] .card{box-shadow:0 1px 2px #1b153008,0 8px 24px -18px #1b153030}
+.chip{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;padding:4px 10px;border-radius:var(--r-pill);background:#ffffff10;color:var(--fg);white-space:nowrap}
+[data-theme="light"] .chip{background:#1b15300d}
+.chip.pos{background:var(--pos-soft);color:var(--pos)} .chip.acc{background:var(--accent-soft);color:var(--lav)}
+.label{font-family:var(--display);font-weight:400;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--lav)}
+.hero{position:relative;overflow:hidden;border-radius:var(--r-xl);padding:18px 20px 16px;border:1px solid #ffffff14;background:
+  radial-gradient(120% 110% at 100% 0%,#a64dff3d,transparent 55%),radial-gradient(80% 80% at 0% 100%,#ff52d914,transparent 60%),
+  linear-gradient(160deg,#1b1038,#0d0820);box-shadow:0 24px 60px -34px #a64dffaa}
+[data-theme="light"] .hero{color:#f5f1ff;--fg:#f5f1ff;--mute:#c9bdf0;--lav:#cfbaff;--pos:#34e0a1;--pos-soft:#34e0a11f}
+[data-theme="light"] .hero .chip{background:#ffffff14}
+.bal{font-weight:800;font-size:38px;letter-spacing:-.02em;line-height:1.05;margin-top:6px}
+.bal-sub{margin-top:4px;color:var(--mute);font-size:14px}
+.ms-ph{position:absolute;right:14px;bottom:10px;width:64px;height:84px;border-radius:30px 30px 16px 16px;background:linear-gradient(180deg,#2a2440,#141024);opacity:.9}
+.ms-ph::after{content:"Слиток";position:absolute;inset:auto 0 -2px;text-align:center;font-size:9px;color:#9a8fc4}
+.qa{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.qa div{display:flex;flex-direction:column;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--mute)}
+.qa i{width:56px;height:56px;border-radius:var(--r-l);display:grid;place-items:center;background:var(--surface2);border:1px solid var(--line2);color:var(--lav);font-style:normal;font-size:22px;font-weight:500}
+[data-theme="light"] .qa i{background:#fff}
+.qa div:first-child i{background:var(--grad);border-color:transparent;color:#fff;box-shadow:0 12px 26px -12px var(--glow)}
+.chart-stub{height:92px;position:relative;overflow:hidden;-webkit-mask-image:linear-gradient(180deg,#000 40%,transparent);mask-image:linear-gradient(180deg,#000 40%,transparent)}
+.chart-stub b{font-size:22px;font-weight:800;color:var(--pos)}
+.chart-stub .ln{position:absolute;left:16px;right:16px;bottom:18px;height:2px;background:var(--line2)}
+
+/* ============ КАРТОЧКА «14 ДНЕЙ» — это и переносить в index.html ============ */
+.d14{position:relative;border-color:var(--line2);padding:6px 6px 14px 16px;
+  background:radial-gradient(90% 120% at 100% 0%,var(--accent-soft),transparent 60%),linear-gradient(180deg,var(--surface2),var(--surface))}
+.d14-top{display:flex;align-items:center;gap:10px;min-height:48px}
+.d14-prog{flex:1;display:grid;grid-template-columns:repeat(14,1fr);gap:3px;min-width:0}
+.d14-prog i{height:4px;border-radius:2px;background:var(--d14-seg)}
+.d14-prog i.on{background:var(--accent)}
+.d14-prog i.now{background:var(--grad)}
+.d14-x{flex:none;width:48px;height:48px;border:0;background:none;border-radius:var(--r-m);color:var(--mute);display:grid;place-items:center;cursor:pointer}
+.d14-x svg{width:18px;height:18px}
+.d14-x:active{background:var(--accent-soft)}
+.d14-body{padding-right:10px}
+.d14 h3{margin:2px 0 6px;font-size:17px;font-weight:800;line-height:1.25;letter-spacing:-.005em}
+.d14 p{font-size:14px;line-height:1.45;color:var(--fg)}
+.d14 p q{quotes:"«" "»"}
+.d14-btns{display:flex;gap:8px;margin-top:12px;padding-right:10px}
+.d14-btn{flex:1;min-height:48px;border-radius:var(--r-m);font-weight:700;font-size:15px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:0 14px;transition:transform var(--dur-s) var(--ease)}
+.d14-btn:active{transform:scale(.97)}
+.d14-btn.act{background:var(--accent-soft);border:1px solid var(--d14-ring);color:var(--lav)}
+.d14-btn.ok{background:var(--surface2);border:1px solid var(--line2);color:var(--fg)}
+[data-theme="light"] .d14-btn.ok{background:#fff}
+.d14-btn svg{width:16px;height:16px}
+
+/* свёрнутая строка (прочитано сегодня / 14 из 14) */
+.d14-row{position:relative;display:flex;align-items:center;gap:12px;min-height:56px;padding:0 16px;overflow:hidden}
+.d14-ok{flex:none;width:28px;height:28px;border-radius:50%;background:var(--pos-soft);color:var(--pos);display:grid;place-items:center}
+.d14-ok svg{width:16px;height:16px}
+.d14-row .t{font-size:14px;line-height:1.3;min-width:0}
+.d14-row .t b{font-weight:700}
+.d14-row .t span{color:var(--mute)}
+.d14-row .bar{position:absolute;left:16px;right:16px;bottom:0;height:3px;border-radius:2px 2px 0 0;background:var(--d14-seg);overflow:hidden}
+.d14-row .bar i{display:block;height:100%;background:var(--accent)}
+.d14-row.all .bar i{background:var(--grad)}
+
+/* приглашение давнему аккаунту — одна строка */
+.d14-inv{display:flex;align-items:center;gap:6px;min-height:64px;padding:6px 6px 6px 16px}
+.d14-inv .t{flex:1;min-width:0;font-size:13.5px;line-height:1.3}
+.d14-inv .t b{display:block;font-weight:700;color:var(--fg)}
+.d14-inv .t span{color:var(--mute)}
+.d14-inv .d14-btn{flex:none;font-size:14px;padding:0 14px}
+.d14-inv .d14-btn.hide{background:none;border:0;color:var(--mute);padding:0 10px}
+
+/* тост после «Скрыть» (существующий .toast приложения) */
+.toast{display:flex;align-items:center;gap:12px;padding:0 4px 0 14px;min-height:52px;border-radius:var(--r-l);background:var(--raise);border:1px solid var(--line2);font-size:13.5px;box-shadow:0 14px 34px -18px #000}
+[data-theme="light"] .toast{background:#1b1530;color:#f5f1ff;border-color:#1b1530}
+.toast span{flex:1;min-width:0}
+.toast button{border:0;background:none;color:var(--pink);font-weight:800;min-height:48px;padding:0 12px;cursor:pointer}
+[data-theme="light"] .toast button{color:#ff7ad9}
+@media (prefers-reduced-motion:reduce){.d14-btn{transition:none}}
+</style>
+</head>
+<body>
+<div class="spec-top">
+  <div>
+    <h1>«14 дней с MoneyLife» — макет</h1>
+    <p>Верх главной, 390 px. Блок стоит сразу после сигнала докупки, перед графиком. Суммы — демо.</p>
+  </div>
+  <div class="seg" role="group" aria-label="Тема">
+    <button type="button" data-t="dark" aria-pressed="true">Тёмная</button>
+    <button type="button" data-t="light" aria-pressed="false">Светлая</button>
+  </div>
+</div>
+
+<main class="page">
+
+<!-- 1. Полная карточка дня (новичок) -->
+<section class="phone" aria-label="Полная карточка дня">
+  <div class="bgfx"></div>
+  <div class="cap">1 · Новичок — карточка дня</div>
+  <div class="app">
+    <div class="hero"><div class="label">Стоимость портфеля</div><div class="bal">$120</div><div class="bal-sub">вложено $120</div><div class="ms-ph"></div></div>
+    <div class="qa"><div><i>+</i>Купить</div><div><i>↑</i>Продать</div><div><i>↓</i>Пополнить</div><div><i>···</i>Ещё</div></div>
+
+    <article class="card d14" aria-label="14 дней с MoneyLife, день 3 из 14">
+      <div class="d14-top">
+        <span class="chip acc">День 3 из 14</span>
+        <div class="d14-prog" aria-hidden="true"><i class="on"></i><i class="on"></i><i class="now"></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+        <button type="button" class="d14-x" aria-label="Скрыть карточки «14 дней»"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+      </div>
+      <div class="d14-body">
+        <h3>Пополнение делится само</h3>
+        <p>Добавил деньги — нажми «Пополнить»: 70% уйдёт в бюджет DCA (покупки по плану), 30% — в резерв USDT. Так в «Настройках».</p>
+      </div>
+      <div class="d14-btns">
+        <button type="button" class="d14-btn act">Пополнить</button>
+        <button type="button" class="d14-btn ok">Понятно</button>
+      </div>
+    </article>
+
+    <div class="card chart-stub"><b>+$0</b><div class="ln"></div></div>
+  </div>
+  <div class="note">
+    <b>Размеры:</b> блок .card, отступ 6/6/14/16 px; верхняя строка 48 px — чип «День N из 14», полоска из 14 делений (4 px), крестик 48×48.
+    <ul>
+      <li>Деления: пройденные — акцент, текущее — градиент, будущие — бледные. Слов «подряд/серия» нет.</li>
+      <li>Кнопки 48 px поровну: действие (мягкий акцент) и «Понятно». Без кнопки-действия (карточки 10, 5S, 8S) — одна «Понятно» на всю ширину.</li>
+      <li>Градиент не берём: он у «Купить» и «+», рядом — спор за внимание; и белый на градиенте — около 4:1.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- 2. Свёрнутая / прочитанная -->
+<section class="phone" aria-label="Карточка прочитана">
+  <div class="bgfx"></div>
+  <div class="cap">2 · Прочитано — до завтра</div>
+  <div class="app">
+    <div class="hero"><div class="label">Стоимость портфеля</div><div class="bal">$120</div><div class="bal-sub">вложено $120</div><div class="ms-ph"></div></div>
+    <div class="qa"><div><i>+</i>Купить</div><div><i>↑</i>Продать</div><div><i>↓</i>Пополнить</div><div><i>···</i>Ещё</div></div>
+
+    <div class="card d14-row" role="status" aria-label="День 3 из 14 пройден, завтра — день 4">
+      <span class="d14-ok"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg></span>
+      <p class="t"><b>День 3 из 14</b> <span>· завтра — день 4</span></p>
+      <div class="bar"><i style="width:21.43%"></i></div>
+    </div>
+
+    <div class="card chart-stub"><b>+$0</b><div class="ln"></div></div>
+  </div>
+  <div class="note">
+    <b>Одна строка 56 px</b> — главная не прыгает. Не кнопка (нажать нечего), поэтому без стрелки и подсветки.
+    <ul>
+      <li>«✓» — значок слева (зелёный круг), в тексте символ не повторяем. Полоска снизу 3 px = N/14 (здесь 3/14).</li>
+      <li>Нажатие «Понятно» или кнопки-действия → карточка сворачивается сюда (высота плавно, ≤ 260 мс, только transform/opacity — или без анимации).</li>
+      <li>Тост после крестика — ниже, в виде 3.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- 3. Давний аккаунт — приглашение -->
+<section class="phone" aria-label="Приглашение для давнего аккаунта">
+  <div class="bgfx"></div>
+  <div class="cap">3 · Давний аккаунт — приглашение</div>
+  <div class="app">
+    <div class="hero"><div class="label">Стоимость портфеля</div><div class="bal">$48 250</div><div class="bal-sub">вложено $41 900</div><div class="ms-ph"></div></div>
+    <div class="qa"><div><i>+</i>Купить</div><div><i>↑</i>Продать</div><div><i>↓</i>Пополнить</div><div><i>···</i>Ещё</div></div>
+
+    <div class="card d14-inv">
+      <p class="t"><b>Новое: 14 карточек</b><span>коротко о приложении, по одной в день</span></p>
+      <button type="button" class="d14-btn act">Начать</button>
+      <button type="button" class="d14-btn hide">Скрыть</button>
+    </div>
+
+    <div class="toast" role="status"><span>Карточки скрыты. Вернуть — «Настройки» → «Отображение»</span><button type="button">Вернуть</button></div>
+
+    <div class="card chart-stub"><b>+$6 350</b><div class="ln"></div></div>
+  </div>
+  <div class="note">
+    <b>Одна строка 64 px</b>: текст в две строки слева, «Начать» и «Скрыть» по 48 px справа. Главная владельца почти не меняется.
+    <ul>
+      <li>«Начать» → сразу полная карточка 1 (вид 1).</li>
+      <li>«Скрыть» и крестик в карточке → тост существующим .toast с «Вернуть» (4 с). Без тоста новичок не узнает, где вернуть.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- 4. 14 из 14 -->
+<section class="phone" aria-label="Все карточки пройдены">
+  <div class="bgfx"></div>
+  <div class="cap">4 · День 14 прочитан</div>
+  <div class="app">
+    <div class="hero"><div class="label">Стоимость портфеля</div><div class="bal">$410</div><div class="bal-sub">вложено $380</div><div class="ms-ph"></div></div>
+    <div class="qa"><div><i>+</i>Купить</div><div><i>↑</i>Продать</div><div><i>↓</i>Пополнить</div><div><i>···</i>Ещё</div></div>
+
+    <div class="card d14-row all" role="status" aria-label="14 из 14, все карточки пройдены">
+      <span class="d14-ok"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg></span>
+      <p class="t"><b>14 из 14</b> <span>· все карточки пройдены</span></p>
+      <div class="bar"><i style="width:100%"></i></div>
+    </div>
+
+    <div class="card chart-stub"><b>+$30</b><div class="ln"></div></div>
+  </div>
+  <div class="note">
+    <b>Та же строка 56 px</b>, полоска целиком и градиентом. Слиток празднует (табличка «14/14»). Наград и «пройти заново» нет.
+    <ul>
+      <li>На следующий местный день блок исчезает насовсем.</li>
+      <li>Дни 3 и 7 — та же свёрнутая строка, что в виде 2, плюс праздник Слитка «3/14», «7/14».</li>
+    </ul>
+  </div>
+</section>
+
+</main>
+<script>
+document.querySelectorAll('.seg button').forEach(b=>b.addEventListener('click',()=>{
+  document.documentElement.dataset.theme=b.dataset.t;
+  document.querySelectorAll('.seg button').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));
+}));
+</script>
+</body>
+</html>
