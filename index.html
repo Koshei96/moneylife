@@ -69,8 +69,9 @@ p{margin:0}
 
 /* общие */
 .view{display:flex;flex-direction:column;gap:18px}
-.view.enter{animation:vin .32s var(--ease)}
-@keyframes vin{from{opacity:.25;transform:translateY(8px)}to{opacity:1;transform:none}}
+/* смена вкладки: содержимое проявляется и чуть поднимается — только opacity/transform, без перерисовки макета */
+.view.enter{animation:vin var(--dur-s) var(--ease)}
+@keyframes vin{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 .label{font-family:var(--display);font-weight:400;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--lav)}
 .sec-h{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
 .more{font-size:13px;font-weight:700;color:var(--pink);background:none;border:0;cursor:pointer;padding:4px 0}
@@ -285,9 +286,11 @@ details.cd:first-child{border-top:0}
 /* нижняя навигация */
 nav.tabs{position:fixed;left:0;right:0;bottom:0;z-index:30;background:#0a0716;border-top:1px solid var(--line);padding-top:6px;padding-bottom:calc(8px + env(safe-area-inset-bottom,0px));padding-left:max(8px,env(safe-area-inset-left,0px));padding-right:max(8px,env(safe-area-inset-right,0px))}
 nav.tabs .in{max-width:720px;margin:0 auto;display:grid;grid-template-columns:repeat(5,1fr);align-items:end}
-.tab{border:0;background:none;color:var(--mute);display:flex;flex-direction:column;align-items:center;gap:3px;font-size:11px;font-weight:600;padding:6px 0;cursor:pointer}
-.tab svg{width:22px;height:22px;color:var(--dim);transition:transform .25s var(--ease)}
+.tab{position:relative;border:0;background:none;color:var(--mute);display:flex;flex-direction:column;align-items:center;gap:3px;font-size:11px;font-weight:600;padding:6px 0;cursor:pointer;transition:color var(--dur-s) var(--ease)}
+.tab svg{width:22px;height:22px;color:var(--dim);transition:transform var(--dur-m) var(--ease),color var(--dur-s) var(--ease),filter var(--dur-s) var(--ease)}
+.tab::before{content:"";position:absolute;top:-6px;left:50%;width:20px;height:3px;margin-left:-10px;border-radius:0 0 3px 3px;background:var(--pink);opacity:0;transform:scaleX(.3);transition:opacity var(--dur-s) var(--ease),transform var(--dur-m) var(--ease);pointer-events:none}
 .tab[aria-current="page"]{color:var(--fg)}
+.tab[aria-current="page"]::before{opacity:1;transform:none}
 .tab[aria-current="page"] svg{color:var(--pink);transform:translateY(-1px);filter:drop-shadow(0 0 6px #ff52d988)}
 .plus{justify-self:center;width:58px;height:58px;margin-top:-26px;border-radius:var(--r-l);border:0;background:var(--grad);color:#fff;display:grid;place-items:center;cursor:pointer;box-shadow:0 12px 28px -8px var(--glow),0 0 0 6px var(--bg);transition:transform .2s var(--ease)}
 .plus:active{transform:scale(.9) rotate(45deg)}
@@ -953,9 +956,9 @@ input::placeholder{color:var(--mute);opacity:.8;font-weight:400}
 
 <div class="toast" id="toast" role="status"><span id="toastMsg"></span><button type="button" id="toastBtn" hidden></button></div>
 
-<script src="config.js?v=20261108030001"></script>
+<script src="config.js?v=20261108145941"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="shim.js?v=20261108030001"></script>
+<script src="shim.js?v=20261108145941"></script>
 <script>
 /* ===== основа ===== */
 const $=id=>document.getElementById(id);
@@ -2121,7 +2124,7 @@ function msSync(x){MSC.last=x;if(!msApply())return;if(!S.ready||document.getElem
   if(window.Mascot){try{window.Mascot.sync(msPayload(x));}catch(e){}}else msLoad();}
 function msLoad(){if(MSC.loading||MSC.failed)return;MSC.loading=true;
   const add=(src,ok)=>{try{const s=document.createElement('script');s.src=src;s.async=true;s.onload=ok;s.onerror=()=>{MSC.failed=true;};document.head.appendChild(s);}catch(e){MSC.failed=true;}};
-  const boot=()=>add('mascot.js?v=20261108030001',()=>{try{if(window.Mascot&&window.Mascot.init({host:$('mascot'),app:{audio:ac,buzz}})&&MSC.last&&$('ob').hidden&&!document.getElementById('mlAuth'))window.Mascot.sync(msPayload(MSC.last));}catch(e){}});
+  const boot=()=>add('mascot.js?v=20261108145941',()=>{try{if(window.Mascot&&window.Mascot.init({host:$('mascot'),app:{audio:ac,buzz}})&&MSC.last&&$('ob').hidden&&!document.getElementById('mlAuth'))window.Mascot.sync(msPayload(MSC.last));}catch(e){}});
   setTimeout(()=>{if(window.THREE)boot();else add('three.min.js',boot);},300);}
 function render(){const D=derive();renderHeader();renderHome(D);renderGrowth();renderCoins(D);renderStrategy(D);renderActivity();earnNudge();if(cvSym&&$('coinSheet').classList.contains('open'))renderCoinView();}
 document.body.classList.add('loading');

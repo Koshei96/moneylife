@@ -277,9 +277,10 @@ def run_browser():
     with sync_playwright() as p:
         browser = p.chromium.launch(args=['--no-proxy-server'])
 
-        def page_for(name, test_cfg, prices=True, dsf=2, theme=None, extra=None):
+        def page_for(name, test_cfg, prices=True, dsf=2, theme=None, extra=None, motion=None):
             ctx = browser.new_context(viewport={'width': 390, 'height': 844}, device_scale_factor=dsf, service_workers='block',
-                                      locale='ru-RU', timezone_id='Europe/Kyiv', is_mobile=True, has_touch=True)
+                                      locale='ru-RU', timezone_id='Europe/Kyiv', is_mobile=True, has_touch=True,
+                                      reduced_motion=motion or 'no-preference')
             def route(r):
                 u = r.request.url
                 if u.startswith(base): return r.continue_()
@@ -312,8 +313,8 @@ def run_browser():
         def shot(pg, name):
             pg.screenshot(path=str(OUT / f'{name}.png'))
 
-        def scenario(name, cfg, body, prices=True, path='index.html', dsf=2, theme=None, extra=None):
-            ctx, pg, errs = page_for(name, cfg, prices, dsf, theme, extra)
+        def scenario(name, cfg, body, prices=True, path='index.html', dsf=2, theme=None, extra=None, motion=None):
+            ctx, pg, errs = page_for(name, cfg, prices, dsf, theme, extra, motion)
             try:
                 pg.goto(base + path, wait_until='load', timeout=30000)
                 pg.wait_for_timeout(1500)
@@ -395,6 +396,53 @@ def run_browser():
                 ok(f'нижняя панель ({th}): фон плотный, альфа {a:g}') if a >= 0.98 else fail(f'нижняя панель ({th}): фон просвечивает', bg)
                 shot(pg, f'nav-{th}')
             scenario(f'Нижняя панель ({th})', {'session': True, 'docs': SEED}, s_nav_look, dsf=1, theme=th)
+
+        # --- А4. смена вкладок (08.11, «анимация вкладок»): содержимое проявляется 160–220 мс только через opacity/transform,
+        #     полоска над активной вкладкой; при «уменьшить движение» в системе — без анимаций и переходов
+        TABCLICK = """t=>{document.querySelector('nav.tabs [data-tab="'+t+'"]').click();const v=document.getElementById('v-'+t);
+            const a=v.getAnimations().map(x=>{const k=x.effect.getKeyframes();return {name:x.animationName||'',dur:x.effect.getTiming().duration,
+                props:[...new Set(k.flatMap(f=>Object.keys(f).filter(p=>!['offset','easing','composite','computedOffset'].includes(p))))]}});
+            return {a,shown:!v.hidden,others:[...document.querySelectorAll('.view')].filter(x=>x!==v&&!x.hidden).length,
+                cur:document.querySelector('nav.tabs [aria-current="page"]').dataset.tab,td:getComputedStyle(document.querySelector('nav.tabs .tab')).transitionDuration}}"""
+        BAR = """()=>[...document.querySelectorAll('nav.tabs .tab')].map(b=>[b.dataset.tab,+getComputedStyle(b,'::before').opacity])"""
+        for th in ('dark', 'light'):
+            def s_tab_anim(pg, n, th=th):
+                wait_app(pg); pg.wait_for_timeout(600)
+                if pg.evaluate("document.documentElement.dataset.theme") != th: raise AssertionError('тема не включилась: ' + th)
+                r = pg.evaluate(TABCLICK, 'coins')
+                vin = [a for a in r['a'] if a['name'] == 'vin']
+                if r['shown'] and not r['others'] and r['cur'] == 'coins' and vin and 160 <= vin[0]['dur'] <= 220 and set(vin[0]['props']) <= {'opacity', 'transform'}:
+                    ok(f'смена вкладки ({th}): «Монеты» видна одна, проявление {vin[0]["dur"]:g} мс только opacity/transform')
+                else: fail(f'смена вкладки ({th}): анимация', str(r))
+                if th == 'dark':  # кадр середины перехода: все анимации и переходы — на паузу на половине
+                    pg.evaluate(TABCLICK, 'strategy')
+                    fin = "document.getAnimations().filter(a=>isFinite(a.effect.getComputedTiming().endTime))"
+                    pg.evaluate(f"()=>{fin}.forEach(a=>{{a.pause();a.currentTime=90}})")
+                    shot(pg, 'tab-mid-dark')
+                    pg.evaluate(f"()=>{fin}.forEach(a=>a.finish())")
+                    pg.evaluate(TABCLICK, 'coins')
+                pg.wait_for_timeout(700)
+                left = pg.evaluate("document.getElementById('v-coins').getAnimations().length")
+                tr = pg.evaluate("getComputedStyle(document.getElementById('v-coins')).transform")
+                ok(f'смена вкладки ({th}): после перехода анимация закончилась, сдвига нет') if left == 0 and tr == 'none' else fail(f'смена вкладки ({th}): после перехода', f'{left} анимаций, transform {tr}')
+                bar = pg.evaluate(BAR)
+                if [b[0] for b in bar if b[1] > 0.99] == ['coins'] and all(b[1] < 0.01 for b in bar if b[0] != 'coins'): ok(f'смена вкладки ({th}): полоска только над активной вкладкой')
+                else: fail(f'смена вкладки ({th}): полоска', str(bar))
+                shot(pg, f'tab-coins-{th}')
+                pg.evaluate(TABCLICK, 'activity'); pg.wait_for_timeout(700)
+                shot(pg, f'tab-activity-{th}')
+            scenario(f'Смена вкладок ({th})', {'session': True, 'docs': SEED}, s_tab_anim, dsf=1, theme=th)
+
+        def s_tab_reduced(pg, n):
+            wait_app(pg); pg.wait_for_timeout(600)
+            if not pg.evaluate("matchMedia('(prefers-reduced-motion: reduce)').matches"): raise AssertionError('«уменьшить движение» не включилось')
+            res = [pg.evaluate(TABCLICK, t) for t in ('coins', 'strategy', 'activity', 'home')]
+            if all(r['shown'] and not r['others'] and not r['a'] for r in res) and all(float(x.strip().rstrip('s') or 0) == 0 for x in res[0]['td'].split(',')):
+                ok('«уменьшить движение»: вкладки переключаются сразу, без анимации и переходов (длительность 0)')
+            else: fail('«уменьшить движение»: вкладки', str(res))
+            bar = pg.evaluate(BAR)
+            ok('«уменьшить движение»: полоска сразу над активной вкладкой') if [b[0] for b in bar if b[1] > 0.99] == ['home'] else fail('«уменьшить движение»: полоска', str(bar))
+        scenario('Смена вкладок: уменьшить движение', {'session': True, 'docs': SEED}, s_tab_reduced, motion='reduce')
 
         # --- Б. новый пользователь → знакомство
         def s_new(pg, n):
