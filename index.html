@@ -271,6 +271,20 @@ details.cd:first-child{border-top:0}
 .pk-warn{margin-top:8px;padding:10px 12px;border-radius:var(--r-m);background:var(--warn-soft);color:var(--warn);font-size:13px}
 .signal.soft{background:linear-gradient(135deg,#2e2410,#1c0b25 60%,#231a10);border-color:#ffc94d55;box-shadow:none}
 .signal .small{font-size:12px}
+/* «14 дней с MoneyLife»: карточка дня под сигналом; свёрнутая и приглашение — одна строка */
+.d14{display:flex;flex-direction:column;gap:10px;border-color:var(--line2);background:linear-gradient(135deg,#1d1440,var(--surface2) 55%,#1a1030)}
+.d14-h{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:-4px -8px -4px 0}
+.d14-x{width:48px;height:48px;border:0;background:none;border-radius:var(--r-m);display:grid;place-items:center;color:var(--mute);cursor:pointer;padding:0;flex:none}
+.d14-x svg{width:18px;height:18px}
+.d14-t{font-weight:800;font-size:17px;line-height:1.25}
+.d14-p{font-size:14px;color:var(--mute);line-height:1.45}
+.d14 .meter{margin-top:0;height:4px}
+.d14 .btnrow .btn{min-height:48px}
+.d14-min{flex-direction:row;align-items:center;gap:10px;padding:12px 16px;min-height:48px;font-size:14px;color:var(--mute)}
+.d14-min b{color:var(--fg);font-weight:700}
+.d14-ok{color:var(--pos);font-weight:800}
+.d14-inv{gap:10px}
+.d14-inv b{font-weight:700;font-size:15px}
 
 /* кнопки */
 .btn{border:0;border-radius:var(--r-m);padding:13px 18px;font-weight:700;font-size:15px;cursor:pointer;background:var(--grad);color:#fff;box-shadow:0 10px 26px -12px var(--glow);transition:transform .15s var(--ease),opacity .2s}
@@ -487,6 +501,8 @@ button:focus-visible{outline:2px solid var(--pink);outline-offset:2px}
 [data-theme="light"] .btn.danger,[data-theme="light"] .del-warn b{color:#c62a3e}
 [data-theme="light"] .mark{background:#ffffff}
 [data-theme="light"] .signal{background:linear-gradient(135deg,#fff0f2,#fff 60%,#fff4f6);border-color:#e2364b55;box-shadow:0 14px 34px -26px #e2364b}
+[data-theme="light"] .d14{background:linear-gradient(135deg,#f1eaff,#ffffff 60%,#fbf4ff);border-color:#a64dff33}
+[data-theme="light"] .d14-ok{color:#0f9a68}
 [data-theme="light"] .signal.soft{background:linear-gradient(135deg,#fff8ea,#fff 60%,#fffaf0);border-color:#d9a13566}
 [data-theme="light"] .mi.main{background:linear-gradient(135deg,#f1eaff,#ffffff);border-color:#a64dff44}
 [data-theme="light"] .card{box-shadow:0 1px 2px #1b153008,0 8px 24px -18px #1b153030}
@@ -683,6 +699,7 @@ input::placeholder{color:var(--mute);opacity:.8;font-weight:400}
       <button type="button" data-act="menu"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/></svg></i>Ещё</button>
     </div>
     <div id="signal"></div>
+    <div id="d14" hidden></div>
     <div class="card">
       <div class="chart-head"><div class="chart-read" id="gRead"><div class="v skel">$0 000</div><div class="s">&nbsp;</div></div><div class="ranges" id="gRanges"></div></div>
       <div class="chartbox" id="gChart"></div>
@@ -911,6 +928,7 @@ input::placeholder{color:var(--mute);opacity:.8;font-weight:400}
       <div class="setrow"><div><b>Вибрация</b><small>Отклик на нажатия</small></div><button type="button" class="switch" id="swHaptic" role="switch" aria-checked="true" aria-label="Вибрация"></button></div>
       <div class="setrow"><div><b>Персонаж</b><small>Слиток на главном экране</small></div><button type="button" class="switch" id="swMascot" role="switch" aria-checked="true" aria-label="Персонаж"></button></div>
       <div class="setrow"><div><b>Голос персонажа</b><small>Мягкий голос робота и звуки при касании.</small></div><button type="button" class="switch" id="swMsSound" role="switch" aria-checked="true" aria-label="Голос персонажа"></button></div>
+      <div class="setrow" id="d14Row"><div><b>Карточка «14 дней»</b><small>Короткие подсказки о приложении на главной</small></div><button type="button" class="switch" id="swD14" role="switch" aria-checked="true" aria-label="Карточка «14 дней»"></button></div>
     </div>
     <span class="label">Правила</span>
     <div class="card"><div class="kv" id="rules"></div></div>
@@ -953,9 +971,9 @@ input::placeholder{color:var(--mute);opacity:.8;font-weight:400}
 
 <div class="toast" id="toast" role="status"><span id="toastMsg"></span><button type="button" id="toastBtn" hidden></button></div>
 
-<script src="config.js?v=20261107145800"></script>
+<script src="config.js?v=20261108040000"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="shim.js?v=20261107145800"></script>
+<script src="shim.js?v=20261108040000"></script>
 <script>
 /* ===== основа ===== */
 const $=id=>document.getElementById(id);
@@ -1956,7 +1974,7 @@ $('eDel').addEventListener('click',delTx);
 /* ===== настройки ===== */
 const swSet=(id,on)=>$(id).setAttribute('aria-checked',String(!!on));
 function fillSettings(){[...$('themeSeg').children].forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.th===(P.theme||'system'))));[...$('curSeg').children].forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.c===P.cur)));
-  swSet('swHide',P.hide);swSet('swDust',P.dust);swSet('swSound',P.sound);swSet('swHaptic',P.haptic);swSet('swMascot',P.mascot!==false);swSet('swMsSound',P.msVoice!==false);
+  swSet('swHide',P.hide);swSet('swDust',P.dust);swSet('swSound',P.sound);swSet('swHaptic',P.haptic);swSet('swMascot',P.mascot!==false);swSet('swMsSound',P.msVoice!==false);swSet('swD14',!d14Load().hid);$('d14Row').hidden=!window.mlUser;
   const sp=split();$('stB').value=sp.BTC;$('stE').value=sp.ETH;$('stA').value=sp.ALT;$('stCap').value=S.settings.capPct||20;$('stDep').value=Math.round(depShare()*100);$('stAlt').value=S.settings.altOfMonth||'';{const b=S.settings.budget;$('stIncL').textContent=b?'В крипту в месяц, '+(b.cur==='USD'?'$':'грн'):'Доход в месяц, грн';$('stInc').value=b?(b.amount||''):(S.settings.incomeMonthlyUah||'');}swSet('swLadder',ladderOn());$('stK2').value=k2Cfg().pct;$('stAltCap').value=altCapPct();$('setErr').textContent='';
   const U=window.mlUser;$('accInfo').innerHTML=U?`<div><span>Почта</span><span>${esc(U.email||'—')}</span></div><div><span>Вход</span><span>${U.provider==='google'?'через Google':'почта и пароль'}</span></div>`:'<div><span>Аккаунт</span><span>—</span></div>';$('delBtn').hidden=!(window.ML_CONFIG&&ML_CONFIG.accountDelete);
   const L=S.live;$('dataInfo').innerHTML=`<div><span>Курс доллара</span><span>${rate()?nf(rate(),2)+' грн за $':'—'}</span></div>${S.settings.usdUahSrc?`<div><span>Откуда курс</span><span>${esc(S.settings.usdUahSrc)}${S.settings.usdUahAt?' · '+dShort(S.settings.usdUahAt)+', '+tHM(S.settings.usdUahAt):''}</span></div>`:''}${S.settings.usdUahNbu?`<div><span>Курс НБУ</span><span>${nf(+S.settings.usdUahNbu,2)} грн</span></div>`:''}<div><span>Живые цены</span><span>${L.status==='ok'?'CoinGecko · '+tHM(L.at):L.status==='stale'?'с задержкой':LIVE_MSG[L.code]||'нет'}</span></div><div><span>Монеты и логотипы</span><span>CoinGecko${DIR.n?' · '+nf(DIR.n,0)+' в поиске':''}</span></div><div><span>Последняя проверка</span><span>${S.market&&S.market.updatedAt?dShort(S.market.updatedAt)+', '+tHM(S.market.updatedAt):'—'}</span></div><div><span>Проверка рынка</span><span>8:41 и 20:41</span></div><div><span>Записей</span><span>${S.tx.length}</span></div>`;}
@@ -2111,6 +2129,94 @@ document.addEventListener('click',e=>{const t=e.target;if(!t||!t.closest)return;
   if(pk){play('tick');const id=pk.id;if(id==='pkRun'){runAsk=true;renderPick(derive());}else if(id==='pkNo'){runAsk=false;renderPick(derive());}else if(id==='pkGo')runScreen();else if(id==='pkAll'){pickAll=!pickAll;renderPick(derive());}else if(id==='pkApprove')approvePlan();else if(id==='pkEdit')openPlanEditor();else if(id==='peSave')savePlanEditor();return;}
   const act=t.closest('[data-act]');if(act){openAct(act.dataset.act==='menu'?'menu':act.dataset.act);return;}});
 
+/* ===== «14 дней с MoneyLife»: одна карточка в день (company/research/14days-spec-2026-11-08.md) =====
+   День засчитан, когда карточку прочли («Понятно» или кнопка). День — местный календарный (isoDay по часам телефона).
+   Пропуск ничего не сжигает: следующая карточка ждёт; больше одной новой в день не бывает.
+   Прогресс — только на телефоне: localStorage 'ml-14d:<uid>' = {v:1,n,read,last,start,done,hid,party?}; в базу ничего не пишем. */
+const D14_RE=/^\d{4}-\d\d-\d\d$/;
+function d14Norm(o){const d={v:1,n:1,read:false,last:'',start:'',done:false,hid:false};
+  if(!o||typeof o!=='object'||o.v!==1)return d;const n=Math.floor(+o.n);
+  const r={v:1,n:n>=1&&n<=14?n:1,read:o.read===true,last:D14_RE.test(o.last)?o.last:'',start:D14_RE.test(o.start)?o.start:'',done:false,hid:o.hid===true};
+  r.done=o.done===true&&r.n===14&&r.read;if(typeof o.party==='string'&&o.party)r.party=o.party.slice(0,8);return r;}
+/* чистая функция: (сохранённое состояние, сегодня 'ГГГГ-ММ-ДД', новичок?) → {mode, st}; ничего не читает и не пишет.
+   mode: off — скрыто человеком; invite — давний аккаунт ещё не начал; card — карточка st.n; read — прочитана сегодня;
+   done — 14 из 14 сегодня; gone — курс пройден, блока нет. Сравнение строк ГГГГ-ММ-ДД = сравнение дат. */
+function d14View(raw,today,isNew){const st=d14Norm(raw);
+  if(st.hid)return {mode:'off',st};
+  if(!st.start){if(!isNew)return {mode:'invite',st};st.start=today;}
+  if(st.done)return {mode:today>st.last?'gone':'done',st};
+  if(st.read){if(!(today>st.last))return {mode:'read',st};   /* тот же день или часы назад — ждём */
+    st.n=Math.min(14,st.n+1);st.read=false;}                  /* новый день (хоть через неделю) — ровно одна следующая */
+  return {mode:'card',st};}
+/* прочитал карточку: день засчитан; 14-я — курс пройден */
+function d14Read(raw,today){const st=d14Norm(raw);if(st.read||st.done)return st;st.read=true;st.last=today;if(st.n>=14)st.done=true;return st;}
+const D14={day:''};
+const d14Key=()=>'ml-14d:'+((window.mlUser&&mlUser.id)||'');
+function d14Load(){let o=null;try{o=JSON.parse(localStorage.getItem(d14Key())||'null');}catch(e){}return d14Norm(o);}
+function d14Save(st){try{localStorage.setItem(d14Key(),JSON.stringify(st));}catch(e){}}
+const d14Can=()=>S.ready&&S.setOk&&!!window.mlUser&&!document.getElementById('mlAuth')&&$('ob').hidden&&!obNeed();
+/* тексты — из спецификации; числа — из настроек человека в момент показа; go — существующий экран */
+function d14Card(n){const sp=split(),ds=depShare(),dca=Math.round(ds*100),cap=+S.settings.capPct||20,k=k2Cfg(),lad=ladderOn();
+  const lv=(S.cycle&&S.cycle.levels&&S.cycle.levels.length)?S.cycle.levels.map(l=>[+l.drop,+l.pct]):LV_DEF;
+  const C={1:['Первая запись','Купил монету на бирже — запиши её: монета, сколько потратил, сколько получил. Стоимость портфеля посчитается сама.','Записать покупку','buy'],
+    2:[`Твои доли: ${sp.BTC}/${sp.ETH}/${sp.ALT}`,`Твой план: BTC ${sp.BTC}%, ETH ${sp.ETH}%, альткоины ${sp.ALT}%. Блок «Распределение» внизу главной показывает цель и как сейчас.`,'Показать','alloc'],
+    3:ds<1?['Пополнение делится само',`Запиши «Пополнить»: ${dca}% суммы уйдёт в бюджет DCA, ${100-dca}% — в резерв USDT. Так делит твоё правило из «Настроек».`,'Пополнить','deposit']
+      :['Пополнение — в DCA','Запиши «Пополнить» — вся сумма уйдёт в бюджет DCA. Плитка «Бюджет DCA» на главной покажет, сколько осталось купить.','Пополнить','deposit'],
+    4:['Покупка по плану (DCA)','DCA — одна и та же сумма каждый месяц. В «Купить» → «По плану» впиши, сколько потратил: сумма разложится по твоим долям.','Купить по плану','dca'],
+    11:['Оборот карточки монеты','«Монеты» → нажми на монету, потом на карточку. На обороте — твои цифры: средняя цена покупки, вложено, стоит сейчас.','Монеты','coins'],
+    12:['Ошибся — исправь','Нажми на запись в «Активности»: можно поменять дату, сумму, заметку или удалить её. Итоги пересчитаются.','История','hist'],
+    13:['Отчёт за месяц','«Активность» → «Отчёт за месяц»: что куплено, сколько внесено, средняя цена покупки на начало и конец, резерв.','Отчёт','rep'],
+    14:['Копия и вид','Копию всех записей можно скачать файлом: «Настройки» → «Скачать мои данные». Там же тема: тёмная, светлая или как в телефоне.','Скачать копию','exp']};
+  const L={5:['Резерв USDT','Резерв — доллары, которые ждут просадки BTC. В приложении его уменьшают только докупки по лестнице и твои поправки.','Резерв и DCA','res'],
+    6:[`Потолок резерва ${cap}%`,`Потолок — ${cap}% от стоимости монет. Резерв дорос — на плитке «Резерв USDT» появится «выше!». Что делать дальше, решаешь ты.`,'Мои правила','rules'],
+    7:[`Лестница: ${pl(lv.length,'ступень','ступени','ступеней')}`,`Ступени — BTC ниже максимума на ${lv.map(x=>x[0]).join(', ')}%. На каждой — доля свободного резерва: ${lv.map(x=>x[1]).join(', ')}%.`,'Открыть лестницу','strategy'],
+    8:['Ключ 1 — ступень','Ключ 1 открыт, когда BTC дошёл до цены ступени: максимум минус её процент. Максимум и цены ступеней — во вкладке «Стратегия».','Стратегия','strategy'],
+    9:['Ключ 2 — ниже твоих покупок',`Ключ 2: цена монеты на ${k.pct}% ниже твоей средней покупки за ${k.days} дней. Покупок за этот срок не было — ключ 2 не мешает.`,'Мои правила','rules'],
+    10:['Сигнал на главной','Когда оба ключа сошлись, над графиком появится «Можно докупить» с суммами по монетам. Это расчёт по твоим правилам, не совет.','','']};
+  const SIMPLE={5:['Суммы под замком','Кнопка с глазом вверху прячет суммы за точками — удобно на людях. Насовсем — «Настройки» → «Скрывать суммы».','',''],
+    6:['Доллары или гривны','Суммы — в $ или ₴: «Настройки» → «Валюта». Под итогом рядом стоит та же сумма в другой валюте.','Настройки','set'],
+    7:['Монеты до MoneyLife','Монеты, купленные раньше, добавь: «Ещё» → «Остаток монеты». Впишешь, сколько вложил, — прибыль по ним тоже посчитается.','Остаток монеты','start'],
+    8:['Лидеры дня','Блок «Лидеры дня» на главной — как изменились твои монеты за 24 часа. Появится, когда монет от двух и каждая дороже $10.','',''],
+    9:['Мелочь в списке','Монеты дешевле $10 во вкладке «Монеты» скрыты. Показать их — кнопка-фильтр рядом с поиском или «Настройки».','Монеты','coins'],
+    10:['Слиток','Слиток на главной отзывается на покупки и пополнения. Персонаж, голос и звуки выключаются в «Настройках» → «Отображение».','Настройки','set']};
+  const c=C[n]||(lad?L:SIMPLE)[n]||C[1];return {t:c[0],x:c[1],b:c[2],go:c[3]};}
+const D14_GO={buy:()=>openAct('buy'),dca:()=>{openAct('buy');setBuyMode('dca');},deposit:()=>openAct('deposit'),start:()=>openAct('start'),res:()=>openSt('res'),
+  alloc:()=>{const a=$('alloc');if(a&&a.scrollIntoView)a.scrollIntoView({block:'center',behavior:reduced?'auto':'smooth'});},
+  rules:()=>{openSettings(false);setTimeout(()=>{const r=$('rules');if(r&&r.scrollIntoView)r.scrollIntoView({block:'start',behavior:reduced?'auto':'smooth'});},380);},
+  set:()=>openSettings(false),strategy:()=>show('strategy'),coins:()=>show('coins'),hist:()=>{show('activity');setActPane('hist');},rep:()=>$('teaser').click(),exp:()=>exportData()};
+function d14Html(v){const n=v.st.n;
+  if(v.mode==='invite')return `<div class="card d14 d14-inv"><b>Новое: 14 коротких карточек о&nbsp;приложении</b><div class="btnrow"><button type="button" class="btn sm" data-d14="start">Начать</button><button type="button" class="btn sm ghost" data-d14="hide">Скрыть</button></div></div>`;
+  if(v.mode==='read')return `<div class="card d14 d14-min" role="status"><span><b>День ${n} из 14 <span class="d14-ok">✓</span></b> · следующая — завтра</span></div>`;
+  if(v.mode==='done')return `<div class="card d14 d14-min" role="status"><span><b>14 из 14 <span class="d14-ok">✓</span></b> · Все карточки пройдены</span></div>`;
+  const c=d14Card(n);
+  return `<div class="card d14" role="region" aria-label="14 дней с MoneyLife"><div class="d14-h"><span class="chip acc">День ${n} из 14</span><button type="button" class="d14-x" data-d14="x" aria-label="Скрыть карточки «14 дней»"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+    <div class="d14-t">${esc(c.t)}</div><p class="d14-p">${esc(c.x)}</p><div class="meter" aria-hidden="true"><i style="width:${Math.round((n-1)/14*100)}%"></i></div>
+    <div class="btnrow">${c.b?`<button type="button" class="btn sm" data-d14="go">${esc(c.b)}</button>`:''}<button type="button" class="btn sm ghost" data-d14="ok">Понятно</button></div></div>`;}
+function renderD14(){const el=$('d14');if(!el)return;$('d14Row').hidden=!window.mlUser;
+  if(!d14Can()){el.hidden=true;return;}
+  const today=isoDay(new Date()),cur=d14Load(),v=d14View(cur,today,!!S.settings.onboardedAt);
+  if(JSON.stringify(v.st)!==JSON.stringify(cur))d14Save(v.st);
+  D14.day=today;el.dataset.mode=v.mode;el.dataset.n=v.st.n;
+  const h=v.mode==='off'||v.mode==='gone'?'':d14Html(v);if(el._h!==h){el.innerHTML=h;el._h=h;}el.hidden=!h;
+  if(v.st.party)d14Party();}
+/* Слиток празднует 3/14, 7/14, 14/14 — один раз; если ещё не загружен — ждёт до следующей отрисовки */
+function d14Party(){const st=d14Load();if(!st.party)return;
+  if(P.mascot===false||MSC.failed){delete st.party;d14Save(st);return;}
+  if(!window.Mascot||!$('ob').hidden||document.getElementById('mlAuth'))return;
+  const lb=st.party;delete st.party;d14Save(st);try{window.Mascot.event('milestone',{label:lb});}catch(e){}}
+function d14Hide(on){const st=d14Load();st.hid=on;d14Save(st);swSet('swD14',!on);renderD14();}
+function d14Act(k){if(!d14Can())return;const today=isoDay(new Date()),v=d14View(d14Load(),today,!!S.settings.onboardedAt);let st=v.st;
+  if(k==='start'&&v.mode==='invite'){st.start=today;d14Save(st);play('tick');buzz(8);renderD14();return;}
+  if(k==='hide'||k==='x'){play('tick');d14Hide(true);toast('Карточки скрыты. Вернуть — в «Настройках»',{label:'Вернуть',fn:()=>d14Hide(false)});return;}
+  if((k==='ok'||k==='go')&&v.mode==='card'){const n=st.n,c=d14Card(n);st=d14Read(st,today);
+    if([3,7,14].includes(n)&&P.mascot!==false)st.party=n+'/14';d14Save(st);play('tick');buzz(8);renderD14();
+    if(k==='go'&&D14_GO[c.go])D14_GO[c.go]();}}
+$('d14').addEventListener('click',e=>{const b=e.target.closest('[data-d14]');if(b)d14Act(b.dataset.d14);});
+$('swD14').addEventListener('click',()=>{play('tick');d14Hide(!d14Load().hid);});
+/* полночь при открытом приложении: проверка при возврате в приложение и раз в 30 с (только смена даты — без отрисовки всего) */
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')renderD14();});
+setInterval(()=>{if(D14.day&&document.visibilityState==='visible'&&isoDay(new Date())!==D14.day)renderD14();},30000);
+
 /* ===== отрисовка и запуск ===== */
 /* ===== персонаж «Слиток»: 3D — three.min.js, код — mascot.js (файлы лежат рядом с приложением) ===== */
 const MSC={loading:false,failed:false,last:null};
@@ -2121,9 +2227,9 @@ function msSync(x){MSC.last=x;if(!msApply())return;if(!S.ready||document.getElem
   if(window.Mascot){try{window.Mascot.sync(msPayload(x));}catch(e){}}else msLoad();}
 function msLoad(){if(MSC.loading||MSC.failed)return;MSC.loading=true;
   const add=(src,ok)=>{try{const s=document.createElement('script');s.src=src;s.async=true;s.onload=ok;s.onerror=()=>{MSC.failed=true;};document.head.appendChild(s);}catch(e){MSC.failed=true;}};
-  const boot=()=>add('mascot.js?v=20261107145800',()=>{try{if(window.Mascot&&window.Mascot.init({host:$('mascot'),app:{audio:ac,buzz}})&&MSC.last&&$('ob').hidden&&!document.getElementById('mlAuth'))window.Mascot.sync(msPayload(MSC.last));}catch(e){}});
+  const boot=()=>add('mascot.js?v=20261108040000',()=>{try{if(window.Mascot&&window.Mascot.init({host:$('mascot'),app:{audio:ac,buzz}})&&MSC.last&&$('ob').hidden&&!document.getElementById('mlAuth'))window.Mascot.sync(msPayload(MSC.last));}catch(e){}});
   setTimeout(()=>{if(window.THREE)boot();else add('three.min.js',boot);},300);}
-function render(){const D=derive();renderHeader();renderHome(D);renderGrowth();renderCoins(D);renderStrategy(D);renderActivity();earnNudge();if(cvSym&&$('coinSheet').classList.contains('open'))renderCoinView();}
+function render(){const D=derive();renderHeader();renderHome(D);renderGrowth();renderCoins(D);renderStrategy(D);renderActivity();renderD14();earnNudge();if(cvSym&&$('coinSheet').classList.contains('open'))renderCoinView();}
 document.body.classList.add('loading');
 const startTab=(location.hash||'').slice(1);if(['coins','strategy','activity'].includes(startTab))show(startTab);
 /* ярлык с главного экрана, когда приложение уже открыто: меняется только #хэш — переключаем вкладку (show() пишет хэш через replaceState, hashchange от этого не бывает — цикла нет) */
@@ -2133,7 +2239,7 @@ render();
 (async()=>{try{db=await use('db');}catch(e){db=null;}
   if(!db){document.body.classList.remove('loading');S.ready=true;$('offline').hidden=false;render();return;}
   const fail=()=>{$('offline').hidden=false;if(!S.ready){S.ready=true;document.body.classList.remove('loading');render();}};
-  db.doc('app/settings').onSnapshot(s=>{S.settings=s.exists?s.data():{};render();startLive();},fail);
+  db.doc('app/settings').onSnapshot(s=>{S.settings=s.exists?s.data():{};S.setOk=true;render();startLive();},fail);
   db.doc('app/cycle').onSnapshot(s=>{S.cycle=s.exists?s.data():null;render();checkAth();},fail);
   db.doc('app/altplan').onSnapshot(s=>{S.altplan=s.exists?s.data():null;render();startLive();},fail);
   db.doc('app/screen').onSnapshot(s=>{S.screen=s.exists?s.data():null;renderStrategy(derive());},fail);
