@@ -389,6 +389,11 @@ def run_browser():
                 if len(r['lab']) == 3 and all(c == r['mute'] for c in r['lab']): ok(f'нижняя панель ({th}): подписи неактивных вкладок цветом --mute')
                 else: fail(f'нижняя панель ({th}): подписи', f"{r['lab']} ≠ {r['mute']}")
                 ok(f'нижняя панель ({th}): значки неактивных — --dim, активная — --fg') if all(c == r['dim'] for c in r['ico']) and r['on'] == r['fg'] else fail(f'нижняя панель ({th}): значки/активная', str(r))
+                # Вера 07.11: сквозь полупрозрачный фон панели просвечивал текст карточек — фон непрозрачный (альфа ≥ 0,98; прежние 0,95–0,96 просвечивали)
+                bg = pg.evaluate("getComputedStyle(document.querySelector('nav.tabs')).backgroundColor")
+                m = re.match(r'rgba?\(([^)]*)\)', bg); parts = [x.strip() for x in m.group(1).split(',')] if m else []
+                a = float(parts[3]) if len(parts) == 4 else (1.0 if len(parts) == 3 else 0.0)
+                ok(f'нижняя панель ({th}): фон плотный, альфа {a:g}') if a >= 0.98 else fail(f'нижняя панель ({th}): фон просвечивает', bg)
                 shot(pg, f'nav-{th}')
             scenario(f'Нижняя панель ({th})', {'session': True, 'docs': SEED}, s_nav_look, dsf=1, theme=th)
 
