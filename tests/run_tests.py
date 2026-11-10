@@ -938,51 +938,39 @@ def run_browser():
             else: fail('зоны нажатия ≥48 px', '; '.join(small)[:600])
         scenario('Шторки форм', {'session': True, 'docs': SEED}, s_sheets)
 
-        # --- Г3. Слиток на главной один: заглушка .ms-still прячется, когда рисует 3D, и после потери WebGL-контекста
-        #     (Android уводит приложение в фон) не остаётся видна рядом с ожившим 3D
-        MS = """()=>{const h=document.getElementById('mascot'),st=h&&h.querySelector('.ms-still'),d=window.Mascot&&Mascot.debug&&Mascot.debug.state();
+        # --- Г3. Голосовой помощник «Аура»: одна сфера рядом с суммой, кнопка ≥ 48 px, цвет по настроению, без three.js
+        MS = """()=>{const h=document.getElementById('mascot'),b=h&&h.querySelector('.ms-hit'),r=b&&b.getBoundingClientRect(),d=window.Mascot&&Mascot.debug&&Mascot.debug.state();
             return {cv:h?h.querySelectorAll('canvas').length:-1,mscv:document.querySelectorAll('.ms-cv').length,live:!!(h&&h.classList.contains('ms-live')),
-              still:st?+getComputedStyle(st).opacity:-1,frame:!!(d&&d.frame)}}"""
+              hit:r?[Math.round(r.width),Math.round(r.height)]:null,label:b?b.getAttribute('aria-label'):'',three:!!window.THREE,d:d,
+              ink:(()=>{const c=h&&h.querySelector('.ms-cv');if(!c)return 0;const x=c.getContext('2d').getImageData(c.width/2-4,c.height/2-4,8,8).data;let a=0;for(let i=3;i<x.length;i+=4)a+=x[i];return a})()}}"""
         def s_mascot(pg, n):
             wait_app(pg)
-            if not pg.evaluate("(()=>{try{const c=document.createElement('canvas');return !!(c.getContext('webgl2')||c.getContext('webgl'))}catch(e){return false}})()"):
-                ok('(Слиток: в тестовом браузере нет WebGL — проверки 3D пропущены)'); return
             try: pg.wait_for_function("()=>{const h=document.getElementById('mascot');return h&&h.classList.contains('ms-live')}", polling=250, timeout=25000)
-            except Exception: raise AssertionError('3D-Слиток не ожил за 25 с (нет класса ms-live)')
-            pg.wait_for_timeout(700)
+            except Exception: raise AssertionError('помощник не ожил за 25 с (нет класса ms-live)')
+            pg.wait_for_timeout(3200)
             a = pg.evaluate(MS)
-            if a['cv'] == 1 and a['mscv'] == 1 and a['still'] == 0: ok('на главной ровно один Слиток: один canvas .ms-cv, заглушка скрыта')
-            else: fail('на главной ровно один Слиток', str(a))
+            if a['cv'] == 1 and a['mscv'] == 1 and a['ink'] > 0 and not a['three']: ok('помощник «Аура»: одна сфера на главной, нарисована, three.js не грузится')
+            else: fail('помощник «Аура» на главной', str(a))
+            if a['hit'] and min(a['hit']) >= 48 and 'помощник' in a['label'].lower(): ok(f"помощник: кнопка {a['hit'][0]}×{a['hit'][1]} с подписью для скринридера")
+            else: fail('помощник: кнопка', str(a))
             for th in ['dark', 'light']:
                 pg.evaluate(f"document.documentElement.setAttribute('data-theme','{th}')"); pg.wait_for_timeout(400)
                 shot(pg, f'15-mascot-home-{th}')
             pg.evaluate("document.documentElement.setAttribute('data-theme','dark')")
-            has = pg.evaluate("""()=>{const c=document.querySelector('#mascot .ms-cv');if(!c)return false;const g=c.getContext('webgl2')||c.getContext('webgl');
-                const x=g&&g.getExtension('WEBGL_lose_context');if(!x)return false;window.__msLC=x;return true}""")
-            if not has: ok('(Слиток: WEBGL_lose_context недоступно в тестовом браузере — проверка потери контекста пропущена)'); return
-            env0 = pg.evaluate("Mascot.debug.env()")
-            pg.evaluate("window.__msLC.loseContext()"); pg.wait_for_timeout(1500)
-            b = pg.evaluate(MS)
-            if not b['live'] and b['still'] == 1 and not b['frame']: ok('потеря WebGL-контекста: 3D спрятан, видна только заглушка')
-            else: fail('потеря WebGL-контекста', str(b))
-            pg.evaluate("window.__msLC.restoreContext()")
-            try: pg.wait_for_function("()=>document.getElementById('mascot').classList.contains('ms-live')", polling=250, timeout=8000)
-            except Exception: pass
-            pg.wait_for_timeout(2000)
-            c = pg.evaluate(MS)
-            shot(pg, '15-mascot-after-restore')
-            # окружение (блики и мягкий свет) — результат отрисовки, при потере контекста оно пропадает; без него Слиток
-            # темнеет: бордовая куртка, чёрный шлем (владелец 05.11, «потерял вид при плохом интернете»)
-            env1 = pg.evaluate("Mascot.debug.env()")
-            if env0 and env1 and env1 != env0: ok('после восстановления контекста окружение Слитка построено заново (цвета не темнеют)')
-            else: fail('после восстановления контекста — окружение Слитка', f'было {env0!r}, стало {env1!r}')
-            both = c['frame'] and c['still'] > 0          # 3D уже рисует, а заглушка всё ещё видна — «два Слитка»
-            if c['cv'] != 1 or c['mscv'] != 1: fail('после восстановления контекста — один canvas', str(c))
-            elif both or c['live'] != c['frame']: fail('после восстановления контекста — не видно двух Слитков', str(c))
-            elif c['live'] and c['still'] == 0: ok('после восстановления контекста: 3D-Слиток ожил, заглушка скрыта, canvas один')
-            elif not c['live'] and c['still'] == 1: ok('после восстановления контекста: 3D не ожил, видна только заглушка (двух Слитков нет)')
-            else: fail('после восстановления контекста', str(c))
-        scenario('Слиток один', {'session': True, 'docs': SEED}, s_mascot)
+            # цвет — настроение: прибыль → зелёный, просадка → янтарный
+            pg.evaluate("Mascot.debug.mood('rocket')"); pg.wait_for_timeout(2500); up = pg.evaluate("Mascot.debug.state()")
+            pg.evaluate("Mascot.debug.mood('down')"); pg.wait_for_timeout(2500); dn = pg.evaluate("Mascot.debug.state()")
+            if up['mood'] == 'rocket' and up['pal'][1] > up['pal'][0] and dn['mood'] == 'down' and dn['pal'][0] > dn['pal'][2]: ok('помощник: цвет меняется по настроению (прибыль — зелёный, просадка — янтарный)')
+            else: fail('помощник: цвет по настроению', f'{up} | {dn}')
+            # сводка собирается из цены биткоина, портфеля и сигнала; нажатие не роняет страницу
+            nw = pg.evaluate("Mascot.debug.news()")
+            if nw and len(nw['ids']) >= 4 and any(i.startswith('n.price') for i in nw['ids']): ok(f"помощник: сводка голосом собрана из {len(nw['ids'])} частей")
+            else: fail('помощник: сводка', str(nw))
+            pg.click('#mascot .ms-hit'); pg.wait_for_timeout(600); pg.click('#mascot .ms-hit'); pg.wait_for_timeout(300)
+            st = pg.evaluate("Mascot.debug.state()")
+            if not st['talking'] and not st['think']: ok('помощник: второе нажатие останавливает речь')
+            else: fail('помощник: второе нажатие', str(st))
+        scenario('Помощник «Аура»', {'session': True, 'docs': SEED}, s_mascot)
 
         # --- Г4. карточка докупки «ждём ключ 2» (владелец 05.11): в чипе «BTC $38,39» сумму покупки приняли за цену BTC —
         #     теперь «BTC на $… · когда цена ≤ $…»: видно, что $ — сумма, а порог — цена монеты
