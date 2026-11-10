@@ -1411,9 +1411,9 @@ html.lite nav.tabs{background:var(--bg);-webkit-backdrop-filter:none;backdrop-fi
 
 <div class="toast" id="toast" role="status"><span id="toastMsg"></span><button type="button" id="toastBtn" hidden></button></div>
 
-<script src="config.js?v=20261110140500"></script>
+<script src="config.js?v=20261110141500"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="shim.js?v=20261110140500"></script>
+<script src="shim.js?v=20261110141500"></script>
 <script>
 /* ===== основа ===== */
 const $=id=>document.getElementById(id);
@@ -2627,7 +2627,7 @@ function d14Card(n){const sp=split(),ds=depShare(),dca=Math.round(ds*100),cap=+S
     7:['Монеты до MoneyLife','Монеты, купленные раньше, добавь: «Ещё» → «Остаток монеты». Впишешь, сколько вложил, — прибыль по ним тоже посчитается.','Остаток монеты','start'],
     8:['Лидеры дня','Блок «Лидеры дня» на главной — как изменились твои монеты за 24 часа. Появится, когда монет от двух и каждая дороже $10.','',''],
     9:['Мелочь в списке','Монеты дешевле $10 во вкладке «Монеты» скрыты. Показать их — кнопка-фильтр рядом с поиском или «Настройки».','Монеты','coins'],
-    10:['Голосовой помощник','Сфера рядом с суммой меняет цвет по рынку. Нажми на неё — расскажет главное голосом. Помощник и голос выключаются в «Настройках» → «Отображение».','Настройки','set']};
+    10:['Голосовой помощник','Сфера рядом с суммой меняет цвет по рынку. Нажми — расскажет главное голосом. Выключается в «Настройках» → «Отображение».','Настройки','set']};
   const c=C[n]||(lad?L:SIMPLE)[n]||C[1];return {t:c[0],x:c[1],b:c[2],go:c[3]};}
 const D14_GO={buy:()=>openAct('buy'),dca:()=>{openAct('buy');setBuyMode('dca');},deposit:()=>openAct('deposit'),start:()=>openAct('start'),res:()=>openSt('res'),
   alloc:()=>{const a=$('alloc');if(a&&a.scrollIntoView)a.scrollIntoView({block:'center',behavior:reduced?'auto':'smooth'});},
@@ -2678,7 +2678,7 @@ function msSync(x){MSC.last=x;if(!msApply())return;if(!S.ready||document.getElem
   if(window.Mascot){try{window.Mascot.sync(msPayload(x));}catch(e){}}else msLoad();}
 function msLoad(){if(MSC.loading||MSC.failed)return;MSC.loading=true;
   const add=(src,ok)=>{try{const s=document.createElement('script');s.src=src;s.async=true;s.onload=ok;s.onerror=()=>{MSC.failed=true;};document.head.appendChild(s);}catch(e){MSC.failed=true;}};
-  const boot=()=>add('mascot.js?v=20261110140500',()=>{try{if(window.Mascot&&window.Mascot.init({host:$('mascot'),app:{audio:ac,buzz}})&&MSC.last&&$('ob').hidden&&!document.getElementById('mlAuth'))window.Mascot.sync(msPayload(MSC.last));}catch(e){}});
+  const boot=()=>add('mascot.js?v=20261110141500',()=>{try{if(window.Mascot&&window.Mascot.init({host:$('mascot'),app:{audio:ac,buzz}})&&MSC.last&&$('ob').hidden&&!document.getElementById('mlAuth'))window.Mascot.sync(msPayload(MSC.last));}catch(e){}});
   setTimeout(boot,300);}
 function render(){const D=derive();renderHeader();renderHome(D);renderGrowth();renderCoins(D);renderStrategy(D);renderActivity();renderD14();if(window.MLX)try{MLX.render(D);}catch(e){console.error(e);}earnNudge();if(cvSym&&$('coinSheet').classList.contains('open'))renderCoinView();}
 document.body.classList.add('loading');
@@ -2701,6 +2701,6 @@ render();requestAnimationFrame(inkMove);setTimeout(inkMove,600);
   db.collection('history').limit(1000).onSnapshot(q=>{S.history=q.docs.map(d=>d.data());renderGrowth();if(S.ready&&derive().noPrice)renderHome(derive());},fail);
 })();
 </script>
-<script src="plus.js?v=20261110140500"></script>
+<script src="plus.js?v=20261110141500"></script>
 </body>
 </html>
