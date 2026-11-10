@@ -1297,7 +1297,7 @@ def run_browser():
             longt = [f'{t[0]}: {len(t[2])}/{len(t[3])}' for t in tx if len(t[2]) > 30 or len(t[3]) > 130]
             ok('14 дней: заголовки ≤ 30, тексты ≤ 130 знаков') if not longt else fail('14 дней: длина текстов', ', '.join(longt))
             simple = [t[2] for t in tx if not t[1]][2:10]
-            if simple[0] == 'Пополнение — в DCA' and simple[2] == 'Суммы под замком' and simple[7] == 'Слиток': ok('14 дней: шаблон «Простой» — карточки 3S, 5S–10S')
+            if simple[0] == 'Пополнение — в DCA' and simple[2] == 'Суммы под замком' and simple[7] == 'Голосовой помощник': ok('14 дней: шаблон «Простой» — карточки 3S, 5S–10S')
             else: fail('14 дней: «Простой»', str(simple))
             gos = sorted({t[5] for t in tx if t[5]})
             miss = pg.evaluate("g=>g.filter(k=>typeof D14_GO[k]!=='function')", gos)
