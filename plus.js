@@ -362,7 +362,7 @@
     const home = el('xPlan'), path = el('xPath'), learn = el('xLearn'), x = xGet(), ok = S.ready && (!el('ob') || el('ob').hidden);
     if (home) { const p = planGet(), hideInv = !p && x.planLater && Date.now() - x.planLater < 7 * 864e5, h = ok && !hideInv ? planCardHtml(false) : ''; if (home._h !== h) { home.innerHTML = h; home._h = h; } home.hidden = !h; }
     if (path) { const h = ok ? planCardHtml(true) : ''; if (path._h !== h) { path.innerHTML = h; path._h = h; } path.hidden = !h; }
-    if (learn) { const n = LESSONS.filter(l => readGet()[l.id]).length, h = ok ? `<div class="list"><button type="button" class="row r3" data-x="learn0">${icoBadge('news', 'var(--lav)')}<span class="col"><span class="nm">Знания</span><span class="sub">${LESSONS.length} уроков из 14 книг о деньгах · прочитано ${n}</span></span><span class="chev">›</span></button></div>` : ''; if (learn._h !== h) { learn.innerHTML = h; learn._h = h; } learn.hidden = !h; }
+    if (learn) { const n = LESSONS.filter(l => readGet()[l.id]).length, h = ok ? `<div class="list"><button type="button" class="row r3" data-x="learn0">${icoBadge('news', 'var(--lav)')}<span class="col"><span class="nm">Знания</span><span class="sub">${LESSONS.length} уроков из 14 книг · прочитано ${n}</span></span><span class="chev">›</span></button></div>` : ''; if (learn._h !== h) { learn.innerHTML = h; learn._h = h; } learn.hidden = !h; }
   }
 
   /* ================= объяснения: настроение рынка, цель ================= */
