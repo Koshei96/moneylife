@@ -407,8 +407,10 @@
     if (cfg.goal > 0 && btc >= cfg.goal) { const k = 'goal:' + cfg.goal; if (!cfg.seen[k]) ev.push({ k, title: 'BTC дошёл до твоей цели', body: 'Цена выше $' + Math.round(cfg.goal).toLocaleString('ru-RU') + '. Что делать дальше — по твоему плану.' }); }
     return ev; }
   X.sigEvents = sigEvents;
-  let sigT = 0;
-  function sigCheck(D) { if (!S.ready || S.live.status !== 'ok' || Date.now() - sigT < 20000) return; sigT = Date.now();
+  let sigT = 0, seenPulled = !('caches' in window);
+  /* что уже показала фоновая проверка — забираем один раз при запуске, чтобы не повторять тот же сигнал */
+  if (!seenPulled) caches.open('ml-cfg').then(ch => ch.match('cfg.json')).then(r => r ? r.json() : null).then(c => { if (c && c.seen) xPatch({ seen: Object.assign({}, c.seen, xGet().seen || {}) }); }).catch(() => {}).finally(() => { seenPulled = true; });
+  function sigCheck(D) { if (!seenPulled || !S.ready || S.live.status !== 'ok' || Date.now() - sigT < 20000) return; sigT = Date.now();
     const btc = +D.prices.BTC || 0, cfg = cfgForSw(D), states = {}; for (const l of (S.cycle && S.cycle.levels) || []) states[l.n] = lvState(l, btc, D);
     const ev = sigEvents(cfg, btc, states); if (!ev.length) { cfgPush(D); return; }
     const seen = Object.assign({}, cfg.seen); for (const e of ev) { seen[e.k] = Date.now(); notify(e.title, e.body, e.k); }

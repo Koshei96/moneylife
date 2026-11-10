@@ -65,6 +65,24 @@ def static_checks():
     else: fail('sw.js: кэш переходов', 'страницы кладутся в кэш под именем index.html')
     manifest_checks(html)
     deletion_checks()
+    signal_checks()
+
+def signal_checks():
+    """Фоновые сигналы (sw.js, 10.11.2026): ступень лестницы и цель BTC — событие один раз, повтор не шлём."""
+    js = r"""const fs=require('fs'),vm=require('vm');const ctx={self:{addEventListener(){},registration:{}},caches:{},location:{origin:'x'},URL,Response:function(){},fetch(){}};vm.createContext(ctx);
+vm.runInContext(fs.readFileSync(process.argv[1],'utf8')+';this.mlEvents=mlEvents;',ctx);
+const cfg={ath:126000,athDate:'2025-10-06',levels:[{n:1,drop:30,price:88200},{n:2,drop:40,price:75600}],goal:150000,seen:{}};
+const a=ctx.mlEvents(cfg,100000).length,b=ctx.mlEvents(cfg,88000).map(e=>e.k),c=ctx.mlEvents(cfg,75000).length,d=ctx.mlEvents(cfg,151000).map(e=>e.k);
+cfg.seen['lv:2025-10-06:1:k1']=1;cfg.seen['goal:150000']=1;const e=ctx.mlEvents(cfg,88000).length+ctx.mlEvents(cfg,151000).length;
+console.log(JSON.stringify([a,b,c,d,e]));"""
+    try:
+        out = subprocess.run(['node', '-e', js, str(ROOT / 'sw.js')], capture_output=True, text=True, timeout=30)
+        got = json.loads(out.stdout.strip() or 'null')
+        if got == [0, ['lv:2025-10-06:1:k1'], 2, ['goal:150000'], 0]: ok('сигналы в фоне: ступень и цель дают событие один раз, выше ступеней — тишина')
+        else: fail('сигналы в фоне (sw.js)', (out.stdout + out.stderr)[:300])
+    except Exception as e: fail('сигналы в фоне (sw.js)', str(e)[:200])
+    sw = (ROOT / 'sw.js').read_text(encoding='utf-8')
+    ok('сигналы: настройки сигналов переживают обновление версии (кэш ml-cfg не стирается)') if "k!==CFGC" in sw and "const CFGC='ml-cfg'" in sw else fail('сигналы: кэш настроек', 'ml-cfg стирается при обновлении')
 
 def deletion_checks():
     """Удаление аккаунта (требование Google Play): веб-страница и серверная функция."""
@@ -1236,7 +1254,7 @@ def run_browser():
             ok('14 дней: открыл и закрыл без нажатия — на следующий день всё ещё карточка 1')
             pg.click('#d14 [data-d14="ok"]'); d14_wait(pg, 'read', 1)
             st = d14(pg)
-            if 'День 1 из 14 ✓ · следующая — завтра' in st['txt']: ok('14 дней: «Понятно» в 23:59:30 → «День 1 из 14 ✓ · следующая — завтра»')
+            if 'День 1 из 14 · завтра — день 2' in st['txt']: ok('14 дней: «Понятно» в 23:59:30 → «День 1 из 14 · завтра — день 2»')
             else: fail('14 дней: свёрнутая', st['txt'])
             for th in ('dark', 'light'):
                 pg.evaluate(f"document.documentElement.setAttribute('data-theme','{th}')"); pg.wait_for_timeout(200)
@@ -1278,7 +1296,7 @@ def run_browser():
             if 'Копия и вид' in d14(pg)['txt']: ok('14 дней: карточка 14 «Копия и вид»')
             else: fail('14 дней: карточка 14', d14(pg)['txt'][:100])
             pg.click('#d14 [data-d14="ok"]'); d14_wait(pg, 'done', 14)
-            if '14 из 14 ✓ · Все карточки пройдены' in d14(pg)['txt']: ok('14 дней: после 14-й — «14 из 14 ✓ · Все карточки пройдены»')
+            if '14 из 14 · все карточки пройдены' in d14(pg)['txt']: ok('14 дней: после 14-й — «14 из 14 · все карточки пройдены»')
             else: fail('14 дней: 14 из 14', d14(pg)['txt'])
             pg.clock.set_system_time('2026-11-16T09:00:00Z'); d14_tick(pg); d14_wait(pg, 'gone')
             ok('14 дней: на следующий день после 14-й блока нет') if not d14(pg)['vis'] else fail('14 дней: после 14', 'блок виден')
@@ -1343,6 +1361,95 @@ def run_browser():
             pg.click('#obSkip'); pg.wait_for_selector('#ob', state='hidden', timeout=8000)
             d14_wait(pg, 'card', 1, 8000); ok('14 дней: после знакомства («Пропустить») — карточка 1')
         scenario('14 дней: после знакомства', {'session': True, 'docs': []}, s_d14_ob)
+
+        # --- MoneyLife 3.0 (10.11.2026): знак, «Сегодня» со шкалой, «Из чего итог», личный план и знания, цена покупки вручную,
+        #     демо без регистрации, вход без анимаций при «уменьшить движение»
+        CYC = {'ath': 126000, 'athDate': '2025-10-06', 'startedAt': '2026-01-01',
+               'levels': [{'n': i + 1, 'drop': d, 'pct': p, 'status': 'pending'} for i, (d, p) in enumerate([(30, 20), (40, 25), (50, 33), (60, 50), (70, 100)])]}
+        SEED3 = SEED + [{'col': 'app', 'id': 'cycle', 'data': CYC}]
+        def s_v3_home(pg, n):
+            wait_app(pg); pg.wait_for_timeout(1500)
+            r = pg.evaluate("""()=>{const q=s=>document.querySelector(s);
+              return {logo:!!q('.mark use[href="#mlLogo"]'),ink:q('#tabInk').classList.contains('on'),today:!q('#xToday').hidden,mk:document.querySelectorAll('#xToday .xs-mk').length,
+                cap:(q('#xToday .xs-cap')||{}).innerText||'',plan:!q('#xPlan').hidden&&/Собери личный план/.test(q('#xPlan').innerText),path:!q('#xPath').hidden,learn:!q('#xLearn').hidden}}""")
+            ok('3.0: новый знак в шапке, «капля» под активной вкладкой') if r['logo'] and r['ink'] else fail('3.0: знак и капля', str(r))
+            if r['today'] and r['mk'] == 6 and '−12,7%' in r['cap'] and 'до ступени 1' in r['cap'] and '−19,8%' in r['cap']: ok('3.0: «Сегодня» — шкала: 5 ступеней и максимум, BTC −12,7%, до ступени 1 −19,8%')
+            else: fail('3.0: шкала лестницы', str(r))
+            ok('3.0: приглашение в личный план на главной, карточки плана и знаний в «Стратегии»') if r['plan'] and r['path'] and r['learn'] else fail('3.0: карточки плана', str(r))
+            shot(pg, 'v3-home')
+            pg.click('#hInfo'); pg.wait_for_timeout(800)
+            t = pg.evaluate("document.getElementById('xTitle').textContent+' | '+document.getElementById('xBody').innerText")
+            if t.startswith('Из чего итог') and all(x in t for x in ('посчитано 2 из 2', 'Резерв USDT — отдельно', 'Вложено в монеты', 'Монеты и резерв вместе')): ok('3.0: «Из чего итог» — монеты, вложено, резерв отдельно')
+            else: fail('3.0: из чего итог', t[:300])
+            shot(pg, 'v3-total')
+        scenario('3.0: главная и итог', {'session': True, 'docs': SEED3}, s_v3_home)
+
+        def s_v3_plan(pg, n):
+            wait_app(pg); pg.wait_for_timeout(800)
+            pure = pg.evaluate("""()=>{const r=a=>{const x=MLX.planResult({v:1,a:{inc:a[0],cus:a[1],debt:a[2],save:a[3],hor:a[4],drop:a[5],exp:a[6],dep:a[7]}});return [x.stage,x.prof,x.ceil,x.preset.name]};
+              return {a:r([0,0,3,0,0,0,0,0]),b:r([1,2,2,1,2,1,1,0]),c:r([2,3,0,2,3,2,2,1]),d:r([2,4,0,3,3,3,3,1]),e:r([2,4,0,3,0,3,3,1]),
+                fi:[MLX.fiMonths(1000,2000,0,4),MLX.fiMonths(1000,0,0,4),MLX.fiMonths(12000,0,1000,0)],les:MLX.LESSONS.length,src:MLX.LESSONS.every(l=>l.src&&l.x&&l.t)}}""")
+            want = {'a': [0, 'calm', 0, 'Простой'], 'b': [2, 'bal', 5, 'Взвешенный'], 'c': [3, 'bold', 10, 'Как у автора'], 'd': [4, 'bold', 10, 'Как у автора'], 'e': [4, 'calm', 0, 'Простой']}
+            ok('3.0: личный план — этап, профиль и потолок крипты для пяти разных людей') if all(pure[k] == v for k, v in want.items()) else fail('3.0: расчёт плана', str(pure))
+            ok('3.0: число свободы — срок: уже есть / недостижимо без взносов / 12 месяцев; 18 уроков с источниками') if pure['fi'] == [0, None, 12] and pure['les'] == 18 and pure['src'] else fail('3.0: число свободы и уроки', str(pure))
+            pg.evaluate("MLX.openPlan()"); pg.wait_for_timeout(700)
+            for a in (1, 2, 2, 1, 2, 1, 1, 0):
+                pg.evaluate(f"document.querySelector('#xBody [data-qa=\"{a}\"]').click()"); pg.wait_for_timeout(200)
+            pg.wait_for_timeout(900)
+            t = pg.inner_text('#xBody')
+            st = pg.evaluate("(()=>{const p=JSON.parse(localStorage.getItem('ml-plan:'+mlUser.id)||'null'),c=JSON.stringify(window.__mlCalls||[]);return {saved:!!(p&&p.a&&p.a.cus===2),leak:/\"cus\"|ml-plan/.test(c)}})()")
+            if 'Этап 3 из 5' in t and 'Полная подушка' in t and 'до 5%' in t and 'Взвешенный' in t and st['saved'] and not st['leak']: ok('3.0: анкета из 8 вопросов → этап 3, потолок до 5%; ответы только на телефоне, в базу не уходят')
+            else: fail('3.0: анкета плана', str(st) + ' ' + t[:200])
+            pg.evaluate("document.querySelector('#xBody [data-step]').click()"); pg.wait_for_timeout(1300)
+            pg.fill('#fiExp', '800'); pg.fill('#fiSav', '6000'); pg.fill('#fiAdd', '300'); pg.wait_for_timeout(800)
+            r = pg.evaluate("""()=>({ck:document.querySelector('#xBody [data-step]').getAttribute('aria-checked'),fi:document.getElementById('fiOut').innerText,
+                card:document.getElementById('xPlan').innerText,today:document.getElementById('xToday').innerText})""")
+            if r['ck'] == 'true' and '$316 800' in r['fi'] and '$480 000' in r['fi'] and 'этап 3 из 5' in r['card'] and 'при потолке 5%' in r['today']: ok('3.0: шаг отмечен, число свободы ×33 = $316 800, главная показывает этап и долю крипты выше потолка')
+            else: fail('3.0: шаги и число свободы', str(r)[:400])
+            shot(pg, 'v3-plan')
+            pg.evaluate("document.querySelector('#xBody [data-x=learn]').click()"); pg.wait_for_timeout(600)
+            rows = pg.evaluate("document.querySelectorAll('#xBody [data-les]').length")
+            pg.evaluate("document.querySelector('#xBody [data-les=spec]').click()"); pg.wait_for_timeout(600)
+            t = pg.inner_text('#xBody')
+            ok('3.0: «Знания» — 18 уроков, урок открывается с источником из книг') if rows == 18 and 'Источник:' in t and 'Грэхем' in t and 'не инвестиционный совет' in t else fail('3.0: знания', f'{rows} {t[:200]}')
+            shot(pg, 'v3-lesson')
+        scenario('3.0: личный план и знания', {'session': True, 'docs': SEED3}, s_v3_plan)
+
+        def s_v3_price(pg, n):
+            wait_app(pg); pg.wait_for_timeout(600)
+            pg.evaluate("openAct('buy');setBuyMode('one')"); pg.wait_for_timeout(700)
+            pg.fill('#oSym', 'BTC'); pg.fill('#oUsd', '100'); pg.fill('#oPrice', '100000'); pg.wait_for_timeout(250)
+            auto = pg.evaluate("document.getElementById('oQty').value")
+            pg.fill('#oQty', '0.0011'); pg.fill('#oPrice', '90000'); pg.wait_for_timeout(250)
+            manual = pg.evaluate("document.getElementById('oQty').value")
+            ok('3.0: цена покупки вручную → количество считается само; вписанное человеком не затирается') if auto == '0.001' and manual == '0.0011' else fail('3.0: цена покупки', f'{auto} / {manual}')
+            shot(pg, 'v3-price')
+        scenario('3.0: цена покупки вручную', {'session': True, 'docs': SEED}, s_v3_price)
+
+        def s_v3_demo(pg, n):
+            pg.wait_for_selector('#mlaDemo', state='visible', timeout=8000)
+            pg.click('#mlaDemo'); wait_app(pg); pg.wait_for_timeout(3500)
+            r = pg.evaluate("""()=>({auth:!!document.getElementById('mlAuth'),bar:!!document.getElementById('mlDemoBar'),tx:S.tx.length,syms:derive().syms.join(','),tot:derive().total,del:document.getElementById('delBtn').hidden})""")
+            if not r['auth'] and r['bar'] and r['tx'] >= 20 and r['syms'] == 'BTC,ETH,SOL' and r['tot'] > 0 and r['del']: ok('3.0: демо без регистрации — пример портфеля из трёх монет, полоса «Демо», удаление аккаунта скрыто')
+            else: fail('3.0: демо', str(r))
+            shot(pg, 'v3-demo')
+            pg.evaluate("openAct('buy');setBuyMode('one')"); pg.wait_for_timeout(600)
+            pg.fill('#oSym', 'BTC'); pg.fill('#oUsd', '100'); pg.fill('#oPrice', '100000'); pg.wait_for_timeout(200)
+            pg.evaluate("document.querySelector('#actSheet .sh-foot .btn:not(.ghost)').click()"); pg.wait_for_timeout(1200)
+            w = pg.evaluate("""()=>({tx:S.tx.length,calls:JSON.stringify(window.__mlCalls||[]),ls:Object.keys(localStorage).filter(k=>k.startsWith('ml-docs')).length})""")
+            if w['tx'] == r['tx'] + 1 and not re.search(r'upsert|doc_merge|delete', w['calls']) and w['ls'] == 0: ok('3.0: демо — запись живёт только в памяти: в базу и на телефон ничего не сохраняется')
+            else: fail('3.0: демо, запись', str(w)[:300])
+            pg.click('#mlDemoGo'); pg.wait_for_selector('#mlAuth .mla-sub', state='visible', timeout=8000); pg.wait_for_timeout(900)
+            sub = pg.inner_text('#mlAuth .mla-sub')
+            ok('3.0: демо — «Создать аккаунт» открывает регистрацию, пример стёрт') if sub == 'Новый аккаунт' and pg.evaluate("S.tx.length") == 0 else fail('3.0: демо, выход', sub)
+        scenario('3.0: демо без регистрации', {'session': False, 'docs': []}, s_v3_demo)
+
+        def s_v3_auth_calm(pg, n):
+            pg.wait_for_selector('#mlaPass', state='visible', timeout=8000)
+            a = pg.evaluate("""()=>{const c=document.querySelector('.mla-card');document.querySelector('#mlAuth [data-to=up]').click();
+                return {first:c.classList.contains('first'),sub:document.querySelector('#mlAuth .mla-sub').textContent,cur:document.querySelectorAll('.mla-curtain').length,logo:!!document.querySelector('.mla-logo use')}}""")
+            ok('3.0: вход при «уменьшить движение» — экран меняется сразу, без шторки; знак на месте') if not a['first'] and a['sub'] == 'Новый аккаунт' and a['cur'] == 0 and a['logo'] else fail('3.0: вход без анимаций', str(a))
+        scenario('3.0: вход, уменьшить движение', {'session': False, 'docs': []}, s_v3_auth_calm, motion='reduce')
 
         browser.close()
     srv.shutdown()
