@@ -6,7 +6,9 @@
 <title>MoneyLife</title>
 <meta name="theme-color" content="#06040e">
 <script>/* тема до отрисовки: «Авто» — как в телефоне, иначе выбор из настроек */
-(function(){try{var p=JSON.parse(localStorage.getItem('cp-prefs2')||'{}'),t=p.theme||'system',d=t==='system'?(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark'):t;document.documentElement.setAttribute('data-theme',d);document.querySelector('meta[name=theme-color]').content=d==='light'?'#f5f2fc':'#06040e';}catch(e){}})();</script>
+(function(){try{var p=JSON.parse(localStorage.getItem('cp-prefs2')||'{}'),t=p.theme||'system',d=t==='system'?(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark'):t;document.documentElement.setAttribute('data-theme',d);document.querySelector('meta[name=theme-color]').content=d==='light'?'#f5f2fc':'#06040e';}catch(e){}
+/* «лёгкий» режим: слабый телефон или экономия трафика — без размытия и лесенок */
+try{var n=navigator,c=n.connection;if((n.hardwareConcurrency&&n.hardwareConcurrency<=4)||(n.deviceMemory&&n.deviceMemory<=3)||(c&&c.saveData))document.documentElement.classList.add('lite');}catch(e){}})();</script>
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -279,13 +281,25 @@ details.cd:first-child{border-top:0}
 .d14-x svg{width:18px;height:18px}
 .d14-t{font-weight:800;font-size:17px;line-height:1.25}
 .d14-p{font-size:14px;color:var(--mute);line-height:1.45}
-.d14 .meter{margin-top:0;height:4px}
+.d14-seg{display:grid;grid-template-columns:repeat(14,1fr);gap:3px;margin-top:-2px}
+.d14-seg i{height:4px;border-radius:2px;background:var(--line2)}
+.d14-seg i.on{background:var(--accent)}
+.d14-seg i.cur{background:var(--grad)}
 .d14 .btnrow .btn{min-height:48px}
-.d14-min{flex-direction:row;align-items:center;gap:10px;padding:12px 16px;min-height:48px;font-size:14px;color:var(--mute)}
+.btn.soft{background:var(--accent-soft);color:var(--lav);box-shadow:none;border:1px solid transparent}
+.d14-min{position:relative;overflow:hidden;flex-direction:row;align-items:center;gap:10px;padding:12px 16px;min-height:56px;font-size:14px;color:var(--mute)}
 .d14-min b{color:var(--fg);font-weight:700}
-.d14-ok{color:var(--pos);font-weight:800}
-.d14-inv{gap:10px}
-.d14-inv b{font-weight:700;font-size:15px}
+.d14-ok{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;flex:none;background:var(--pos-soft);color:var(--pos)}
+.d14-ok svg{width:14px;height:14px}
+.d14-bar{position:absolute;left:0;bottom:0;height:3px;background:var(--accent);border-radius:0 2px 2px 0}
+.d14-bar.full{background:var(--grad)}
+.d14-inv{flex-direction:row;align-items:center;gap:10px;padding:8px 8px 8px 16px;min-height:64px}
+.d14-it{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+.d14-it b{font-weight:700;font-size:15px}
+.d14-it small{font-size:12px;color:var(--mute);line-height:1.3}
+.d14-ib{display:flex;gap:6px;flex:none}
+.d14-ib .btn{min-height:48px;padding:8px 12px}
+@media (max-width:359px){.d14-inv{flex-direction:column;align-items:stretch;padding:12px 16px}.d14-ib .btn{flex:1}}
 
 /* кнопки */
 .btn{border:0;border-radius:var(--r-m);padding:13px 18px;font-weight:700;font-size:15px;cursor:pointer;background:var(--grad);color:#fff;box-shadow:0 10px 26px -12px var(--glow);transition:transform .15s var(--ease),opacity .2s}
@@ -505,7 +519,6 @@ button:focus-visible{outline:2px solid var(--pink);outline-offset:2px}
 [data-theme="light"] .mark{background:#ffffff}
 [data-theme="light"] .signal{background:linear-gradient(135deg,#fff0f2,#fff 60%,#fff4f6);border-color:#e2364b55;box-shadow:0 14px 34px -26px #e2364b}
 [data-theme="light"] .d14{background:linear-gradient(135deg,#f1eaff,#ffffff 60%,#fbf4ff);border-color:#a64dff33}
-[data-theme="light"] .d14-ok{color:#0f9a68}
 [data-theme="light"] .signal.soft{background:linear-gradient(135deg,#fff8ea,#fff 60%,#fffaf0);border-color:#d9a13566}
 [data-theme="light"] .mi.main{background:linear-gradient(135deg,#f1eaff,#ffffff);border-color:#a64dff44}
 [data-theme="light"] .card{box-shadow:0 1px 2px #1b153008,0 8px 24px -18px #1b153030}
@@ -669,13 +682,284 @@ input::placeholder{color:var(--mute);opacity:.8;font-weight:400}
 .mla-sub{color:var(--mute);margin:0 0 6px}.mla-note{font-size:12px;color:var(--dim);margin:4px 0 0}
 #mlUpd{position:fixed;left:16px;right:16px;bottom:calc(96px + env(safe-area-inset-bottom,0px));z-index:120;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;border-radius:var(--r-l);background:var(--raise);border:1px solid var(--line2);box-shadow:0 12px 30px -10px #000}
 </style>
+<style id="v3">
+/* ===== MoneyLife 3.0 (10.11.2026): новый знак, движение, свежие поверхности. Всё — поверх прежних правил, цвета — токенами ===== */
+:root{
+  --ember:#ff9a3d; --gold:#ffc24d; --gold-soft:#ffc24d1f;
+  --grad-btn:linear-gradient(135deg,#6a35ff 0%,#8f3df5 52%,#b934c4 100%);   /* кнопки: белый текст ≥ 4,8:1 по всей длине */
+  --tabc-home:#9a7bff; --tabc-coins:#b76bff; --tabc-strategy:#e06bff; --tabc-activity:#ff6fd8;
+}
+:root[data-theme="light"]{--ember:#c2620e; --gold:#a86a10; --gold-soft:#d9a1351c; --tabc-home:#6a35ff; --tabc-coins:#8f3df5; --tabc-strategy:#b934c4; --tabc-activity:#d0339f}
+
+/* подписи разделов — обычным регистром: спокойнее и читается быстрее, чем разрядка заглавными */
+.label{font-family:var(--ui);font-weight:700;font-size:13px;letter-spacing:.01em;text-transform:none}
+:focus-visible{outline:2px solid var(--lav);outline-offset:2px}
+input:focus-visible,select:focus-visible,textarea:focus-visible{outline:none}
+
+/* знак в шапке */
+.mark{width:40px;height:40px;border:0;background:none;border-radius:12px;overflow:hidden;box-shadow:0 8px 20px -10px var(--glow)}
+.mark svg{width:40px;height:40px;display:block}
+[data-theme="light"] .mark{background:none}
+
+/* поверхности: тонкий блик по верхней кромке */
+.card,.tile,.list,.mi{box-shadow:inset 0 1px 0 #ffffff0a}
+
+/* карточка баланса */
+.hero{border-color:#ffffff1f;background:linear-gradient(155deg,#241356 0%,#150b33 46%,#0b0620 100%);box-shadow:0 28px 60px -36px #7a3cffcc,inset 0 1px 0 #ffffff1a}
+.hero-bg{position:absolute;inset:0;border-radius:inherit;overflow:hidden;pointer-events:none}
+.hero-bg::before{content:"";position:absolute;right:-18%;top:-52%;width:86%;aspect-ratio:1;border-radius:50%;background:radial-gradient(closest-side,#9a6bff5c,#9a6bff00)}
+.hero-bg::after{content:"";position:absolute;left:-26%;bottom:-64%;width:84%;aspect-ratio:1;border-radius:50%;background:radial-gradient(closest-side,#ff4fd830,#ff4fd800)}
+.hero-bg svg{position:absolute;left:0;top:8px;width:100%;height:54px;opacity:.45}
+.hero-bg .pl{stroke-dasharray:1;stroke-dashoffset:1}
+body:not(.loading) .hero-bg .pl{animation:pldraw 1.5s .2s var(--ease) forwards}
+@keyframes pldraw{to{stroke-dashoffset:0}}
+.hero .iso{right:-8px;top:6px;width:150px;height:150px;opacity:.9}
+.hero-l{position:relative;display:inline-flex;align-items:center;gap:2px;border:0;background:none;padding:0;margin:0;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.hero-l svg{width:14px;height:14px;opacity:.7}
+.hero-l::after{content:"";position:absolute;inset:-14px -12px -10px -12px}
+.hero-l:active{opacity:.7}
+
+/* кнопки */
+.btn{background:var(--grad-btn);box-shadow:0 10px 26px -12px var(--glow),inset 0 1px 0 #ffffff33;transition:transform .15s var(--ease),opacity .2s,filter .2s}
+.btn:active{filter:brightness(1.08)}
+.btn.soft{box-shadow:none}
+.qa i{border-radius:20px;box-shadow:inset 0 1px 0 #ffffff0d}
+.qa button:first-child i{background:var(--grad-btn);box-shadow:0 12px 26px -12px var(--glow),inset 0 1px 0 #ffffff40}
+[data-theme="light"] .qa button:first-child i{background:var(--grad-btn)}
+.plus{background:var(--grad-btn);border-radius:20px;box-shadow:0 12px 28px -8px var(--glow),0 0 0 6px var(--bg),inset 0 1px 0 #ffffff40}
+[data-theme="light"] .plus{box-shadow:0 12px 28px -8px var(--glow),0 0 0 6px var(--bg),inset 0 1px 0 #ffffff40}
+.switch[aria-checked="true"]{background:var(--grad-btn)}
+.mi.main i{background:var(--grad-btn)}
+
+/* нижняя панель: у каждой вкладки свой оттенок внутри фирменного градиента, под значком — «капля» */
+nav.tabs .in{position:relative}
+.tab{z-index:1}
+.tab[data-tab="home"]{--tab-c:var(--tabc-home)}.tab[data-tab="coins"]{--tab-c:var(--tabc-coins)}.tab[data-tab="strategy"]{--tab-c:var(--tabc-strategy)}.tab[data-tab="activity"]{--tab-c:var(--tabc-activity)}
+.tab::before{background:var(--tab-c,var(--pink))}
+.tab[aria-current="page"] svg{color:var(--tab-c,var(--pink));filter:drop-shadow(0 0 6px color-mix(in srgb,var(--tab-c,#ff52d9) 55%,transparent))}
+.tab:active svg{transform:scale(.9)}
+.tab-ink{position:absolute;z-index:0;left:0;top:1px;width:54px;height:34px;margin-left:-27px;border-radius:17px;pointer-events:none;opacity:0;
+  background:color-mix(in srgb,var(--ink-c,#a64dff) 17%,transparent);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--ink-c,#a64dff) 26%,transparent);
+  transform:translateX(var(--ink-x,0px));transition:transform 340ms var(--ease-spring),background-color var(--dur-m) linear,box-shadow var(--dur-m) linear,opacity var(--dur-s) linear}
+.tab-ink.on{opacity:1}
+[data-theme="light"] .tab-ink{background:color-mix(in srgb,var(--ink-c,#7a3cf0) 11%,transparent)}
+
+/* смена вкладки: сдвиг в сторону перехода, блоки приходят лесенкой (только opacity/transform) */
+@keyframes vin{from{opacity:0;transform:translate3d(var(--vx,0px),6px,0)}to{opacity:1;transform:none}}
+.view.enter>*{animation:vch var(--dur-m) var(--ease) backwards}
+.view.enter>:nth-child(2){animation-delay:35ms}.view.enter>:nth-child(3){animation-delay:70ms}.view.enter>:nth-child(4){animation-delay:105ms}.view.enter>:nth-child(5){animation-delay:140ms}.view.enter>:nth-child(n+6){animation-delay:175ms}
+@keyframes vch{from{opacity:0;transform:translateY(10px)}}
+
+/* шторки: открытие мягче, закрытие быстрее, содержимое — лесенкой */
+.sheet{transition:transform 240ms cubic-bezier(.3,0,.8,.15),visibility 0s linear 240ms}
+.sheet.open{transition:transform var(--dur-l) var(--ease-sheet),visibility 0s}
+.scrim{transition:opacity .2s linear;-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px)}
+.scrim.open{transition:opacity .3s linear}
+.sheet.open .sh-body .sh-in>*{animation:shin 240ms var(--ease) backwards}
+.sheet.open .sh-body .sh-in>:nth-child(1){animation-delay:60ms}.sheet.open .sh-body .sh-in>:nth-child(2){animation-delay:90ms}.sheet.open .sh-body .sh-in>:nth-child(3){animation-delay:120ms}.sheet.open .sh-body .sh-in>:nth-child(4){animation-delay:150ms}.sheet.open .sh-body .sh-in>:nth-child(n+5){animation-delay:180ms}
+@keyframes shin{from{opacity:0;transform:translateY(8px)}}
+html.lite .scrim{-webkit-backdrop-filter:none;backdrop-filter:none}
+html.lite .view.enter>*,html.lite .sheet.open .sh-body .sh-in>*{animation:none}
+
+/* мелкий текст: приглушённый, но читаемый (контраст ≥ 4,5:1) */
+.note,.nw-s,.cv-hint,.cd-r{color:var(--mute)}
+[data-theme="light"] .signal.soft .chip.warn{color:#8a5a0c;background:#d9a1352e}
+
+/* вход: знак, первое появление, шторка между «Вход» и «Регистрация» */
+#mlAuth{display:flex;overflow:auto}
+.mla-card{position:relative;overflow:hidden;margin:auto;box-shadow:inset 0 1px 0 #ffffff0d,0 30px 80px -40px #7a3cff99}
+.mla-brand{display:flex;align-items:center;gap:12px}
+.mla-logo{width:48px;height:48px;border-radius:14px;overflow:hidden;flex:none;box-shadow:0 12px 28px -12px var(--glow)}
+.mla-logo svg{width:100%;height:100%;display:block}
+.mla-card .mla-brand .wm{margin:0}
+.mla-curtain{position:absolute;z-index:5;left:-30%;top:-30%;width:160%;height:160%;background:var(--grad);pointer-events:none;transform:translateX(-130%) rotate(-12deg);box-shadow:0 0 0 2px #ff52d999}
+.mla-card.first{animation:mlacard 500ms var(--ease) backwards}
+.mla-card.first>*,.mla-card.sw>*{animation:mlain 280ms var(--ease) backwards}
+.mla-card.first>:nth-child(1){animation-delay:140ms}.mla-card.first>:nth-child(2){animation-delay:180ms}.mla-card.first>:nth-child(3){animation-delay:220ms}.mla-card.first>:nth-child(4){animation-delay:260ms}.mla-card.first>:nth-child(n+5){animation-delay:300ms}
+.mla-card.sw>:nth-child(2){animation-delay:40ms}.mla-card.sw>:nth-child(3){animation-delay:80ms}.mla-card.sw>:nth-child(4){animation-delay:120ms}.mla-card.sw>:nth-child(n+5){animation-delay:160ms}
+.mla-card>.mla-curtain{animation:none!important}
+@keyframes mlacard{from{opacity:0;transform:translateY(24px) scale(.98)}}
+@keyframes mlain{from{opacity:0;transform:translateY(12px)}}
+.mla-demo{align-self:center;margin-top:-4px}
+
+/* знакомство: шаги сменяются со сдвигом, точки прогресса вытягиваются */
+.ob-dots i{transition:width 300ms var(--ease),background-color 300ms var(--ease)}
+.ob-dots i.cur{width:32px}
+.ob-card.fwd>*{animation:obin 280ms var(--ease) backwards}
+.ob-card.back>*{animation:obinb 280ms var(--ease) backwards}
+.ob-card.fwd>:nth-child(2),.ob-card.back>:nth-child(2){animation-delay:35ms}.ob-card.fwd>:nth-child(3),.ob-card.back>:nth-child(3){animation-delay:70ms}.ob-card.fwd>:nth-child(n+4),.ob-card.back>:nth-child(n+4){animation-delay:105ms}
+@keyframes obin{from{opacity:0;transform:translateX(28px)}}
+@keyframes obinb{from{opacity:0;transform:translateX(-28px)}}
+
+/* праздник: искры от Слитка и важных шагов */
+.spark-p{position:fixed;left:0;top:0;z-index:300;width:10px;height:10px;border-radius:3px;pointer-events:none;will-change:transform,opacity}
+
+/* ===== MoneyLife 3.0: новые разделы (plus.js) ===== */
+#xBody>p{margin:0;font-size:15px;line-height:1.5}
+.setbtn{width:100%;border-left:0;border-right:0;border-bottom:0;background:none;color:inherit;font:inherit;text-align:left;cursor:pointer;min-height:56px;-webkit-tap-highlight-color:transparent}
+.setbtn:first-child{border-top:0}
+.setbtn:active{opacity:.7}
+
+/* «Сегодня» */
+.card.xt{gap:10px;padding:14px 16px 6px}
+.xt .sec-h{margin-bottom:0}
+.xt-l{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.xt-l li{display:flex;align-items:center;gap:10px;min-height:48px;padding:6px 0;border-top:1px solid var(--line);font-size:14px;line-height:1.35}
+.xt-l li:first-child{border-top:0}
+.xs+.xt-l li:first-child{border-top:1px solid var(--line)}
+.xt-l li>i{width:8px;height:8px;border-radius:50%;flex:none;background:var(--accent)}
+.xt-l li.pos>i{background:var(--pos)}.xt-l li.neg>i{background:var(--neg)}.xt-l li.warn>i{background:var(--warn)}.xt-l li.info>i{background:var(--info)}.xt-l li.gold>i{background:var(--gold)}.xt-l li.mute>i{background:var(--dim)}
+.xt-l li>span{flex:1;min-width:0}
+.xt-l li b{font-weight:700}
+.xt-l .more{position:relative;flex:none;color:var(--lav);padding:8px 0 8px 8px}
+.xs{display:flex;flex-direction:column;gap:6px;width:100%;border:0;background:none;padding:0 0 8px;margin:0;font:inherit;color:inherit;text-align:left;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.xs-track{position:relative;display:block;height:8px;border-radius:4px;background:var(--line2);margin:22px 14px 20px}
+.xs-fill{position:absolute;left:0;top:0;bottom:0;border-radius:4px;background:linear-gradient(90deg,#7a3cff44,#c04dff)}
+.xs-mk{position:absolute;top:-4px;width:2px;height:16px;margin-left:-1px;border-radius:1px;background:var(--dim)}
+.xs-mk b{position:absolute;top:19px;left:50%;transform:translateX(-50%);font-size:10.5px;font-weight:600;color:var(--mute);white-space:nowrap;font-variant-numeric:tabular-nums}
+.xs-mk.go{background:var(--pos)}.xs-mk.go b{color:var(--pos)}
+.xs-mk.hold,.xs-mk.near{background:var(--warn)}.xs-mk.hold b,.xs-mk.near b{color:var(--warn)}
+.xs-mk.done{background:var(--pos);opacity:.55}.xs-mk.skip{opacity:.4}
+.xs-mk.ath{background:var(--lav)}.xs-mk.ath b{color:var(--lav)}
+.xs-mk.goal{background:var(--gold)}.xs-mk.goal b{top:auto;bottom:19px;color:var(--gold)}
+.xs-cur{position:absolute;top:50%;width:16px;height:16px;margin:-8px 0 0 -8px;border-radius:50%;background:#fff;box-shadow:0 0 0 4px #a64dff55,0 2px 8px #0008}
+[data-theme="light"] .xs-cur{background:var(--accent);box-shadow:0 0 0 4px #7a3cf033,0 2px 6px #1b153033}
+.xs-cap{display:flex;justify-content:space-between;align-items:baseline;gap:10px;font-size:12.5px;line-height:1.3;color:var(--mute)}
+.xs-cap b{color:var(--fg);font-weight:700;white-space:nowrap}
+.xs.off .xs-track{opacity:.6}
+
+/* «Из чего итог» */
+.xtot{display:flex;flex-direction:column;gap:2px;align-items:flex-start}
+.xtot b{font-size:36px;line-height:1.1;font-weight:800;letter-spacing:-.025em;font-variant-numeric:tabular-nums}
+.xr{display:flex;align-items:center;gap:12px;padding:10px 14px;min-height:60px;border-top:1px solid var(--line)}
+.xr:first-child{border-top:0}
+.xr-n,.xr-v{display:flex;flex-direction:column;gap:1px;min-width:0}
+.xr-n{flex:1}.xr-v{align-items:flex-end;text-align:right}
+.xr b{font-size:15px;font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap}
+.xr small{font-size:12px;color:var(--mute);white-space:nowrap;font-variant-numeric:tabular-nums}
+
+/* анкета личного плана */
+.xq-prog{display:grid;grid-template-columns:repeat(8,1fr);gap:4px}
+.xq-prog i{height:4px;border-radius:2px;background:var(--line2)}
+.xq-prog i.on{background:var(--accent)}.xq-prog i.cur{background:var(--grad)}
+.xq-t{margin:0;font-size:21px;line-height:1.25;font-weight:800;letter-spacing:-.015em}
+.xq-o{display:flex;flex-direction:column;gap:8px}
+.xq-b{min-height:56px;text-align:left;padding:14px 16px;border-radius:var(--r-l);border:1px solid var(--line2);background:var(--surface2);color:var(--fg);font:inherit;font-weight:600;font-size:15px;line-height:1.3;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:transform .12s var(--ease),border-color .15s linear,background-color .15s linear}
+.xq-b:active{transform:scale(.98)}
+.xq-b[aria-checked="true"]{border-color:var(--accent);background:var(--accent-soft)}
+
+/* результат плана */
+.xp-hero{position:relative;overflow:hidden;padding:18px;border-radius:var(--r-xl);background:linear-gradient(150deg,#2a1563,#150b33 60%,#0b0620);border:1px solid #ffffff1f;color:#f5f1ff;display:flex;flex-direction:column;gap:8px;align-items:flex-start}
+.xp-hero::after{content:"";position:absolute;right:-20%;top:-70%;width:70%;aspect-ratio:1;border-radius:50%;background:radial-gradient(closest-side,#ffc24d33,#ffc24d00);pointer-events:none}
+.xp-hero h4{margin:0;font-size:26px;line-height:1.15;font-weight:800;letter-spacing:-.02em}
+.xp-hero p{margin:0;color:#cfc6ea;font-size:14px;line-height:1.45}
+.xp-hero p b{color:#fff}
+.xp-hero .chip{background:#ffffff1a;color:#e9defc}
+.xp-path{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.xp-path li{position:relative;display:flex;gap:12px;align-items:flex-start;padding:6px 0}
+.xp-path li>i{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;flex:none;z-index:1;font-style:normal;font-size:13px;font-weight:700;background:var(--surface2);border:1px solid var(--line2);color:var(--mute)}
+.xp-path li>i svg{width:14px;height:14px}
+.xp-path li.done>i{background:var(--pos-soft);border-color:transparent;color:var(--pos)}
+.xp-path li.cur>i{background:var(--grad-btn);border-color:transparent;color:#fff;box-shadow:0 6px 16px -6px var(--glow)}
+.xp-path li:not(:last-child)::after{content:"";position:absolute;left:13.5px;top:34px;bottom:-6px;width:1px;background:var(--line2)}
+.xp-path li>span{display:flex;flex-direction:column;gap:1px;padding-top:4px;min-width:0}
+.xp-path b{font-size:14.5px;font-weight:600;color:var(--mute)}
+.xp-path li.cur b{color:var(--fg);font-weight:700}
+.xp-path small{font-size:13px;color:var(--mute);line-height:1.35}
+.xp-step{display:flex;align-items:center;gap:6px;padding:8px 12px 8px 4px;min-height:64px;border-top:1px solid var(--line)}
+.xp-step:first-child{border-top:0}
+.xp-ck{width:48px;height:48px;flex:none;border:0;background:none;padding:0;display:grid;place-items:center;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.xp-ck svg{width:26px;height:26px;padding:5px;box-sizing:border-box;border-radius:50%;border:2px solid var(--line2);color:transparent;transition:background-color .18s linear,border-color .18s linear,color .18s linear,transform .2s var(--ease-spring)}
+.xp-ck:active svg{transform:scale(.86)}
+.xp-step.on .xp-ck svg{background:var(--pos);border-color:var(--pos);color:#06281c}
+.xp-st{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.xp-st b{font-size:14.5px;font-weight:600;line-height:1.3}
+.xp-st small{font-size:12px;color:var(--mute);line-height:1.3}
+.xp-step.on .xp-st b{color:var(--mute)}
+.xp-step .more{position:relative;flex:none;color:var(--lav)}
+.card.xp-ceil{gap:8px}
+.xp-ceil>b{align-self:flex-start;font-size:36px;line-height:1.1;font-weight:800;letter-spacing:-.025em;background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}
+.xp-ceil p{margin:0;font-size:14px;line-height:1.45}
+.xp-share{display:grid;grid-template-columns:1fr auto;gap:6px 10px;align-items:baseline;font-size:13px;color:var(--mute);padding:10px 0 4px;border-top:1px solid var(--line)}
+.xp-share>b{font-size:16px;color:var(--fg);font-weight:700}
+.xp-share>i{grid-column:1/-1;position:relative;height:8px;border-radius:4px;background:var(--line2)}
+.xp-share>i>i{position:absolute;left:0;top:0;bottom:0;border-radius:4px;background:var(--pos)}
+.xp-share.over>i>i{background:var(--warn)}.xp-share.over>b{color:var(--warn)}
+.xp-share em{position:absolute;top:-4px;bottom:-4px;width:2px;margin-left:-1px;background:var(--fg);border-radius:1px}
+.card.xp-rules{gap:8px;align-items:flex-start}
+.xp-rules>b{font-size:19px;font-weight:800;letter-spacing:-.01em}
+.xp-rules .sp{font-size:13.5px;color:var(--lav);font-weight:600;line-height:1.35}
+.xp-rules p{margin:0;font-size:14px;line-height:1.45;color:var(--mute)}
+.xp-rules .btn{align-self:stretch;min-height:48px}
+.card.xf{gap:12px}
+.xf .field input{min-width:0}
+.xf-t{display:flex;flex-direction:column}
+.xf-r{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 10px;padding:10px 0;border-top:1px solid var(--line)}
+.xf-r:first-child{border-top:0;padding-top:0}
+.xf-r>span{display:flex;flex-direction:column;gap:1px;min-width:0}
+.xf-r>.rt{align-items:flex-end;text-align:right}
+.xf-r b{font-size:14.5px;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}
+.xf-r small{font-size:12px;color:var(--mute);line-height:1.3}
+.xf-r>i{grid-column:1/-1;position:relative;height:4px;border-radius:2px;background:var(--line2);margin-top:6px;overflow:hidden}
+.xf-r>i>i{position:absolute;left:0;top:0;bottom:0;border-radius:2px;background:var(--grad)}
+
+/* карточка плана на главной и в «Стратегии» */
+.card.xpc{border-color:var(--line2)}
+.xpc-row{display:flex;flex-direction:row;align-items:center;gap:12px;padding:12px 14px;width:100%;min-height:64px;text-align:left;font:inherit;color:inherit;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.xpc-row:active{transform:scale(.99)}
+.xpc .col{flex:1;gap:2px}
+.xpc .col b{font-size:15px;font-weight:700;line-height:1.3}
+.xpc .col b .mute{font-weight:600;color:var(--mute)}
+.xpc .col small{font-size:12.5px;color:var(--mute);line-height:1.35}
+.xpc-i{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;flex:none;background:var(--gold-soft);color:var(--gold)}
+.xpc-i svg{width:20px;height:20px}
+.xpc-ring{position:relative;width:40px;height:40px;border-radius:50%;flex:none;display:grid;place-items:center;background:conic-gradient(var(--accent) calc(var(--p,0)*360deg),var(--line2) 0)}
+.xpc-ring::before{content:"";position:absolute;inset:4px;border-radius:50%;background:var(--surface)}
+.xpc-ring b{position:relative;font-size:15px;font-weight:800}
+.card.xpc-inv{flex-direction:row;flex-wrap:wrap;align-items:flex-start;gap:12px}
+.xpc-tx{flex:1;min-width:0}
+.xpc-tx b{font-size:16px;font-weight:700}
+.xpc-tx p{margin:4px 0 0;font-size:13.5px;color:var(--mute);line-height:1.4}
+.xpc-inv .btnrow{width:100%}
+.xpc-inv .btnrow .btn{min-height:48px}
+
+/* уроки и объяснения */
+.xl{display:flex;flex-direction:column;gap:12px;align-items:flex-start}
+.xl h4{margin:0;font-size:25px;line-height:1.18;font-weight:800;letter-spacing:-.02em}
+.xl p{margin:0;font-size:16px;line-height:1.55}
+.xl-src,#xBody>p.xl-src{font-size:13px;line-height:1.45;color:var(--mute)}
+.xl-src b{color:var(--lav);font-weight:700}
+.xl-app{align-self:stretch;padding:12px 14px;border-radius:var(--r-l);background:var(--accent-soft);display:flex;flex-direction:column;gap:3px;font-size:14px;line-height:1.45}
+.xl-app b{font-size:12.5px;color:var(--lav);font-weight:700}
+.xl-ck{width:24px;height:24px;border-radius:50%;border:2px solid var(--line2);flex:none;display:grid;place-items:center;box-sizing:border-box}
+.xl-ck.on{background:var(--pos-soft);border-color:transparent;color:var(--pos)}
+.xl-ck svg{width:14px;height:14px}
+.xg{display:flex;flex-direction:column;gap:8px}
+.xg-bar{position:relative;height:10px;border-radius:5px;background:linear-gradient(90deg,#ff5d6c,#ffc65c 50%,#34e0a1);margin:6px 9px 0}
+.xg-bar i{position:absolute;top:-5px;width:20px;height:20px;margin-left:-10px;border-radius:50%;background:#fff;border:3px solid var(--bg);box-sizing:border-box;box-shadow:0 2px 6px #0006}
+.xg-s{display:flex;justify-content:space-between;font-size:12px;color:var(--mute)}
+.xg>b{font-size:21px;font-weight:800;letter-spacing:-.01em}
+
+/* демо без регистрации */
+#mlDemoBar{position:fixed;left:12px;right:12px;bottom:calc(96px + env(safe-area-inset-bottom,0px));z-index:45;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 8px 8px 14px;border-radius:var(--r-l);background:var(--raise);border:1px solid var(--gold);box-shadow:0 12px 30px -10px #000;font-size:13.5px;line-height:1.3}
+#mlDemoBar b{color:var(--gold);font-weight:700}
+#mlDemoBar .btn{min-height:44px;padding:8px 14px;flex:none}
+</style>
 </head>
 <body class="loading">
 
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><defs>
+<radialGradient id="lgB" cx="22%" cy="12%" r="110%"><stop offset="0" stop-color="#4a23a8"/><stop offset=".42" stop-color="#1d0e4a"/><stop offset="1" stop-color="#07040f"/></radialGradient>
+<radialGradient id="lgP" cx="88%" cy="92%" r="60%"><stop offset="0" stop-color="#ff4fd8" stop-opacity=".42"/><stop offset="1" stop-color="#ff4fd8" stop-opacity="0"/></radialGradient>
+<linearGradient id="lgW" gradientUnits="userSpaceOnUse" x1="48" y1="0" x2="404" y2="0"><stop offset="0" stop-color="#b79bff"/><stop offset=".45" stop-color="#fff"/><stop offset="1" stop-color="#ffd9f6"/></linearGradient>
+<radialGradient id="lgC" cx="36%" cy="30%" r="80%"><stop offset="0" stop-color="#fff3c4"/><stop offset=".45" stop-color="#ffc24d"/><stop offset="1" stop-color="#ff8a2a"/></radialGradient>
+<symbol id="mlLogo" viewBox="0 0 512 512"><rect width="512" height="512" fill="url(#lgB)"/><rect width="512" height="512" fill="url(#lgP)"/><path d="M74 332h60l62-152 60 124 60-124 62 152" fill="none" stroke="url(#lgW)" stroke-width="52" stroke-linecap="round" stroke-linejoin="round"/><circle cx="438" cy="332" r="33" fill="url(#lgC)"/></symbol>
+<symbol id="mlMark" viewBox="0 0 512 512"><path d="M74 332h60l62-152 60 124 60-124 62 152" fill="none" stroke="url(#lgW)" stroke-width="52" stroke-linecap="round" stroke-linejoin="round"/><circle cx="438" cy="332" r="33" fill="url(#lgC)"/></symbol>
+</defs></svg>
 <div class="bgfx" aria-hidden="true"></div>
 <div class="app">
   <header class="top">
-    <div class="mark" aria-hidden="true"><svg viewBox="0 0 24 24"><defs><linearGradient id="mkG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ff52d9"/><stop offset="1" stop-color="#6a35ff"/></linearGradient></defs><path d="M12 2.5 20.5 7.2v9.6L12 21.5 3.5 16.8V7.2z" fill="none" stroke="url(#mkG)" stroke-width="1.6"/><path d="M12 7.2 16.2 9.6 12 12 7.8 9.6z" fill="#e7b6ff"/><path d="M7.8 9.6 12 12v4.8L7.8 14.4z" fill="#8f4dff"/><path d="M16.2 9.6 12 12v4.8l4.2-2.4z" fill="#c44dff"/></svg></div>
+    <div class="mark" aria-hidden="true"><svg viewBox="0 0 512 512"><use href="#mlLogo"/></svg></div>
     <div class="ttl"><h1 class="wm" aria-label="MoneyLife"><span>Money</span><span class="wm-l">Life</span></h1><div class="status" id="status"><i class="dot"></i><span>Загружаю…</span></div></div>
     <button type="button" class="ib" id="eyeBtn" aria-label="Скрыть суммы" aria-pressed="false"></button>
     <button type="button" class="ib" id="refreshBtn" aria-label="Обновить цены"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 0 0-14.9-3.9L4 9"/><path d="M4 4v5h5"/><path d="M4 13a8 8 0 0 0 14.9 3.9L20 15"/><path d="M20 20v-5h-5"/></svg></button>
@@ -688,9 +972,10 @@ input::placeholder{color:var(--mute);opacity:.8;font-weight:400}
   <section class="view" id="v-home" data-view="home">
     <div class="banner" id="liveBanner" hidden></div>
     <div class="hero has-ms">
+      <div class="hero-bg" aria-hidden="true"><svg viewBox="0 0 400 60" preserveAspectRatio="none"><defs><linearGradient id="hpl" x1="0" x2="1" y1="0" y2="0"><stop offset=".46" stop-color="#b79bff" stop-opacity="0"/><stop offset=".6" stop-color="#b79bff" stop-opacity=".9"/><stop offset=".7" stop-color="#ff7ad9" stop-opacity=".8"/><stop offset="1" stop-color="#ffc24d" stop-opacity="0"/></linearGradient></defs><path class="pl" pathLength="1" d="M0 44H236l14-30 14 24 14-24 14 30H400" fill="none" stroke="url(#hpl)" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/></svg></div>
       <div class="ms" id="mascot" aria-hidden="true"><img class="ms-still" alt="" src="data:image/webp;base64,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"></div>
-      <svg class="iso" viewBox="0 0 200 200" aria-hidden="true"><defs><linearGradient id="isoS" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ff52d9"/><stop offset="1" stop-color="#6a35ff"/></linearGradient><radialGradient id="isoG"><stop offset="0" stop-color="#d36bff" stop-opacity=".5"/><stop offset="1" stop-color="#d36bff" stop-opacity="0"/></radialGradient></defs><circle cx="100" cy="104" r="72" fill="url(#isoG)"/><g fill="none" stroke="url(#isoS)"><path d="M100 14 176 58v88l-76 44-76-44V58z" stroke-opacity=".5"/><path d="M100 40 153 70.5v61L100 162l-53-30.5v-61z" stroke-opacity=".32"/><path d="M100 14v26M176 58l-23 12.5M176 146l-23-14.5M100 190v-28M24 146l23-14.5M24 58l23 12.5" stroke-opacity=".28"/></g><g class="cube"><path d="M100 72 128 88 100 104 72 88z" fill="#ebbcff"/><path d="M72 88 100 104v32L72 120z" fill="#8a45ff"/><path d="M128 88 100 104v32l28-16z" fill="#c24dff"/><path d="M100 72 128 88 100 104 72 88z" fill="none" stroke="#fff" stroke-opacity=".5"/></g></svg>
-      <span class="label">Стоимость портфеля</span>
+      <svg class="iso" viewBox="0 0 512 512" aria-hidden="true"><use href="#mlMark"/></svg>
+      <button type="button" class="label hero-l" id="hInfo" aria-haspopup="dialog" aria-label="Стоимость портфеля — из чего складывается итог">Стоимость портфеля<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
       <div class="bal skel" id="hBal">$0 000</div>
       <div class="bal-sub skel" id="hSub">загружаю</div>
       <div class="chips" id="hChips"></div>
@@ -702,7 +987,9 @@ input::placeholder{color:var(--mute);opacity:.8;font-weight:400}
       <button type="button" data-act="menu"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/></svg></i>Ещё</button>
     </div>
     <div id="signal"></div>
+    <div id="xToday" hidden></div>
     <div id="d14" hidden></div>
+    <div id="xPlan" hidden></div>
     <div class="card">
       <div class="chart-head"><div class="chart-read" id="gRead"><div class="v skel">$0 000</div><div class="s">&nbsp;</div></div><div class="ranges" id="gRanges"></div></div>
       <div class="chartbox" id="gChart"></div>
@@ -732,6 +1019,7 @@ input::placeholder{color:var(--mute);opacity:.8;font-weight:400}
 
   <!-- СТРАТЕГИЯ -->
   <section class="view" id="v-strategy" data-view="strategy" hidden>
+    <div id="xPath" hidden></div>
     <div class="card">
       <div class="sec-h"><span class="label">Лестница докупок</span><span class="small mute" id="athLbl"></span></div>
       <div class="gauge" id="gauge"></div>
@@ -746,6 +1034,7 @@ input::placeholder{color:var(--mute);opacity:.8;font-weight:400}
       <p class="hint" id="planNote" style="margin-top:10px"></p>
     </div>
     <div><div class="sec-h"><span class="label">Подбор и рынок</span><span class="small mute" id="stLbl"></span></div><div class="list" id="stMenu"></div></div>
+    <div id="xLearn" hidden></div>
   </section>
 
   <!-- АКТИВНОСТЬ -->
@@ -768,6 +1057,7 @@ input::placeholder{color:var(--mute);opacity:.8;font-weight:400}
 </div>
 
 <nav class="tabs" aria-label="Разделы"><div class="in">
+  <i class="tab-ink" id="tabInk" aria-hidden="true"></i>
   <button type="button" class="tab" data-tab="home" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 10v10h13V10"/></svg>Главная</button>
   <button type="button" class="tab" data-tab="coins"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><ellipse cx="12" cy="6" rx="7" ry="3"/><path d="M5 6v6c0 1.7 3.1 3 7 3s7-1.3 7-3V6"/><path d="M5 12v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6"/></svg>Монеты</button>
   <button type="button" class="plus" id="plusBtn" aria-label="Новая запись"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
@@ -801,7 +1091,8 @@ input::placeholder{color:var(--mute);opacity:.8;font-weight:400}
       </div>
       <div id="buyOne" hidden style="display:flex;flex-direction:column;gap:12px">
         <div class="f2"><label class="field"><span>Монета</span><input type="text" id="oSym" maxlength="12" placeholder="например, BTC" autocomplete="off"></label><label class="field"><span>Потратил, $</span><input type="number" id="oUsd" step="any" min="0" inputmode="decimal"></label></div>
-        <label class="field"><span>Получил монет</span><input type="number" id="oQty" step="any" min="0" inputmode="decimal" aria-describedby="oQtyHint"><small class="hint" id="oQtyHint">смотри в истории сделок биржи</small></label>
+        <div class="f2"><label class="field"><span>Цена покупки, $</span><input type="number" id="oPrice" step="any" min="0" inputmode="decimal" placeholder="необязательно" aria-describedby="oQtyHint"></label><label class="field"><span>Получил монет</span><input type="number" id="oQty" step="any" min="0" inputmode="decimal" aria-describedby="oQtyHint"></label></div>
+        <small class="hint" id="oQtyHint">Количество смотри в истории сделок биржи. Или впиши цену покупки — посчитаю его сам.</small>
         <p class="hint" id="oHint"></p>
         <label class="check"><input type="checkbox" id="oDca"><span>Покупка из бюджета DCA<br><span class="hint">DCA — покупка на одну и ту же сумму каждый месяц. Отметь, если это плановая покупка.</span></span></label>
       </div>
@@ -933,6 +1224,14 @@ input::placeholder{color:var(--mute);opacity:.8;font-weight:400}
       <div class="setrow"><div><b>Голос персонажа</b><small>Мягкий голос робота и звуки при касании.</small></div><button type="button" class="switch" id="swMsSound" role="switch" aria-checked="true" aria-label="Голос персонажа"></button></div>
       <div class="setrow" id="d14Row"><div><b>Карточка «14 дней»</b><small>Короткие подсказки о приложении на главной</small></div><button type="button" class="switch" id="swD14" role="switch" aria-checked="true" aria-label="Карточка «14 дней»"></button></div>
     </div>
+    <span class="label">План и сигналы</span>
+    <div class="card" style="padding:4px 16px">
+      <button type="button" class="setrow setbtn" data-x="plan"><div><b>Личный план</b><small>Твой этап, потолок крипты и шаги — по 14 книгам о деньгах</small></div><span class="chev" aria-hidden="true">›</span></button>
+      <button type="button" class="setrow setbtn" id="goalBtn"><div><b>Цель BTC</b><small>Напомнить, когда цена дойдёт до твоей отметки: <span id="goalVal">не задана</span></small></div><span class="chev" aria-hidden="true">›</span></button>
+      <div class="setrow"><div><b>Сигналы на телефоне</b><small>Ступени лестницы и цель BTC. В фоне проверка идёт, когда разрешит телефон</small></div><button type="button" class="switch" id="swNotif" role="switch" aria-checked="false" aria-label="Сигналы на телефоне"></button></div>
+      <button type="button" class="setrow setbtn" data-x="learn0"><div><b>Знания</b><small>Короткие уроки из 14 книг о деньгах</small></div><span class="chev" aria-hidden="true">›</span></button>
+      <button type="button" class="setrow setbtn" data-x="share"><div><b>Поделиться результатом</b><small>Картинка с процентом и долями — без сумм</small></div><span class="chev" aria-hidden="true">›</span></button>
+    </div>
     <span class="label">Правила</span>
     <div class="card"><div class="kv" id="rules"></div></div>
     <span class="label" id="stratLbl">Изменить правила</span>
@@ -968,6 +1267,13 @@ input::placeholder{color:var(--mute);opacity:.8;font-weight:400}
     <p class="err" id="delErr" role="alert"></p>
     <button type="button" class="btn block danger" id="delGo" disabled>Удалить навсегда</button>
   </div></div>
+</div>
+
+<!-- Общая шторка новых разделов (plus.js): итог, личный план, знания, цель -->
+<div class="sheet" id="xSheet" role="dialog" aria-modal="true" aria-labelledby="xTitle">
+  <div class="sh-head"><div class="grab"></div><div class="sh-bar"><button type="button" class="ib" id="xBack" aria-label="Назад" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M15 5l-7 7 7 7"/></svg></button><h3 id="xTitle"></h3><button type="button" class="ib" data-close aria-label="Закрыть"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div></div>
+  <div class="sh-body"><div class="sh-in" id="xBody"></div></div>
+  <div class="sh-foot" id="xFoot" hidden><div class="sh-in" id="xFootIn"></div></div>
 </div>
 
 <div id="ob" hidden role="dialog" aria-modal="true" aria-labelledby="obTitle"><div class="ob-card" id="obCard"></div></div>
@@ -1501,7 +1807,7 @@ function resInfo(D){const E=earnCfg(),er=earnRate(E),due=earnDue(E);
   const earnHtml=E?`<div class="tile earn" style="margin-top:10px"><div class="k">Резерв в стейкинге · ${esc(E.place||'')}</div><div class="v" style="font-size:20px">~${nf(er*100,1)}% <span class="small mute" style="font-weight:600">годовых · +${money(D.reserve*er/365,{d:3})}/день</span></div><div class="s">заработано ${money(D.earned,{sign:true})}${E.fact?' · по факту ~'+nf(E.fact,1)+'%':''} · сверено ${dShort(E.at)}</div>${due?'<p class="hint" style="color:var(--warn);margin-top:6px">Прошёл месяц — пора сверить с биржей</p>':''}<button type="button" class="btn sm ${due?'':'ghost'}" data-act="earn" style="margin-top:10px;width:100%">Сверить с биржей</button></div>`:`<button type="button" class="btn sm ghost" data-act="earn" style="margin-top:10px;width:100%">Резерв лежит в стейкинге? Настроить учёт</button>`;
   const capP=+S.settings.capPct||20,cap=D.total*capP/100,bud=budgetUsd(),flow=bud*(1-depShare());
   const dk=D.hasDep?'Бюджет DCA':'DCA в месяц',dv=D.hasDep?usd(dcaShow(D.dcaBudget)):(bud?usd(bud*depShare(),0):'—'),ds=D.hasDep?(D.dcaBudget>0.5?'осталось купить':'всё куплено ✓'):(bud?(S.settings.budget?'по твоему бюджету':'оценка по доходу'):'');
-  return {dk,dv,html:`<div class="grid2"><div class="tile"><div class="k">Резерв USDT</div><div class="v">${money(D.reserve)}</div><div class="s">${cap?'потолок '+money(cap,{d:0}):''}${flow?' · +'+usd(flow,0)+'/мес':''}</div><div class="meter"><i style="width:${cap?Math.min(100,D.reserve/cap*100):0}%"></i></div><button type="button" class="btn sm" data-act="reserve" style="margin-top:12px;width:100%">Пополнить</button></div><div class="tile"><div class="k">${dk}</div><div class="v">${dv}</div><div class="s">${ds}</div><button type="button" class="btn sm ghost" data-act="buy" style="margin-top:12px;width:100%">Купить</button></div></div>${earnHtml}<p class="hint">Резерв USDT — деньги для докупок по лестнице. Выше потолка (${capP}% от стоимости монет) резерв не копим: излишек идёт в DCA.</p>`};}
+  return {dk,dv,html:`<div class="grid2"><div class="tile"><div class="k">Резерв USDT</div><div class="v">${money(D.reserve)}</div><div class="s">${cap?'потолок '+money(cap,{d:0}):''}${flow?' · +'+usd(flow,0)+'/мес':''}</div><div class="meter"><i style="width:${cap?Math.min(100,D.reserve/cap*100):0}%"></i></div><button type="button" class="btn sm" data-act="reserve" style="margin-top:12px;width:100%">Пополнить</button></div><div class="tile"><div class="k">${dk}</div><div class="v">${dv}</div><div class="s">${ds}</div><button type="button" class="btn sm ghost" data-act="buy" style="margin-top:12px;width:100%">Купить</button></div></div>${earnHtml}<p class="hint">Резерв USDT — деньги для докупок по лестнице. Выше потолка (${capP}% от стоимости монет) плитка покажет «выше!» — как поступить с излишком, решаешь ты.</p>`};}
 function renderPick(D){const sc=S.screen,ap=S.altplan||{},yr=ap.draftYear||'',run=screenRunning(),req=S.screenreq||{};
   const dr=ap.draft||{},dk=Object.keys(dr).sort(),uniq=[...new Set(dk.map(k=>dr[k].sym))],RS=resInfo(D);
   const row=(k,ico,col,nm,sub)=>`<button type="button" class="row r3" data-st="${k}" aria-haspopup="dialog">${icoBadge(ico,col)}<span class="col"><span class="nm">${nm}</span><span class="sub">${sub}</span></span><span class="chev">›</span></button>`;
@@ -1853,9 +2159,13 @@ function initBuy(opt){const D=derive(),sp=split();symOptions();
   setBuyMode(opt.sym||!S.tx.some(t=>['buy','dca','dip'].includes(t.type))?'one':'dca');
   $('dcaHint').innerHTML=D.hasDep?(D.dcaBudget>0.5?'Бюджет DCA: осталось <b>'+usd(D.dcaBudget)+'</b>':'Бюджет DCA уже потрачен — покупка уйдёт в минус бюджета'):'Сумма разложится по монетам по твоему правилу.';
   $('bTotal').value=D.hasDep&&D.dcaBudget>0.5?D.dcaBudget.toFixed(2):'';$('bAlt').value=altNow();fillRows('b');
-  $('oSym').value=opt.sym||'';$('oUsd').value='';$('oQty').value='';$('oDca').checked=D.hasDep;oHint();}
+  $('oSym').value=opt.sym||'';$('oUsd').value='';$('oQty').value='';$('oPrice').value='';delete $('oQty').dataset.auto;$('oDca').checked=D.hasDep;oHint();}
 const oHint=()=>hintFor(($('oSym').value||'').trim().toUpperCase(),+$('oUsd').value||0,+$('oQty').value||0,$('oHint'),$('oQty'));
-['oSym','oUsd','oQty'].forEach(id=>$(id).addEventListener('input',oHint));
+/* цена покупки вручную: «потратил ÷ цена» подставляет количество, пока человек не вписал его сам */
+function oAuto(){const u=+$('oUsd').value||0,p=+$('oPrice').value||0,q=$('oQty');if(u>0&&p>0&&(q.value===''||q.dataset.auto)){q.value=+(u/p).toPrecision(8);q.dataset.auto='1';}else if(q.dataset.auto&&!(u>0&&p>0)){q.value='';delete q.dataset.auto;}}
+$('oQty').addEventListener('input',()=>{delete $('oQty').dataset.auto;});
+['oUsd','oPrice'].forEach(id=>$(id).addEventListener('input',oAuto));
+['oSym','oUsd','oQty','oPrice'].forEach(id=>$(id).addEventListener('input',oHint));
 let dipPlan=null;
 function initDip(opt){const D=derive(),btc=+D.prices.BTC||0,lv=((S.cycle&&S.cycle.levels)||[]).filter(l=>!['done','skip'].includes(lvState(l,btc,D))),tag={go:' · можно',hold:' · ждём ключ 2'};
   $('dLevel').innerHTML=lv.length?lv.map(l=>`<option value="${l.n}">Уровень ${l.n} · −${l.drop}% · ${l.pct>=100?'весь остаток':l.pct+'% остатка'}${tag[lvState(l,btc,D)]||''}</option>`).join(''):'<option value="">Нет активных уровней</option>';
@@ -2004,9 +2314,9 @@ TPL.own=TPL.author;
 const OB={step:0,cur:'USD',tpl:'author',amt:'',amtCur:'UAH',day:'',coins:[{sym:'',qty:''}],busy:false};
 const obNeed=()=>S.ready&&!!window.mlUser&&!S.settings.onboardedAt&&!S.settings.split&&!S.tx.length;
 let obShown=false;
-function obCheck(){if(obShown||!obNeed())return;obShown=true;OB.cur=P.cur||'USD';$('ob').hidden=false;obDraw();}
+function obCheck(){if(obShown||!obNeed())return;obShown=true;OB.cur=P.cur||'USD';$('ob').hidden=false;OB.dir='fwd';obDraw();}
 function obMoney(v){return OB.amtCur==='USD'?usd(v,0):uah(v);}
-function obDraw(){const st=OB.step,N=4,dots='<div class="ob-dots" aria-hidden="true">'+[0,1,2,3].map(i=>`<i class="${i<=st?'on':''}"></i>`).join('')+'</div>';
+function obDraw(){const st=OB.step,N=4,dots='<div class="ob-dots" aria-hidden="true">'+[0,1,2,3].map(i=>`<i class="${i<=st?'on':''}${i===st?' cur':''}"></i>`).join('')+'</div>';
   const top=`<div class="ob-top">${dots}${st<3?'<button type="button" class="ob-skip" id="obSkip">Пропустить</button>':''}</div>`;
   const nav=(next,back)=>`<p class="err" id="obErr" role="alert"></p><div class="ob-nav">${back?'<button type="button" class="btn ghost" id="obBack">Назад</button>':''}<button type="button" class="btn" id="obNext">${next}</button></div>`;
   let h='';
@@ -2030,11 +2340,11 @@ function obDraw(){const st=OB.step,N=4,dots='<div class="ob-dots" aria-hidden="t
     <div class="ob-coins" id="obCoins">${OB.coins.map((c,i)=>`<div class="ob-coin" data-i="${i}"><label class="field"><span>Монета</span><input type="text" class="ob-sym" maxlength="12" placeholder="например, BTC" autocomplete="off" value="${esc(c.sym)}"></label><label class="field"><span>Количество</span><input type="number" class="ob-qty" min="0" step="any" inputmode="decimal" value="${esc(c.qty)}"></label><button type="button" class="ib ob-del" aria-label="Убрать монету"${OB.coins.length<2?' hidden':''}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>`).join('')}</div>
     <button type="button" class="btn ghost" id="obAdd">+ Ещё монета</button>
     <p class="ob-note">Цену покупки можно добавить позже в «Активности». Без неё прибыль по этим монетам не считается.</p>${nav(OB.busy?'Сохраняю…':'Готово',true)}`;}
-  $('obCard').innerHTML=h;obWire();}
+  const oc=$('obCard');oc.innerHTML=h;oc.classList.remove('fwd','back');if(OB.dir&&!reduced){void oc.offsetWidth;oc.classList.add(OB.dir);}OB.dir='';obWire();}
 function obSaveCoins(){document.querySelectorAll('#obCoins .ob-coin').forEach(r=>{const i=+r.dataset.i,c=OB.coins[i];if(!c)return;const si=r.querySelector('.ob-sym');c.sym=si.value.trim().toUpperCase();c.qty=r.querySelector('.ob-qty').value;c.pickId=si.dataset.pickSym===c.sym?si.dataset.pickId:'';});}
 function obWire(){const q=id=>$(id);
   const sk=q('obSkip');if(sk)sk.onclick=()=>obFinish(true);
-  const bk=q('obBack');if(bk)bk.onclick=()=>{if(OB.step===3)obSaveCoins();OB.step--;play('tick');obDraw();};
+  const bk=q('obBack');if(bk)bk.onclick=()=>{if(OB.step===3)obSaveCoins();OB.step--;OB.dir='back';play('tick');obDraw();};
   const cur=q('obCur');if(cur)cur.onclick=e=>{const b=e.target.closest('[data-c]');if(!b)return;OB.cur=b.dataset.c;OB.amtCur=OB.cur==='USD'?'USD':'UAH';play('tick');obDraw();};
   document.querySelectorAll('[data-tpl]').forEach(b=>b.onclick=()=>{OB.tpl=b.dataset.tpl;play('tick');obDraw();});
   const amt=q('obAmt');if(amt)amt.oninput=()=>{OB.amt=amt.value;const t=TPL[OB.tpl],ds=t.depositSplit.dca/100,a=+OB.amt||0;q('obCalc').innerHTML=a?(ds<1?`Каждый месяц: <b>${obMoney(a*ds)}</b> на покупки по плану и <b>${obMoney(a*(1-ds))}</b> в резерв для докупок.`:`Каждый месяц: <b>${obMoney(a)}</b> на покупки — BTC ${t.split.BTC}% и ETH ${t.split.ETH}%.`):'Впиши сумму — покажу, как она разделится.';};
@@ -2047,7 +2357,7 @@ function obWire(){const q=id=>$(id);
     if(OB.step===0){P.cur=OB.cur==='UAH'?'UAH':'USD';OB.amtCur=P.cur==='USD'?'USD':'UAH';savePrefs();}
     if(OB.step===2){OB.amt=q('obAmt').value;if(OB.amt!==''&&!(+OB.amt>0)){q('obErr').textContent='Впиши сумму больше нуля или оставь поле пустым.';return;}}
     if(OB.step===3){obSaveCoins();const bad=OB.coins.find(c=>c.sym&&!(+c.qty>0));if(bad){q('obErr').textContent='Впиши количество для '+bad.sym+'.';return;}obFinish(false);return;}
-    OB.step++;play('tick');obDraw();};}
+    OB.step++;OB.dir='fwd';play('tick');obDraw();};}
 /* лестница: максимум BTC с CoinGecko (если не ответил — последний известный) и уровни по умолчанию */
 async function cycleCreate(){if(!db)return;let ath=126000,day='2025-10-06';
   let px=+derive().prices.BTC||0;
@@ -2067,7 +2377,7 @@ async function obFinish(skip){if(OB.busy||!db)return;OB.busy=true;const ts=new D
     $('ob').hidden=true;startLive(true);render();
     if(!skip&&OB.tpl==='own'){openSheet('setSheet');fillSettings();setTimeout(()=>{const l=$('stratLbl');if(l)l.scrollIntoView({block:'start'});},350);toast('Настрой правила под себя');}
     else if(coins.length)toast('Готово! Портфель настроен');else toast('Готово! Нажми «Купить» и запиши покупку',null,7000);
-    play('coin');buzz([12,40,18]);}
+    play('coin');buzz([12,40,18]);if(window.MLX)setTimeout(()=>MLX.sparks($('hBal'),18),300);}
   catch(e){const er=$('obErr');if(er)er.textContent=failMsg(e,'Не сохранилось');}
   finally{OB.busy=false;}}
 
@@ -2115,11 +2425,16 @@ $('refreshBtn').addEventListener('click',async()=>{play('tick');buzz(8);const b=
 
 /* ===== навигация и общие клики ===== */
 let curTab='home';
-function show(tab){curTab=tab;document.querySelectorAll('.view').forEach(v=>{const on=v.dataset.view===tab;v.hidden=!on;if(on&&!reduced){v.classList.remove('enter');void v.offsetWidth;v.classList.add('enter');}});
+const TAB_ORDER=['home','coins','strategy','activity'];
+/* «капля» под значком активной вкладки: едет по горизонтали, цвет — цвет вкладки */
+function inkMove(){const ink=$('tabInk'),b=document.querySelector('.tab[aria-current="page"]');if(!ink||!b||!b.getBoundingClientRect)return;
+  const r=b.getBoundingClientRect(),p=ink.parentElement.getBoundingClientRect();if(!r.width)return;
+  ink.style.setProperty('--ink-x',(r.left-p.left+r.width/2).toFixed(1)+'px');ink.style.setProperty('--ink-c',getComputedStyle(b).getPropertyValue('--tab-c').trim()||'#a64dff');ink.classList.add('on');}
+function show(tab){const dir=Math.sign(TAB_ORDER.indexOf(tab)-TAB_ORDER.indexOf(curTab));curTab=tab;document.querySelectorAll('.view').forEach(v=>{const on=v.dataset.view===tab;v.hidden=!on;if(on&&!reduced){v.style.setProperty('--vx',(dir*14)+'px');v.classList.remove('enter');void v.offsetWidth;v.classList.add('enter');}});
   document.querySelectorAll('.tab').forEach(b=>{if(b.dataset.tab===tab)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current');});
-  window.scrollTo(0,0);try{history.replaceState(null,'','#'+tab);}catch(e){}if(tab==='activity')renderActivity();if(tab==='home')renderGrowth();if(tab==='strategy')requestAnimationFrame(scrollPlan);}
+  inkMove();window.scrollTo(0,0);try{history.replaceState(null,'','#'+tab);}catch(e){}if(window.MLX)try{MLX.tab(tab);}catch(e){}if(tab==='activity')renderActivity();if(tab==='home')renderGrowth();if(tab==='strategy')requestAnimationFrame(scrollPlan);}
 let rzT=null,rzW=innerWidth;
-window.addEventListener('resize',()=>{if(Math.abs(innerWidth-rzW)<2)return;rzW=innerWidth;clearTimeout(rzT);rzT=setTimeout(()=>{renderGrowth();if(cvSym&&$('coinSheet').classList.contains('open'))renderCoinChart();},200);});
+window.addEventListener('resize',()=>{if(Math.abs(innerWidth-rzW)<2)return;rzW=innerWidth;clearTimeout(rzT);rzT=setTimeout(()=>{inkMove();renderGrowth();if(cvSym&&$('coinSheet').classList.contains('open'))renderCoinChart();},200);});
 document.querySelectorAll('.tab').forEach(b=>b.addEventListener('click',()=>{play('tick');buzz(6);show(b.dataset.tab);}));
 document.addEventListener('click',e=>{const t=e.target;if(!t||!t.closest)return;
   if(t.closest('[data-close]')){closeSheets();return;}
@@ -2149,10 +2464,10 @@ function d14View(raw,today,isNew){const st=d14Norm(raw);
   if(!st.start){if(!isNew)return {mode:'invite',st};st.start=today;}
   if(st.done)return {mode:today>st.last?'gone':'done',st};
   if(st.read){if(!(today>st.last))return {mode:'read',st};   /* тот же день или часы назад — ждём */
-    st.n=Math.min(14,st.n+1);st.read=false;}                  /* новый день (хоть через неделю) — ровно одна следующая */
+    st.n=Math.min(14,st.n+1);st.read=false;st.last=today;}    /* новый день (хоть через неделю) — ровно одна следующая; день выдачи запомнен */
   return {mode:'card',st};}
 /* прочитал карточку: день засчитан; 14-я — курс пройден */
-function d14Read(raw,today){const st=d14Norm(raw);if(st.read||st.done)return st;st.read=true;st.last=today;if(st.n>=14)st.done=true;return st;}
+function d14Read(raw,today){const st=d14Norm(raw);if(st.read||st.done)return st;st.read=true;if(!(st.last>today))st.last=today;/* часы назад — дату не уводим */if(st.n>=14)st.done=true;return st;}
 const D14={day:''};
 const d14Key=()=>'ml-14d:'+((window.mlUser&&mlUser.id)||'');
 function d14Load(){let o=null;try{o=JSON.parse(localStorage.getItem(d14Key())||'null');}catch(e){}return d14Norm(o);}
@@ -2161,20 +2476,20 @@ const d14Can=()=>S.ready&&S.setOk&&!!window.mlUser&&!document.getElementById('ml
 /* тексты — из спецификации; числа — из настроек человека в момент показа; go — существующий экран */
 function d14Card(n){const sp=split(),ds=depShare(),dca=Math.round(ds*100),cap=+S.settings.capPct||20,k=k2Cfg(),lad=ladderOn();
   const lv=(S.cycle&&S.cycle.levels&&S.cycle.levels.length)?S.cycle.levels.map(l=>[+l.drop,+l.pct]):LV_DEF;
-  const C={1:['Первая запись','Купил монету на бирже — запиши её: монета, сколько потратил, сколько получил. Стоимость портфеля посчитается сама.','Записать покупку','buy'],
-    2:[`Твои доли: ${sp.BTC}/${sp.ETH}/${sp.ALT}`,`Твой план: BTC ${sp.BTC}%, ETH ${sp.ETH}%, альткоины ${sp.ALT}%. Блок «Распределение» внизу главной показывает цель и как сейчас.`,'Показать','alloc'],
-    3:ds<1?['Пополнение делится само',`Запиши «Пополнить»: ${dca}% суммы уйдёт в бюджет DCA, ${100-dca}% — в резерв USDT. Так делит твоё правило из «Настроек».`,'Пополнить','deposit']
+  const C={1:['Первая запись','Купил монету на бирже — запиши её: монета, сколько потратил и сколько монет получил. Стоимость портфеля посчитается сама.','Записать покупку','buy'],
+    2:[`Твои доли: ${sp.BTC}/${sp.ETH}/${sp.ALT}`,`Твой план: BTC ${sp.BTC}%, ETH ${sp.ETH}%, альткоины ${sp.ALT}%. Блок «Распределение» внизу главной покажет план и как у тебя сейчас.`,'Показать','alloc'],
+    3:ds<1?['Пополнение делится само',`Добавил деньги — нажми «Пополнить»: ${dca}% уйдёт в бюджет DCA (покупки по плану), ${100-dca}% — в резерв USDT. Так в «Настройках».`,'Пополнить','deposit']
       :['Пополнение — в DCA','Запиши «Пополнить» — вся сумма уйдёт в бюджет DCA. Плитка «Бюджет DCA» на главной покажет, сколько осталось купить.','Пополнить','deposit'],
-    4:['Покупка по плану (DCA)','DCA — одна и та же сумма каждый месяц. В «Купить» → «По плану» впиши, сколько потратил: сумма разложится по твоим долям.','Купить по плану','dca'],
+    4:['Покупка по плану (DCA)','DCA — покупка на равную сумму каждый месяц. В «Купить» → «По плану» впиши, сколько потратил: сумма разложится по долям.','Купить по плану','dca'],
     11:['Оборот карточки монеты','«Монеты» → нажми на монету, потом на карточку. На обороте — твои цифры: средняя цена покупки, вложено, стоит сейчас.','Монеты','coins'],
     12:['Ошибся — исправь','Нажми на запись в «Активности»: можно поменять дату, сумму, заметку или удалить её. Итоги пересчитаются.','История','hist'],
-    13:['Отчёт за месяц','«Активность» → «Отчёт за месяц»: что куплено, сколько внесено, средняя цена покупки на начало и конец, резерв.','Отчёт','rep'],
+    13:['Отчёт за месяц','«Активность» → «Отчёт за месяц»: что куплено, сколько внесено, средняя цена покупки на начало и конец месяца, резерв.','Отчёт','rep'],
     14:['Копия и вид','Копию всех записей можно скачать файлом: «Настройки» → «Скачать мои данные». Там же тема: тёмная, светлая или как в телефоне.','Скачать копию','exp']};
-  const L={5:['Резерв USDT','Резерв — доллары, которые ждут просадки BTC. В приложении его уменьшают только докупки по лестнице и твои поправки.','Резерв и DCA','res'],
-    6:[`Потолок резерва ${cap}%`,`Потолок — ${cap}% от стоимости монет. Резерв дорос — на плитке «Резерв USDT» появится «выше!». Что делать дальше, решаешь ты.`,'Мои правила','rules'],
-    7:[`Лестница: ${pl(lv.length,'ступень','ступени','ступеней')}`,`Ступени — BTC ниже максимума на ${lv.map(x=>x[0]).join(', ')}%. На каждой — доля свободного резерва: ${lv.map(x=>x[1]).join(', ')}%.`,'Открыть лестницу','strategy'],
-    8:['Ключ 1 — ступень','Ключ 1 открыт, когда BTC дошёл до цены ступени: максимум минус её процент. Максимум и цены ступеней — во вкладке «Стратегия».','Стратегия','strategy'],
-    9:['Ключ 2 — ниже твоих покупок',`Ключ 2: цена монеты на ${k.pct}% ниже твоей средней покупки за ${k.days} дней. Покупок за этот срок не было — ключ 2 не мешает.`,'Мои правила','rules'],
+  const L={5:['Резерв USDT','Резерв — доллары, отложенные на падение BTC. Тратят его только докупки по лестнице (о ней — день 7) и твои поправки.','Резерв и DCA','res'],
+    6:[`Потолок резерва ${cap}%`,`Потолок — ${cap}% от стоимости твоих монет. Резерв больше — на плитке «Резерв USDT» появится «выше!». Что делать, решаешь ты.`,'Мои правила','rules'],
+    7:[`Лестница: ${pl(lv.length,'ступень','ступени','ступеней')}`,`Лестница — план докупок при падении BTC: на ${lv.map(x=>x[0]).join(', ')}% ниже максимума — ${lv.map(x=>x[1]).join(', ')}% свободного резерва.`,'Открыть лестницу','strategy'],
+    8:['Ключ 1 — ступень','Докупке нужны два «ключа». Ключ 1 — BTC дошёл до цены ступени: максимум минус её процент. Цены — во вкладке «Стратегия».','Стратегия','strategy'],
+    9:['Ключ 2 — ниже твоих покупок',`Ключ 2: цена монеты на ${k.pct}% ниже средней цены твоих покупок за ${k.days} дней. Покупок за этот срок не было — ключ 2 не мешает.`,'Мои правила','rules'],
     10:['Сигнал на главной','Когда оба ключа сошлись, над графиком появится «Можно докупить» с суммами по монетам. Это расчёт по твоим правилам, не совет.','','']};
   const SIMPLE={5:['Суммы под замком','Кнопка с глазом вверху прячет суммы за точками — удобно на людях. Насовсем — «Настройки» → «Скрывать суммы».','',''],
     6:['Доллары или гривны','Суммы — в $ или ₴: «Настройки» → «Валюта». Под итогом рядом стоит та же сумма в другой валюте.','Настройки','set'],
@@ -2188,13 +2503,15 @@ const D14_GO={buy:()=>openAct('buy'),dca:()=>{openAct('buy');setBuyMode('dca');}
   rules:()=>{openSettings(false);setTimeout(()=>{const r=$('rules');if(r&&r.scrollIntoView)r.scrollIntoView({block:'start',behavior:reduced?'auto':'smooth'});},380);},
   set:()=>openSettings(false),strategy:()=>show('strategy'),coins:()=>show('coins'),hist:()=>{show('activity');setActPane('hist');},rep:()=>$('teaser').click(),exp:()=>exportData()};
 function d14Html(v){const n=v.st.n;
-  if(v.mode==='invite')return `<div class="card d14 d14-inv"><b>Новое: 14 коротких карточек о&nbsp;приложении</b><div class="btnrow"><button type="button" class="btn sm" data-d14="start">Начать</button><button type="button" class="btn sm ghost" data-d14="hide">Скрыть</button></div></div>`;
-  if(v.mode==='read')return `<div class="card d14 d14-min" role="status"><span><b>День ${n} из 14 <span class="d14-ok">✓</span></b> · следующая — завтра</span></div>`;
-  if(v.mode==='done')return `<div class="card d14 d14-min" role="status"><span><b>14 из 14 <span class="d14-ok">✓</span></b> · Все карточки пройдены</span></div>`;
+  const okI='<i class="d14-ok" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></i>';
+  const segs=k=>'<div class="d14-seg" aria-hidden="true">'+Array.from({length:14},(_,i)=>`<i class="${i<k-1?'on':i===k-1?'cur':''}"></i>`).join('')+'</div>';
+  if(v.mode==='invite')return `<div class="card d14 d14-inv"><span class="d14-it"><b>Новое: 14 карточек</b><small>коротко о приложении, по одной в день</small></span><span class="d14-ib"><button type="button" class="btn sm soft" data-d14="start">Начать</button><button type="button" class="btn sm ghost" data-d14="hide">Скрыть</button></span></div>`;
+  if(v.mode==='read')return `<div class="card d14 d14-min" role="status">${okI}<span><b>День ${n} из 14</b> · завтра — день ${n+1}</span><i class="d14-bar" aria-hidden="true" style="width:${Math.round(n/14*100)}%"></i></div>`;
+  if(v.mode==='done')return `<div class="card d14 d14-min" role="status">${okI}<span><b>14 из 14</b> · все карточки пройдены</span><i class="d14-bar full" aria-hidden="true" style="width:100%"></i></div>`;
   const c=d14Card(n);
   return `<div class="card d14" role="region" aria-label="14 дней с MoneyLife"><div class="d14-h"><span class="chip acc">День ${n} из 14</span><button type="button" class="d14-x" data-d14="x" aria-label="Скрыть карточки «14 дней»"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
-    <div class="d14-t">${esc(c.t)}</div><p class="d14-p">${esc(c.x)}</p><div class="meter" aria-hidden="true"><i style="width:${Math.round((n-1)/14*100)}%"></i></div>
-    <div class="btnrow">${c.b?`<button type="button" class="btn sm" data-d14="go">${esc(c.b)}</button>`:''}<button type="button" class="btn sm ghost" data-d14="ok">Понятно</button></div></div>`;}
+    ${segs(n)}<div class="d14-t">${esc(c.t)}</div><p class="d14-p">${esc(c.x)}</p>
+    <div class="btnrow">${c.b?`<button type="button" class="btn sm soft" data-d14="go">${esc(c.b)}</button>`:''}<button type="button" class="btn sm ghost" data-d14="ok">Понятно</button></div></div>`;}
 function renderD14(){const el=$('d14');if(!el)return;$('d14Row').hidden=!window.mlUser;
   if(!d14Can()){el.hidden=true;return;}
   const today=isoDay(new Date()),cur=d14Load(),v=d14View(cur,today,!!S.settings.onboardedAt);
@@ -2210,7 +2527,7 @@ function d14Party(){const st=d14Load();if(!st.party)return;
 function d14Hide(on){const st=d14Load();st.hid=on;d14Save(st);swSet('swD14',!on);renderD14();}
 function d14Act(k){if(!d14Can())return;const today=isoDay(new Date()),v=d14View(d14Load(),today,!!S.settings.onboardedAt);let st=v.st;
   if(k==='start'&&v.mode==='invite'){st.start=today;d14Save(st);play('tick');buzz(8);renderD14();return;}
-  if(k==='hide'||k==='x'){play('tick');d14Hide(true);toast('Карточки скрыты. Вернуть — в «Настройках»',{label:'Вернуть',fn:()=>d14Hide(false)});return;}
+  if(k==='hide'||k==='x'){play('tick');d14Hide(true);toast('Карточки скрыты. Вернуть — «Настройки» → «Отображение»',{label:'Вернуть',fn:()=>d14Hide(false)});return;}
   if((k==='ok'||k==='go')&&v.mode==='card'){const n=st.n,c=d14Card(n);st=d14Read(st,today);
     if([3,7,14].includes(n)&&P.mascot!==false)st.party=n+'/14';d14Save(st);play('tick');buzz(8);renderD14();
     if(k==='go'&&D14_GO[c.go])D14_GO[c.go]();}}
@@ -2232,12 +2549,12 @@ function msLoad(){if(MSC.loading||MSC.failed)return;MSC.loading=true;
   const add=(src,ok)=>{try{const s=document.createElement('script');s.src=src;s.async=true;s.onload=ok;s.onerror=()=>{MSC.failed=true;};document.head.appendChild(s);}catch(e){MSC.failed=true;}};
   const boot=()=>add('mascot.js?v=20261108145941',()=>{try{if(window.Mascot&&window.Mascot.init({host:$('mascot'),app:{audio:ac,buzz}})&&MSC.last&&$('ob').hidden&&!document.getElementById('mlAuth'))window.Mascot.sync(msPayload(MSC.last));}catch(e){}});
   setTimeout(()=>{if(window.THREE)boot();else add('three.min.js',boot);},300);}
-function render(){const D=derive();renderHeader();renderHome(D);renderGrowth();renderCoins(D);renderStrategy(D);renderActivity();renderD14();earnNudge();if(cvSym&&$('coinSheet').classList.contains('open'))renderCoinView();}
+function render(){const D=derive();renderHeader();renderHome(D);renderGrowth();renderCoins(D);renderStrategy(D);renderActivity();renderD14();if(window.MLX)try{MLX.render(D);}catch(e){console.error(e);}earnNudge();if(cvSym&&$('coinSheet').classList.contains('open'))renderCoinView();}
 document.body.classList.add('loading');
 const startTab=(location.hash||'').slice(1);if(['coins','strategy','activity'].includes(startTab))show(startTab);
 /* ярлык с главного экрана, когда приложение уже открыто: меняется только #хэш — переключаем вкладку (show() пишет хэш через replaceState, hashchange от этого не бывает — цикла нет) */
 window.addEventListener('hashchange',()=>{const t=(location.hash||'').slice(1);if(['home','coins','strategy','activity'].includes(t)&&t!==curTab)show(t);});
-render();
+render();requestAnimationFrame(inkMove);setTimeout(inkMove,600);
 (async()=>{try{mcp=await use('mcp');}catch(e){mcp=null;}if(mcp){startLive();loadGrowth();}})();
 (async()=>{try{db=await use('db');}catch(e){db=null;}
   if(!db){document.body.classList.remove('loading');S.ready=true;$('offline').hidden=false;render();return;}
@@ -2253,5 +2570,6 @@ render();
   db.collection('history').limit(1000).onSnapshot(q=>{S.history=q.docs.map(d=>d.data());renderGrowth();if(S.ready&&derive().noPrice)renderHome(derive());},fail);
 })();
 </script>
+<script src="plus.js?v=20261108145941"></script>
 </body>
 </html>

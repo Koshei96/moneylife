@@ -93,12 +93,50 @@
     const r = crypto.getRandomValues(new Uint8Array(20)); for (const b of r) s += a[b % a.length]; return s;
   };
 
-  function canWrite() { if (offlineAt != null || navigator.onLine === false) { const e = new Error('Нет интернета — запись не сохранена'); e.code = 'offline'; throw e; } }
+  /* ---------- демо без регистрации (10.11.2026): пример портфеля в памяти; записи не сохраняются и в базу не уходят ---------- */
+  let demo = false;
+  async function demoPrices() {
+    const px = { BTC: 100000, ETH: 3500, SOL: 180 };
+    try {
+      const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), 2500);
+      const r = await fetch('https://data-api.binance.vision/api/v3/ticker/24hr?symbols=' + encodeURIComponent(JSON.stringify(['BTCUSDT', 'ETHUSDT', 'SOLUSDT'])), { signal: ctl.signal });
+      clearTimeout(t);
+      for (const x of await r.json()) { const p = +x.lastPrice; if (p > 0) px[String(x.symbol).replace('USDT', '')] = p; }
+    } catch (e) {}
+    return px;
+  }
+  function demoDocs(px) {
+    const now = Date.now(), iso = d => new Date(now - d * 864e5).toISOString(), docs = [];
+    const K = [0.84, 0.97, 1.1, 0.9, 0.86, 0.96];              /* цена покупки относительно сегодняшней: от 5 месяцев назад до этого месяца */
+    const ath = Math.round(px.BTC * 1.14 / 100) * 100;
+    docs.push(['app/settings', { template: 'author', onboardedAt: iso(170), split: { BTC: 50, ETH: 30, ALT: 20 }, capPct: 20, depositSplit: { dca: 50 }, ladder: true, key2Pct: 5, key2Days: 60, altCapPct: 20, altOfMonth: 'SOL', budget: { amount: 200, cur: 'USD' }, depositDay: 5 }]);
+    docs.push(['app/cycle', { ath, athDate: iso(42).slice(0, 10), startedAt: iso(170).slice(0, 10), levels: [[30, 20], [40, 25], [50, 33], [60, 50], [70, 100]].map(([d, p], i) => ({ n: i + 1, drop: d, pct: p, status: 'pending' })) }]);
+    let n = 0; const add = d => docs.push(['tx/demo' + (++n), d]);
+    K.forEach((k, i) => { const back = (K.length - 1 - i) * 30 + 6, last = i === K.length - 1;
+      add({ ts: iso(back), type: 'deposit', usd: 200, uah: null, dcaUsd: 100, reserveUsd: 100, rate: null });
+      if (last) return;                                        /* в этом месяце пополнение есть, а покупка по плану ещё впереди — видно «осталось купить» */
+      for (const [s, u] of [['BTC', 50], ['ETH', 30], ['SOL', 20]]) { const p = px[s] * k; add({ ts: iso(back - 1), type: 'dca', symbol: s, qty: +(u / p).toPrecision(8), usd: u, price: +p.toPrecision(8) }); } });
+    return docs;
+  }
+  async function startDemo(o) {
+    const px = await demoPrices();
+    demo = true; window.mlDemo = true; cache.clear();
+    for (const [k, v] of demoDocs(px)) cache.set(k, v);
+    loaded = true; if (o) o.remove();
+    const b = document.createElement('div'); b.id = 'mlDemoBar'; b.setAttribute('role', 'status');
+    b.innerHTML = '<span><b>Демо.</b> Это пример: записи не сохраняются</span><button type="button" class="btn sm" id="mlDemoGo">Создать аккаунт</button>';
+    document.body.appendChild(b);
+    b.querySelector('#mlDemoGo').addEventListener('click', () => { try { sessionStorage.setItem('ml-auth-mode', 'up'); } catch (e) {} location.reload(); });
+    window.__mlAuthed(); emit();
+  }
+
+  function canWrite() { if (demo) return; if (offlineAt != null || navigator.onLine === false) { const e = new Error('Нет интернета — запись не сохранена'); e.code = 'offline'; throw e; } }
   function rollback(k, prev) { if (prev === undefined) cache.delete(k); else cache.set(k, prev); emit(); }
   async function writeSet(c, id, data) {
     canWrite();
     const k = key(c, id), prev = cache.get(k);
     cache.set(k, clone(data)); emit();
+    if (demo) return;
     let r; try { r = await client().from('docs').upsert({ owner: uid, col: c, id, data, updated_at: new Date().toISOString() }, { onConflict: 'owner,col,id' }); } catch (e) { r = { error: e }; }
     if (r.error) { rollback(k, prev); throw r.error; }
   }
@@ -112,6 +150,7 @@
       if (v && typeof v === 'object' && v.__delete__ === true) delete next[k]; else next[k] = clone(v);
     }
     cache.set(k0, next); emit();
+    if (demo) return;
     let r; try { r = await client().rpc('doc_merge', { p_col: c, p_id: id, p_patch: patch }); } catch (e) { r = { error: e }; }
     if (r.error) { rollback(k0, prev); throw r.error; }
   }
@@ -119,6 +158,7 @@
     canWrite();
     const k = key(c, id), prev = cache.get(k);
     cache.delete(k); emit();
+    if (demo) return;
     let r; try { r = await client().from('docs').delete().match({ owner: uid, col: c, id }); } catch (e) { r = { error: e }; }
     if (r.error) { rollback(k, prev); throw r.error; }
   }
@@ -464,8 +504,27 @@
     const passField = (id, label, ac) => `<label class="field"><span>${label}</span><span class="mla-pw"><input type="password" id="${id}" autocomplete="${ac}"><button type="button" class="mla-eye" data-eye="${id}" aria-label="Показать пароль"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></button></span></label>`;
     const gBtn = google ? `<div class="mla-or"><span>или</span></div><button type="button" class="btn block mla-g" id="mlaG">${G_ICON}<span>Войти через Google</span></button>` : '';
     const priv = '<a href="privacy.html" target="_blank" rel="noopener">политикой конфиденциальности</a>';
+    const calm = () => { try { return matchMedia('(prefers-reduced-motion: reduce)').matches || document.documentElement.classList.contains('lite'); } catch (e) { return true; } };
+    let look = calm() ? '' : ' first', switching = false;     /* вид карточки: первое появление / после смены экрана */
+    /* смена экрана: шторка закрывает карточку, под ней меняется содержимое, шторка уходит. Без анимаций — сразу */
+    function swap(to) {
+      const card = o.querySelector('.mla-card');
+      if (switching) return;
+      if (calm() || !card || !card.animate) { mode = to; draw(); return; }
+      switching = true;
+      const cur = document.createElement('i'); cur.className = 'mla-curtain'; card.appendChild(cur);
+      let done = false;
+      const fin = () => { if (done) return; done = true; mode = to; look = ' sw'; draw(); switching = false;
+        const c2 = o.querySelector('.mla-card'); if (!c2 || !c2.animate) return;
+        const out = document.createElement('i'); out.className = 'mla-curtain'; out.style.transform = 'translateX(0) rotate(-12deg)'; c2.appendChild(out);
+        const a2 = out.animate([{ transform: 'translateX(0) rotate(-12deg)' }, { transform: 'translateX(130%) rotate(-12deg)' }], { duration: 300, easing: 'cubic-bezier(.2,.8,.2,1)', fill: 'forwards' });
+        a2.onfinish = () => out.remove(); setTimeout(() => out.remove(), 500); };
+      try { cur.animate([{ transform: 'translateX(-130%) rotate(-12deg)' }, { transform: 'translateX(0) rotate(-12deg)' }], { duration: 240, easing: 'cubic-bezier(.4,0,.6,1)', fill: 'forwards' }).onfinish = fin; } catch (e) { fin(); }
+      setTimeout(fin, 420);                                    /* страховка: экран сменится, даже если анимация не доиграла */
+    }
     function draw() {
-      const head = '<h1 class="wm" aria-label="MoneyLife"><span>Money</span><span class="wm-l">Life</span></h1>';
+      const head = '<div class="mla-brand"><span class="mla-logo" aria-hidden="true"><svg viewBox="0 0 512 512"><use href="#mlLogo"/></svg></span><h1 class="wm" aria-label="MoneyLife"><span>Money</span><span class="wm-l">Life</span></h1></div>';
+      const demoBtn = '<button type="button" class="mla-link mla-demo" id="mlaDemo">Посмотреть приложение на примере</button>';
       let h = '';
       if (mode === 'in') h = `${head}<p class="mla-sub">Вход в личный кабинет</p>${field('mlaEmail', 'Почта', 'email', 'username', email)}${passField('mlaPass', 'Пароль', 'current-password')}
         <p class="err" id="mlaErr" role="alert"></p><button type="button" class="btn block" id="mlaGo">Войти</button>
@@ -485,7 +544,8 @@
         <button type="button" class="mla-link" data-to="in">Назад ко входу</button>`;
       else if (mode === 'newpass') h = `${head}<p class="mla-sub">Новый пароль</p>${passField('mlaPass', 'Новый пароль', 'new-password')}<p class="mla-hint">${PASS_HINT}</p>
         <p class="err" id="mlaErr" role="alert"></p><button type="button" class="btn block" id="mlaGo">Сохранить пароль</button>`;
-      o.innerHTML = `<div class="mla-card" role="dialog" aria-modal="true">${h}${mode === 'in' || mode === 'up' ? '<p class="mla-note">Твои записи видны только тебе.</p>' : ''}</div>`;
+      o.innerHTML = `<div class="mla-card${look}" role="dialog" aria-modal="true">${h}${mode === 'in' || mode === 'up' ? '<p class="mla-note">Твои записи видны только тебе.</p>' + (window.mlWantDelete ? '' : demoBtn) : ''}</div>`;
+      look = '';
       wire();
       const hadNote = !!note;
       if (note) { const e = o.querySelector('#mlaErr'); if (e) { e.textContent = note.text; e.classList.toggle('ok', !!note.ok); } note = null; }
@@ -534,7 +594,8 @@
     function wire() {
       const g = o.querySelector('#mlaGo'); if (g) g.addEventListener('click', go);
       o.querySelectorAll('input').forEach(i => i.addEventListener('keydown', e => { if (e.key === 'Enter' && i.type !== 'checkbox') go(); }));
-      o.querySelectorAll('[data-to]').forEach(x => x.addEventListener('click', () => { const e = o.querySelector('#mlaEmail'); if (e) { email = e.value.trim(); o.dataset.email = email; } mode = x.dataset.to; clearInterval(waitT); draw(); }));
+      o.querySelectorAll('[data-to]').forEach(x => x.addEventListener('click', () => { const e = o.querySelector('#mlaEmail'); if (e) { email = e.value.trim(); o.dataset.email = email; } clearInterval(waitT); swap(x.dataset.to); }));
+      const dm = o.querySelector('#mlaDemo'); if (dm) dm.addEventListener('click', () => { busy(dm, true); startDemo(o); });
       o.querySelectorAll('[data-eye]').forEach(x => x.addEventListener('click', () => { const i = o.querySelector('#' + x.dataset.eye); i.type = i.type === 'password' ? 'text' : 'password'; x.setAttribute('aria-label', i.type === 'password' ? 'Показать пароль' : 'Скрыть пароль'); }));
       const a = o.querySelector('#mlaAgain'); if (a) a.addEventListener('click', again);
       const gg = o.querySelector('#mlaG'); if (gg) gg.addEventListener('click', async () => { busy(gg, true); if (window.mlWantDelete) { try { localStorage.setItem(DEL_KEY, JSON.stringify({ go: 'delete', ts: Date.now() })); } catch (e) {} } try { const r = await c.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: SITE } }); if (r.error) { err(authErr(r.error)); busy(gg, false); } } catch (e) { err(authErr(e)); busy(gg, false); } });
@@ -554,7 +615,7 @@
     const c = client(); if (!c || !uid) throw new Error('not signed in');
     if (navigator.onLine === false) { const e = new Error('offline'); e.code = 'offline'; throw e; }
     const r = await c.rpc('delete_my_account'); if (r.error) throw r.error;
-    try { localStorage.removeItem(lsDocs()); localStorage.removeItem(LS_UID); localStorage.removeItem('ml-cmeta'); } catch (e) {}
+    try { localStorage.removeItem(lsDocs()); localStorage.removeItem(LS_UID); localStorage.removeItem('ml-cmeta'); for (const k of ['ml-14d:', 'ml-plan:', 'ml-x:']) localStorage.removeItem(k + uid); } catch (e) {}   /* личное на телефоне уходит вместе с аккаунтом */
     try { await c.auth.signOut({ scope: 'local' }); } catch (e) {}
     history.replaceState(null, '', location.pathname + '#deleted'); location.reload();   /* экран входа покажет «аккаунт удалён» */
   };
@@ -565,7 +626,7 @@
     let o = null;
     const startNote = urlErr ? { text: /expired|invalid/i.test(urlErr) ? 'Ссылка устарела или уже использована — запроси новую.' : 'Не получилось: ' + urlErr } : (URLH === 'deleted' ? { text: 'Аккаунт и все записи удалены.', ok: true } : (URLH === 'delete' ? { text: 'Войди, чтобы удалить аккаунт.' } : null));
     const onSession = async s => {
-      if (!s || !s.user) { if (!o) o = overlay(urlErr && /expired|invalid/i.test(urlErr) ? 'forgot' : 'in', startNote); return; }
+      if (!s || !s.user) { if (demo) return; if (!o) { let m0 = 'in'; try { if (sessionStorage.getItem('ml-auth-mode') === 'up' && CFG.allowSignup !== false) m0 = 'up'; sessionStorage.removeItem('ml-auth-mode'); } catch (e) {} o = overlay(urlErr && /expired|invalid/i.test(urlErr) ? 'forgot' : m0, startNote); } return; }
       window.mlUser = { id: s.user.id, email: s.user.email || '', provider: (s.user.app_metadata && s.user.app_metadata.provider) || 'email' };
       if (uid === s.user.id && offlineAt == null) return;
       uid = s.user.id; try { localStorage.setItem(LS_UID, uid); } catch (e) {}
