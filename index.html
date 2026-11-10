@@ -948,6 +948,133 @@ html.lite .view.enter>*,html.lite .sheet.open .sh-body .sh-in>*{animation:none}
 .xp-ceil p.hint,.xp-rules p.hint{font-size:12px;line-height:1.4;color:var(--mute)}
 .xf .f3{align-items:end}
 </style>
+<style id="v4">
+/* ===== MoneyLife 3.0, слой «Графит» (10.11.2026): нейтральная база, один акцент, без градиентов и свечений. Поверх прежних правил ===== */
+:root{
+  --bg:#09090b; --bg2:#101013; --surface:#141417; --surface2:#19191d; --raise:#222227; --field:#1b1b20;
+  --line:#222228; --line2:#2f2f37;
+  --fg:#f5f5f7; --mute:#a3a3ae; --dim:#6e6e7a;
+  --violet:#7566f5; --purple:#8b7dff; --magenta:#8b7dff; --pink:#8b7dff; --lav:#b6adff;
+  --accent:#8b7dff; --accent-soft:#8b7dff1f; --glow:transparent;
+  --grad:linear-gradient(0deg,#7566f5,#7566f5); --grad-btn:linear-gradient(0deg,#6f5ef2,#6f5ef2);
+  --pos:#30d158; --pos-soft:#30d1581c; --neg:#ff5b5b; --neg-soft:#ff5b5b1c; --warn:#f5b545; --warn-soft:#f5b5451c; --info:#7aa8ff; --info-soft:#7aa8ff1c;
+  --gold:#f5b545; --gold-soft:#f5b5451c; --ember:#f5b545;
+  --display:var(--ui);
+  --r-s:10px; --r-m:14px; --r-l:20px; --r-xl:26px;
+  --tabc-home:var(--fg); --tabc-coins:var(--fg); --tabc-strategy:var(--fg); --tabc-activity:var(--fg);
+  --btn-bg:#f5f5f7; --btn-fg:#09090b;
+}
+:root[data-theme="light"]{
+  --bg:#f4f4f6; --bg2:#ffffff; --surface:#ffffff; --surface2:#ffffff; --raise:#ececf0; --field:#f1f1f4; --line:#ebebef; --line2:#d9d9e0;
+  --fg:#0b0b0f; --mute:#5e5e6b; --dim:#8c8c98; --lav:#4f3fd8; --accent:#5b4be6; --accent-soft:#5b4be614; --glow:transparent;
+  --violet:#5b4be6; --purple:#5b4be6; --magenta:#5b4be6; --pink:#5b4be6;
+  --grad:linear-gradient(0deg,#5b4be6,#5b4be6); --grad-btn:linear-gradient(0deg,#5b4be6,#5b4be6);
+  --pos:#0f8a4b; --pos-soft:#0f8a4b14; --neg:#d92d3f; --neg-soft:#d92d3f12; --warn:#a2670c; --warn-soft:#c9860f1a; --info:#2f5fd0; --info-soft:#2f5fd012;
+  --gold:#a2670c; --gold-soft:#c9860f1a; --ember:#a2670c;
+  --tabc-home:var(--fg); --tabc-coins:var(--fg); --tabc-strategy:var(--fg); --tabc-activity:var(--fg);
+  --btn-bg:#0b0b0f; --btn-fg:#ffffff;
+}
+.bgfx{display:none}
+body{letter-spacing:-.005em}
+
+/* шапка */
+.mark{box-shadow:none;border-radius:11px}
+.wm-l,[data-theme="light"] .wm-l{background:none;-webkit-background-clip:border-box;background-clip:border-box;color:var(--mute);font-weight:500}
+.ib{border:0;background:var(--surface);border-radius:50%}
+[data-theme="light"] .ib{background:#e9e9ee}
+
+/* поверхности: плоские, без рамок и бликов */
+.card,.tile,.list,.mi{background:var(--surface);border-color:transparent;box-shadow:none}
+[data-theme="light"] .card{box-shadow:none}
+.card.xpc{border-color:transparent}
+.label{font-size:15px;font-weight:650;letter-spacing:-.01em;color:var(--fg)}
+.sec-h{margin-bottom:12px}
+
+/* баланс: без карточки — крупная цифра на фоне */
+.hero,[data-theme="light"] .hero{border:0;background:none;box-shadow:none;border-radius:0;padding:4px 4px 2px;overflow:visible}
+[data-theme="light"] .hero{color:var(--fg);--fg:#0b0b0f;--mute:#5e5e6b;--dim:#8c8c98;--lav:#4f3fd8;--line:#ebebef;--line2:#d9d9e0;--surface:#ffffff;--surface2:#ffffff;--pos:#0f8a4b;--pos-soft:#0f8a4b14;--neg:#d92d3f;--neg-soft:#d92d3f12}
+[data-theme="light"] .hero .chip{background:#0b0b0f0d}
+.hero-bg,.hero .iso{display:none}
+.hero-l{font-size:14px;font-weight:500;color:var(--mute)}
+.bal{font-size:clamp(44px,13.5vw,58px);font-weight:700;letter-spacing:-.04em;line-height:1;margin-top:0}
+.bal-sub{margin-top:10px;font-size:15px}
+.hero .chips{margin-top:12px}
+.chip{background:#ffffff0f;font-weight:600}
+[data-theme="light"] .chip{background:#0b0b0f0d}
+
+/* быстрые действия: круглые, первая — контрастная */
+.qa{margin-top:4px}
+.qa button{color:var(--fg);font-weight:500;font-size:12.5px;gap:8px}
+.qa i{border:0;border-radius:50%;background:var(--surface2);color:var(--fg);box-shadow:none}
+[data-theme="light"] .qa i{background:#e9e9ee}
+.qa button:first-child i,[data-theme="light"] .qa button:first-child i{background:var(--btn-bg);color:var(--btn-fg);box-shadow:none}
+
+/* кнопки */
+.btn{background:var(--btn-bg);color:var(--btn-fg);box-shadow:none;border-radius:var(--r-m);font-weight:650}
+.btn:active{filter:none;opacity:.86}
+.btn.soft{background:var(--raise);color:var(--fg)}
+.btn.ghost{background:none;border:1px solid var(--line2);color:var(--fg)}
+.btn.danger{background:var(--neg-soft);border-color:transparent;color:var(--neg)}
+.btn.block.mla-up{color:var(--fg);border-color:var(--line2)}
+.switch[aria-checked="true"]{background:var(--pos)}
+.fchip{border-color:transparent;background:var(--surface)}
+.fchip[aria-pressed="true"]{background:var(--btn-bg);color:var(--btn-fg)}
+.search{border-color:transparent}
+[data-theme="light"] .search,[data-theme="light"] .fchip{background:#e9e9ee}
+[data-theme="light"] .fchip[aria-pressed="true"]{background:var(--btn-bg)}
+.ranges,.seg{background:none;padding:0;gap:4px}
+.ranges button,.seg button{border-radius:var(--r-pill);font-weight:600}
+.ranges button[aria-pressed="true"],.seg button[aria-pressed="true"]{background:var(--raise);box-shadow:none}
+
+/* нижняя панель: матовая, без цветных капель и свечения */
+nav.tabs,[data-theme="light"] nav.tabs{background:color-mix(in srgb,var(--bg) 78%,transparent);-webkit-backdrop-filter:blur(22px) saturate(1.4);backdrop-filter:blur(22px) saturate(1.4);border-top:1px solid var(--line)}
+html.lite nav.tabs{background:var(--bg);-webkit-backdrop-filter:none;backdrop-filter:none}
+.tab{font-weight:500}
+.tab::before{display:none}
+.tab[aria-current="page"] svg{color:var(--fg);filter:none;transform:none}
+.tab-ink,[data-theme="light"] .tab-ink{background:color-mix(in srgb,var(--fg) 9%,transparent);box-shadow:none}
+.plus,[data-theme="light"] .plus{background:var(--btn-bg);color:var(--btn-fg);border-radius:50%;width:56px;height:56px;box-shadow:0 0 0 6px var(--bg)}
+
+/* шторки и меню */
+.sheet{border-top:0;box-shadow:none}
+.mi.main,[data-theme="light"] .mi.main{background:var(--surface);border-color:transparent}
+.mi.main i{background:var(--btn-bg);color:var(--btn-fg)}
+
+/* карточки-подсказки и сигналы: цвет — тонким фоном, без градиентов */
+.d14,[data-theme="light"] .d14{background:var(--surface);border-color:transparent}
+.signal,[data-theme="light"] .signal{background:color-mix(in srgb,var(--neg) 10%,var(--surface));border-color:transparent;box-shadow:none}
+.signal.soft,[data-theme="light"] .signal.soft{background:color-mix(in srgb,var(--warn) 10%,var(--surface));border-color:transparent}
+.summary,[data-theme="light"] .summary{background:var(--surface);border-color:transparent}
+.xpc-i{background:var(--raise);color:var(--fg)}
+.xp-hero{background:var(--surface);border:0;color:var(--fg)}
+.xp-hero::after{display:none}
+.xp-hero p{color:var(--mute)}.xp-hero p b{color:var(--fg)}
+.xp-hero .chip{background:var(--raise);color:var(--fg)}
+.xp-path li.cur>i{background:var(--btn-bg);color:var(--btn-fg);box-shadow:none}
+.xp-ceil>b{background:none;color:var(--fg)}
+.xq-b{border-color:transparent;background:var(--surface)}
+.xq-b[aria-checked="true"]{border-color:var(--fg);background:var(--surface2)}
+.xs-fill{background:var(--accent);opacity:.55}
+.xs-cur,[data-theme="light"] .xs-cur{background:var(--fg);box-shadow:0 0 0 4px var(--bg)}
+.xt-l .more,.xp-step .more{color:var(--fg)}
+#mlDemoBar{border-color:var(--line2)}
+
+/* графики: одна линия акцента, без неона */
+.card svg [id$="L"] stop,.card svg [id$="A"] stop{stop-color:var(--accent)}
+.card svg [stroke="#ff52d9"]{stroke:var(--accent)}.card svg [fill="#ff52d9"]{fill:var(--accent)}
+.card svg [stroke="#cfbaff"],[data-theme="light"] .card svg [stroke="#cfbaff"]{stroke:var(--dim)}
+.card svg [filter]{filter:none}
+.legend i[style*="--lav"]{background:var(--dim)!important}
+
+.card svg circle[stroke="#1d1540"],[data-theme="light"] .card svg circle[stroke="#1d1540"]{stroke:var(--raise)}
+.card svg text[fill="#a99dcc"]{fill:var(--mute)}.card svg text[fill="#8e83b6"],[data-theme="light"] .card svg text[fill="#8e83b6"]{fill:var(--dim)}.card svg text[fill="#f5f1ff"]{fill:var(--fg)}
+.mv{border-color:transparent;border-radius:var(--r-l)}
+/* вход */
+#mlAuth,[data-theme="light"] #mlAuth{background:var(--bg)}
+.mla-card{box-shadow:none;border-color:transparent}
+.mla-logo{box-shadow:none}
+.mla-curtain{box-shadow:none}
+</style>
 </head>
 <body class="loading">
 
@@ -1283,9 +1410,9 @@ html.lite .view.enter>*,html.lite .sheet.open .sh-body .sh-in>*{animation:none}
 
 <div class="toast" id="toast" role="status"><span id="toastMsg"></span><button type="button" id="toastBtn" hidden></button></div>
 
-<script src="config.js?v=20261110080500"></script>
+<script src="config.js?v=20261110125500"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="shim.js?v=20261110080500"></script>
+<script src="shim.js?v=20261110125500"></script>
 <script>
 /* ===== основа ===== */
 const $=id=>document.getElementById(id);
@@ -1665,7 +1792,7 @@ function donut(parts,n){const tot=parts.reduce((a,p)=>a+Math.max(0,p.v),0)||1,r=
 function renderAlloc(D){const sp=split();$('tgt').textContent=sp.BTC+' / '+sp.ETH+' / '+sp.ALT;
   if(!D.total){$('alloc').innerHTML=`<div class="empty" style="grid-column:1/-1">${S.ready?'Появится, когда будут монеты.':'Загружаю…'}</div>`;return;}
   const v=s=>(D.h[s]?D.h[s].qty:0)*(+D.prices[s]||0),b=v('BTC'),e=v('ETH'),a=D.total-b-e;
-  const rows=[['BTC',b,sp.BTC,'#a64dff'],['ETH',e,sp.ETH,'#ff52d9'],['Альткоины',a,sp.ALT,'#cfbaff']];
+  const rows=[['BTC',b,sp.BTC,'#f2a33a'],['ETH',e,sp.ETH,'#7d8fd9'],['Альткоины',a,sp.ALT,'#3fc7b0']];
   $('alloc').innerHTML=donut(rows.map(r=>({v:r[1],c:r[3]})),D.syms.length)+'<div class="alloc-rows">'+rows.map(r=>{const p=r[1]/D.total*100,d=p-r[2],dt=Math.abs(d)<.05?'в цели':d<0?'ниже цели на '+nf(-d,1)+'%':'выше цели на '+nf(d,1)+'%';return `<div class="arow"><span class="sw" style="background:${r[3]}"></span><span>${r[0]}</span><b>${nf(p,1)}%</b><span class="d">цель ${r[2]}% · <span class="adev">${dt}</span></span></div>`;}).join('')+'</div>';}
 let sigSeen='';try{sigSeen=localStorage.getItem('sigSeen')||'';}catch(e){}
 function renderAlerts(){const all=S.alerts,A=all.slice(0,12),tone={level:'var(--neg)',near:'var(--warn)',ath:'var(--pos)',cap:'var(--pos)',payday:'var(--info)',buy:'var(--neg)',stale:'var(--warn)',rules:'var(--info)',news:'var(--warn)'};
@@ -2550,7 +2677,7 @@ function msSync(x){MSC.last=x;if(!msApply())return;if(!S.ready||document.getElem
   if(window.Mascot){try{window.Mascot.sync(msPayload(x));}catch(e){}}else msLoad();}
 function msLoad(){if(MSC.loading||MSC.failed)return;MSC.loading=true;
   const add=(src,ok)=>{try{const s=document.createElement('script');s.src=src;s.async=true;s.onload=ok;s.onerror=()=>{MSC.failed=true;};document.head.appendChild(s);}catch(e){MSC.failed=true;}};
-  const boot=()=>add('mascot.js?v=20261110080500',()=>{try{if(window.Mascot&&window.Mascot.init({host:$('mascot'),app:{audio:ac,buzz}})&&MSC.last&&$('ob').hidden&&!document.getElementById('mlAuth'))window.Mascot.sync(msPayload(MSC.last));}catch(e){}});
+  const boot=()=>add('mascot.js?v=20261110125500',()=>{try{if(window.Mascot&&window.Mascot.init({host:$('mascot'),app:{audio:ac,buzz}})&&MSC.last&&$('ob').hidden&&!document.getElementById('mlAuth'))window.Mascot.sync(msPayload(MSC.last));}catch(e){}});
   setTimeout(()=>{if(window.THREE)boot();else add('three.min.js',boot);},300);}
 function render(){const D=derive();renderHeader();renderHome(D);renderGrowth();renderCoins(D);renderStrategy(D);renderActivity();renderD14();if(window.MLX)try{MLX.render(D);}catch(e){console.error(e);}earnNudge();if(cvSym&&$('coinSheet').classList.contains('open'))renderCoinView();}
 document.body.classList.add('loading');
@@ -2573,6 +2700,6 @@ render();requestAnimationFrame(inkMove);setTimeout(inkMove,600);
   db.collection('history').limit(1000).onSnapshot(q=>{S.history=q.docs.map(d=>d.data());renderGrowth();if(S.ready&&derive().noPrice)renderHome(derive());},fail);
 })();
 </script>
-<script src="plus.js?v=20261110080500"></script>
+<script src="plus.js?v=20261110125500"></script>
 </body>
 </html>

@@ -1404,6 +1404,7 @@ def run_browser():
             pg.fill('#fiExp', '800'); pg.fill('#fiSav', '6000'); pg.fill('#fiAdd', '300'); pg.wait_for_timeout(800)
             r = pg.evaluate("""()=>({ck:document.querySelector('#xBody [data-step]').getAttribute('aria-checked'),fi:document.getElementById('fiOut').innerText,
                 card:document.getElementById('xPlan').innerText,today:document.getElementById('xToday').innerText})""")
+            r = {k: v.replace('\xa0', ' ') for k, v in r.items()}
             if r['ck'] == 'true' and '$316 800' in r['fi'] and '$480 000' in r['fi'] and 'этап 3 из 5' in r['card'] and 'при потолке 5%' in r['today']: ok('3.0: шаг отмечен, число свободы ×33 = $316 800, главная показывает этап и долю крипты выше потолка')
             else: fail('3.0: шаги и число свободы', str(r)[:400])
             shot(pg, 'v3-plan')
