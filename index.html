@@ -714,7 +714,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible{outline:none}
 body:not(.loading) .hero-bg .pl{animation:pldraw 1.5s .2s var(--ease) forwards}
 @keyframes pldraw{to{stroke-dashoffset:0}}
 .hero .iso{right:-8px;top:6px;width:150px;height:150px;opacity:.9}
-.hero-l{position:relative;display:inline-flex;align-items:center;gap:2px;border:0;background:none;padding:0;margin:0;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.hero-l{position:relative;display:inline-flex;align-items:center;gap:2px;min-height:48px;border:0;background:none;padding:0;margin:0;cursor:pointer;-webkit-tap-highlight-color:transparent}
 .hero-l svg{width:14px;height:14px;opacity:.7}
 .hero-l::after{content:"";position:absolute;inset:-14px -12px -10px -12px}
 .hero-l:active{opacity:.7}
@@ -1283,9 +1283,9 @@ html.lite .view.enter>*,html.lite .sheet.open .sh-body .sh-in>*{animation:none}
 
 <div class="toast" id="toast" role="status"><span id="toastMsg"></span><button type="button" id="toastBtn" hidden></button></div>
 
-<script src="config.js?v=20261110074905"></script>
+<script src="config.js?v=20261110080500"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="shim.js?v=20261110074905"></script>
+<script src="shim.js?v=20261110080500"></script>
 <script>
 /* ===== основа ===== */
 const $=id=>document.getElementById(id);
@@ -2550,7 +2550,7 @@ function msSync(x){MSC.last=x;if(!msApply())return;if(!S.ready||document.getElem
   if(window.Mascot){try{window.Mascot.sync(msPayload(x));}catch(e){}}else msLoad();}
 function msLoad(){if(MSC.loading||MSC.failed)return;MSC.loading=true;
   const add=(src,ok)=>{try{const s=document.createElement('script');s.src=src;s.async=true;s.onload=ok;s.onerror=()=>{MSC.failed=true;};document.head.appendChild(s);}catch(e){MSC.failed=true;}};
-  const boot=()=>add('mascot.js?v=20261110074905',()=>{try{if(window.Mascot&&window.Mascot.init({host:$('mascot'),app:{audio:ac,buzz}})&&MSC.last&&$('ob').hidden&&!document.getElementById('mlAuth'))window.Mascot.sync(msPayload(MSC.last));}catch(e){}});
+  const boot=()=>add('mascot.js?v=20261110080500',()=>{try{if(window.Mascot&&window.Mascot.init({host:$('mascot'),app:{audio:ac,buzz}})&&MSC.last&&$('ob').hidden&&!document.getElementById('mlAuth'))window.Mascot.sync(msPayload(MSC.last));}catch(e){}});
   setTimeout(()=>{if(window.THREE)boot();else add('three.min.js',boot);},300);}
 function render(){const D=derive();renderHeader();renderHome(D);renderGrowth();renderCoins(D);renderStrategy(D);renderActivity();renderD14();if(window.MLX)try{MLX.render(D);}catch(e){console.error(e);}earnNudge();if(cvSym&&$('coinSheet').classList.contains('open'))renderCoinView();}
 document.body.classList.add('loading');
@@ -2573,6 +2573,6 @@ render();requestAnimationFrame(inkMove);setTimeout(inkMove,600);
   db.collection('history').limit(1000).onSnapshot(q=>{S.history=q.docs.map(d=>d.data());renderGrowth();if(S.ready&&derive().noPrice)renderHome(derive());},fail);
 })();
 </script>
-<script src="plus.js?v=20261110074905"></script>
+<script src="plus.js?v=20261110080500"></script>
 </body>
 </html>

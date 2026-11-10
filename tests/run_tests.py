@@ -668,7 +668,7 @@ def run_browser():
                 if len(hz) == 3 and all(h >= 48 and w >= 48 for h, w in hz): ok(f'«Монеты» ({th}): подписи колонок — кнопки, зона нажатия ≥ 48 px ({hz})')
                 else: fail(f'«Монеты» ({th}): зона нажатия подписей', str(hz))
                 # итог: «АКТИВЫ · 2» слева, справа сумма и прибыль за период
-                if st['lbl'] == 'АКТИВЫ · 2' and st['tot'].startswith('$950 · за 24ч +$'): ok(f'«Монеты» ({th}): итог «{st["lbl"]}» слева, «{st["tot"]}» справа')
+                if st['lbl'] == 'Активы · 2' and st['tot'].startswith('$950 · за 24ч +$'): ok(f'«Монеты» ({th}): итог «{st["lbl"]}» слева, «{st["tot"]}» справа')
                 else: fail(f'«Монеты» ({th}): итог над таблицей', f'{st["lbl"]!r} | {st["tot"]!r}')
                 shot(pg, f'stage1-coins-app-{th}')
                 # неделя: из 7-дневного графика (0,97 × цены → +3,1%); прибыль = стоимость сейчас − кол-во × цена неделю назад
@@ -788,7 +788,7 @@ def run_browser():
                 pg.click('#coinList .thead [data-sortcol="v"]'); pg.wait_for_timeout(250)
                 if pg.evaluate("P.sort") == 'value': ok(f'кадры «Монет» ({th}): третье нажатие — снова «Портфель ▾»')
                 else: fail(f'кадры «Монет» ({th}): возврат к сортировке по стоимости', pg.evaluate("P.sort"))
-                if st['lbl'] == 'АКТИВЫ · 5' and st['tot'].startswith('$5 000 · за 24ч'): ok(f'кадры «Монет» ({th}): итог «{st["lbl"]}» · «{st["tot"]}»')
+                if st['lbl'] == 'Активы · 5' and st['tot'].startswith('$5 000 · за 24ч'): ok(f'кадры «Монет» ({th}): итог «{st["lbl"]}» · «{st["tot"]}»')
                 else: fail(f'кадры «Монет» ({th}): итог', f'{st["lbl"]!r} | {st["tot"]!r}')
                 fits = pg.evaluate('''()=>{const L=document.getElementById('coinList').getBoundingClientRect();return [...document.querySelectorAll('#coinList .thead [data-sortcol], #coinList .row .b, #coinList .row .s, #coinsTot, #coinsLbl')].every(x=>{const r=x.getBoundingClientRect();return x.scrollWidth<=x.clientWidth+1&&r.left>=L.left-1&&r.right<=L.right+1||x.id==='coinsTot'||x.id==='coinsLbl'})&&document.documentElement.scrollWidth<=390}''')
                 ok(f'кадры «Монет» ({th}): подписи и цифры не обрезаны, без сдвига вбок') if fits else fail(f'кадры «Монет» ({th}): обрезанный текст', 'есть многоточие или выход за таблицу')
@@ -819,7 +819,7 @@ def run_browser():
                 col = pg.evaluate("[getComputedStyle(document.querySelector('#coinList .row .c3 .b')).color,getComputedStyle(document.querySelector('.ctab .s.q')).color,getComputedStyle(document.querySelector('#coinsTot b')).color,document.querySelector('#coinsTot b').textContent]")
                 ok(f'нет цен ни у одной монеты ({th}): в ячейках и в итоге «—» приглушённым цветом --mute') if col[0] == col[1] == col[2] and col[3] == '—' else fail(f'нет цен ({th}): цвет и текст итога', str(col))
                 lbl = cnorm(pg.inner_text('#coinsLbl'))
-                ok(f'нет цен ни у одной монеты ({th}): «{lbl}»') if lbl == 'АКТИВЫ · 5' else fail(f'нет цен ({th}): подпись итога', repr(lbl))
+                ok(f'нет цен ни у одной монеты ({th}): «{lbl}»') if lbl == 'Активы · 5' else fail(f'нет цен ({th}): подпись итога', repr(lbl))
                 npn = pg.evaluate("(()=>{const e=document.getElementById('npNote');return e&&!e.hidden?[e.textContent,getComputedStyle(e).backgroundColor]:null})()")
                 if npn and cnorm(npn[0]) == 'Цен пока нет — проверьте связь. Количества сохранены, итог появится, когда цены придут.' and npn[1] != 'rgba(0, 0, 0, 0)':
                     ok(f'нет цен ни у одной монеты ({th}): под таблицей одна общая плашка «Цен пока нет — проверьте связь…», без тикеров')
@@ -832,7 +832,7 @@ def run_browser():
                 wait_app(pg)
                 pg.evaluate("document.querySelector('nav.tabs [data-tab=\"coins\"]').click()"); pg.wait_for_timeout(700)
                 lbl, txt = cnorm(pg.inner_text('#coinsLbl')), pg.inner_text('#coinList')
-                if lbl == 'АКТИВЫ' and 'Монет пока нет' in txt and pg.locator('#coinRanges').is_hidden(): ok(f'пустая вкладка «Монеты» ({th}): «АКТИВЫ» без счётчика, подсказка, переключатель периода скрыт')
+                if lbl == 'Активы' and 'Монет пока нет' in txt and pg.locator('#coinRanges').is_hidden(): ok(f'пустая вкладка «Монеты» ({th}): «Активы» без счётчика, подсказка, переключатель периода скрыт')
                 else: fail(f'пустая вкладка «Монеты» ({th})', f'{lbl!r} | {txt[:80]!r}')
                 shot(pg, f'stage1-empty-{th}')
             scenario(f'Монеты: пустая вкладка ({th})', {'session': True, 'docs': [SEED[0]]}, s_coins_empty, theme=th)
@@ -1254,7 +1254,7 @@ def run_browser():
             ok('14 дней: открыл и закрыл без нажатия — на следующий день всё ещё карточка 1')
             pg.click('#d14 [data-d14="ok"]'); d14_wait(pg, 'read', 1)
             st = d14(pg)
-            if 'День 1 из 14 · завтра — день 2' in st['txt']: ok('14 дней: «Понятно» в 23:59:30 → «День 1 из 14 · завтра — день 2»')
+            if 'День 1 из 14 · завтра — день 2' in ' '.join(st['txt'].split()): ok('14 дней: «Понятно» в 23:59:30 → «День 1 из 14 · завтра — день 2»')
             else: fail('14 дней: свёрнутая', st['txt'])
             for th in ('dark', 'light'):
                 pg.evaluate(f"document.documentElement.setAttribute('data-theme','{th}')"); pg.wait_for_timeout(200)
@@ -1296,7 +1296,7 @@ def run_browser():
             if 'Копия и вид' in d14(pg)['txt']: ok('14 дней: карточка 14 «Копия и вид»')
             else: fail('14 дней: карточка 14', d14(pg)['txt'][:100])
             pg.click('#d14 [data-d14="ok"]'); d14_wait(pg, 'done', 14)
-            if '14 из 14 · все карточки пройдены' in d14(pg)['txt']: ok('14 дней: после 14-й — «14 из 14 · все карточки пройдены»')
+            if '14 из 14 · все карточки пройдены' in ' '.join(d14(pg)['txt'].split()): ok('14 дней: после 14-й — «14 из 14 · все карточки пройдены»')
             else: fail('14 дней: 14 из 14', d14(pg)['txt'])
             pg.clock.set_system_time('2026-11-16T09:00:00Z'); d14_tick(pg); d14_wait(pg, 'gone')
             ok('14 дней: на следующий день после 14-й блока нет') if not d14(pg)['vis'] else fail('14 дней: после 14', 'блок виден')
@@ -1321,7 +1321,7 @@ def run_browser():
         def s_d14_old(pg, n):
             wait_app(pg); d14_wait(pg, 'invite')
             st = d14(pg)
-            if 'Новое: 14 коротких карточек о приложении' in st['txt'] and 'Начать' in st['txt'] and 'Скрыть' in st['txt']: ok('14 дней: давний аккаунт видит приглашение «Начать / Скрыть»')
+            if 'Новое: 14 карточек' in ' '.join(st['txt'].split()) and 'по одной в день' in st['txt'] and 'Начать' in st['txt'] and 'Скрыть' in st['txt']: ok('14 дней: давний аккаунт видит приглашение «Начать / Скрыть»')
             else: fail('14 дней: приглашение', st['txt'])
             for th in ('dark', 'light'):
                 pg.evaluate(f"document.documentElement.setAttribute('data-theme','{th}')"); pg.wait_for_timeout(250)
