@@ -109,11 +109,12 @@
     const now = Date.now(), iso = d => new Date(now - d * 864e5).toISOString(), docs = [];
     const K = [0.84, 0.97, 1.1, 0.9, 0.86, 0.96];              /* цена покупки относительно сегодняшней: от 5 месяцев назад до этого месяца */
     const ath = Math.round(px.BTC * 1.14 / 100) * 100;
-    docs.push(['app/settings', { template: 'author', onboardedAt: iso(170), split: { BTC: 50, ETH: 30, ALT: 20 }, capPct: 20, depositSplit: { dca: 50 }, ladder: true, key2Pct: 5, key2Days: 60, altCapPct: 20, altOfMonth: 'SOL', budget: { amount: 200, cur: 'USD' }, depositDay: 5 }]);
+    docs.push(['app/settings', { template: 'author', onboardedAt: iso(170), split: { BTC: 50, ETH: 30, ALT: 20 }, capPct: 20, depositSplit: { dca: 87 }, ladder: true, key2Pct: 5, key2Days: 60, altCapPct: 20, altOfMonth: 'SOL', budget: { amount: 115, cur: 'USD' }, depositDay: 5 }]);
     docs.push(['app/cycle', { ath, athDate: iso(42).slice(0, 10), startedAt: iso(170).slice(0, 10), levels: [[30, 20], [40, 25], [50, 33], [60, 50], [70, 100]].map(([d, p], i) => ({ n: i + 1, drop: d, pct: p, status: 'pending' })) }]);
+    docs.push(['app/market', { prices: { BTC: px.BTC, ETH: px.ETH, SOL: px.SOL }, updatedAt: new Date(now).toISOString(), source: 'demo' }]);   /* опора для сверки цен с бирж */
     let n = 0; const add = d => docs.push(['tx/demo' + (++n), d]);
     K.forEach((k, i) => { const back = (K.length - 1 - i) * 30 + 6, last = i === K.length - 1;
-      add({ ts: iso(back), type: 'deposit', usd: 200, uah: null, dcaUsd: 100, reserveUsd: 100, rate: null });
+      add({ ts: iso(back), type: 'deposit', usd: 115, uah: null, dcaUsd: 100, reserveUsd: 15, rate: null });
       if (last) return;                                        /* в этом месяце пополнение есть, а покупка по плану ещё впереди — видно «осталось купить» */
       for (const [s, u] of [['BTC', 50], ['ETH', 30], ['SOL', 20]]) { const p = px[s] * k; add({ ts: iso(back - 1), type: 'dca', symbol: s, qty: +(u / p).toPrecision(8), usd: u, price: +p.toPrecision(8) }); } });
     return docs;

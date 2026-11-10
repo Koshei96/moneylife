@@ -170,8 +170,9 @@
       for (const q of parts) { const w = bw * q[1] / D.total; g.fillStyle = q[2]; rr(g, x, y, Math.max(8, w - 8), 28, 14); g.fill(); x += w; }
       g.font = font(600, 40); let tx = 84; for (const q of parts) { g.fillStyle = q[2]; g.beginPath(); g.arc(tx + 12, 852, 12, 0, 7); g.fill(); g.fillStyle = '#f5f1ff'; const t = q[0] + ' ' + nf(q[1] / D.total * 100, 0) + '%'; g.fillText(t, tx + 36, 866); tx += g.measureText(t).width + 84; } }
     const first = S.tx.length ? daysSince(S.tx.slice().sort(byTs)[0].ts) : null;
-    g.fillStyle = '#a99dcc'; g.font = font(500, 40);
-    g.fillText([pl(D.syms.length, 'монета', 'монеты', 'монет'), first != null && first > 0 ? 'веду учёт ' + pl2(first) : '', 'покупаю по плану'].filter(Boolean).join(' · '), 84, 980);
+    const facts = [pl(D.syms.length, 'монета', 'монеты', 'монет'), first != null && first > 0 ? 'веду учёт ' + pl2(first) : '', 'покупаю по плану'].filter(Boolean).join(' · ');
+    let fs = 40; g.fillStyle = '#a99dcc'; do { g.font = font(500, fs); fs -= 2; } while (g.measureText(facts).width > W - 168 && fs > 24);   /* строка всегда влезает в ширину */
+    g.fillText(facts, 84, 980);
     g.fillStyle = '#f5f1ff'; g.font = font(700, 44); g.fillText('Дневник и план крипто-накоплений', 84, 1170);
     g.fillStyle = '#ffc24d'; g.font = font(600, 40); g.fillText('koshei96.github.io/moneylife', 84, 1236);
     g.fillStyle = '#6d6396'; g.font = font(500, 30); g.fillText('Не инвестиционный совет. Суммы скрыты.', 84, 1296);
