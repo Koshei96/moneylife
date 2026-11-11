@@ -334,6 +334,7 @@ def run_browser():
             pg.screenshot(path=str(OUT / f'{name}.png'))
 
         def scenario(name, cfg, body, prices=True, path='index.html', dsf=2, theme=None, extra=None, tz='Europe/Kyiv', clock=None, motion=None):
+            if os.environ.get('ML_ONLY') and os.environ['ML_ONLY'] not in name: return
             ctx, pg, errs = page_for(name, cfg, prices, dsf, theme, extra, tz, motion)
             try:
                 if clock: pg.clock.install(time=clock)   # подменённые часы телефона (идут дальше сами)
@@ -1030,26 +1031,36 @@ def run_browser():
             if v2['engine'] == 'phone' and v2['err'] == 'not_configured' and v2['cap']: ok('Орион: функция голоса недоступна — говорит голосом телефона, субтитры на месте')
             else: fail('Орион: запасной голос', str(v2))
             pg.evaluate("document.querySelector('.or-cap').click()"); pg.unroute('**/functions/v1/orion-voice')
-            # вопрос про рынок → функция orion-ask (имитация): уходит только вопрос и тикер, ответ звучит; ошибка → понятная фраза
+            # «мозг»: вопрос → функция orion-ask (имитация). Уходят вопрос, тикер, начало разговора и портфель только долями; ответ звучит
             asks = []
             def fa(route):
-                asks.append(route.request.post_data or '')
-                if len(asks) == 1: route.fulfill(status=200, headers={'content-type': 'application/json', 'access-control-allow-origin': '*'}, body=json.dumps({'text': 'Биткоин за сутки плюс 3%. По новостям, рынок реагирует на приток денег в биржевые фонды, пишет Cointelegraph.', 'sources': ['Cointelegraph']}))
+                asks.append(json.loads(route.request.post_data or '{}'))
+                if len(asks) <= 2: route.fulfill(status=200, headers={'content-type': 'application/json', 'access-control-allow-origin': '*'}, body=json.dumps({'text': 'Биткоин за сутки плюс 3%. По новостям, рынок реагирует на приток денег в биржевые фонды, пишет Cointelegraph.' if len(asks) == 1 else 'Эфир идёт следом за биткоином, отдельной новости нет.', 'sources': ['Cointelegraph']}))
                 else: route.fulfill(status=429, headers={'content-type': 'application/json', 'access-control-allow-origin': '*'}, body='{"error":"day_limit"}')
             pg.route('**/functions/v1/orion-ask', fa)
             pg.evaluate("Mascot.debug.ask('Почему биткоин растёт?')"); pg.wait_for_timeout(1500)
             cap = pg.evaluate("(document.querySelector('.or-cap')||{}).textContent||''")
-            body = json.loads(asks[0]) if asks else {}
-            if body.get('sym') == 'BTC' and 'растёт' in body.get('q', '') and set(body) == {'q', 'sym'} and 'Cointelegraph' in cap: ok('Орион: «почему биткоин растёт» — ответ по новостям; на сервер уходит только вопрос и тикер')
-            else: fail('Орион: вопрос про рынок', str(body) + ' | ' + cap)
+            b1 = asks[0] if asks else {}
+            ctx = b1.get('ctx') or {}
+            flat = json.dumps(ctx)
+            no_sums = set(b1) <= {'q', 'sym', 'hist', 'ctx'} and all(0 < v <= 100 for v in (ctx.get('shares') or {}).values()) and 'total' not in flat and '@' not in flat
+            if b1.get('sym') == 'BTC' and 'растёт' in b1.get('q', '') and ctx.get('shares') and no_sums and 'Cointelegraph' in cap: ok('Орион: «почему биткоин растёт» — ответ «мозга»; портфель уходит только долями в %, без сумм')
+            else: fail('Орион: вопрос «мозгу»', str(b1) + ' | ' + cap)
             pg.evaluate("document.querySelector('.or-cap') && document.querySelector('.or-cap').click()")
-            pg.evaluate("Mascot.debug.ask('Что с рынком?')"); pg.wait_for_timeout(1200)
+            pg.evaluate("Mascot.debug.ask('А эфир?')"); pg.wait_for_timeout(1200)
+            h2 = (asks[1].get('hist') if len(asks) > 1 else None) or []
+            if h2 and 'биткоин' in h2[-1]['q'].lower() and 'Cointelegraph' in h2[-1]['a']: ok('Орион: помнит начало разговора — «а эфир?» уходит вместе с прошлым вопросом и ответом')
+            else: fail('Орион: память разговора', str(h2))
+            pg.evaluate("document.querySelector('.or-cap') && document.querySelector('.or-cap').click()")
+            pg.evaluate("Mascot.debug.ask('Что такое халвинг?')"); pg.wait_for_timeout(1200)
             cap = pg.evaluate("(document.querySelector('.or-cap')||{}).textContent||''")
-            if 'закончились' in cap: ok('Орион: лимит вопросов о рынке — понятная фраза')
-            else: fail('Орион: лимит вопросов о рынке', cap)
-            r0 = pg.evaluate("Mascot.debug.reply('сколько у меня биткоина')")
-            if len(asks) == 2 and 'биткоин' in r0.lower(): ok('Орион: вопросы о своём портфеле отвечаются на телефоне, без сервера')
-            else: fail('Орион: портфель без сервера', str(len(asks)) + ' ' + r0)
+            if len(asks) == 3 and 'закончились' in cap: ok('Орион: общий вопрос идёт «мозгу»; лимит — понятная фраза')
+            else: fail('Орион: лимит вопросов', str(len(asks)) + ' ' + cap)
+            pg.evaluate("document.querySelector('.or-cap') && document.querySelector('.or-cap').click()")
+            pg.evaluate("Mascot.debug.ask('сколько у меня биткоина')"); pg.wait_for_timeout(800)
+            cap = pg.evaluate("(document.querySelector('.or-cap')||{}).textContent||''")
+            if len(asks) == 3 and 'У вас' in cap: ok('Орион: вопросы о своём портфеле отвечаются на телефоне, без сервера')
+            else: fail('Орион: портфель без сервера', str(len(asks)) + ' ' + cap)
             pg.evaluate("document.querySelector('.or-cap') && document.querySelector('.or-cap').click()"); pg.unroute('**/functions/v1/orion-ask')
         scenario('Орион', {'session': True, 'docs': SEED}, s_mascot)
 

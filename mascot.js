@@ -172,6 +172,7 @@
   function finish(cur, quick) {
     if (TTS.cur !== cur) return; TTS.cur = null; clearInterval(TTS.sim); clearTimeout(TTS.guard); TTS.sim = 0; capDone(cur, quick); wake();
     if (quick) { TTS.q = []; return; }   /* остановили рукой — очередь не договариваем */
+    if (cur.follow && AUTO && SRC && !document.hidden) { setTimeout(() => { if (!TTS.cur && !ST.rec) listen({ follow: true }); }, 450); return; }   /* разговор: после ответа слушаем следующий вопрос */
     setTimeout(() => { if (TTS.cur) return; let x; while ((x = TTS.q.shift()) && now() - x.at > 40) {} if (x) speak(x.text, Object.assign({}, x.o, { queue: false })); }, 700);
   }
   function stopVoice() {
@@ -197,7 +198,7 @@
       return false;
     }
     stopVoice();
-    const cur = { text, pri: o.pri || 0 }; TTS.cur = cur; ST.lastSay = text; ST.lastEvent = now(); TTS.beat = now();
+    const cur = { text, pri: o.pri || 0, follow: !!o.follow }; TTS.cur = cur; ST.lastSay = text; ST.lastEvent = now(); TTS.beat = now();
     capShow(text); pulse(0.6);
     if (premiumOK()) { cur.wait = true; premium(cur).then(ok => { cur.wait = false; if (!ok && TTS.cur === cur) phone(cur); }); wake(); return true; }
     phone(cur);
@@ -495,29 +496,57 @@
     if (has('спасибо', 'благодар')) return pick(['Всегда к вашим услугам.', 'Обращайтесь' + nm() + '.']);
     if (has('кто ты', 'что ты умеешь', 'что умеешь', 'помощ', 'помоги')) return 'Я Орион. Могу рассказать сводку за день, итог недели, цену любой монеты и сколько её у вас, почему рынок растёт или падает по свежим новостям, что с лестницей и резервом, и поставить оповещение: «сообщи, когда солана будет 150».';
     if (has('сводк', 'главн', 'нового', 'новост', 'как дела', 'что там', 'доклад', 'привет')) return brief();
-    return 'Пока не понял вопрос. Спросите, например: «сколько у меня биткоина», «что с лестницей» или «как прошла неделя».';
+    return UNK + ' Спросите, например: «сколько у меня биткоина», «что с лестницей» или «как прошла неделя».';
   }
-  /* вопрос про рынок и новости: «почему биткоин растёт», «что с рынком», «новости по солане» */
+  /* ---------- «мозг»: вопросы, на которые нет точного ответа на телефоне, — серверной функции orion-ask (Claude + новости + цены) ----------
+     Телефон отвечает сам на то, что знает точно: сколько монет, итог, лестница, резерв, план, неделя, серия, оповещения.
+     Остальное — «мозгу». Ему уходит вопрос, начало разговора и портфель только долями в % (без сумм, имени и почты). */
+  const UNK = 'Пока не понял вопрос.';
   function marketQ(t) {
     const has = (...k) => k.some(x => t.indexOf(x) >= 0);
-    return has('почему', 'из-за чего', 'отчего', 'причин', 'новост', 'рынок', 'рынк', 'что происходит', 'что случилось', 'что с крипт', 'растёт', 'растет', 'рост', 'падает', 'падени', 'упал', 'вырос', 'обвал', 'памп', 'дамп', 'хайп');
+    return has('почему', 'из-за чего', 'отчего', 'причин', 'новост', 'рынок', 'рынк', 'что происходит', 'что случилось', 'что с крипт', 'растёт', 'растет', 'рост', 'падает', 'падени', 'упал', 'вырос', 'обвал', 'памп', 'дамп', 'хайп', 'стоит ли', 'что думаешь', 'объясни', 'расскажи про', 'что такое', 'как работает', 'зачем', 'а если', 'а что');
   }
-  const ASK_ERR = { day_limit: 'На сегодня вопросы о рынке закончились. Завтра продолжим.', month_limit: 'Лимит вопросов о рынке на этот месяц исчерпан.' };
-  async function answer(q) {
-    const t = norm(q);
-    if (A.ask && t.trim() && marketQ(t) && !/(у меня|мои |мой |сколько у)/.test(t)) {
-      const sym = coinIn(t) || '';
-      speak(pick(['Секунду, смотрю новости.', 'Сейчас проверю рынок.', 'Анализирую новости.']), { pri: 2 });
-      let r = null; try { r = await A.ask(q, sym); } catch (e) { r = null; }
-      ST.lastAsk = r;
-      if (r && r.text) { speak(r.text, { pri: 2 }); return; }
-      const base = sym && sym !== 'USDT' ? reply(q) : '';
-      speak((r && ASK_ERR[r.error]) || ((base && coinPrice(sym) ? base + ' ' : '') + 'Новости сейчас не загрузились — попробуйте чуть позже.'), { pri: 2 });
-      return;
-    }
-    speak(reply(q), { pri: 2 });
+  /* портфель долями: монеты в %, итог к вложенному в %, резерв в %, следующая ступень, этап личного плана, индекс страха */
+  function brainCtx() {
+    const D = ST.D || {}, S = ST.S || {}, M = window.MLX || {}, c = {};
+    try {
+      const tot = +D.total || 0;
+      if (tot > 0 && D.h) {
+        const sh = {}; Object.keys(D.h).forEach(k => { const q = +(D.h[k] && D.h[k].qty) || 0, p = coinPrice(k); if (q > 0 && p > 0) { const v = Math.round(q * p / tot * 100); if (v >= 1) sh[k] = v; } });
+        if (Object.keys(sh).length) c.shares = sh;
+        const inv = +D.invPriced || 0; if (inv > 0) c.pnl = Math.round((tot - inv) / inv * 1000) / 10;
+        if (D.reserve > 0) c.reserve = Math.round(D.reserve / (tot + D.reserve) * 100);
+      }
+      const ath = +(S.cycle && S.cycle.ath) || 0, btc = coinPrice('BTC');
+      if (ath && btc) c.btcFromAth = Math.round((btc / ath - 1) * 1000) / 10;
+      const l = ((S.cycle && S.cycle.levels) || []).filter(x => x && x.status === 'pending' && x.drop > 0).sort((a, b) => a.n - b.n)[0];
+      if (l && ath && btc) c.nextStep = { n: l.n, dist: Math.max(0, Math.round((1 - ath * (1 - l.drop / 100) / btc) * 1000) / 10) };
+      if (ST.go) c.onStep = true;
+      const pl = M.planGet ? M.planGet() : null, R = pl && M.planResult ? M.planResult(pl) : null;
+      if (R) { c.stage = R.stage + 1; c.cryptoCeil = R.ceil; }
+      const f = M.fng ? M.fng() : null; if (f) c.fng = f.v;
+    } catch (e) {}
+    return c;
   }
-  function listen() {
+  const ASK_ERR = { day_limit: 'На сегодня вопросы ко мне закончились. Завтра продолжим.', month_limit: 'Лимит вопросов на этот месяц исчерпан.' };
+  async function answer(q, byVoice) {
+    const t = norm(q), local = t.trim() ? reply(q) : reply('');
+    const sure = local && local.indexOf(UNK) !== 0 && !/^Не расслышал/.test(local);
+    const follow = ST.lastBrain && now() - ST.lastBrain < 120 && (/^\s*(а|и|ну|тогда|а\s+если)\b/.test(t) || t.trim().split(/\s+/).length <= 3) && !/(у меня|мои |мой |сколько у)/.test(t);   /* переспрос: «а эфир?», «а почему?» */
+    const toBrain = A.ask && t.trim() && (marketQ(t) || !sure || follow);
+    if (!toBrain) { remember(q, local); speak(local, { pri: 2, follow: byVoice }); return; }
+    const sym = coinIn(t) || '';
+    speak(pick(sym || marketQ(t) ? ['Секунду, смотрю новости.', 'Сейчас проверю рынок.', 'Анализирую.'] : ['Секунду.', 'Думаю.', 'Сейчас отвечу.']), { pri: 2 });
+    const hist = (ST.hist || []).filter(x => now() - x.at < 900).slice(-6).map(x => ({ q: x.q, a: x.a }));
+    let r = null; try { r = await A.ask(q, sym, { hist, ctx: brainCtx() }); } catch (e) { r = null; }
+    ST.lastAsk = r;
+    if (r && r.text) { ST.lastBrain = now(); remember(q, r.text); speak(r.text, { pri: 2, follow: byVoice }); return; }
+    const msg = (r && ASK_ERR[r.error]) || (sure ? local : (sym && coinPrice(sym) ? reply(NAME_N[sym] || sym) + ' ' : '') + 'Сейчас не могу связаться с сервером — попробуйте чуть позже.');
+    speak(msg, { pri: 2 });
+  }
+  function remember(q, a) { ST.hist = (ST.hist || []).filter(x => now() - x.at < 900).concat([{ q: String(q).slice(0, 200), a: String(a).slice(0, 400), at: now() }]).slice(-6); }
+  function listen(lo) {
+    lo = lo || {};
     stopVoice();
     if (!SRC) { speak('Голосовые вопросы на этом телефоне недоступны. Нажмите на меня — расскажу главное за сегодня.', { pri: 2 }); return; }
     if (ST.rec) { try { ST.rec.abort(); } catch (e) {} ST.rec = null; }
@@ -526,9 +555,10 @@
     ST.rec = rec; let heard = '', done = false;
     if (ui.cap) { ui.capT.textContent = 'Слушаю…'; ui.cap.classList.add('on', 'talk', 'listen'); clearTimeout(ui.capOff); }
     pulse(1); buzz(12);
-    const end = () => { if (done) return; done = true; ST.rec = null; if (ui.cap) ui.cap.classList.remove('listen'); try { rec.stop(); } catch (e) {} answer(heard); };
+    const end = () => { if (done) return; done = true; ST.rec = null; if (ui.cap) ui.cap.classList.remove('listen'); try { rec.stop(); } catch (e) {} if (!heard && lo.follow) { if (ui.cap) ui.cap.classList.remove('on', 'talk'); return; } answer(heard, true); };
     rec.onresult = e => { heard = Array.from(e.results).map(r => r[0].transcript).join(' ').trim(); if (ui.capT && heard) ui.capT.textContent = '«' + heard + '»'; ST.lastHeard = heard; if (e.results[e.results.length - 1].isFinal) end(); };
     rec.onerror = e => { if (done) return; done = true; ST.rec = null; if (ui.cap) ui.cap.classList.remove('listen');
+      if (lo.follow && e.error !== 'not-allowed') { if (ui.cap) ui.cap.classList.remove('on', 'talk'); return; }   /* в разговоре тишина — просто заканчиваем */
       speak(e.error === 'not-allowed' || e.error === 'service-not-allowed' ? 'Нет доступа к микрофону. Разрешите его этому приложению в настройках телефона.' : e.error === 'network' ? 'Для распознавания речи нужен интернет.' : 'Не расслышал. Зажмите меня и спросите ещё раз.', { pri: 2 }); };
     rec.onend = () => { if (!done) end(); };
     try { rec.start(); } catch (e) { done = true; ST.rec = null; if (ui.cap) ui.cap.classList.remove('listen'); speak('Микрофон сейчас занят.', { pri: 2 }); }
@@ -739,7 +769,7 @@
       hour: h => { ST.forceHour = h; },
       premium: on => { ST.forcePremium = !!on; VO.off = 0; },
       spoken: t => spokenRu(t),
-      ask: q => answer(q), lastAsk: () => ST.lastAsk || null,
+      ask: q => answer(q), lastAsk: () => ST.lastAsk || null, ctx: () => brainCtx(), hist: () => ST.hist || [],
       mood: m => { if (ST.forceHour == null) ST.forceHour = 12; ST.pct = { calm: 0, up: 3, rocket: 9, down: -3, crash: -9 }[m]; ST.go = m === 'hunter'; if (m === 'offline') { ST.offline = true; ST.offSince = now() - 120; } else ST.offline = false; ST.lastInput = now(); wake(); },
       say: t => speak(t, { pri: 2 }),
       tap: () => tapped(),
