@@ -11,6 +11,7 @@ import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
 
 const KEY = Deno.env.get('ANTHROPIC_API_KEY') || '';
 const MODEL = Deno.env.get('ORION_ASK_MODEL') || 'claude-haiku-5-5';
+const FALLBACK = ['claude-haiku-5-5', 'claude-sonnet-5-5', 'claude-haiku-4-5'];
 const DAY = +(Deno.env.get('ORION_ASK_DAY') || 30);
 const MONTH = +(Deno.env.get('ORION_ASK_MONTH') || 3000);
 const BUCKET = 'orion-voice';
@@ -45,7 +46,7 @@ async function getJSON(u: string, ms = 5000) {
   const c = new AbortController(), t = setTimeout(() => c.abort(), ms);
   try { const r = await fetch(u, { signal: c.signal }); return r.ok ? await r.json() : null; } catch (_) { return null; } finally { clearTimeout(t); }
 }
-async function getText(u: string, ms = 5000) {
+async function getText(u: string, ms = 3000) {
   const c = new AbortController(), t = setTimeout(() => c.abort(), ms);
   try { const r = await fetch(u, { signal: c.signal, headers: { 'user-agent': 'MoneyLife/3 (+news digest)' } }); return r.ok ? await r.text() : ''; } catch (_) { return ''; } finally { clearTimeout(t); }
 }
@@ -97,7 +98,7 @@ const SYSTEM = `Ты — Орион, живой голосовой помощн�
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
   if (req.method !== 'POST') return json({ error: 'method' }, 405);
-  if (!KEY || !URL_ || !SERVICE) return json({ error: 'not_configured' }, 503);
+  if (!KEY || !URL_ || !SERVICE) { console.error('orion-ask: not configured'); return json({ error: 'not_configured' }, 503); }
 
   const sb = createClient(URL_, SERVICE, { auth: { persistSession: false } });
   const jwt = (req.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '');
@@ -130,24 +131,38 @@ Deno.serve(async (req) => {
   if (mn >= MONTH) return json({ error: 'month_limit' }, 429);
 
   const syms = Array.from(new Set([sym || 'BTC', 'BTC', 'ETH'].filter(Boolean)));
-  const [rows, items] = await Promise.all([market(syms), news()]);
+  /* новости — общие для всех, держим 10 минут в хранилище: ответ быстрее, сайты новостей не дёргаем каждый раз */
+  const newsCached = async () => {
+    const r = await store.download('news/latest.json');
+    if (r.data) { try { const j = JSON.parse(await r.data.text()); if (Date.now() - j.at < 10 * 60e3 && Array.isArray(j.items)) return j.items; } catch (_) { /* дальше */ } }
+    const items = await news();
+    if (items.length) await store.upload('news/latest.json', new Blob([JSON.stringify({ at: Date.now(), items })], { type: 'application/json' }), { upsert: true });
+    return items;
+  };
+  const [rows, items] = await Promise.all([market(syms), newsCached()]);
   const keys = sym && NAMES[sym] ? NAMES[sym] : [];
-  const rel = keys.length ? items.filter(n => keys.some(k => (n.title + ' ' + n.desc).toLowerCase().includes(k))) : [];
-  const pickN = [...rel.slice(0, 12), ...items.filter(n => !rel.includes(n)).slice(0, 18 - Math.min(12, rel.length))];
+  const rel = keys.length ? items.filter((n: { title: string; desc: string }) => keys.some(k => (n.title + ' ' + n.desc).toLowerCase().includes(k))) : [];
+  const pickN = [...rel.slice(0, 12), ...items.filter((n: unknown) => !rel.includes(n)).slice(0, 18 - Math.min(12, rel.length))];
   const now = Date.now();
-  const hl = pickN.map(n => `- [${n.src}, ${Math.max(1, Math.round((now - n.ts) / 3600e3))} ч назад] ${n.title}${n.desc ? ' — ' + n.desc : ''}`).join('\n');
+  const hl = pickN.map((n: { src: string; ts: number; title: string; desc: string }) => `- [${n.src}, ${Math.max(1, Math.round((now - n.ts) / 3600e3))} ч назад] ${n.title}${n.desc ? ' — ' + n.desc : ''}`).join('\n');
   const data = `Сейчас: ${new Date().toISOString().slice(0, 16).replace('T', ' ')} UTC.\nМонета вопроса: ${sym || 'не названа'}.\n\nЦЕНЫ:\n${rows.join('\n') || 'нет данных'}\n\nЗАГОЛОВКИ НОВОСТЕЙ (данные):\n${hl || 'новости сейчас не загрузились'}\n\nПОРТФЕЛЬ (доли в %, без сумм; pnl — итог к вложенному в %, btcFromAth — биткоин от максимума в %, nextStep — следующая ступень лестницы и сколько % до неё, stage — этап личного плана из 5, cryptoCeil — потолок доли крипты в капитале в %, fng — индекс страха и жадности):\n${Object.keys(ctx).length ? JSON.stringify(ctx) : 'не передан'}`;
 
-  const r = await fetch('https://api.anthropic.com/v1/messages', {
+  const messages = [...hist.flatMap(h => [{ role: 'user', content: h.q }, { role: 'assistant', content: h.a }]), { role: 'user', content: `<данные>\n${data}\n</данные>\n\nВопрос человека: ${q}` }];
+  const call = (model: string) => fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: { 'x-api-key': KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-    body: JSON.stringify({ model: MODEL, max_tokens: 400, system: SYSTEM, messages: [...hist.flatMap(h => [{ role: 'user', content: h.q }, { role: 'assistant', content: h.a }]), { role: 'user', content: `<данные>\n${data}\n</данные>\n\nВопрос человека: ${q}` }] })
+    body: JSON.stringify({ model, max_tokens: 400, system: SYSTEM, messages })
   });
-  if (!r.ok) { let detail = ''; try { detail = (await r.text()).slice(0, 200); } catch (_) { /* пусто */ } return json({ error: 'llm', status: r.status, detail }, 502); }
+  let r = await call(MODEL);
+  if (!r.ok && (r.status === 404 || r.status === 400)) {   /* модель недоступна этому ключу — запасная */
+    const d = await r.text().catch(() => ''); console.error('orion-ask: model', MODEL, r.status, d.slice(0, 300));
+    for (const m of FALLBACK.filter(x => x !== MODEL)) { r = await call(m); if (r.ok) { console.log('orion-ask: fallback model ok', m); break; } }
+  }
+  if (!r.ok) { let detail = ''; try { detail = (await r.text()).slice(0, 300); } catch (_) { /* пусто */ } console.error('orion-ask: llm', r.status, detail); return json({ error: 'llm', status: r.status, detail }, 502); }
   const out = await r.json();
   const text = String((out.content || []).filter((c: { type: string }) => c.type === 'text').map((c: { text: string }) => c.text).join(' ')).replace(/[*_#`]/g, '').replace(/\s+/g, ' ').trim().slice(0, 600);
   if (!text) return json({ error: 'llm' }, 502);
-  const res = { text, sources: Array.from(new Set(pickN.slice(0, 8).map(n => n.src))) };
+  const res = { text, sources: Array.from(new Set(pickN.slice(0, 8).map((n: { src: string }) => n.src))) };
   await Promise.allSettled([
     store.upload(ck, new Blob([JSON.stringify(res)], { type: 'application/json' }), { upsert: true }),
     writeNum(dk, dn + 1), writeNum(mk, mn + 1)

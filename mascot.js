@@ -267,8 +267,10 @@
     const said = spokenRu(cur.text);
     let ab = VO.buf.get(said);
     if (!ab) {
-      let r = null; try { r = await A.voice(said); } catch (e) { r = null; }
-      if (!r || !r.audio) { VO.off = now() + (r && r.error ? 600 : 60); TTS.lastErr = (r && r.error) || 'net'; return false; }   /* не вышло — 10 минут говорим голосом телефона */
+      let r = await voFetch(said);
+      if (TTS.cur !== cur) return true;   /* пока ждали — речь сменилась: это не ошибка голоса */
+      if (!r || !r.audio) { r = await voFetch(said); if (TTS.cur !== cur) return true; }   /* сеть моргнула — вторая попытка */
+      if (!r || !r.audio) { VO.off = now() + (r && r.error && r.error !== 'net' ? 600 : 20); TTS.lastErr = (r && r.error) || 'net'; return false; }   /* лимит или настройки — 10 минут голос телефона; сеть — 20 секунд */
       ab = r.audio;
       VO.buf.set(said, ab); if (VO.buf.size > 40) VO.buf.delete(VO.buf.keys().next().value);
     }
@@ -330,6 +332,14 @@
       return pre + sign + w + tail;
     });
     return s.replace(/\s+/g, ' ').replace(/\s+([,.!?])/g, '$1').trim();
+  }
+  async function voFetch(text) { try { return await A.voice(text); } catch (e) { return null; } }
+  /* короткие фразы-«подхваты» заранее в памяти телефона — Орион отзывается сразу, пока думает над ответом */
+  const FILL = { news: 'Секунду, смотрю новости.', think: 'Секунду.' };
+  let preloaded = false;
+  function preloadFill() {
+    if (preloaded || !A.voice || !ST.sound || (navigator.webdriver && !ST.forcePremium)) return; preloaded = true;
+    Object.values(FILL).forEach((t, i) => setTimeout(async () => { const k = spokenRu(t); if (VO.buf.has(k)) return; const r = await voFetch(k); if (r && r.audio) VO.buf.set(k, r.audio); }, 1500 + i * 700));
   }
   function voLevel() {
     if (!VO.src || !VO.an) return null;
@@ -536,7 +546,7 @@
     const toBrain = A.ask && t.trim() && (marketQ(t) || !sure || follow);
     if (!toBrain) { remember(q, local); speak(local, { pri: 2, follow: byVoice }); return; }
     const sym = coinIn(t) || '';
-    speak(pick(sym || marketQ(t) ? ['Секунду, смотрю новости.', 'Сейчас проверю рынок.', 'Анализирую.'] : ['Секунду.', 'Думаю.', 'Сейчас отвечу.']), { pri: 2 });
+    speak(sym || marketQ(t) ? FILL.news : FILL.think, { pri: 2 });
     const hist = (ST.hist || []).filter(x => now() - x.at < 900).slice(-6).map(x => ({ q: x.q, a: x.a }));
     let r = null; try { r = await A.ask(q, sym, { hist, ctx: brainCtx() }); } catch (e) { r = null; }
     ST.lastAsk = r;
@@ -547,7 +557,7 @@
   function remember(q, a) { ST.hist = (ST.hist || []).filter(x => now() - x.at < 900).concat([{ q: String(q).slice(0, 200), a: String(a).slice(0, 400), at: now() }]).slice(-6); }
   function listen(lo) {
     lo = lo || {};
-    stopVoice();
+    stopVoice(); voUnlock(); preloadFill();
     if (!SRC) { speak('Голосовые вопросы на этом телефоне недоступны. Нажмите на меня — расскажу главное за сегодня.', { pri: 2 }); return; }
     if (ST.rec) { try { ST.rec.abort(); } catch (e) {} ST.rec = null; }
     let rec; try { rec = new SRC(); } catch (e) { speak('Микрофон сейчас недоступен.', { pri: 2 }); return; }
@@ -566,7 +576,7 @@
 
   /* ---------- нажатие на сферу ---------- */
   function tapped() {
-    ST.lastInput = now(); pulse(0.8); buzz(8);
+    ST.lastInput = now(); pulse(0.8); buzz(8); voUnlock(); preloadFill();
     if (ST.rec) { try { ST.rec.abort(); } catch (e) {} ST.rec = null; if (ui.cap) ui.cap.classList.remove('listen', 'on'); return; }
     if (speaking()) { stopVoice(); return; }
     if (!ST.name && !ST.asked && A.askName) { ST.asked = true; lsSet('or-asked', 1); A.askName(); return; }
