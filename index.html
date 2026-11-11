@@ -1092,6 +1092,36 @@ html.lite nav.tabs{background:var(--bg);-webkit-backdrop-filter:none;backdrop-fi
 .card[data-x],.tile,.mi,.qa button,.btn,.fchip,.xpc,.list>[role="button"],.list>button{transition:transform .16s cubic-bezier(.2,.8,.3,1)}
 .card[data-x]:active,.tile:active,.mi:active,.qa button:active,.btn:active,.xpc:active,.list>button:active{transform:scale(.97)}
 @media (prefers-reduced-motion:reduce){.card[data-x]:active,.tile:active,.mi:active,.qa button:active,.btn:active,.xpc:active,.list>button:active{transform:none}}
+/* сводка на главной: четыре показателя — одна карточка с тонкими разделителями */
+.sumgrid{gap:0;background:var(--surface);border-radius:var(--r-l);overflow:hidden}
+.sumgrid .tile{background:none!important;border-radius:0;padding:14px 16px}
+.sumgrid .tile:nth-child(1){box-shadow:inset -1px 0 0 var(--line),inset 0 -1px 0 var(--line)}
+.sumgrid .tile:nth-child(2){box-shadow:inset 0 -1px 0 var(--line)}
+.sumgrid .tile:nth-child(3){box-shadow:inset -1px 0 0 var(--line)}
+.sumgrid .tile:active{transform:none}
+.sumgrid .meter i{background:var(--accent)}
+/* карточка монеты: та же поверхность, что у всего приложения, цвет монеты — лёгкий отсвет в углу */
+.cc-face,[data-theme="light"] .cc-face{background:radial-gradient(90% 70% at 100% 0%,color-mix(in srgb,var(--c) 14%,transparent),transparent 62%),var(--surface);color:var(--fg);box-shadow:none}
+.cc-face::before,.cc-face::after,.cc-top .badge::after,.cc-mag{display:none}
+[data-theme="light"] .cc-face{box-shadow:inset 0 0 0 1px var(--line)}
+[data-theme="light"] .sumgrid{box-shadow:none}
+.cc-top .badge{animation:none}
+.cc-id span,.cc-sub,.cc-cell span{color:var(--mute)}
+.cc-cur{color:var(--mute);font-size:15px;font-weight:600;letter-spacing:0}
+.cc-grid{top:18px}
+.cc-pl{border-top-color:var(--line)}
+.cc-chart .empty{color:var(--dim)}
+.cv-hint .tap{color:var(--mute)}
+[data-theme="light"] .cc-face svg [stroke="#ffffff"],[data-theme="light"] .cc-face svg [stroke="#fff"]{stroke:var(--fg)}
+[data-theme="light"] .cv-hint .lg i.dash{border-top-color:var(--fg)}
+/* знакомство: тот же графит, без фиолетового свечения */
+#ob,[data-theme="light"] #ob{background:var(--bg)}
+.ob-card{background:var(--surface);border:0}
+.ob-card h2{font-family:var(--ui);font-weight:700;letter-spacing:-.03em}
+.ob-dots i.on{background:var(--fg)}
+.ob-opt{border-color:var(--line2);background:var(--surface2)}
+.ob-opt[aria-pressed="true"]{border-color:var(--fg);background:var(--raise);box-shadow:none}
+.ob-opt .sp{color:var(--fg)}
 /* вход */
 #mlAuth,[data-theme="light"] #mlAuth{background:var(--bg)}
 .mla-card{box-shadow:none;border-color:transparent}
@@ -1150,7 +1180,7 @@ html.lite nav.tabs{background:var(--bg);-webkit-backdrop-filter:none;backdrop-fi
     <div id="xToday" hidden></div>
     <div id="d14" hidden></div>
     <div id="xPlan" hidden></div>
-    <div class="grid2">
+    <div class="grid2 sumgrid">
       <div class="tile"><div class="k">Вложено</div><div class="v skel" id="tInv">$0 000</div><div class="s" id="tInvS"></div></div>
       <div class="tile"><div class="k">Резерв USDT</div><div class="v skel" id="tRes">$000</div><div class="s" id="tResS"></div><div class="meter"><i id="tResM"></i></div></div>
       <div class="tile"><div class="k">BTC сейчас</div><div class="v skel" id="tBtc">$00 000</div><div class="s" id="tBtcS"></div></div>
@@ -1409,7 +1439,7 @@ html.lite nav.tabs{background:var(--bg);-webkit-backdrop-filter:none;backdrop-fi
       <button type="button" class="btn block ghost" onclick="mlSignOut()">Выйти из аккаунта</button>
       <button type="button" class="btn block danger" id="delBtn">Удалить аккаунт</button>
     </div>
-    <p class="hint">Money Life — дневник и калькулятор для твоей стратегии, а не инвестиционный совет: решения о покупке и продаже принимаешь ты. <a href="privacy.html" target="_blank" rel="noopener">Политика конфиденциальности</a></p>
+    <p class="hint">MoneyLife — дневник и калькулятор для твоей стратегии, а не инвестиционный совет: решения о покупке и продаже принимаешь ты. <a href="privacy.html" target="_blank" rel="noopener">Политика конфиденциальности</a></p>
   </div></div>
 </div>
 
@@ -1435,9 +1465,9 @@ html.lite nav.tabs{background:var(--bg);-webkit-backdrop-filter:none;backdrop-fi
 
 <div class="toast" id="toast" role="status"><span id="toastMsg"></span><button type="button" id="toastBtn" hidden></button></div>
 
-<script src="config.js?v=20261111183000"></script>
+<script src="config.js?v=20261111190000"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="shim.js?v=20261111183000"></script>
+<script src="shim.js?v=20261111190000"></script>
 <script>
 /* ===== основа ===== */
 const $=id=>document.getElementById(id);
@@ -2479,9 +2509,9 @@ function obDraw(){const st=OB.step,N=4,dots='<div class="ob-dots" aria-hidden="t
   const top=`<div class="ob-top">${dots}${st<3?'<button type="button" class="ob-skip" id="obSkip">Пропустить</button>':''}</div>`;
   const nav=(next,back)=>`<p class="err" id="obErr" role="alert"></p><div class="ob-nav">${back?'<button type="button" class="btn ghost" id="obBack">Назад</button>':''}<button type="button" class="btn" id="obNext">${next}</button></div>`;
   let h='';
-  if(st===0)h=`${top}<h2 id="obTitle">Добро пожаловать в Money Life</h2><p class="ob-lead">Здесь удобно копить в крипте по своему плану: записывать покупки, держать распределение и докупать, когда рынок падает.</p>
+  if(st===0)h=`${top}<h2 id="obTitle">Добро пожаловать в MoneyLife</h2><p class="ob-lead">Здесь удобно копить в крипте по своему плану: записывать покупки, держать распределение и докупать, когда рынок падает.</p>
     <div class="field"><span>Как показывать суммы?</span><div class="seg" id="obCur"><button type="button" data-c="USD" aria-pressed="${OB.cur==='USD'}">$ доллары</button><button type="button" data-c="UAH" aria-pressed="${OB.cur==='UAH'}">₴ гривны</button></div></div>
-    <p class="ob-note">Money Life — дневник и калькулятор, а не инвестиционный совет. Решения принимаешь ты.</p>${nav('Начать',false)}`;
+    <p class="ob-note">MoneyLife — дневник и калькулятор, а не инвестиционный совет. Решения принимаешь ты.</p>${nav('Начать',false)}`;
   else if(st===1){const o=(k,name,sp,txt,rec)=>`<button type="button" class="ob-opt" data-tpl="${k}" aria-pressed="${OB.tpl===k}"><span class="oh"><b>${name}</b>${rec?'<span class="chip acc">советую</span>':''}</span>${sp?`<span class="sp">${sp}</span>`:''}<small>${txt}</small></button>`;
     h=`${top}<h2 id="obTitle">Выбери стратегию</h2><p class="ob-lead">Это правила, по которым приложение подсказывает, что и когда покупать. Всё можно поменять потом в «Настройках».</p>
     <div class="ob-opts">${o('simple','Простой','BTC 70% · ETH 30%','Каждый месяц покупаешь на одну и ту же сумму. Без резерва и докупок на просадках.')}
@@ -2706,7 +2736,7 @@ function msSync(x){MSC.last=x;if(!msApply())return;if(!S.ready||document.getElem
   if(window.Mascot){try{window.Mascot.sync(msPayload(x));}catch(e){}}else msLoad();}
 function msLoad(){if(MSC.loading||MSC.failed)return;MSC.loading=true;
   const add=(src,ok)=>{try{const s=document.createElement('script');s.src=src;s.async=true;s.onload=ok;s.onerror=()=>{MSC.failed=true;};document.head.appendChild(s);}catch(e){MSC.failed=true;}};
-  const boot=()=>add('mascot.js?v=20261111183000',()=>{try{if(window.Mascot&&window.Mascot.init({host:$('mascot'),app:{buzz,askName:()=>{if(window.MLX&&MLX.askName)MLX.askName();}}})&&MSC.last&&$('ob').hidden&&!document.getElementById('mlAuth'))window.Mascot.sync(msPayload(MSC.last));}catch(e){}});
+  const boot=()=>add('mascot.js?v=20261111190000',()=>{try{if(window.Mascot&&window.Mascot.init({host:$('mascot'),app:{buzz,askName:()=>{if(window.MLX&&MLX.askName)MLX.askName();}}})&&MSC.last&&$('ob').hidden&&!document.getElementById('mlAuth'))window.Mascot.sync(msPayload(MSC.last));}catch(e){}});
   setTimeout(boot,300);}
 function render(){const D=derive();renderHeader();renderHome(D);renderGrowth();renderCoins(D);renderStrategy(D);renderActivity();renderD14();if(window.MLX)try{MLX.render(D);}catch(e){console.error(e);}earnNudge();if(cvSym&&$('coinSheet').classList.contains('open'))renderCoinView();}
 document.body.classList.add('loading');
@@ -2729,6 +2759,6 @@ render();requestAnimationFrame(inkMove);setTimeout(inkMove,600);
   db.collection('history').limit(1000).onSnapshot(q=>{S.history=q.docs.map(d=>d.data());renderGrowth();if(S.ready&&derive().noPrice)renderHome(derive());},fail);
 })();
 </script>
-<script src="plus.js?v=20261111183000"></script>
+<script src="plus.js?v=20261111190000"></script>
 </body>
 </html>
