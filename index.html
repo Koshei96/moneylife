@@ -1166,6 +1166,63 @@ html.lite .view.enter{animation:vin .2s var(--ease)}
 @keyframes ptrs{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion:reduce){.rv{opacity:1;transform:none;filter:none}#v-home .hero{transform:none;opacity:1}.tab.pop svg{animation:none}.view.enter{animation:none}}
 </style>
+<style id="v6">
+/* ===== достижения и «Итог месяца» (12.11.2026) ===== */
+.win-card{display:flex;flex-direction:column;gap:12px;width:100%;text-align:left;cursor:pointer;color:inherit;font:inherit}
+.win-row{display:flex;gap:10px}
+.win-b{width:44px;height:44px;border-radius:14px;display:grid;place-items:center;flex:none;color:var(--dim);background:var(--surface2);border:1px solid var(--line2)}
+.win-b svg{width:22px;height:22px}
+.win-b.on{color:var(--c);border-color:color-mix(in srgb,var(--c) 45%,transparent);background:radial-gradient(circle at 30% 25%,color-mix(in srgb,var(--c) 28%,transparent),color-mix(in srgb,var(--c) 6%,var(--surface2)) 70%);box-shadow:0 8px 22px -12px var(--c),inset 0 1px 0 #ffffff1f}
+.win-bar{height:6px;border-radius:3px;background:var(--line);overflow:hidden}
+.win-bar i{display:block;height:100%;width:100%;transform-origin:0 50%;transform:scaleX(var(--p,0));background:linear-gradient(90deg,#7a3cf0,#ff4fd8,#ffc24d);border-radius:3px;transition:transform .8s cubic-bezier(.2,.9,.25,1)}
+.win-sub{font-size:13px;color:var(--mute)}
+.win-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px}
+.win-cell{display:flex;flex-direction:column;gap:6px;padding:14px;border-radius:16px;background:var(--surface2);border:1px solid var(--line);animation:wcell .45s var(--ease) backwards;animation-delay:calc(var(--i) * 30ms)}
+.win-cell b{font-size:14px}.win-cell small{font-size:12px;color:var(--mute);line-height:1.35}
+.win-cell:not(.on){opacity:.62}.win-cell:not(.on) .win-b{filter:grayscale(1)}
+@keyframes wcell{from{opacity:0;transform:translateY(10px) scale(.96)}}
+.win-inv{display:flex;align-items:center;gap:14px;width:100%;text-align:left;cursor:pointer;color:inherit;font:inherit;position:relative;overflow:hidden}
+.win-inv b{font-size:16px}.win-inv small{display:block;color:var(--mute);font-size:13px;margin-top:2px}.win-inv .col{flex:1}
+.win-inv-g{width:46px;height:46px;border-radius:50%;flex:none;background:conic-gradient(from 0deg,#7a3cf0,#ff4fd8,#ffc24d,#34e0a1,#7a3cf0);animation:wspin 6s linear infinite;box-shadow:0 0 0 3px var(--surface) inset}
+@keyframes wspin{to{transform:rotate(1turn)}}
+/* «истории» на весь экран */
+.story{position:fixed;inset:0;z-index:90;display:flex;flex-direction:column;color:#fff;opacity:0;transform:scale(1.04);transition:opacity .26s var(--ease),transform .32s var(--ease);touch-action:manipulation;user-select:none;-webkit-user-select:none}
+.story.open{opacity:1;transform:none}
+.st-bg{position:absolute;inset:0;background:radial-gradient(120% 80% at 85% 10%,hsl(calc(300 + var(--hue,0)) 90% 55% / .45),transparent 60%),radial-gradient(110% 80% at 10% 95%,hsl(calc(260 + var(--hue,0)) 85% 50% / .55),transparent 60%),#0b0620;transition:background .6s}
+.st-bars{position:relative;display:flex;gap:5px;padding:calc(env(safe-area-inset-top,0px) + 12px) 14px 0}
+.st-bars i{flex:1;height:3px;border-radius:2px;background:#ffffff33;overflow:hidden}
+.st-bars i b{display:block;height:100%;width:100%;background:#fff;transform-origin:0 50%;transform:scaleX(0)}
+.st-bars i.done b{transform:scaleX(1)}
+.st-bars i.run b{animation:stbar 6s linear forwards}
+@keyframes stbar{to{transform:scaleX(1)}}
+.st-x{position:absolute;right:10px;top:calc(env(safe-area-inset-top,0px) + 22px);z-index:2;width:44px;height:44px;border:0;border-radius:50%;background:#ffffff1a;color:#fff;font-size:26px;line-height:1;cursor:pointer}
+.st-in{position:relative;flex:1;display:flex;align-items:center;padding:24px 28px calc(env(safe-area-inset-bottom,0px) + 40px)}
+.st-s{width:100%;display:flex;flex-direction:column;gap:14px}
+.st-s.fw{animation:stin .5s cubic-bezier(.2,.9,.25,1)}.st-s.bw{animation:stinb .45s cubic-bezier(.2,.9,.25,1)}
+@keyframes stin{from{opacity:0;transform:translate3d(40px,0,0) scale(.97)}}
+@keyframes stinb{from{opacity:0;transform:translate3d(-40px,0,0) scale(.97)}}
+.st-s>*{animation:stch .6s cubic-bezier(.2,.9,.25,1) backwards}.st-s>:nth-child(2){animation-delay:.08s}.st-s>:nth-child(3){animation-delay:.16s}.st-s>:nth-child(4){animation-delay:.24s}
+@keyframes stch{from{opacity:0;transform:translateY(16px)}}
+.st-k{font-size:13px;letter-spacing:.16em;text-transform:uppercase;color:#d9c9ff}
+.st-s h2{font-size:44px;line-height:1.05;margin:0;font-weight:800;letter-spacing:-.02em}
+.st-s p{font-size:19px;line-height:1.4;margin:0;color:#ece6ff}
+.st-big{font-size:96px;line-height:1;font-weight:800;letter-spacing:-.04em;font-variant-numeric:tabular-nums}
+.st-big.pos{color:#34e0a1;text-shadow:0 0 40px #34e0a166}.st-big.neg{color:#ff7a86}
+.st-tap{font-size:13px;color:#ffffff88;margin-top:30px}
+.st-coins{display:flex;gap:10px;flex-wrap:wrap}.st-coins>span{animation:stpop .5s cubic-bezier(.3,1.5,.5,1) backwards;animation-delay:calc(.3s + var(--i) * 70ms)}
+.st-flames{display:flex;gap:6px;flex-wrap:wrap}.st-flames i{width:30px;height:30px;color:#ffffff30;animation:stpop .45s cubic-bezier(.3,1.5,.5,1) backwards;animation-delay:calc(.25s + var(--i) * 60ms)}.st-flames i.on{color:#ffb04d;filter:drop-shadow(0 0 8px #ff8a3d)}
+.st-flames svg{width:100%;height:100%}
+.st-ach{display:grid;grid-template-columns:52px 1fr;gap:12px 14px;align-items:center}
+.st-ach .win-b{width:52px;height:52px;animation:stpop .55s cubic-bezier(.3,1.5,.5,1) backwards;animation-delay:calc(.2s + var(--i) * 120ms)}
+.st-ach small{font-size:18px;font-weight:700;animation:stch .5s ease backwards;animation-delay:calc(.25s + var(--i) * 120ms)}
+@keyframes stpop{from{opacity:0;transform:scale(.3) rotate(-20deg)}}
+.st-q{font-size:24px!important;line-height:1.35!important;font-weight:600}
+.st-btns{display:flex;gap:10px;margin-top:10px}.st-btns .btn{flex:1}
+.st-note{color:#ffffff88;font-size:12px}
+.story .btn.ghost{color:#fff;border-color:#ffffff45;background:#ffffff10}.story .btn:not(.ghost){background:#fff;color:#14092e}
+.st-big.st-na{font-size:56px;color:#d9c9ff}
+@media (prefers-reduced-motion:reduce){.story,.st-s,.st-s>*,.st-coins>span,.st-flames i,.st-ach .win-b,.st-ach small,.win-cell,.win-inv-g{animation:none;transition:none}}
+</style>
 </head>
 <body class="loading">
 
@@ -1505,9 +1562,9 @@ html.lite .view.enter{animation:vin .2s var(--ease)}
 
 <div class="toast" id="toast" role="status"><span id="toastMsg"></span><button type="button" id="toastBtn" hidden></button></div>
 
-<script src="config.js?v=20261112000000"></script>
+<script src="config.js?v=20261112004500"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="shim.js?v=20261112000000"></script>
+<script src="shim.js?v=20261112004500"></script>
 <script>
 /* ===== основа ===== */
 const $=id=>document.getElementById(id);
@@ -2776,7 +2833,7 @@ function msSync(x){MSC.last=x;if(!msApply())return;if(!S.ready||document.getElem
   if(window.Mascot){try{window.Mascot.sync(msPayload(x));}catch(e){}}else msLoad();}
 function msLoad(){if(MSC.loading||MSC.failed)return;MSC.loading=true;
   const add=(src,ok)=>{try{const s=document.createElement('script');s.src=src;s.async=true;s.onload=ok;s.onerror=()=>{MSC.failed=true;};document.head.appendChild(s);}catch(e){MSC.failed=true;}};
-  const boot=()=>add('mascot.js?v=20261112000000',()=>{try{if(window.Mascot&&window.Mascot.init({host:$('mascot'),app:{buzz,askName:()=>{if(window.MLX&&MLX.askName)MLX.askName();},addAlert:(y,v)=>window.MLX&&MLX.addAlert?MLX.addAlert(y,v):null,voice:(t,x)=>window.mlVoice?window.mlVoice(t,x):null,ask:(q,y,x)=>window.mlAsk?window.mlAsk(q,y,x):null}})&&MSC.last&&$('ob').hidden&&!document.getElementById('mlAuth'))window.Mascot.sync(msPayload(MSC.last));}catch(e){}});
+  const boot=()=>add('mascot.js?v=20261112004500',()=>{try{if(window.Mascot&&window.Mascot.init({host:$('mascot'),app:{buzz,askName:()=>{if(window.MLX&&MLX.askName)MLX.askName();},addAlert:(y,v)=>window.MLX&&MLX.addAlert?MLX.addAlert(y,v):null,voice:(t,x)=>window.mlVoice?window.mlVoice(t,x):null,ask:(q,y,x)=>window.mlAsk?window.mlAsk(q,y,x):null}})&&MSC.last&&$('ob').hidden&&!document.getElementById('mlAuth'))window.Mascot.sync(msPayload(MSC.last));}catch(e){}});
   setTimeout(boot,300);}
 function render(){const D=derive();renderHeader();renderHome(D);renderGrowth();renderCoins(D);renderStrategy(D);renderActivity();renderD14();if(window.MLX)try{MLX.render(D);}catch(e){console.error(e);}earnNudge();if(cvSym&&$('coinSheet').classList.contains('open'))renderCoinView();}
 document.body.classList.add('loading');
@@ -2860,6 +2917,7 @@ render();requestAnimationFrame(inkMove);setTimeout(inkMove,600);
     sy=null;swipe=null;pull=0;armed=false;},{passive:true});
 })();
 </script>
-<script src="plus.js?v=20261112000000"></script>
+<script src="plus.js?v=20261112004500"></script>
+<script src="wins.js?v=20261112004500"></script>
 </body>
 </html>

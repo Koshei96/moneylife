@@ -237,6 +237,7 @@
   function planGet() { const p = lsGet(planKey(), null); if (!p || p.v !== 1 || !p.a) return null; for (const q of Q) { const v = p.a[q.k]; if (!(Number.isInteger(v) && v >= 0 && v < q.o.length)) return null; } return p; }
   const planSave = p => lsSet(planKey(), p);
   X.planGet = planGet;
+  X.open = (...a) => xOpen(...a);   /* общая шторка — для других модулей (достижения) */
   /* чистая функция: ответы → этап, профиль, потолок крипты, набор правил, шаги */
   function planResult(p) {
     const a = p.a;
@@ -340,6 +341,7 @@
     ['free', 'Цель', 'Сколько нужно для свободы', 'Авторы расходятся: Роббинс берёт годовые расходы × 20, Мэлкил — × 25–28,6, Бернстайн считает надёжным × 33–50. Чем осторожнее расчёт, тем больше множитель.', 'Роббинс, 3.1; Мэлкил, гл. 14; Бернстайн, гл. 6; Шефер, гл. 12', '«Личный план» → «Число свободы» считает три варианта.']
   ].map(a => ({ id: a[0], g: a[1], t: a[2], x: a[3], src: a[4], app: a[5] }));
   X.LESSONS = LESSONS;
+  X.lessonsCount = LESSONS.length;
   const readGet = () => { const r = xGet().read; return r && typeof r === 'object' ? r : {}; };
   function openLearn(fromPlan) {
     const rd = readGet(), groups = [...new Set(LESSONS.map(l => l.g))], n = LESSONS.filter(l => rd[l.id]).length;

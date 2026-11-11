@@ -1072,6 +1072,37 @@ def run_browser():
             pg.evaluate("document.querySelector('.or-cap') && document.querySelector('.or-cap').click()"); pg.unroute('**/functions/v1/orion-ask')
         scenario('Орион', {'session': True, 'docs': SEED}, s_mascot)
 
+        # --- достижения и «Итог месяца» (12.11.2026): первая проверка — тихо, новое — праздник; «истории» и картинка без сумм
+        def s_wins(pg, errs):
+            pg.wait_for_timeout(2500)
+            pg.evaluate("show('strategy')"); pg.wait_for_timeout(600)
+            card = pg.evaluate("(document.getElementById('winCard')||{}).textContent||''")
+            toast0 = pg.inner_text('#toastMsg') if pg.locator('#toast.show').count() else ''
+            if 'Достижения' in card and 'из 17' in card and 'Достижение' not in toast0: ok('достижения: карточка в «Стратегии», уже заслуженные отмечены тихо, без салюта задним числом')
+            else: fail('достижения: карточка', card + ' | ' + toast0)
+            pg.evaluate("(()=>{const k=Object.keys(localStorage).find(k=>k.startsWith('ml-win:'));const o=JSON.parse(localStorage.getItem(k));delete o.got.first;localStorage.setItem(k,JSON.stringify(o));MLX.achCheck();})()")
+            pg.wait_for_timeout(400)
+            t1 = pg.inner_text('#toastMsg') if pg.locator('#toast.show').count() else ''
+            if 'Первый шаг' in t1: ok('достижения: новое — тост «Достижение: Первый шаг» и праздник')
+            else: fail('достижения: новое', t1)
+            pg.evaluate("MLX.openAch()"); pg.wait_for_timeout(700)
+            n = pg.locator('#xSheet.open .win-cell').count(); on = pg.locator('#xSheet.open .win-cell.on').count()
+            if n == 17 and on >= 1: ok(f'достижения: шторка — 17 значков, получено {on}')
+            else: fail('достижения: шторка', f'{n} {on}')
+            pg.evaluate("closeSheets()"); pg.wait_for_timeout(300)
+            pg.evaluate("MLX.openStory()"); pg.wait_for_timeout(700)
+            bars = pg.locator('#mlStory .st-bars i').count(); h = pg.inner_text('#mlStory .st-in')
+            pg.mouse.click(330, 500); pg.wait_for_timeout(500); h2 = pg.inner_text('#mlStory .st-in')
+            if bars == 6 and 'MONEYLIFE' in h.upper() and 'ПОКУПКИ' in h2.upper(): ok('итог месяца: 6 слайдов, листаются нажатием')
+            else: fail('итог месяца: слайды', f'{bars} | {h[:60]} | {h2[:60]}')
+            size = pg.evaluate("(()=>{const r=MLX.monthRecap(new Date().toISOString().slice(0,7));const c=MLX.storyCanvas(r,'Итог',r.ch==null?'—':'+1%');return c.width+'x'+c.height})()")
+            if size == '1080x1920': ok('итог месяца: картинка для «историй» 1080×1920')
+            else: fail('итог месяца: картинка', size)
+            pg.click('#mlStory .st-x'); pg.wait_for_timeout(500)
+            if pg.locator('#mlStory').count() == 0 and not pg.evaluate("document.body.classList.contains('lock')"): ok('итог месяца: закрывается, страница снова листается')
+            else: fail('итог месяца: закрытие', 'осталось')
+        scenario('Достижения', {'session': True, 'docs': SEED}, s_wins)
+
         # --- Г4. карточка докупки «ждём ключ 2» (владелец 05.11): в чипе «BTC $38,39» сумму покупки приняли за цену BTC —
         #     теперь «BTC на $… · когда цена ≤ $…»: видно, что $ — сумма, а порог — цена монеты
         import datetime as _dt
