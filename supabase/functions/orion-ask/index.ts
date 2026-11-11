@@ -9,7 +9,7 @@
    Ответ: 200 {text, sources[]}; ошибки {error: 'auth'|'bad_q'|'day_limit'|'month_limit'|'not_configured'|'llm'}. */
 import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
 
-const KEY = Deno.env.get('ANTHROPIC_API_KEY') || '';
+const KEY = (Deno.env.get('ANTHROPIC_API_KEY') || '').trim();
 const MODEL = Deno.env.get('ORION_ASK_MODEL') || 'claude-haiku-5-5';
 const FALLBACK = ['claude-haiku-5-5', 'claude-sonnet-5-5', 'claude-haiku-4-5'];
 const DAY = +(Deno.env.get('ORION_ASK_DAY') || 30);
@@ -158,7 +158,11 @@ Deno.serve(async (req) => {
     const d = await r.text().catch(() => ''); console.error('orion-ask: model', MODEL, r.status, d.slice(0, 300));
     for (const m of FALLBACK.filter(x => x !== MODEL)) { r = await call(m); if (r.ok) { console.log('orion-ask: fallback model ok', m); break; } }
   }
-  if (!r.ok) { let detail = ''; try { detail = (await r.text()).slice(0, 300); } catch (_) { /* пусто */ } console.error('orion-ask: llm', r.status, detail); return json({ error: 'llm', status: r.status, detail }, 502); }
+  if (!r.ok) { let detail = ''; try { detail = (await r.text()).slice(0, 300); } catch (_) { /* пусто */ } console.error('orion-ask: llm', r.status, detail);
+    /* причина ошибки — в имени маленького файла diag/… (без ключа и без вопроса): так её видно из панели Supabase */
+    const tag = (r.status + '_' + detail.replace(/sk-[A-Za-z0-9_-]+/g, 'KEY').replace(/[^A-Za-z0-9]+/g, '-')).slice(0, 160);
+    await store.upload('diag/' + new Date().toISOString().replace(/[:.]/g, '-') + '_' + tag + '.txt', new Blob(['1'], { type: 'text/plain' }), { upsert: true }).catch(() => null);
+    return json({ error: 'llm', status: r.status, detail }, 502); }
   const out = await r.json();
   const text = String((out.content || []).filter((c: { type: string }) => c.type === 'text').map((c: { text: string }) => c.text).join(' ')).replace(/[*_#`]/g, '').replace(/\s+/g, ' ').trim().slice(0, 600);
   if (!text) return json({ error: 'llm' }, 502);
