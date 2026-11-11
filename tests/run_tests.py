@@ -1030,6 +1030,27 @@ def run_browser():
             if v2['engine'] == 'phone' and v2['err'] == 'not_configured' and v2['cap']: ok('Орион: функция голоса недоступна — говорит голосом телефона, субтитры на месте')
             else: fail('Орион: запасной голос', str(v2))
             pg.evaluate("document.querySelector('.or-cap').click()"); pg.unroute('**/functions/v1/orion-voice')
+            # вопрос про рынок → функция orion-ask (имитация): уходит только вопрос и тикер, ответ звучит; ошибка → понятная фраза
+            asks = []
+            def fa(route):
+                asks.append(route.request.post_data or '')
+                if len(asks) == 1: route.fulfill(status=200, headers={'content-type': 'application/json', 'access-control-allow-origin': '*'}, body=json.dumps({'text': 'Биткоин за сутки плюс 3%. По новостям, рынок реагирует на приток денег в биржевые фонды, пишет Cointelegraph.', 'sources': ['Cointelegraph']}))
+                else: route.fulfill(status=429, headers={'content-type': 'application/json', 'access-control-allow-origin': '*'}, body='{"error":"day_limit"}')
+            pg.route('**/functions/v1/orion-ask', fa)
+            pg.evaluate("Mascot.debug.ask('Почему биткоин растёт?')"); pg.wait_for_timeout(1500)
+            cap = pg.evaluate("(document.querySelector('.or-cap')||{}).textContent||''")
+            body = json.loads(asks[0]) if asks else {}
+            if body.get('sym') == 'BTC' and 'растёт' in body.get('q', '') and set(body) == {'q', 'sym'} and 'Cointelegraph' in cap: ok('Орион: «почему биткоин растёт» — ответ по новостям; на сервер уходит только вопрос и тикер')
+            else: fail('Орион: вопрос про рынок', str(body) + ' | ' + cap)
+            pg.evaluate("document.querySelector('.or-cap') && document.querySelector('.or-cap').click()")
+            pg.evaluate("Mascot.debug.ask('Что с рынком?')"); pg.wait_for_timeout(1200)
+            cap = pg.evaluate("(document.querySelector('.or-cap')||{}).textContent||''")
+            if 'закончились' in cap: ok('Орион: лимит вопросов о рынке — понятная фраза')
+            else: fail('Орион: лимит вопросов о рынке', cap)
+            r0 = pg.evaluate("Mascot.debug.reply('сколько у меня биткоина')")
+            if len(asks) == 2 and 'биткоин' in r0.lower(): ok('Орион: вопросы о своём портфеле отвечаются на телефоне, без сервера')
+            else: fail('Орион: портфель без сервера', str(len(asks)) + ' ' + r0)
+            pg.evaluate("document.querySelector('.or-cap') && document.querySelector('.or-cap').click()"); pg.unroute('**/functions/v1/orion-ask')
         scenario('Орион', {'session': True, 'docs': SEED}, s_mascot)
 
         # --- Г4. карточка докупки «ждём ключ 2» (владелец 05.11): в чипе «BTC $38,39» сумму покупки приняли за цену BTC —

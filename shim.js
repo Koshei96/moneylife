@@ -626,6 +626,21 @@
     } catch (e) { return null; } finally { clearTimeout(t); }
   };
 
+  /* Орион про рынок (11.11.2026): вопрос → функция orion-ask (новости + цены + Claude). Портфель не отправляется. null — ответить без сети */
+  window.mlAsk = async (q, sym) => {
+    const c = client(); if (!c || demo || !uid || navigator.onLine === false) return null;
+    let ses = null; try { ses = (await c.auth.getSession()).data.session; } catch (e) {}
+    if (!ses) return null;
+    const ctl = typeof AbortController !== 'undefined' ? new AbortController() : null, t = setTimeout(() => { try { ctl && ctl.abort(); } catch (e) {} }, 25000);
+    try {
+      const r = await fetch(CFG.supabaseUrl.replace(/\/$/, '') + '/functions/v1/orion-ask', { method: 'POST', signal: ctl ? ctl.signal : undefined,
+        headers: { Authorization: 'Bearer ' + ses.access_token, apikey: CFG.supabaseKey, 'content-type': 'application/json' }, body: JSON.stringify({ q, sym: sym || '' }) });
+      let j = null; try { j = await r.json(); } catch (x) {}
+      if (!r.ok || !j || !j.text) return { error: (j && j.error) || ('http ' + r.status) };
+      return { text: String(j.text), sources: j.sources || [] };
+    } catch (e) { return null; } finally { clearTimeout(t); }
+  };
+
   window.mlDeleteAccount = async () => {
     const c = client(); if (!c || !uid) throw new Error('not signed in');
     if (navigator.onLine === false) { const e = new Error('offline'); e.code = 'offline'; throw e; }
