@@ -177,7 +177,7 @@
   }
   function stopVoice() {
     const c = TTS.cur; if (!c) return;
-    if (VO.src) { try { VO.src.onended = null; VO.src.stop(); } catch (e) {} VO.src = null; }
+    (VO.srcs || []).forEach(x => { try { x.onended = null; x.stop(); } catch (e) {} }); VO.srcs = []; VO.src = null;
     if (TTS.ok) try { speechSynthesis.cancel(); } catch (e) {}
     finish(c, true);
   }
@@ -199,14 +199,19 @@
     }
     stopVoice();
     const cur = { text, pri: o.pri || 0, follow: !!o.follow }; TTS.cur = cur; ST.lastSay = text; ST.lastEvent = now(); TTS.beat = now();
-    capShow(text); pulse(0.6);
-    if (premiumOK()) { cur.wait = true; premium(cur).then(ok => { cur.wait = false; if (!ok && TTS.cur === cur) phone(cur); }); wake(); return true; }
+    pulse(0.6);
+    if (premiumOK()) {   /* субтитры появляются вместе со звуком, а не раньше (не дольше 4 секунд ожидания) */
+      cur.wait = true; cur.cap = () => { if (!cur.capOn && TTS.cur === cur) { cur.capOn = true; capShow(text); } }; setTimeout(cur.cap, 4000);
+      premium(cur).then(ok => { cur.wait = false; if (!ok && TTS.cur === cur) phone(cur); }); wake(); return true;
+    }
+    capShow(text); cur.capOn = true;
     phone(cur);
     wake();
     return true;
   }
   /* голос телефона (запасной путь) */
   function phone(cur) {
+    if (!cur.capOn) { cur.capOn = true; capShow(cur.text); }
     const text = cur.text, v = TTS.voice || pickVoice();
     TTS.engine = 'phone';
     if (!ST.sound || !TTS.ok || !v || document.hidden) { silent(cur); return; }
@@ -261,27 +266,47 @@
     });
   }
   const premiumOK = () => !!(ST.sound && A.voice && !document.hidden && navigator.onLine !== false && now() > VO.off && (ST.forcePremium || !navigator.webdriver));
+  /* фраза → части по предложениям: первая короткая озвучивается быстро и звучит, пока готовятся остальные */
+  function splitParts(t) {
+    const ss = t.match(/[^.!?…]+[.!?…]+["»]?|[^.!?…]+$/g) || [t], out = [];
+    for (const x of ss.map(z => z.trim()).filter(Boolean)) { if (out.length && (out[out.length - 1].length < 28 || out.length >= 4)) out[out.length - 1] += ' ' + x; else out.push(x); }
+    return out;
+  }
+  async function voGet(text, ctx) {
+    const k = text + '|' + (ctx.prev || '') + '|' + (ctx.next || '');
+    if (VO.buf.has(k)) return { audio: VO.buf.get(k) };
+    if (!ctx.prev && !ctx.next && VO.buf.has(text)) return { audio: VO.buf.get(text) };
+    let r = await voFetch(text, ctx);
+    if (!r || !r.audio) r = await voFetch(text, ctx);   /* сеть моргнула — вторая попытка */
+    if (r && r.audio) { VO.buf.set(k, r.audio); if (VO.buf.size > 60) VO.buf.delete(VO.buf.keys().next().value); }
+    return r;
+  }
   async function premium(cur) {
     const c = voCtx(); if (!c) return false;
     if (c.state === 'suspended') { try { await c.resume(); } catch (e) {} if (c.state !== 'running') return false; }
-    const said = spokenRu(cur.text);
-    let ab = VO.buf.get(said);
-    if (!ab) {
-      let r = await voFetch(said);
+    const parts = splitParts(spokenRu(cur.text));
+    const reqs = parts.map((p, i) => voGet(p, parts.length > 1 ? { prev: parts[i - 1] || '', next: parts[i + 1] || '' } : {}));   /* все части сразу, параллельно */
+    let at = 0, played = 0, lastSrc = null;
+    for (let i = 0; i < parts.length; i++) {
+      const r = await reqs[i];
       if (TTS.cur !== cur) return true;   /* пока ждали — речь сменилась: это не ошибка голоса */
-      if (!r || !r.audio) { r = await voFetch(said); if (TTS.cur !== cur) return true; }   /* сеть моргнула — вторая попытка */
-      if (!r || !r.audio) { VO.off = now() + (r && r.error && r.error !== 'net' ? 600 : 20); TTS.lastErr = (r && r.error) || 'net'; return false; }   /* лимит или настройки — 10 минут голос телефона; сеть — 20 секунд */
-      ab = r.audio;
-      VO.buf.set(said, ab); if (VO.buf.size > 40) VO.buf.delete(VO.buf.keys().next().value);
+      if (!r || !r.audio) {
+        if (!played) { VO.off = now() + (r && r.error && r.error !== 'net' ? 600 : 20); TTS.lastErr = (r && r.error) || 'net'; return false; }   /* лимит или настройки — 10 минут голос телефона; сеть — 20 секунд */
+        continue;
+      }
+      let audio; try { audio = await c.decodeAudioData(r.audio.slice(0)); } catch (e) { if (!played) { VO.off = now() + 600; TTS.lastErr = 'decode'; return false; } continue; }
+      if (TTS.cur !== cur) return true;
+      if (!played) { at = c.currentTime + 0.03; chime(at); at += 0.22; TTS.engine = 'premium'; if (cur.cap) cur.cap(); }
+      const src = c.createBufferSource(); src.buffer = audio; src.connect(VO.inp);
+      const st = Math.max(at, c.currentTime + 0.01);
+      src.onended = () => { if (VO.src === src) VO.src = null; };
+      src.start(st); VO.src = src; VO.srcs = (VO.srcs || []).concat(src); lastSrc = src;
+      at = st + audio.duration + 0.06; played++;
+      clearTimeout(TTS.guard); TTS.guard = setTimeout(() => finish(cur), (at - c.currentTime + (i === parts.length - 1 ? 1.5 : 12)) * 1000);
     }
-    if (TTS.cur !== cur) return true;   /* пока ждали — речь остановили */
-    let audio; try { audio = await c.decodeAudioData(ab.slice(0)); } catch (e) { VO.off = now() + 600; TTS.lastErr = 'decode'; return false; }
-    if (TTS.cur !== cur) return true;
-    const t0 = c.currentTime + 0.03; chime(t0);
-    const src = c.createBufferSource(); src.buffer = audio; src.connect(VO.inp);
-    src.onended = () => { if (VO.src === src) VO.src = null; finish(cur); };
-    VO.src = src; TTS.engine = 'premium'; src.start(t0 + 0.28);
-    TTS.guard = setTimeout(() => finish(cur), (audio.duration + 2) * 1000);
+    if (!played) return false;
+    lastSrc.onended = () => { if (VO.src === lastSrc) VO.src = null; if (TTS.cur === cur) finish(cur); };   /* договорил последнюю часть */
+    clearTimeout(TTS.guard); TTS.guard = setTimeout(() => finish(cur), (at - c.currentTime + 1.5) * 1000);
     return true;
   }
   /* ---------- текст для живого голоса: все числа — словами (ElevenLabs путает русские цифры) ----------
@@ -328,8 +353,27 @@
   const PREP_GEN = /(?:^|\s)(до|от|около|более|менее|свыше|после|из|без|для|против|кроме|у|ниже|выше|порядка|с|со|вместо|дороже|дешевле|больше|меньше)\s*$/i;
   const PREP_DAT = /(?:^|\s)(к|ко|благодаря|согласно|вопреки)\s*$/i;
   const UNITS = { '$': ['доллар', 'доллара', 'долларов', 'доллару', 'долларам'], '₴': ['гривна', 'гривны', 'гривен', 'гривне', 'гривнам'], '%': ['процент', 'процента', 'процентов', 'проценту', 'процентам'] };
+  /* произношение: бренды, биржи и аббревиатуры — как их говорят по-русски («OKX» — «о-кей-икс», «ETF» — «и-ти-эф») */
+  const SAY = [
+    [/\bBTC\b/g, 'биткоина'], [/\bETH\b/g, 'эфира'], [/\bUSDT\b/g, 'тезер'], [/\bUSDC\b/g, 'ю-эс-ди-си'],
+    [/\bOKX\b/g, 'о-кей-икс'], [/(^|[^А-ЯЁа-яёA-Za-z])(ОКХ|ОКX|OКХ)(?![А-ЯЁа-яёA-Za-z])/g, '$1о-кей-икс'], [/\bETFs?\b/g, 'и-ти-эф'], [/(^|[^А-ЯЁа-яё])ЕТФ(?![А-ЯЁа-яё])/g, '$1и-ти-эф'], [/\bSEC\b/g, 'эс-и-си'], [/\bNFT\b/g, 'эн-эф-ти'], [/\bDeFi\b/gi, 'дефай'], [/\bAI\b/g, 'эй-ай'],
+    [/\bCEO\b/g, 'си-и-оу'], [/\bIPO\b/g, 'ай-пи-оу'], [/\bUSA\b/g, 'ю-эс-эй'], [/\bS&P\s?500\b/g, 'эс-энд-пи пятьсот'], [/\bFed\b/g, 'ФРС'], [/\bFOMC\b/g, 'эф-оу-эм-си'],
+    [/\bBinance\b/gi, 'Бинанс'], [/\bCoinbase\b/gi, 'Койнбейс'], [/\bBybit\b/gi, 'Байбит'], [/\bKraken\b/gi, 'Кракен'], [/\bBlackRock\b/gi, 'Блэкрок'], [/\bFidelity\b/gi, 'Фиделити'],
+    [/\bGrayscale\b/gi, 'Грейскейл'], [/\b(Micro)?Strategy\b/g, 'Майкростратеджи'], [/\bTether\b/gi, 'Тезер'], [/\bCircle\b/g, 'Сёркл'], [/\bRipple\b/gi, 'Рипл'], [/\bSolana\b/gi, 'Солана'],
+    [/\bEthereum\b/gi, 'Эфириум'], [/\bBitcoin\b/gi, 'биткоин'], [/\bCointelegraph\b/gi, 'Коинтелеграф'], [/\bCoinDesk\b/gi, 'Коиндеск'], [/\bForkLog\b/gi, 'Форклог'], [/\bDecrypt\b/g, 'Декрипт'],
+    [/\bIncrypted\b/gi, 'Инкриптед'], [/\bNasdaq\b/gi, 'Насдак'], [/\bTrump\b/g, 'Трамп'], [/\bPowell\b/g, 'Пауэлл'], [/\bSaylor\b/g, 'Сейлор'], [/\bMetaMask\b/gi, 'Метамаск'], [/\bLedger\b/g, 'Леджер'],
+    [/\bTrezor\b/g, 'Трезор'], [/\bBNB\b/g, 'би-эн-би'], [/\bXRP\b/g, 'икс-ар-пи'], [/\bSOL\b/g, 'солана'], [/\bTON\b/g, 'тон'], [/\bDOGE\b/g, 'доги'], [/\bADA\b/g, 'кардано'], [/\bTRX\b/g, 'трон'],
+    [/\bLTC\b/g, 'лайткоин'], [/\bLINK\b/g, 'чейнлинк'], [/\bAVAX\b/g, 'аваланч'], [/\bDCA\b/g, 'ди-си-эй'],
+    [/(^|[^А-ЯЁа-яё])ФРС(?![А-ЯЁа-яё])/g, '$1эф-эр-эс'], [/(^|[^А-ЯЁа-яё])США(?![А-ЯЁа-яё])/g, '$1сэ-шэ-а'], [/(^|[^А-ЯЁа-яё])ЕС(?![А-ЯЁа-яё])/g, '$1е-эс'],
+    [/(^|[^А-ЯЁа-яё])МВФ(?![А-ЯЁа-яё])/g, '$1эм-вэ-эф'], [/(^|[^А-ЯЁа-яё])НБУ(?![А-ЯЁа-яё])/g, '$1эн-бэ-у'], [/(^|[^А-ЯЁа-яё])ВВП(?![А-ЯЁа-яё])/g, '$1вэ-вэ-пэ'], [/(^|[^А-ЯЁа-яё])ЦБ(?![А-ЯЁа-яё])/g, '$1цэ-бэ']
+  ];
+  const EN = { A: 'эй', B: 'би', C: 'си', D: 'ди', E: 'и', F: 'эф', G: 'джи', H: 'эйч', I: 'ай', J: 'джей', K: 'кей', L: 'эл', M: 'эм', N: 'эн', O: 'оу', P: 'пи', Q: 'кью', R: 'ар', S: 'эс', T: 'ти', U: 'ю', V: 'ви', W: 'дабл-ю', X: 'икс', Y: 'уай', Z: 'зед' };
+  function pronounce(s) {
+    for (const [re, to] of SAY) s = s.replace(re, to);
+    return s.replace(/\b[A-Z]{2,5}\b/g, w => w.split('').map(ch => EN[ch]).join('-'));   /* прочие латинские аббревиатуры — по буквам */
+  }
   function spokenRu(t) {
-    let s = String(t || '').replace(/[   ]/g, ' ').replace(/[«»]/g, '').replace(/\s*—\s*/g, ' — ');   /* тире оставляем: живой голос сам делает естественную паузу */
+    let s = pronounce(String(t || '')).replace(/[   ]/g, ' ').replace(/[«»]/g, '').replace(/\s*—\s*/g, ' — ');   /* тире оставляем: живой голос сам делает естественную паузу */
     s = s.replace(/(\d)\s(?=\d{3}(?!\d))/g, '$1');   /* «110 000» → «110000» */
     s = s.replace(/\bBTC\b/g, 'биткоина').replace(/\bETH\b/g, 'эфира').replace(/\bUSDT\b/g, 'тезер');
     s = s.replace(/×\s?(\d)/g, 'в $1').replace(/(\d)\s?×/g, '$1 раз');
@@ -349,7 +393,7 @@
     });
     return s.replace(/\s+/g, ' ').replace(/\s+([,.!?])/g, '$1').trim();
   }
-  async function voFetch(text) { try { return await A.voice(text); } catch (e) { return null; } }
+  async function voFetch(text, ctx) { try { return await A.voice(text, ctx || {}); } catch (e) { return null; } }
   /* короткие фразы-«подхваты» заранее в памяти телефона — Орион отзывается сразу, пока думает над ответом */
   const FILL = { news: 'Секунду, смотрю новости.', think: 'Секунду.' };
   let preloaded = false;
@@ -581,9 +625,12 @@
     ST.rec = rec; let heard = '', done = false;
     if (ui.cap) { ui.capT.textContent = 'Слушаю…'; ui.cap.classList.add('on', 'talk', 'listen'); clearTimeout(ui.capOff); }
     pulse(1); buzz(12);
-    const end = () => { if (done) return; done = true; ST.rec = null; if (ui.cap) ui.cap.classList.remove('listen'); try { rec.stop(); } catch (e) {} if (!heard && lo.follow) { if (ui.cap) ui.cap.classList.remove('on', 'talk'); return; } answer(heard, true); };
-    rec.onresult = e => { heard = Array.from(e.results).map(r => r[0].transcript).join(' ').trim(); if (ui.capT && heard) ui.capT.textContent = '«' + heard + '»'; ST.lastHeard = heard; if (e.results[e.results.length - 1].isFinal) end(); };
-    rec.onerror = e => { if (done) return; done = true; ST.rec = null; if (ui.cap) ui.cap.classList.remove('listen');
+    let idle = 0;
+    const quiet = () => { if (done) return; done = true; ST.rec = null; clearTimeout(idle); try { rec.abort(); } catch (e) {} if (ui.cap) ui.cap.classList.remove('listen', 'on', 'talk'); };   /* тишина — молча заканчиваем разговор */
+    idle = setTimeout(() => { if (!heard) quiet(); }, lo.follow ? 2500 : 6000);   /* в разговоре 2,5 секунды тишины — Орион перестаёт слушать сам */
+    const end = () => { if (done) return; clearTimeout(idle); done = true; ST.rec = null; if (ui.cap) ui.cap.classList.remove('listen'); try { rec.stop(); } catch (e) {} if (!heard && lo.follow) { if (ui.cap) ui.cap.classList.remove('on', 'talk'); return; } answer(heard, true); };
+    rec.onresult = e => { heard = Array.from(e.results).map(r => r[0].transcript).join(' ').trim(); if (ui.capT && heard) ui.capT.textContent = '«' + heard + '»'; ST.lastHeard = heard; if (e.results[e.results.length - 1].isFinal) end(); else { clearTimeout(idle); idle = setTimeout(end, 1300); } };   /* договорили и замолчали — не ждём телефон, отвечаем через 1,3 секунды */
+    rec.onerror = e => { if (done) return; clearTimeout(idle); done = true; ST.rec = null; if (ui.cap) ui.cap.classList.remove('listen');
       if (lo.follow && e.error !== 'not-allowed') { if (ui.cap) ui.cap.classList.remove('on', 'talk'); return; }   /* в разговоре тишина — просто заканчиваем */
       speak(e.error === 'not-allowed' || e.error === 'service-not-allowed' ? 'Нет доступа к микрофону. Разрешите его этому приложению в настройках телефона.' : e.error === 'network' ? 'Для распознавания речи нужен интернет.' : 'Не расслышал. Зажмите меня и спросите ещё раз.', { pri: 2 }); };
     rec.onend = () => { if (!done) end(); };

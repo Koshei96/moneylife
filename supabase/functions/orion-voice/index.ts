@@ -50,12 +50,12 @@ Deno.serve(async (req) => {
   const user = u && u.user;
   if (!user) return json({ error: 'auth' }, 401);
 
-  let text = '';
-  try { const b = await req.json(); text = String((b && b.text) || ''); } catch (_) { /* пусто */ }
+  let text = '', prev = '', next = '';
+  try { const b = await req.json(); text = String((b && b.text) || ''); prev = String((b && b.prev) || '').slice(-300); next = String((b && b.next) || '').slice(0, 300); } catch (_) { /* пусто */ }   /* соседние предложения — для цельной интонации, когда фраза озвучивается частями */
   text = text.replace(/\s+/g, ' ').trim();
   if (!text || text.length > 700) return json({ error: 'bad_text' }, 400);
 
-  const hash = await sha256(VOICE + '|' + MODEL + '|' + JSON.stringify(VS) + '|' + text);
+  const hash = await sha256(VOICE + '|' + MODEL + '|' + JSON.stringify(VS) + '|' + prev + '|' + text + '|' + next);
   const path = 'phrases/' + hash.slice(0, 2) + '/' + hash + '.mp3';
   const store = sb.storage.from(BUCKET);
 
@@ -76,7 +76,7 @@ Deno.serve(async (req) => {
   const r = await fetch('https://api.elevenlabs.io/v1/text-to-speech/' + encodeURIComponent(VOICE) + '?output_format=mp3_44100_64', {
     method: 'POST',
     headers: { 'xi-api-key': KEY, 'content-type': 'application/json', accept: 'audio/mpeg' },
-    body: JSON.stringify({ text, model_id: MODEL, voice_settings: VS })
+    body: JSON.stringify({ text, model_id: MODEL, voice_settings: VS, ...(prev ? { previous_text: prev } : {}), ...(next ? { next_text: next } : {}) })
   });
   if (!r.ok) { let detail = ''; try { detail = (await r.text()).slice(0, 200); } catch (_) { /* пусто */ } return json({ error: 'tts', status: r.status, detail }, 502); }
   const audio = new Uint8Array(await r.arrayBuffer());
