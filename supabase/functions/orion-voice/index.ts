@@ -14,6 +14,14 @@ const VOICE = Deno.env.get('ORION_VOICE_ID') || '';
 const MODEL = Deno.env.get('ORION_MODEL') || 'eleven_multilingual_v2';
 const DAY_LIMIT = +(Deno.env.get('ORION_DAY_LIMIT') || 80);
 const MONTH_CHARS = +(Deno.env.get('ORION_MONTH_CHARS') || 120000);
+/* интонация: настраивается секретами без нового выпуска. Выше стабильность — ровнее и спокойнее; style 0 — без «игры», реже странные ударения */
+const VS = {
+  stability: +(Deno.env.get('ORION_STABILITY') || 0.7),
+  similarity_boost: +(Deno.env.get('ORION_SIMILARITY') || 0.8),
+  style: +(Deno.env.get('ORION_STYLE') || 0),
+  use_speaker_boost: true,
+  speed: +(Deno.env.get('ORION_SPEED') || 1)
+};
 const BUCKET = 'orion-voice';
 const URL_ = Deno.env.get('SUPABASE_URL') || '';
 const SERVICE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
@@ -47,7 +55,7 @@ Deno.serve(async (req) => {
   text = text.replace(/\s+/g, ' ').trim();
   if (!text || text.length > 700) return json({ error: 'bad_text' }, 400);
 
-  const hash = await sha256(VOICE + '|' + MODEL + '|' + text);
+  const hash = await sha256(VOICE + '|' + MODEL + '|' + JSON.stringify(VS) + '|' + text);
   const path = 'phrases/' + hash.slice(0, 2) + '/' + hash + '.mp3';
   const store = sb.storage.from(BUCKET);
 
@@ -68,7 +76,7 @@ Deno.serve(async (req) => {
   const r = await fetch('https://api.elevenlabs.io/v1/text-to-speech/' + encodeURIComponent(VOICE) + '?output_format=mp3_44100_64', {
     method: 'POST',
     headers: { 'xi-api-key': KEY, 'content-type': 'application/json', accept: 'audio/mpeg' },
-    body: JSON.stringify({ text, model_id: MODEL, voice_settings: { stability: 0.55, similarity_boost: 0.8, style: 0.15, use_speaker_boost: true } })
+    body: JSON.stringify({ text, model_id: MODEL, voice_settings: VS })
   });
   if (!r.ok) { let detail = ''; try { detail = (await r.text()).slice(0, 200); } catch (_) { /* пусто */ } return json({ error: 'tts', status: r.status, detail }, 502); }
   const audio = new Uint8Array(await r.arrayBuffer());
