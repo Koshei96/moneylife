@@ -432,6 +432,7 @@
     requiz: () => startQuiz(planGet()), apply: () => applyPreset(), learn: () => openLearn(true), learn0: () => openLearn(false), learnlist: () => openLearn(),
     fng: () => openFng(), goal: () => openGoal(), goalsave: () => saveGoal(), share: () => share(), refresh: () => { el('refreshBtn').click(); },
     backup: () => exportData(), rules: () => { closeSheets(); openSettings(false); setTimeout(() => { const r = el('rules'); if (r && r.scrollIntoView) r.scrollIntoView({ block: 'start', behavior: reduced ? 'auto' : 'smooth' }); }, 380); },
+    orname: () => { closeSheets(); setTimeout(X.askName, 260); }, namesave: () => nameSave(),
     buy: () => openAct('buy'), dca: () => { openAct('buy'); setBuyMode('dca'); }, deposit: () => openAct('deposit')
   };
   document.addEventListener('click', e => {
@@ -450,6 +451,23 @@
 
   /* ================= отрисовка ================= */
   let firstReveal = false;
+  /* ================= Орион: индекс страха для сводки и имя для обращения ================= */
+  X.fng = function () { const f = xGet().fng; return f && f.v != null && Date.now() - (f.at || 0) < 24 * 3600e3 ? { v: f.v, w: fngWord(f.v) } : null; };
+  X.askName = function () {
+    xOpen('name', 'Как к вам обращаться?', `<p>Орион — голосовой помощник MoneyLife. Он будет обращаться к вам по имени. Имя хранится только на этом телефоне.</p>
+      <label class="field"><span>Имя</span><input type="text" id="xName" maxlength="24" autocomplete="given-name" enterkeyhint="done" value="${esc(P.name || '')}" placeholder="Например, Андрей"></label>`,
+      '<button class="btn block" type="button" data-x="namesave">Сохранить</button>');
+    setTimeout(() => { const i = el('xName'); if (i) try { i.focus(); } catch (e) {} }, 380);
+  };
+  function nameSave() {
+    const i = el('xName'), v = i ? String(i.value || '').replace(/\s+/g, ' ').trim().slice(0, 24) : '';
+    P.name = v; savePrefs(); closeSheets(); play('tick'); renderNameRow();
+    setTimeout(() => { try { if (window.Mascot && window.Mascot.greet) window.Mascot.greet(v); } catch (e) {} }, 420);
+  }
+  function renderNameRow() { const r = el('orNameVal'); if (r) r.textContent = P.name ? P.name : 'не указано'; }
+  document.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target && e.target.id === 'xName') { e.preventDefault(); nameSave(); } });
+  renderNameRow();
+
   X.render = function (D) {
     renderToday(D); renderPlanCards();
     const sw = el('swNotif'); if (sw) swSet('swNotif', notifOn());

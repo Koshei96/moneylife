@@ -938,7 +938,8 @@ def run_browser():
             else: fail('зоны нажатия ≥48 px', '; '.join(small)[:600])
         scenario('Шторки форм', {'session': True, 'docs': SEED}, s_sheets)
 
-        # --- Г3. Голосовой помощник «Аура»: одна сфера рядом с суммой, кнопка ≥ 48 px, цвет по настроению, без three.js
+        # --- Г3. Голосовой помощник «Орион»: одна сфера рядом с суммой, кнопка ≥ 48 px, цвет по настроению, знакомство по имени,
+        #     сводка и доклады о событиях субтитрами (в тестовом браузере русского голоса нет — Орион говорит субтитрами)
         MS = """()=>{const h=document.getElementById('mascot'),b=h&&h.querySelector('.ms-hit'),r=b&&b.getBoundingClientRect(),d=window.Mascot&&Mascot.debug&&Mascot.debug.state();
             return {cv:h?h.querySelectorAll('canvas').length:-1,mscv:document.querySelectorAll('.ms-cv').length,live:!!(h&&h.classList.contains('ms-live')),
               hit:r?[Math.round(r.width),Math.round(r.height)]:null,label:b?b.getAttribute('aria-label'):'',three:!!window.THREE,d:d,
@@ -946,31 +947,46 @@ def run_browser():
         def s_mascot(pg, n):
             wait_app(pg)
             try: pg.wait_for_function("()=>{const h=document.getElementById('mascot');return h&&h.classList.contains('ms-live')}", polling=250, timeout=25000)
-            except Exception: raise AssertionError('помощник не ожил за 25 с (нет класса ms-live)')
+            except Exception: raise AssertionError('Орион не ожил за 25 с (нет класса ms-live)')
             pg.wait_for_timeout(3200)
             a = pg.evaluate(MS)
-            if a['cv'] == 1 and a['mscv'] == 1 and a['ink'] > 0 and not a['three']: ok('помощник «Аура»: одна сфера на главной, нарисована, three.js не грузится')
-            else: fail('помощник «Аура» на главной', str(a))
-            if a['hit'] and min(a['hit']) >= 48 and 'помощник' in a['label'].lower(): ok(f"помощник: кнопка {a['hit'][0]}×{a['hit'][1]} с подписью для скринридера")
-            else: fail('помощник: кнопка', str(a))
+            if a['cv'] == 1 and a['mscv'] == 1 and a['ink'] > 0 and not a['three']: ok('Орион: одна сфера на главной, нарисована, three.js не грузится')
+            else: fail('Орион на главной', str(a))
+            if a['hit'] and min(a['hit']) >= 48 and 'Орион' in a['label']: ok(f"Орион: кнопка {a['hit'][0]}×{a['hit'][1]} с подписью для скринридера")
+            else: fail('Орион: кнопка', str(a))
+            pg.evaluate("Mascot.debug.mood('rocket')"); pg.wait_for_timeout(2500); up = pg.evaluate("Mascot.debug.state()")
+            pg.evaluate("Mascot.debug.mood('down')"); pg.wait_for_timeout(2500); dn = pg.evaluate("Mascot.debug.state()")
+            if up['mood'] == 'rocket' and up['pal'][1] > up['pal'][0] and dn['mood'] == 'down' and dn['pal'][0] > dn['pal'][2]: ok('Орион: цвет меняется по настроению (прибыль — зелёный, просадка — янтарный)')
+            else: fail('Орион: цвет по настроению', f'{up} | {dn}')
+            pg.evaluate("Mascot.debug.mood('calm')"); pg.evaluate("document.querySelector('.or-cap').click()"); pg.wait_for_timeout(300)
+            # первое нажатие без имени — шторка «Как к вам обращаться?»; имя хранится только на телефоне
+            pg.click('#mascot .ms-hit'); pg.wait_for_timeout(700)
+            if pg.evaluate("document.getElementById('xSheet').classList.contains('open')") and pg.locator('#xName').count(): ok('Орион: первое нажатие — шторка «Как к вам обращаться?»')
+            else: fail('Орион: шторка имени', pg.inner_text('#xTitle'))
+            pg.fill('#xName', 'Андрей'); pg.click('[data-x="namesave"]'); pg.wait_for_timeout(1200)
+            st = pg.evaluate("Mascot.debug.state()")
+            if st['name'] == 'Андрей' and 'Андрей' in st['said'] and st['cap'] and pg.evaluate("JSON.parse(localStorage.getItem('cp-prefs2')).name") == 'Андрей': ok('Орион: знакомится по имени, субтитры видны, имя — в настройках телефона')
+            else: fail('Орион: знакомство', str(st))
             for th in ['dark', 'light']:
                 pg.evaluate(f"document.documentElement.setAttribute('data-theme','{th}')"); pg.wait_for_timeout(400)
                 shot(pg, f'15-mascot-home-{th}')
             pg.evaluate("document.documentElement.setAttribute('data-theme','dark')")
-            # цвет — настроение: прибыль → зелёный, просадка → янтарный
-            pg.evaluate("Mascot.debug.mood('rocket')"); pg.wait_for_timeout(2500); up = pg.evaluate("Mascot.debug.state()")
-            pg.evaluate("Mascot.debug.mood('down')"); pg.wait_for_timeout(2500); dn = pg.evaluate("Mascot.debug.state()")
-            if up['mood'] == 'rocket' and up['pal'][1] > up['pal'][0] and dn['mood'] == 'down' and dn['pal'][0] > dn['pal'][2]: ok('помощник: цвет меняется по настроению (прибыль — зелёный, просадка — янтарный)')
-            else: fail('помощник: цвет по настроению', f'{up} | {dn}')
-            # сводка собирается из цены биткоина, портфеля и сигнала; нажатие не роняет страницу
-            nw = pg.evaluate("Mascot.debug.news()")
-            if nw and len(nw['ids']) >= 4 and any(i.startswith('n.price') for i in nw['ids']): ok(f"помощник: сводка голосом собрана из {len(nw['ids'])} частей")
-            else: fail('помощник: сводка', str(nw))
-            pg.click('#mascot .ms-hit'); pg.wait_for_timeout(600); pg.click('#mascot .ms-hit'); pg.wait_for_timeout(300)
-            st = pg.evaluate("Mascot.debug.state()")
-            if not st['talking'] and not st['think']: ok('помощник: второе нажатие останавливает речь')
-            else: fail('помощник: второе нажатие', str(st))
-        scenario('Помощник «Аура»', {'session': True, 'docs': SEED}, s_mascot)
+            pg.click('#mascot .ms-hit'); pg.wait_for_timeout(300)
+            if not pg.evaluate("Mascot.debug.state().talking"): ok('Орион: нажатие во время речи — тишина')
+            else: fail('Орион: остановка речи', str(pg.evaluate("Mascot.debug.state()")))
+            pg.click('#mascot .ms-hit'); pg.wait_for_timeout(600)
+            said = pg.evaluate("Mascot.debug.state().said").replace('\u00a0', ' ')
+            if said.startswith('Добр') and 'Андрей' in said and 'Портфель' in said and 'Биткоин' in said: ok('Орион: сводка — приветствие по имени, портфель, биткоин')
+            else: fail('Орион: сводка', said)
+            if not any(w in said for w in ['купи', 'продай', 'советую']): ok('Орион: в сводке нет советов купить или продать')
+            else: fail('Орион: советы в сводке', said)
+            pg.evaluate("document.querySelector('.or-cap').click()"); pg.wait_for_timeout(200)
+            pg.evaluate("Mascot.debug.event('coinMove',{sym:'SOL',neg:true,ch:-12.4})")
+            ev = pg.evaluate("Mascot.debug.state().said")
+            if ev.startswith('SOL за сутки минус 12 процентов'): ok('Орион: доклад о сильном движении монеты')
+            else: fail('Орион: доклад о монете', ev)
+            pg.evaluate("document.querySelector('.or-cap').click()")
+        scenario('Орион', {'session': True, 'docs': SEED}, s_mascot)
 
         # --- Г4. карточка докупки «ждём ключ 2» (владелец 05.11): в чипе «BTC $38,39» сумму покупки приняли за цену BTC —
         #     теперь «BTC на $… · когда цена ≤ $…»: видно, что $ — сумма, а порог — цена монеты
@@ -1297,7 +1313,7 @@ def run_browser():
             longt = [f'{t[0]}: {len(t[2])}/{len(t[3])}' for t in tx if len(t[2]) > 30 or len(t[3]) > 130]
             ok('14 дней: заголовки ≤ 30, тексты ≤ 130 знаков') if not longt else fail('14 дней: длина текстов', ', '.join(longt))
             simple = [t[2] for t in tx if not t[1]][2:10]
-            if simple[0] == 'Пополнение — в DCA' and simple[2] == 'Суммы под замком' and simple[7] == 'Голосовой помощник': ok('14 дней: шаблон «Простой» — карточки 3S, 5S–10S')
+            if simple[0] == 'Пополнение — в DCA' and simple[2] == 'Суммы под замком' and simple[7] == 'Орион': ok('14 дней: шаблон «Простой» — карточки 3S, 5S–10S')
             else: fail('14 дней: «Простой»', str(simple))
             gos = sorted({t[5] for t in tx if t[5]})
             miss = pg.evaluate("g=>g.filter(k=>typeof D14_GO[k]!=='function')", gos)

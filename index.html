@@ -1374,8 +1374,9 @@ html.lite nav.tabs{background:var(--bg);-webkit-backdrop-filter:none;backdrop-fi
       <div class="setrow"><div><b>Скрывать мелочь</b><small>Монеты дешевле $10</small></div><button type="button" class="switch" id="swDust" role="switch" aria-checked="true" aria-label="Скрывать мелочь"></button></div>
       <div class="setrow"><div><b>Звуки</b><small>Монета в копилке и другие</small></div><button type="button" class="switch" id="swSound" role="switch" aria-checked="true" aria-label="Звуки"></button></div>
       <div class="setrow"><div><b>Вибрация</b><small>Отклик на нажатия</small></div><button type="button" class="switch" id="swHaptic" role="switch" aria-checked="true" aria-label="Вибрация"></button></div>
-      <div class="setrow"><div><b>Голосовой помощник</b><small>Сфера рядом с суммой: нажми — расскажет главное</small></div><button type="button" class="switch" id="swMascot" role="switch" aria-checked="true" aria-label="Голосовой помощник"></button></div>
-      <div class="setrow"><div><b>Голос помощника</b><small>Сводка и события голосом.</small></div><button type="button" class="switch" id="swMsSound" role="switch" aria-checked="true" aria-label="Голос помощника"></button></div>
+      <div class="setrow"><div><b>Орион — голосовой помощник</b><small>Сфера рядом с суммой: докладывает о событиях, по нажатию — сводка за день</small></div><button type="button" class="switch" id="swMascot" role="switch" aria-checked="true" aria-label="Орион — голосовой помощник"></button></div>
+      <div class="setrow"><div><b>Голос Ориона</b><small>Говорит голосом телефона. Выключено — только субтитры</small></div><button type="button" class="switch" id="swMsSound" role="switch" aria-checked="true" aria-label="Голос Ориона"></button></div>
+      <button type="button" class="setrow setbtn" data-x="orname"><div><b>Как Орион обращается к вам</b><small id="orNameVal">не указано</small></div><span class="chev" aria-hidden="true">›</span></button>
       <div class="setrow" id="d14Row"><div><b>Карточка «14 дней»</b><small>Короткие подсказки о приложении на главной</small></div><button type="button" class="switch" id="swD14" role="switch" aria-checked="true" aria-label="Карточка «14 дней»"></button></div>
     </div>
     <span class="label">План и сигналы</span>
@@ -1434,9 +1435,9 @@ html.lite nav.tabs{background:var(--bg);-webkit-backdrop-filter:none;backdrop-fi
 
 <div class="toast" id="toast" role="status"><span id="toastMsg"></span><button type="button" id="toastBtn" hidden></button></div>
 
-<script src="config.js?v=20261111170000"></script>
+<script src="config.js?v=20261111183000"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="shim.js?v=20261111170000"></script>
+<script src="shim.js?v=20261111183000"></script>
 <script>
 /* ===== основа ===== */
 const $=id=>document.getElementById(id);
@@ -2654,7 +2655,7 @@ function d14Card(n){const sp=split(),ds=depShare(),dca=Math.round(ds*100),cap=+S
     7:['Монеты до MoneyLife','Монеты, купленные раньше, добавь: «Ещё» → «Остаток монеты». Впишешь, сколько вложил, — прибыль по ним тоже посчитается.','Остаток монеты','start'],
     8:['Лидеры дня','Блок «Лидеры дня» на главной — как изменились твои монеты за 24 часа. Появится, когда монет от двух и каждая дороже $10.','',''],
     9:['Мелочь в списке','Монеты дешевле $10 во вкладке «Монеты» скрыты. Показать их — кнопка-фильтр рядом с поиском или «Настройки».','Монеты','coins'],
-    10:['Голосовой помощник','Сфера рядом с суммой меняет цвет по рынку. Нажми — расскажет главное голосом. Выключается в «Настройках» → «Отображение».','Настройки','set']};
+    10:['Орион','Голосовой помощник: сам скажет о важном, а по нажатию на сферу — сводка за день. Настройки — «Отображение».','Настройки','set']};
   const c=C[n]||(lad?L:SIMPLE)[n]||C[1];return {t:c[0],x:c[1],b:c[2],go:c[3]};}
 const D14_GO={buy:()=>openAct('buy'),dca:()=>{openAct('buy');setBuyMode('dca');},deposit:()=>openAct('deposit'),start:()=>openAct('start'),res:()=>openSt('res'),
   alloc:()=>{const a=$('alloc');if(a&&a.scrollIntoView)a.scrollIntoView({block:'center',behavior:reduced?'auto':'smooth'});},
@@ -2696,7 +2697,7 @@ document.addEventListener('visibilitychange',()=>{if(document.visibilityState===
 setInterval(()=>{if(D14.day&&document.visibilityState==='visible'&&isoDay(new Date())!==D14.day)renderD14();},30000);
 
 /* ===== отрисовка и запуск ===== */
-/* ===== голосовой помощник «Аура»: живая сфера рядом с суммой, код — mascot.js (без three.js) ===== */
+/* ===== голосовой помощник «Орион»: живая сфера рядом с суммой, голос телефона и субтитры — mascot.js ===== */
 const MSC={loading:false,failed:false,last:null};
 function msApply(){const on=P.mascot!==false,h=document.querySelector('.hero');if(h&&h.classList)h.classList.toggle('has-ms',on);const m=$('mascot');if(m)m.hidden=!on;return on;}
 function msPayload(x){let fresh=0;try{fresh=S.alerts.filter(a=>String(a.ts||'')>sigSeen).length;}catch(e){}
@@ -2705,7 +2706,7 @@ function msSync(x){MSC.last=x;if(!msApply())return;if(!S.ready||document.getElem
   if(window.Mascot){try{window.Mascot.sync(msPayload(x));}catch(e){}}else msLoad();}
 function msLoad(){if(MSC.loading||MSC.failed)return;MSC.loading=true;
   const add=(src,ok)=>{try{const s=document.createElement('script');s.src=src;s.async=true;s.onload=ok;s.onerror=()=>{MSC.failed=true;};document.head.appendChild(s);}catch(e){MSC.failed=true;}};
-  const boot=()=>add('mascot.js?v=20261111170000',()=>{try{if(window.Mascot&&window.Mascot.init({host:$('mascot'),app:{audio:ac,buzz}})&&MSC.last&&$('ob').hidden&&!document.getElementById('mlAuth'))window.Mascot.sync(msPayload(MSC.last));}catch(e){}});
+  const boot=()=>add('mascot.js?v=20261111183000',()=>{try{if(window.Mascot&&window.Mascot.init({host:$('mascot'),app:{buzz,askName:()=>{if(window.MLX&&MLX.askName)MLX.askName();}}})&&MSC.last&&$('ob').hidden&&!document.getElementById('mlAuth'))window.Mascot.sync(msPayload(MSC.last));}catch(e){}});
   setTimeout(boot,300);}
 function render(){const D=derive();renderHeader();renderHome(D);renderGrowth();renderCoins(D);renderStrategy(D);renderActivity();renderD14();if(window.MLX)try{MLX.render(D);}catch(e){console.error(e);}earnNudge();if(cvSym&&$('coinSheet').classList.contains('open'))renderCoinView();}
 document.body.classList.add('loading');
@@ -2728,6 +2729,6 @@ render();requestAnimationFrame(inkMove);setTimeout(inkMove,600);
   db.collection('history').limit(1000).onSnapshot(q=>{S.history=q.docs.map(d=>d.data());renderGrowth();if(S.ready&&derive().noPrice)renderHome(derive());},fail);
 })();
 </script>
-<script src="plus.js?v=20261111170000"></script>
+<script src="plus.js?v=20261111183000"></script>
 </body>
 </html>
