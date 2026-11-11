@@ -176,6 +176,7 @@
   }
   function stopVoice() {
     const c = TTS.cur; if (!c) return;
+    if (VO.src) { try { VO.src.onended = null; VO.src.stop(); } catch (e) {} VO.src = null; }
     if (TTS.ok) try { speechSynthesis.cancel(); } catch (e) {}
     finish(c, true);
   }
@@ -198,8 +199,16 @@
     stopVoice();
     const cur = { text, pri: o.pri || 0 }; TTS.cur = cur; ST.lastSay = text; ST.lastEvent = now(); TTS.beat = now();
     capShow(text); pulse(0.6);
-    const v = TTS.voice || pickVoice();
-    if (!ST.sound || !TTS.ok || !v || document.hidden) { silent(cur); return true; }
+    if (premiumOK()) { cur.wait = true; premium(cur).then(ok => { cur.wait = false; if (!ok && TTS.cur === cur) phone(cur); }); wake(); return true; }
+    phone(cur);
+    wake();
+    return true;
+  }
+  /* голос телефона (запасной путь) */
+  function phone(cur) {
+    const text = cur.text, v = TTS.voice || pickVoice();
+    TTS.engine = 'phone';
+    if (!ST.sound || !TTS.ok || !v || document.hidden) { silent(cur); return; }
     try {
       speechSynthesis.cancel();
       const u = new SpeechSynthesisUtterance(text.replace(/[«»]/g, '').replace(/—/g, ','));
@@ -215,10 +224,71 @@
       TTS.sim = setInterval(() => { if (TTS.cur === cur && now() - TTS.beat > 0.45) TTS.beat = now() - 0.12; }, 320);
     } catch (e) { silent(cur); }
     wake();
+  }
+
+  /* ---------- живой голос (ElevenLabs через серверную функцию) и звуковая обработка «как в шлеме» ----------
+     Цепочка: голос → плотный низ (160 Гц) → разборчивость (3 кГц) → ровная громкость → сухой сигнал + короткое эхо зала.
+     Перед фразой — тихий двойной звук включения. Сфера и дуги пульсируют по реальной громкости голоса. */
+  const VO = { ctx: null, inp: null, wet: null, an: null, src: null, buf: new Map(), off: 0, data: null };
+  function voCtx() {
+    if (VO.ctx) return VO.ctx;
+    const C = window.AudioContext || window.webkitAudioContext; if (!C) return null;
+    let c; try { c = new C(); } catch (e) { return null; }
+    const inp = c.createGain(), low = c.createBiquadFilter(), pres = c.createBiquadFilter(), comp = c.createDynamicsCompressor(), dry = c.createGain(), conv = c.createConvolver(), wet = c.createGain(), out = c.createGain(), an = c.createAnalyser();
+    low.type = 'lowshelf'; low.frequency.value = 160; low.gain.value = 3.5;
+    pres.type = 'peaking'; pres.frequency.value = 3000; pres.Q.value = 0.9; pres.gain.value = 2.5;
+    comp.threshold.value = -22; comp.ratio.value = 3; comp.attack.value = 0.004; comp.release.value = 0.18;
+    dry.gain.value = 0.92; wet.gain.value = 0.17; out.gain.value = 1;
+    /* эхо зала: 1,4 с затухающего шума — «большое пустое помещение», без чужих записей */
+    const sr = c.sampleRate, len = Math.round(sr * 1.4), ir = c.createBuffer(2, len, sr);
+    for (let ch = 0; ch < 2; ch++) { const d = ir.getChannelData(ch); for (let i = 0; i < len; i++) { const k = i / len; d[i] = i < sr * 0.012 ? 0 : (Math.random() * 2 - 1) * Math.pow(1 - k, 3.4); } }
+    conv.buffer = ir;
+    inp.connect(low); low.connect(pres); pres.connect(comp); comp.connect(dry); comp.connect(conv); conv.connect(wet);
+    dry.connect(out); wet.connect(out); out.connect(an); an.connect(c.destination);
+    an.fftSize = 512; VO.data = new Uint8Array(an.fftSize);
+    Object.assign(VO, { ctx: c, inp, wet: conv, an });
+    return c;
+  }
+  function voUnlock() { const c = voCtx(); if (c && c.state === 'suspended') c.resume().catch(() => {}); }
+  /* тихий звук включения: две короткие ноты с эхом */
+  function chime(at) {
+    const c = VO.ctx; if (!c) return;
+    [[740, 0, 0.05], [1110, 0.07, 0.04]].forEach(([f, dt, g]) => {
+      const o = c.createOscillator(), e = c.createGain(); o.type = 'sine'; o.frequency.value = f;
+      e.gain.setValueAtTime(0, at + dt); e.gain.linearRampToValueAtTime(g, at + dt + 0.012); e.gain.exponentialRampToValueAtTime(0.0001, at + dt + 0.32);
+      o.connect(e); e.connect(VO.wet); e.connect(VO.an); o.start(at + dt); o.stop(at + dt + 0.35);
+    });
+  }
+  const premiumOK = () => !!(ST.sound && A.voice && !document.hidden && navigator.onLine !== false && now() > VO.off && (ST.forcePremium || !navigator.webdriver));
+  async function premium(cur) {
+    const c = voCtx(); if (!c) return false;
+    if (c.state === 'suspended') { try { await c.resume(); } catch (e) {} if (c.state !== 'running') return false; }
+    let ab = VO.buf.get(cur.text);
+    if (!ab) {
+      let r = null; try { r = await A.voice(cur.text); } catch (e) { r = null; }
+      if (!r || !r.audio) { VO.off = now() + (r && r.error ? 600 : 60); TTS.lastErr = (r && r.error) || 'net'; return false; }   /* не вышло — 10 минут говорим голосом телефона */
+      ab = r.audio;
+      VO.buf.set(cur.text, ab); if (VO.buf.size > 40) VO.buf.delete(VO.buf.keys().next().value);
+    }
+    if (TTS.cur !== cur) return true;   /* пока ждали — речь остановили */
+    let audio; try { audio = await c.decodeAudioData(ab.slice(0)); } catch (e) { VO.off = now() + 600; TTS.lastErr = 'decode'; return false; }
+    if (TTS.cur !== cur) return true;
+    const t0 = c.currentTime + 0.03; chime(t0);
+    const src = c.createBufferSource(); src.buffer = audio; src.connect(VO.inp);
+    src.onended = () => { if (VO.src === src) VO.src = null; finish(cur); };
+    VO.src = src; TTS.engine = 'premium'; src.start(t0 + 0.28);
+    TTS.guard = setTimeout(() => finish(cur), (audio.duration + 2) * 1000);
     return true;
+  }
+  function voLevel() {
+    if (!VO.src || !VO.an) return null;
+    VO.an.getByteTimeDomainData(VO.data); let sum = 0;
+    for (let i = 0; i < VO.data.length; i++) { const v = (VO.data[i] - 128) / 128; sum += v * v; }
+    return clamp(Math.sqrt(sum / VO.data.length) * 5.5, 0, 1);
   }
   function talkLevel() {
     if (!TTS.cur) return 0;
+    const lv = voLevel(); if (lv != null) return clamp(0.22 + lv * 0.85, 0, 1);
     const t = now(), k = Math.exp(-(t - TTS.beat) * 4.5);
     return clamp(0.32 + 0.55 * k + 0.12 * Math.sin(t * 11), 0, 1);
   }
@@ -584,6 +654,7 @@
     window.addEventListener('resize', () => { fit(); wake(); });
     if (window.IntersectionObserver) new IntersectionObserver(es => { inView = es[0].isIntersecting; if (inView) wake(); }).observe(host);
     document.addEventListener('visibilitychange', () => { if (document.hidden) stopVoice(); else { ST.lastInput = now(); wake(); } });
+    ['pointerdown', 'keydown'].forEach(ev => document.addEventListener(ev, voUnlock, { passive: true }));
     ['pointerdown', 'keydown'].forEach(ev => document.addEventListener(ev, e => { if (!host.contains(e.target) && !(ui.cap && ui.cap.contains(e.target))) userInput(); }, { passive: true }));
     setInterval(() => { if (!raf) wake(); }, 900);
     inited = true; wake();
@@ -595,8 +666,9 @@
     ask: q => answer(q), listen: () => listen(),
     event: (name, data) => trigger(name, data),
     debug: {
-      state: () => ({ mood: ST.mood, raf: !!raf, frame: firstFrame, voice: !!TTS.voice, tts: TTS.ok, talking: speaking(), lvl: +ST.lvl.toFixed(2), said: ST.lastSay || '', name: ST.name, cap: !!(ui.cap && ui.cap.classList.contains('on')), pal: cur[0].map(Math.round) }),
+      state: () => ({ engine: TTS.engine || '', err: TTS.lastErr || '', mood: ST.mood, raf: !!raf, frame: firstFrame, voice: !!TTS.voice, tts: TTS.ok, talking: speaking(), lvl: +ST.lvl.toFixed(2), said: ST.lastSay || '', name: ST.name, cap: !!(ui.cap && ui.cap.classList.contains('on')), pal: cur[0].map(Math.round) }),
       hour: h => { ST.forceHour = h; },
+      premium: on => { ST.forcePremium = !!on; VO.off = 0; },
       mood: m => { if (ST.forceHour == null) ST.forceHour = 12; ST.pct = { calm: 0, up: 3, rocket: 9, down: -3, crash: -9 }[m]; ST.go = m === 'hunter'; if (m === 'offline') { ST.offline = true; ST.offSince = now() - 120; } else ST.offline = false; ST.lastInput = now(); wake(); },
       say: t => speak(t, { pri: 2 }),
       tap: () => tapped(),

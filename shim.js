@@ -612,6 +612,20 @@
     for (const [k, v] of cache) { const i = k.indexOf('/'); out.docs.push({ col: k.slice(0, i), id: k.slice(i + 1), data: v }); }
     return out;
   };
+  /* голос Ориона (11.11.2026): озвучка фразы серверной функцией orion-voice (ElevenLabs). null — говорить голосом телефона */
+  window.mlVoice = async (text) => {
+    const c = client(); if (!c || demo || !uid || navigator.onLine === false) return null;
+    let ses = null; try { ses = (await c.auth.getSession()).data.session; } catch (e) {}
+    if (!ses) return null;
+    const ctl = typeof AbortController !== 'undefined' ? new AbortController() : null, t = setTimeout(() => { try { ctl && ctl.abort(); } catch (e) {} }, 6000);
+    try {
+      const r = await fetch(CFG.supabaseUrl.replace(/\/$/, '') + '/functions/v1/orion-voice', { method: 'POST', signal: ctl ? ctl.signal : undefined,
+        headers: { Authorization: 'Bearer ' + ses.access_token, apikey: CFG.supabaseKey, 'content-type': 'application/json' }, body: JSON.stringify({ text }) });
+      if (!r.ok || !/audio/.test(r.headers.get('content-type') || '')) { let e = ''; try { e = (await r.json()).error || ''; } catch (x) {} return { error: e || ('http ' + r.status) }; }
+      return { audio: await r.arrayBuffer() };
+    } catch (e) { return null; } finally { clearTimeout(t); }
+  };
+
   window.mlDeleteAccount = async () => {
     const c = client(); if (!c || !uid) throw new Error('not signed in');
     if (navigator.onLine === false) { const e = new Error('offline'); e.code = 'offline'; throw e; }

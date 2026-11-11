@@ -1011,7 +1011,25 @@ def run_browser():
             pg.evaluate("openCoin('BTC')"); pg.wait_for_timeout(900); pg.click('#cvAlert'); pg.wait_for_timeout(700)
             if pg.locator('#xSheet.open #alIn').count() and 'BTC' in pg.inner_text('#xTitle'): ok('карточка монеты: «Оповещение о цене» — шторка с полем цены')
             else: fail('карточка монеты: оповещение', pg.inner_text('#xTitle'))
-            pg.evaluate("closeSheets()")
+            pg.evaluate("closeSheets()"); pg.wait_for_timeout(300)
+            # живой голос (ElevenLabs через функцию orion-voice) — имитация функции: звук, обработка, память; ошибка → голос телефона
+            tone = (ROOT / 'tests' / 'orion-tone.wav').read_bytes(); calls = []
+            def fn(route):
+                calls.append(1)
+                if len(calls) == 1: route.fulfill(status=200, headers={'content-type': 'audio/wav', 'access-control-allow-origin': '*'}, body=tone)
+                else: route.fulfill(status=503, headers={'content-type': 'application/json', 'access-control-allow-origin': '*'}, body='{"error":"not_configured"}')
+            pg.route('**/functions/v1/orion-voice', fn)
+            pg.mouse.click(5, 5); pg.evaluate("Mascot.debug.premium(true)")
+            pg.evaluate("Mascot.debug.say('Проверка живого голоса.')"); pg.wait_for_timeout(1200)
+            v1 = pg.evaluate("Mascot.debug.state()")
+            if v1['engine'] == 'premium' and v1['talking'] and v1['lvl'] > 0.3: ok('Орион: живой голос — звук через обработку, сфера в такт громкости')
+            else: fail('Орион: живой голос', str(v1))
+            pg.wait_for_timeout(2600)
+            pg.evaluate("Mascot.debug.say('Другая фраза.')"); pg.wait_for_timeout(900)
+            v2 = pg.evaluate("Mascot.debug.state()")
+            if v2['engine'] == 'phone' and v2['err'] == 'not_configured' and v2['cap']: ok('Орион: функция голоса недоступна — говорит голосом телефона, субтитры на месте')
+            else: fail('Орион: запасной голос', str(v2))
+            pg.evaluate("document.querySelector('.or-cap').click()"); pg.unroute('**/functions/v1/orion-voice')
         scenario('Орион', {'session': True, 'docs': SEED}, s_mascot)
 
         # --- Г4. карточка докупки «ждём ключ 2» (владелец 05.11): в чипе «BTC $38,39» сумму покупки приняли за цену BTC —
