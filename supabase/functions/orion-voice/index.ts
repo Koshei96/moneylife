@@ -14,13 +14,13 @@ const VOICE = Deno.env.get('ORION_VOICE_ID') || '';
 const MODEL = Deno.env.get('ORION_MODEL') || 'eleven_multilingual_v2';
 const DAY_LIMIT = +(Deno.env.get('ORION_DAY_LIMIT') || 80);
 const MONTH_CHARS = +(Deno.env.get('ORION_MONTH_CHARS') || 120000);
-/* интонация: настраивается секретами без нового выпуска. Выше стабильность — ровнее и спокойнее; style 0 — без «игры», реже странные ударения */
+/* интонация: настраивается секретами без нового выпуска. Ниже стабильность и выше style — живее и разговорнее; выше стабильность — ровнее */
 const VS = {
-  stability: +(Deno.env.get('ORION_STABILITY') || 0.7),
+  stability: +(Deno.env.get('ORION_STABILITY') || 0.42),
   similarity_boost: +(Deno.env.get('ORION_SIMILARITY') || 0.8),
-  style: +(Deno.env.get('ORION_STYLE') || 0),
+  style: +(Deno.env.get('ORION_STYLE') || 0.3),
   use_speaker_boost: true,
-  speed: +(Deno.env.get('ORION_SPEED') || 1)
+  speed: +(Deno.env.get('ORION_SPEED') || 1.05)
 };
 const BUCKET = 'orion-voice';
 const URL_ = Deno.env.get('SUPABASE_URL') || '';
