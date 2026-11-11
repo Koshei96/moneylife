@@ -263,12 +263,13 @@
   async function premium(cur) {
     const c = voCtx(); if (!c) return false;
     if (c.state === 'suspended') { try { await c.resume(); } catch (e) {} if (c.state !== 'running') return false; }
-    let ab = VO.buf.get(cur.text);
+    const said = spokenRu(cur.text);
+    let ab = VO.buf.get(said);
     if (!ab) {
-      let r = null; try { r = await A.voice(cur.text); } catch (e) { r = null; }
+      let r = null; try { r = await A.voice(said); } catch (e) { r = null; }
       if (!r || !r.audio) { VO.off = now() + (r && r.error ? 600 : 60); TTS.lastErr = (r && r.error) || 'net'; return false; }   /* не вышло — 10 минут говорим голосом телефона */
       ab = r.audio;
-      VO.buf.set(cur.text, ab); if (VO.buf.size > 40) VO.buf.delete(VO.buf.keys().next().value);
+      VO.buf.set(said, ab); if (VO.buf.size > 40) VO.buf.delete(VO.buf.keys().next().value);
     }
     if (TTS.cur !== cur) return true;   /* пока ждали — речь остановили */
     let audio; try { audio = await c.decodeAudioData(ab.slice(0)); } catch (e) { VO.off = now() + 600; TTS.lastErr = 'decode'; return false; }
@@ -279,6 +280,55 @@
     VO.src = src; TTS.engine = 'premium'; src.start(t0 + 0.28);
     TTS.guard = setTimeout(() => finish(cur), (audio.duration + 2) * 1000);
     return true;
+  }
+  /* ---------- текст для живого голоса: все числа — словами (ElevenLabs путает русские цифры) ----------
+     «$950» → «девятьсот пятьдесят долларов», «−12,7%» → «минус двенадцать целых семь десятых процента»,
+     «110 тысяч» → «сто десять тысяч», «0,0123 BTC» → «ноль целых двенадцать тысячных биткоина». Субтитры остаются цифрами. */
+  const W1 = ['ноль', 'один', 'два', 'три', 'четыре', 'пять', 'шесть', 'семь', 'восемь', 'девять', 'десять', 'одиннадцать', 'двенадцать', 'тринадцать', 'четырнадцать', 'пятнадцать', 'шестнадцать', 'семнадцать', 'восемнадцать', 'девятнадцать'];
+  const W10 = ['', '', 'двадцать', 'тридцать', 'сорок', 'пятьдесят', 'шестьдесят', 'семьдесят', 'восемьдесят', 'девяносто'];
+  const W100 = ['', 'сто', 'двести', 'триста', 'четыреста', 'пятьсот', 'шестьсот', 'семьсот', 'восемьсот', 'девятьсот'];
+  function tri(n, fem) {
+    const o = []; const h = Math.floor(n / 100), r = n % 100;
+    if (h) o.push(W100[h]);
+    if (r >= 20) { o.push(W10[Math.floor(r / 10)]); if (r % 10) o.push(W1[r % 10]); } else if (r || !h) o.push(W1[r]);
+    let s = o.join(' ');
+    if (fem) s = s.replace(/(^|\s)один$/, '$1одна').replace(/(^|\s)два$/, '$1две');
+    return s;
+  }
+  function intW(n, fem) {
+    n = Math.floor(Math.abs(n)); if (!n) return 'ноль';
+    const parts = [], G = [[1e9, 'миллиард', 'миллиарда', 'миллиардов', false], [1e6, 'миллион', 'миллиона', 'миллионов', false], [1e3, 'тысяча', 'тысячи', 'тысяч', true]];
+    for (const [d, a, b, c, f] of G) { const k = Math.floor(n / d) % 1000; if (k) parts.push(tri(k, f) + ' ' + plural(k, a, b, c)); }
+    const r = n % 1000; if (r) parts.push(tri(r, fem));
+    return parts.join(' ');
+  }
+  const FEM = /^(тысяч|гривн|ступен|монет|недел|минут|секунд|покупк|сделк|позици|цел|част|сотн)/i;
+  function numW(intS, fracS, next) {
+    const n = +intS;
+    if (!fracS) return intW(n, FEM.test(next || ''));
+    fracS = fracS.slice(0, 3).replace(/0+$/, '');
+    if (!fracS) return intW(n, FEM.test(next || ''));
+    const f = +fracS, den = [null, ['десятая', 'десятых'], ['сотая', 'сотых'], ['тысячная', 'тысячных']][fracS.length];
+    return intW(n, true) + ' ' + plural(n, 'целая', 'целых', 'целых') + ' ' + intW(f, true) + ' ' + (f % 10 === 1 && f % 100 !== 11 ? den[0] : den[1]);
+  }
+  function spokenRu(t) {
+    let s = String(t || '').replace(/[   ]/g, ' ').replace(/[«»]/g, '').replace(/—/g, ',');
+    s = s.replace(/(\d)\s(?=\d{3}(?!\d))/g, '$1');   /* «110 000» → «110000» */
+    s = s.replace(/\bBTC\b/g, 'биткоина').replace(/\bETH\b/g, 'эфира').replace(/\bUSDT\b/g, 'тезер');
+    s = s.replace(/×\s?(\d)/g, 'в $1').replace(/(\d)\s?×/g, '$1 раз');
+    s = s.replace(/(^|[\s(:])([−\-+]?)(\$)?(\d+)(?:[.,](\d+))?(\s?(%|₴|\$))?(?=(\s*)([А-Яа-яЁё]*))/g, (m, pre, sg, d1, ip, fp, _u, u, _sp, next) => {
+      const unit = u || (d1 ? '$' : '');
+      let w = numW(ip, fp, unit ? '' : next);
+      if (unit === '$' || unit === '₴') w = numW(ip, fp, unit === '₴' ? 'гривн' : '');
+      const sign = sg === '+' ? 'плюс ' : sg ? 'минус ' : '';
+      const n = +ip, frac = fp && +fp.slice(0, 3);
+      let tail = '';
+      if (unit === '%') tail = ' ' + (frac ? 'процента' : plural(n, 'процент', 'процента', 'процентов'));
+      else if (unit === '$') tail = ' ' + (frac ? 'доллара' : plural(n, 'доллар', 'доллара', 'долларов'));
+      else if (unit === '₴') tail = ' ' + (frac ? 'гривны' : plural(n, 'гривна', 'гривны', 'гривен'));
+      return pre + sign + w + tail;
+    });
+    return s.replace(/\s+/g, ' ').replace(/\s+([,.!?])/g, '$1').trim();
   }
   function voLevel() {
     if (!VO.src || !VO.an) return null;
@@ -669,6 +719,7 @@
       state: () => ({ engine: TTS.engine || '', err: TTS.lastErr || '', mood: ST.mood, raf: !!raf, frame: firstFrame, voice: !!TTS.voice, tts: TTS.ok, talking: speaking(), lvl: +ST.lvl.toFixed(2), said: ST.lastSay || '', name: ST.name, cap: !!(ui.cap && ui.cap.classList.contains('on')), pal: cur[0].map(Math.round) }),
       hour: h => { ST.forceHour = h; },
       premium: on => { ST.forcePremium = !!on; VO.off = 0; },
+      spoken: t => spokenRu(t),
       mood: m => { if (ST.forceHour == null) ST.forceHour = 12; ST.pct = { calm: 0, up: 3, rocket: 9, down: -3, crash: -9 }[m]; ST.go = m === 'hunter'; if (m === 'offline') { ST.offline = true; ST.offSince = now() - 120; } else ST.offline = false; ST.lastInput = now(); wake(); },
       say: t => speak(t, { pri: 2 }),
       tap: () => tapped(),
