@@ -1139,7 +1139,7 @@ body.scrolled .top .mark{transform:scale(.86)}
 .top .mark{transition:transform .3s var(--ease)}
 html.lite body.scrolled .top{-webkit-backdrop-filter:none;backdrop-filter:none;background:var(--bg)}
 /* главная: сумма плавно уменьшается и уходит назад при прокрутке */
-#v-home .hero{transform:translate3d(0,calc(var(--hy,0) * 1px),0) scale(var(--hs,1));opacity:var(--ho,1);transform-origin:50% 0;will-change:transform}
+#v-home .hero{transform:scale(var(--hs,1));opacity:var(--ho,1);transform-origin:50% 0}
 /* блоки проявляются при прокрутке: поднимаются, проявляются и чуть «доезжают» по масштабу */
 .rv{opacity:0;transform:translate3d(0,22px,0) scale(.97);filter:blur(3px)}
 .rv.in{opacity:1;transform:none;filter:none;transition:opacity .55s var(--ease),transform .65s cubic-bezier(.2,.9,.25,1.05),filter .5s var(--ease)}
@@ -1562,9 +1562,9 @@ html.lite .view.enter{animation:vin .2s var(--ease)}
 
 <div class="toast" id="toast" role="status"><span id="toastMsg"></span><button type="button" id="toastBtn" hidden></button></div>
 
-<script src="config.js?v=20261112004500"></script>
+<script src="config.js?v=20261112010000"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="shim.js?v=20261112004500"></script>
+<script src="shim.js?v=20261112010000"></script>
 <script>
 /* ===== основа ===== */
 const $=id=>document.getElementById(id);
@@ -2833,7 +2833,7 @@ function msSync(x){MSC.last=x;if(!msApply())return;if(!S.ready||document.getElem
   if(window.Mascot){try{window.Mascot.sync(msPayload(x));}catch(e){}}else msLoad();}
 function msLoad(){if(MSC.loading||MSC.failed)return;MSC.loading=true;
   const add=(src,ok)=>{try{const s=document.createElement('script');s.src=src;s.async=true;s.onload=ok;s.onerror=()=>{MSC.failed=true;};document.head.appendChild(s);}catch(e){MSC.failed=true;}};
-  const boot=()=>add('mascot.js?v=20261112004500',()=>{try{if(window.Mascot&&window.Mascot.init({host:$('mascot'),app:{buzz,askName:()=>{if(window.MLX&&MLX.askName)MLX.askName();},addAlert:(y,v)=>window.MLX&&MLX.addAlert?MLX.addAlert(y,v):null,voice:(t,x)=>window.mlVoice?window.mlVoice(t,x):null,ask:(q,y,x)=>window.mlAsk?window.mlAsk(q,y,x):null}})&&MSC.last&&$('ob').hidden&&!document.getElementById('mlAuth'))window.Mascot.sync(msPayload(MSC.last));}catch(e){}});
+  const boot=()=>add('mascot.js?v=20261112010000',()=>{try{if(window.Mascot&&window.Mascot.init({host:$('mascot'),app:{buzz,askName:()=>{if(window.MLX&&MLX.askName)MLX.askName();},addAlert:(y,v)=>window.MLX&&MLX.addAlert?MLX.addAlert(y,v):null,voice:(t,x)=>window.mlVoice?window.mlVoice(t,x):null,ask:(q,y,x)=>window.mlAsk?window.mlAsk(q,y,x):null}})&&MSC.last&&$('ob').hidden&&!document.getElementById('mlAuth'))window.Mascot.sync(msPayload(MSC.last));}catch(e){}});
   setTimeout(boot,300);}
 function render(){const D=derive();renderHeader();renderHome(D);renderGrowth();renderCoins(D);renderStrategy(D);renderActivity();renderD14();if(window.MLX)try{MLX.render(D);}catch(e){console.error(e);}earnNudge();if(cvSym&&$('coinSheet').classList.contains('open'))renderCoinView();}
 document.body.classList.add('loading');
@@ -2891,7 +2891,7 @@ render();requestAnimationFrame(inkMove);setTimeout(inkMove,600);
   let ticking=false;const root=document.documentElement,hero=document.querySelector('#v-home .hero');
   function onScroll(){ticking=false;const y=scrollY,max=Math.max(1,root.scrollHeight-innerHeight);
     document.body.classList.toggle('scrolled',y>8);document.querySelector('.top').style.setProperty('--sp',Math.min(1,y/max).toFixed(3));
-    if(mot&&hero&&curTab==='home'){const k=Math.min(1,y/260);hero.style.setProperty('--hy',(y*.35).toFixed(1));hero.style.setProperty('--hs',(1-k*.06).toFixed(3));hero.style.setProperty('--ho',(1-k*.35).toFixed(3));}}
+    if(mot&&hero&&curTab==='home'){const k=Math.min(1,y/320);hero.style.setProperty('--hs',(1-k*.04).toFixed(3));hero.style.setProperty('--ho',(1-k*.45).toFixed(3));}}   /* без сдвига вниз: сдвиг наезжал на карточки ниже (телефон владельца, 11.11) */
   addEventListener('scroll',()=>{if(!ticking){ticking=true;requestAnimationFrame(onScroll);}},{passive:true});onScroll();
   /* блоки проявляются, когда до них доходит прокрутка (только те, что ниже экрана) */
   const io=('IntersectionObserver' in window)&&mot&&!test?new IntersectionObserver(es=>es.forEach(en=>{if(en.isIntersecting){const el=en.target;el.style.transitionDelay=(Math.min(3,el._rvi||0)*60)+'ms';el.classList.add('in');io.unobserve(el);}}),{rootMargin:'0px 0px -8% 0px',threshold:.06}):null;
@@ -2917,7 +2917,7 @@ render();requestAnimationFrame(inkMove);setTimeout(inkMove,600);
     sy=null;swipe=null;pull=0;armed=false;},{passive:true});
 })();
 </script>
-<script src="plus.js?v=20261112004500"></script>
-<script src="wins.js?v=20261112004500"></script>
+<script src="plus.js?v=20261112010000"></script>
+<script src="wins.js?v=20261112010000"></script>
 </body>
 </html>
