@@ -31,6 +31,7 @@
 .or-cap.on{opacity:1;transform:translate(-50%,0);pointer-events:auto}
 .or-cap i{grid-row:span 2;width:26px;height:26px;margin-top:2px;border-radius:50%;background:radial-gradient(circle at 38% 34%,#fff 0,var(--oc,#8b7dff) 46%,#07070a 100%);box-shadow:0 0 14px var(--oc,#8b7dff)}
 .or-cap.talk i{animation:orPulse 1.1s ease-in-out infinite}
+.or-cap.listen i{animation:orPulse .6s ease-in-out infinite;box-shadow:0 0 0 6px color-mix(in srgb,var(--oc,#8b7dff) 25%,transparent),0 0 18px var(--oc,#8b7dff)}
 .or-cap b{font-size:12px;font-weight:600;letter-spacing:.02em;color:var(--mute,#a3a3ae)}
 .or-cap span{font-size:14.5px;line-height:1.45;overflow-wrap:anywhere}
 .or-cap:focus-visible{outline:2px solid var(--fg,#fff);outline-offset:2px}
@@ -278,16 +279,133 @@
     return lsGet('ms-newsDay', '') !== dayKey();   /* сам — один раз в день, после первого касания */
   }
 
+
+  /* ---------- вопросы голосом: зажать сферу и спросить ---------- */
+  const SRC = window.SpeechRecognition || window.webkitSpeechRecognition || null;
+  /* как люди называют монеты вслух — для распознавания (дальше ищем и сам тикер латиницей) */
+  const ALIAS = {
+    BTC: ['биткоин', 'биткойн', 'биток', 'битк', 'btc', 'бтс', 'бтц'], ETH: ['эфир', 'эфириум', 'этериум', 'ethereum', 'eth'], SOL: ['солан', 'sol', 'солы'],
+    XRP: ['рипл', 'xrp', 'иксэрпи'], DOGE: ['доги', 'доге', 'догикоин', 'dogecoin', 'doge'], TON: ['тонкоин', 'toncoin'], ADA: ['кардано', 'ada'],
+    BNB: ['бнб', 'bnb'], TRX: ['трон', 'tron', 'trx'], LINK: ['чейнлинк', 'link'], DOT: ['полкадот', 'polkadot'], AVAX: ['аваланч', 'avalanche', 'avax'],
+    SUI: ['суи', 'sui'], NEAR: ['near'], LTC: ['лайткоин', 'litecoin', 'ltc'], PEPE: ['пепе', 'pepe'], SHIB: ['шиба', 'шиб', 'shib'], USDT: ['тезер', 'usdt']
+  };
+  const NAME_G = { BTC: 'биткоина', ETH: 'эфира', SOL: 'соланы', XRP: 'рипла', DOGE: 'доги', TON: 'тона', ADA: 'кардано' };
+  const NAME_N = { BTC: 'Биткоин', ETH: 'Эфир', SOL: 'Солана', XRP: 'Рипл', DOGE: 'Доги', TON: 'Тон', ADA: 'Кардано' };
+  const norm = q => String(q || '').toLowerCase().replace(/ё/g, 'е');
+  function coinIn(q) {
+    const w = norm(q).split(/[^a-zа-я0-9]+/).filter(Boolean), D = ST.D || {};
+    const syms = Object.keys(ALIAS).concat((D.syms || []).filter(s => !ALIAS[s]));
+    for (const s of syms) {
+      const al = (ALIAS[s] || []).concat([s.toLowerCase()]);
+      if (w.some(x => al.some(a => (a.length >= 4 ? x.startsWith(a) : x === a)))) return s;
+    }
+    return null;
+  }
+  /* число из фразы: «150», «110 000», «150 тысяч», «1,5 тысячи», «120к» */
+  function numIn(q) {
+    const m = norm(q).replace(/(\d)\s+(?=\d{3}\b)/g, '$1').match(/(\d+(?:[.,]\d+)?)\s*(тысяч\S*|тыс\S*|к\b|k\b|миллион\S*|млн)?/);
+    if (!m) return null;
+    let v = parseFloat(m[1].replace(',', '.')); if (!isFinite(v)) return null;
+    if (m[2]) v *= /милл|млн/.test(m[2]) ? 1e6 : 1e3;
+    return v;
+  }
+  const qtyW = v => (+v).toLocaleString('ru-RU', { maximumFractionDigits: v >= 100 ? 0 : v >= 1 ? 3 : 6 });
+  function coinPrice(sym) { const S = ST.S || {}, D = ST.D || {}, lv = S.live || {}; return +(lv.prices && lv.prices[sym]) || +(D.prices && D.prices[sym]) || 0; }
+  function priceW(v) { return v >= 10 ? moneyW(v) : (v >= 1 ? String(+v.toFixed(2)).replace('.', ',') : String(+v.toPrecision(3)).replace('.', ',')) + ' доллара'; }
+  function reply(q) {
+    const t = norm(q), S = ST.S || {}, D = ST.D || {}, M = window.MLX || {};
+    const has = (...k) => k.some(x => t.indexOf(x) >= 0);
+    if (!t.trim()) return 'Не расслышал. Зажмите меня и спросите ещё раз.';
+    const sym = coinIn(t), num = numIn(t);
+    /* оповещение: «сообщи, когда солана будет 150» */
+    if (has('сообщи', 'скажи когда', 'скажи, когда', 'оповест', 'напомни', 'предупреди', 'дай знать') && (has('когда', 'если') || num)) {
+      if (!sym) return 'Какая монета? Скажите, например: «сообщи, когда солана будет 150».';
+      if (!(num > 0)) return 'Какую цену ждать? Скажите, например: «сообщи, когда ' + (NAME_N[sym] || sym).toLowerCase() + ' будет ' + Math.round((coinPrice(sym) || 100) * 1.1) + '».';
+      const a = A.addAlert ? A.addAlert(sym, num) : null;
+      if (!a) return 'Цена ' + sym + ' уже на этой отметке.';
+      return 'Готово. Скажу, когда ' + (NAME_N[sym] ? NAME_N[sym].toLowerCase() : sym) + ' ' + (a.dir === 'up' ? 'поднимется' : 'опустится') + ' до ' + priceW(num) + '.';
+    }
+    if (has('недел')) {
+      const w = M.week ? M.week(D) : null; if (!w) return 'Итог недели пока не готов.';
+      const o = ['За неделю' + nm() + ':'];
+      o.push(w.buys ? 'покупок — ' + w.buys + ', на ' + moneyW(w.spent) + '.' : 'покупок не было.');
+      if (w.chPct != null && !ST.hide) o.push('Портфель без учёта новых денег — ' + signW(w.chPct) + ' ' + pctW(w.chPct) + '.');
+      if (w.chBtc != null) o.push('Биткоин за неделю — ' + signW(w.chBtc) + ' ' + pctW(w.chBtc) + '.');
+      const sk = M.streak ? M.streak() : null; if (sk && sk.n >= 2) o.push('Серия покупок — ' + sk.n + ' ' + plural(sk.n, 'месяц', 'месяца', 'месяцев') + ' подряд.');
+      return o.join(' ');
+    }
+    if (has('сери', 'подряд', 'дисциплин')) {
+      const sk = M.streak ? M.streak() : null; if (!sk || !sk.n) return 'Серии пока нет. Она начнётся с первой покупки в месяце.';
+      return 'Серия — ' + sk.n + ' ' + plural(sk.n, 'месяц', 'месяца', 'месяцев') + ' подряд с покупками.' + (sk.thisMonth ? ' В этом месяце покупка уже есть.' : ' В этом месяце покупки ещё нет — серия продолжится с первой.');
+    }
+    if (sym && has('у меня', 'мои', 'мой', 'моих', 'моего', 'сколько у', 'есть ли')) {
+      const h = D.h && D.h[sym], qn = h ? +h.qty || 0 : 0;
+      if (!(qn > 0)) return (NAME_G[sym] ? cap1(NAME_G[sym]) : sym) + ' в портфеле нет.';
+      const p = coinPrice(sym), v = qn * p;
+      if (ST.hide) return 'У вас ' + qtyW(qn) + ' ' + (NAME_G[sym] || sym) + '. Суммы скрыты.';
+      return 'У вас ' + qtyW(qn) + ' ' + (NAME_G[sym] || sym) + (p ? ' — это ' + moneyW(v) + '.' : '. Цены сейчас нет.');
+    }
+    if (sym && sym !== 'USDT') {
+      const p = coinPrice(sym), ch = S.live && S.live.change ? S.live.change[sym] : null;
+      if (!p) return 'Цены ' + sym + ' сейчас нет.';
+      return (NAME_N[sym] || sym) + ' — ' + priceW(p) + (ch != null && isFinite(ch) ? (Math.abs(ch) < 0.5 ? ', за сутки почти без изменений.' : ', за сутки ' + signW(ch) + ' ' + pctW(ch) + '.') : '.');
+    }
+    if (has('лестниц', 'ступен', 'докуп', 'просадк')) {
+      if (ST.go) return 'Биткоин на ступени лестницы — по плану можно докупать. Суммы по монетам — во вкладке «Стратегия». Решение за вами.';
+      const ath = +(S.cycle && S.cycle.ath) || 0, btc = coinPrice('BTC');
+      const l = ((S.cycle && S.cycle.levels) || []).filter(x => x && x.status === 'pending' && x.drop > 0).sort((a, b) => a.n - b.n)[0];
+      if (!ath || !btc || !l) return 'Лестница пока не построена — она появится, когда загрузится максимум биткоина.';
+      const tg = ath * (1 - l.drop / 100), dist = (1 - tg / btc) * 100;
+      return 'До ' + (ORD[l.n] || l.n + '-й') + ' ступени — ' + pctW(Math.max(0, dist)) + ': биткоин должен опуститься до ' + moneyW(tg) + '.';
+    }
+    if (has('резерв')) return D.reserve > 0 ? (ST.hide ? 'Резерв есть, суммы скрыты.' : 'Резерв — ' + moneyW(D.reserve) + '. Он ждёт ступеней лестницы.') : 'Резерва пока нет.';
+    if (has('план', 'бюджет', 'dca', 'дса', 'месяц')) {
+      const mi = M.monthInfo ? M.monthInfo(D) : null; if (!mi) return 'План месяца пока не посчитан.';
+      if (mi.hasDep) return mi.dca > 0.5 ? 'По плану этого месяца осталось купить на ' + moneyW(mi.dca) + '.' : 'План покупок этого месяца выполнен.';
+      if (mi.budget > 0) return mi.bought >= mi.budget * 0.98 ? 'План месяца выполнен: куплено на ' + moneyW(mi.bought) + '.' : 'В этом месяце куплено на ' + moneyW(mi.bought) + ' из ' + moneyW(mi.budget) + '.';
+      return 'Бюджет на месяц не задан — его можно указать в настройках.';
+    }
+    if (has('страх', 'жадн', 'настроени')) { const f = M.fng ? M.fng() : null; return f ? 'Индекс страха и жадности — ' + f.v + ' из 100: ' + f.w + '.' : 'Индекс страха и жадности сейчас не загружен.'; }
+    if (has('портфел', 'баланс', 'всего', 'денег', 'сколько у меня', 'итог')) {
+      if (!(D.total > 0)) return 'Портфель пока пуст.';
+      const inv = +D.invPriced || 0, gp = inv > 0 ? (D.total - inv) / inv * 100 : null;
+      if (ST.hide) return gp != null ? 'Суммы скрыты. Портфель ' + (gp >= 0 ? 'в плюсе' : 'в минусе') + ' на ' + pctW(gp) + '.' : 'Суммы скрыты.';
+      return 'Портфель — ' + moneyW(D.total) + (gp != null ? ', ' + signW(gp) + ' ' + pctW(gp) + ' к вложенному.' : '.');
+    }
+    if (has('спасибо', 'благодар')) return pick(['Всегда к вашим услугам.', 'Обращайтесь' + nm() + '.']);
+    if (has('кто ты', 'что ты умеешь', 'что умеешь', 'помощ', 'помоги')) return 'Я Орион. Могу рассказать сводку за день, итог недели, цену любой монеты и сколько её у вас, что с лестницей и резервом, и поставить оповещение: «сообщи, когда солана будет 150».';
+    if (has('сводк', 'главн', 'нового', 'новост', 'как дела', 'что там', 'доклад', 'привет')) return brief();
+    return 'Пока не понял вопрос. Спросите, например: «сколько у меня биткоина», «что с лестницей» или «как прошла неделя».';
+  }
+  function answer(q) { speak(reply(q), { pri: 2 }); }
+  function listen() {
+    stopVoice();
+    if (!SRC) { speak('Голосовые вопросы на этом телефоне недоступны. Нажмите на меня — расскажу главное за сегодня.', { pri: 2 }); return; }
+    if (ST.rec) { try { ST.rec.abort(); } catch (e) {} ST.rec = null; }
+    let rec; try { rec = new SRC(); } catch (e) { speak('Микрофон сейчас недоступен.', { pri: 2 }); return; }
+    rec.lang = 'ru-RU'; rec.interimResults = true; rec.maxAlternatives = 1; rec.continuous = false;
+    ST.rec = rec; let heard = '', done = false;
+    if (ui.cap) { ui.capT.textContent = 'Слушаю…'; ui.cap.classList.add('on', 'talk', 'listen'); clearTimeout(ui.capOff); }
+    pulse(1); buzz(12);
+    const end = () => { if (done) return; done = true; ST.rec = null; if (ui.cap) ui.cap.classList.remove('listen'); try { rec.stop(); } catch (e) {} answer(heard); };
+    rec.onresult = e => { heard = Array.from(e.results).map(r => r[0].transcript).join(' ').trim(); if (ui.capT && heard) ui.capT.textContent = '«' + heard + '»'; ST.lastHeard = heard; if (e.results[e.results.length - 1].isFinal) end(); };
+    rec.onerror = e => { if (done) return; done = true; ST.rec = null; if (ui.cap) ui.cap.classList.remove('listen');
+      speak(e.error === 'not-allowed' || e.error === 'service-not-allowed' ? 'Нет доступа к микрофону. Разрешите его этому приложению в настройках телефона.' : e.error === 'network' ? 'Для распознавания речи нужен интернет.' : 'Не расслышал. Зажмите меня и спросите ещё раз.', { pri: 2 }); };
+    rec.onend = () => { if (!done) end(); };
+    try { rec.start(); } catch (e) { done = true; ST.rec = null; if (ui.cap) ui.cap.classList.remove('listen'); speak('Микрофон сейчас занят.', { pri: 2 }); }
+  }
+
   /* ---------- нажатие на сферу ---------- */
   function tapped() {
     ST.lastInput = now(); pulse(0.8); buzz(8);
+    if (ST.rec) { try { ST.rec.abort(); } catch (e) {} ST.rec = null; if (ui.cap) ui.cap.classList.remove('listen', 'on'); return; }
     if (speaking()) { stopVoice(); return; }
     if (!ST.name && !ST.asked && A.askName) { ST.asked = true; lsSet('or-asked', 1); A.askName(); return; }
     tell(false);
   }
   function greet(name) {
     if (name != null) ST.name = String(name).trim().slice(0, 24);
-    speak((ST.name ? 'Приятно познакомиться, ' + ST.name + '. ' : 'Хорошо. ') + 'Я Орион. Слежу за портфелем и рынком и скажу, когда будет важное. Нажмите на меня — расскажу главное за сегодня.', { pri: 2 });
+    speak((ST.name ? 'Приятно познакомиться, ' + ST.name + '. ' : 'Хорошо. ') + 'Я Орион. Слежу за портфелем и рынком и скажу, когда будет важное. Нажмите на меня — расскажу главное за сегодня. А если зажать — можно спросить голосом.', { pri: 2 });
   }
 
   /* ---------- события ---------- */
@@ -310,6 +428,8 @@
     else if (name === 'milestone') { t = ST.hide || !data.v ? 'Новый рубеж портфеля пройден' + nm() + '.' : 'Рубеж пройден: портфель больше ' + moneyW(data.v) + '.'; buzz([15, 50, 15]); }
     else if (name === 'coinMove') t = data.sym + ' за сутки ' + signW(data.ch) + ' ' + pctW(data.ch) + '. ' + (data.neg ? 'Решения — по плану, а не по эмоциям.' : 'Хороший день для этой монеты.');
     else if (name === 'screen') t = 'Свежий подбор альткоинов готов.';
+    else if (name === 'priceAlert') { t = Nm() + (NAME_N[data.sym] || data.sym) + (data.dir === 'up' ? ' поднялся' : ' опустился') + ' до ' + priceW(+data.price) + ' — ваше оповещение сработало.'; t = cap1(t); buzz([20, 60, 20]); }
+    else if (name === 'streak') t = 'Серия — ' + data.n + ' ' + plural(data.n, 'месяц', 'месяца', 'месяцев') + ' подряд с покупками' + nm() + '. Дисциплина — главный актив.';
     else if (name === 'd14') t = data && data.text ? String(data.text) : '';
     else return;
     if (t && (force || (AUTO && !isNight()))) speak(t, { pri: 1 });
@@ -451,8 +571,12 @@
     g = cv.getContext('2d'); if (!g) return false;
     host.appendChild(cv); fit();
     ui.hit = document.createElement('button'); ui.hit.type = 'button'; ui.hit.className = 'ms-hit';
-    ui.hit.setAttribute('aria-label', 'Орион, голосовой помощник: нажмите, чтобы услышать главное'); host.appendChild(ui.hit);
-    ui.hit.addEventListener('click', tapped);
+    ui.hit.setAttribute('aria-label', 'Орион, голосовой помощник: нажмите — сводка, зажмите — вопрос голосом'); host.appendChild(ui.hit);
+    let lpT = 0, lp = false;
+    ui.hit.addEventListener('pointerdown', () => { lp = false; clearTimeout(lpT); lpT = setTimeout(() => { lp = true; ST.lastInput = now(); listen(); }, 450); });
+    ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => ui.hit.addEventListener(ev, () => clearTimeout(lpT)));
+    ui.hit.addEventListener('contextmenu', e => e.preventDefault());
+    ui.hit.addEventListener('click', () => { if (lp) { lp = false; return; } tapped(); });
     ui.cap = document.createElement('button'); ui.cap.type = 'button'; ui.cap.className = 'or-cap'; ui.cap.setAttribute('aria-live', 'polite');
     ui.cap.innerHTML = '<i aria-hidden="true"></i><b>Орион</b><span></span>'; ui.capT = ui.cap.querySelector('span');
     ui.cap.addEventListener('click', () => { stopVoice(); ui.cap.classList.remove('on'); });
@@ -468,6 +592,7 @@
 
   window.Mascot = {
     init, sync, number, greet,
+    ask: q => answer(q), listen: () => listen(),
     event: (name, data) => trigger(name, data),
     debug: {
       state: () => ({ mood: ST.mood, raf: !!raf, frame: firstFrame, voice: !!TTS.voice, tts: TTS.ok, talking: speaking(), lvl: +ST.lvl.toFixed(2), said: ST.lastSay || '', name: ST.name, cap: !!(ui.cap && ui.cap.classList.contains('on')), pal: cur[0].map(Math.round) }),
@@ -476,6 +601,7 @@
       say: t => speak(t, { pri: 2 }),
       tap: () => tapped(),
       brief: () => brief(),
+      reply: q => reply(q),
       event: (n, d) => trigger(n, d, true),
       due: () => newsDue()
     }

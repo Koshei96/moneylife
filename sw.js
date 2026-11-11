@@ -1,5 +1,5 @@
 /* MoneyLife service worker — версия подставляется при сборке */
-const V='ml-20261111190000';
+const V='ml-20261111193000';
 /* KEEP — неизменные файлы (логотипы, голос с хэшем в имени, библиотеки, шрифты): переживают обновления версии и не качаются заново */
 const KEEP='ml-keep-6';
 /* CFGC — настройки сигналов, которые кладёт приложение (plus.js): ступени лестницы, цель BTC, уже показанные события */
@@ -8,7 +8,7 @@ const IMM=['https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/s
 /* картинки монет CoinGecko — с CORS, поэтому кэшируются как обычные файлы */
 const CGIMG='coin-images.coingecko.com';
 const isKeep=u=>(u.origin===location.origin&&(/\/logos\//.test(u.pathname)||/\.bin$/.test(u.pathname)||/three\.min\.js$/.test(u.pathname)||/\/data\/coins-[ab]\.[0-9a-f]+\.json$/.test(u.pathname)))||/supabase-js@[0-9.]+\//.test(u.href)||u.hostname.includes('gstatic')||u.hostname===CGIMG;
-const SHELL=['./','index.html','shim.js','config.js','manifest.webmanifest','icons/icon-192.png','icons/icon-512.png','icons/apple-touch-icon.png','icons/icon-maskable-512.png','icons/badge-96.png','plus.js?v=20261111190000','mascot.js?v=20261111190000'];
+const SHELL=['./','index.html','shim.js','config.js','manifest.webmanifest','icons/icon-192.png','icons/icon-512.png','icons/apple-touch-icon.png','icons/icon-maskable-512.png','icons/badge-96.png','plus.js?v=20261111193000','mascot.js?v=20261111193000'];
 self.addEventListener('install',e=>{e.waitUntil(Promise.all([caches.open(V).then(c=>c.addAll(SHELL)).catch(()=>{}),caches.open(KEEP).then(async c=>{for(const x of IMM){if(!(await c.match(x)))await c.add(x).catch(()=>{});}})]));});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(ks=>Promise.all(ks.filter(k=>k!==V&&k!==KEEP&&k!==CFGC).map(k=>caches.delete(k)))).then(()=>self.clients.claim()));});
 self.addEventListener('message',e=>{if(e.data==='skip')self.skipWaiting();});
@@ -34,14 +34,19 @@ self.addEventListener('push',e=>{let d={};try{d=e.data?e.data.json():{};}catch(x
 self.addEventListener('notificationclick',e=>{e.notification.close();e.waitUntil(self.clients.matchAll({type:'window'}).then(cs=>{for(const c of cs){if('focus' in c)return c.focus();}return self.clients.openWindow(e.notification.data&&e.notification.data.url||'./');}));});
 /* сигналы в фоне (10.11.2026): раз в несколько часов, когда разрешит телефон, сверяем цену BTC со ступенями лестницы (ключ 1) и с целью.
    Ключ 2 в фоне не проверяется — его считает приложение по записям человека. Та же логика событий — в plus.js (sigEvents). */
-function mlEvents(cfg,btc){const ev=[],seen=cfg.seen||{};if(!(btc>0))return ev;
+function mlEvents(cfg,btc,px){const ev=[],seen=cfg.seen||{};if(!(btc>0))return ev;
   for(const l of cfg.levels||[]){if(!(btc<=l.price))continue;const k='lv:'+(cfg.athDate||cfg.ath)+':'+l.n+':k1';if(seen[k]||seen['lv:'+(cfg.athDate||cfg.ath)+':'+l.n+':go'])continue;
     ev.push({k,title:'Ступень '+l.n+' открыта',body:'BTC дошёл до −'+l.drop+'% от максимума ($'+Math.round(l.price).toLocaleString('ru-RU')+'). Ключ 2 проверит приложение.'});}
   if(cfg.goal>0&&btc>=cfg.goal){const k='goal:'+cfg.goal;if(!seen[k])ev.push({k,title:'BTC дошёл до твоей цели',body:'Цена выше $'+Math.round(cfg.goal).toLocaleString('ru-RU')+'. Что делать дальше — по твоему плану.'});}
+  /* оповещения о цене монеты (11.11.2026): px — цены монет из Binance */
+  const f=v=>'$'+(v>=100?Math.round(v).toLocaleString('ru-RU'):String(+v.toPrecision(4)).replace('.',','));
+  for(const a of cfg.alerts||[]){const p=+(px&&px[a.sym])||(a.sym==='BTC'?btc:0),k='al:'+a.id;if(!p||seen[k])continue;
+    if((a.dir==='up'&&p>=a.price)||(a.dir==='down'&&p<=a.price))ev.push({k,title:a.sym+(a.dir==='up'?' поднялся до ':' опустился до ')+f(a.price),body:'Сейчас '+f(p)+'. Оповещение сработало — откройте MoneyLife.'});}
   return ev;}
 async function mlCheck(){const ch=await caches.open(CFGC),r=await ch.match('cfg.json');if(!r)return;let cfg;try{cfg=await r.json();}catch(e){return;}if(!cfg||!cfg.on)return;
   let btc=0;for(const h of ['https://data-api.binance.vision','https://api.binance.com']){try{const j=await (await fetch(h+'/api/v3/ticker/price?symbol=BTCUSDT')).json();btc=+j.price||0;if(btc)break;}catch(e){}}
-  const ev=mlEvents(cfg,btc);if(!ev.length)return;cfg.seen=cfg.seen||{};
+  const px={};for(const a of (cfg.alerts||[]).slice(0,20)){if(a.sym==='BTC'||px[a.sym])continue;for(const h of ['https://data-api.binance.vision','https://api.binance.com']){try{const j=await (await fetch(h+'/api/v3/ticker/price?symbol='+encodeURIComponent(a.sym)+'USDT')).json();if(+j.price){px[a.sym]=+j.price;break;}}catch(e){}}}
+  const ev=mlEvents(cfg,btc,px);if(!ev.length)return;cfg.seen=cfg.seen||{};
   for(const e of ev){cfg.seen[e.k]=Date.now();await self.registration.showNotification(e.title,{body:e.body,tag:e.k,icon:'icons/icon-192.png',badge:'icons/badge-96.png',data:{url:'./'}});}
   await ch.put('cfg.json',new Response(JSON.stringify(cfg),{headers:{'content-type':'application/json'}}));}
 self.addEventListener('periodicsync',e=>{if(e.tag==='ml-check')e.waitUntil(mlCheck());});

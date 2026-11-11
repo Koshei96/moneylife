@@ -74,11 +74,13 @@ vm.runInContext(fs.readFileSync(process.argv[1],'utf8')+';this.mlEvents=mlEvents
 const cfg={ath:126000,athDate:'2025-10-06',levels:[{n:1,drop:30,price:88200},{n:2,drop:40,price:75600}],goal:150000,seen:{}};
 const a=ctx.mlEvents(cfg,100000).length,b=ctx.mlEvents(cfg,88000).map(e=>e.k),c=ctx.mlEvents(cfg,75000).length,d=ctx.mlEvents(cfg,151000).map(e=>e.k);
 cfg.seen['lv:2025-10-06:1:k1']=1;cfg.seen['goal:150000']=1;const e=ctx.mlEvents(cfg,88000).length+ctx.mlEvents(cfg,151000).length;
-console.log(JSON.stringify([a,b,c,d,e]));"""
+const al={alerts:[{id:'x1',sym:'SOL',price:150,dir:'up'},{id:'x2',sym:'ETH',price:3000,dir:'down'}],seen:{}};
+const f=ctx.mlEvents(al,100000,{SOL:151,ETH:3500}).map(e=>e.k);al.seen['al:x1']=1;const g=ctx.mlEvents(al,100000,{SOL:160,ETH:2900}).map(e=>e.k);
+console.log(JSON.stringify([a,b,c,d,e,f,g]));"""
     try:
         out = subprocess.run(['node', '-e', js, str(ROOT / 'sw.js')], capture_output=True, text=True, timeout=30)
         got = json.loads(out.stdout.strip() or 'null')
-        if got == [0, ['lv:2025-10-06:1:k1'], 2, ['goal:150000'], 0]: ok('сигналы в фоне: ступень и цель дают событие один раз, выше ступеней — тишина')
+        if got == [0, ['lv:2025-10-06:1:k1'], 2, ['goal:150000'], 0, ['al:x1'], ['al:x2']]: ok('сигналы в фоне: ступень, цель и оповещение о цене монеты — событие один раз, выше ступеней — тишина')
         else: fail('сигналы в фоне (sw.js)', (out.stdout + out.stderr)[:300])
     except Exception as e: fail('сигналы в фоне (sw.js)', str(e)[:200])
     sw = (ROOT / 'sw.js').read_text(encoding='utf-8')
@@ -986,6 +988,30 @@ def run_browser():
             if ev.startswith('SOL за сутки минус 12 процентов'): ok('Орион: доклад о сильном движении монеты')
             else: fail('Орион: доклад о монете', ev)
             pg.evaluate("document.querySelector('.or-cap').click()")
+            # вопросы голосом (зажать сферу): ответы по данным человека
+            R = lambda q: pg.evaluate("q=>Mascot.debug.reply(q)", q).replace('\u00a0', ' ')
+            a1, a2, a3 = R('сколько у меня биткоина'), R('сколько стоит эфир'), R('абракадабра')
+            if a1.startswith('У вас ') and 'биткоина' in a1 and a2.startswith('Эфир — ') and 'не понял' in a3: ok('Орион: отвечает на вопросы — сколько монеты у меня, цена монеты, непонятное — с подсказкой')
+            else: fail('Орион: ответы на вопросы', f'{a1} | {a2} | {a3}')
+            a4 = R('сообщи когда эфир будет 5000')
+            al = pg.evaluate("(()=>{const k=Object.keys(localStorage).find(k=>k.startsWith('ml-x:'));return k?(JSON.parse(localStorage.getItem(k)).alerts||[]):[]})()")
+            if a4.startswith('Готово') and any(x['sym'] == 'ETH' and x['price'] == 5000 and x['dir'] == 'up' for x in al): ok('Орион: «сообщи, когда эфир будет 5000» — оповещение поставлено')
+            else: fail('Орион: оповещение голосом', f'{a4} | {al}')
+            # оповещение срабатывает один раз и снимается
+            pg.evaluate("(()=>{const k=Object.keys(localStorage).find(k=>k.startsWith('ml-x:'));const o=JSON.parse(localStorage.getItem(k));o.alerts=[{id:'t1',sym:'ETH',price:99999,dir:'down',at:Date.now()}];localStorage.setItem(k,JSON.stringify(o));MLX.alertsCheck(derive())})()")
+            pg.wait_for_timeout(300)
+            left = pg.evaluate("(()=>{const k=Object.keys(localStorage).find(k=>k.startsWith('ml-x:'));return JSON.parse(localStorage.getItem(k)).alerts.length})()")
+            tt = pg.inner_text('#toastMsg') if pg.locator('#toast.show').count() else ''
+            if left == 0 and 'оповещение сработало' in tt: ok('оповещение о цене: сработало, показан тост, оповещение снято')
+            else: fail('оповещение о цене: срабатывание', f'осталось {left}, тост «{tt}»')
+            sk = pg.evaluate("MLX.streak()")
+            if isinstance(sk.get('n'), int) and 'thisMonth' in sk: ok(f"серия дисциплины считается ({sk['n']} мес.)")
+            else: fail('серия дисциплины', str(sk))
+            # карточка монеты: кнопка «Оповещение о цене» открывает шторку с полем цены
+            pg.evaluate("openCoin('BTC')"); pg.wait_for_timeout(900); pg.click('#cvAlert'); pg.wait_for_timeout(700)
+            if pg.locator('#xSheet.open #alIn').count() and 'BTC' in pg.inner_text('#xTitle'): ok('карточка монеты: «Оповещение о цене» — шторка с полем цены')
+            else: fail('карточка монеты: оповещение', pg.inner_text('#xTitle'))
+            pg.evaluate("closeSheets()")
         scenario('Орион', {'session': True, 'docs': SEED}, s_mascot)
 
         # --- Г4. карточка докупки «ждём ключ 2» (владелец 05.11): в чипе «BTC $38,39» сумму покупки приняли за цену BTC —

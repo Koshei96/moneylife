@@ -105,6 +105,12 @@
     if (pl) { const R = planResult(pl), sh = cryptoShare(pl, D);
       if (sh != null && sh > R.ceil + .5) add('warn', `Крипта — <b>${nf(sh, 0)}%</b> твоих накоплений при потолке ${R.ceil}%.`, ['План', 'plan']);
       else { const st = R.steps.find(s => !(pl.steps || {})[s.id]); if (st) add('acc', `Шаг плана: ${esc(st.short || st.t)}.`, ['План', 'plan']); } }
+    /* серия дисциплины */
+    const sk = streak();
+    if (sk.n >= 2 && sk.thisMonth) add('pos', `Серия: <b>${sk.n} ${monW(sk.n)}</b> подряд с покупками.`);
+    else if (sk.n >= 1 && !sk.thisMonth && new Date().getDate() >= 10) add('acc', `В этом месяце покупки ещё нет — серия <b>${sk.n} ${monW(sk.n)}</b> продолжится с первой.`, ['Купить', 'buy']);
+    /* итог недели — по понедельникам */
+    if (new Date().getDay() === 1 && S.tx.length) { const w = week(D); add('info', `Итог недели: ${w.buys ? 'покупок ' + w.buys + ' на <b>' + usd(w.spent, 0) + '</b>' : 'покупок не было'}${w.chPct != null ? ', портфель ' + (w.chPct >= 0 ? '+' : '−') + nf(Math.abs(w.chPct), 1) + '% без новых денег' : ''}.`, ['Послушать', 'week']); }
     /* настроение рынка */
     const f = fngNow(); if (f) add(f.v < 47 ? 'neg' : f.v < 55 ? 'mute' : 'pos', `Настроение рынка: <b>${f.v}</b> из 100 — ${fngWord(f.v)}.`, ['Что это', 'fng']);
     /* копия записей */
@@ -390,7 +396,7 @@
   X.notifOn = notifOn;
   function cfgForSw(D) {
     const ath = +(S.cycle && S.cycle.ath) || 0, btc = +D.prices.BTC || 0, lv = ladderOn() ? ((S.cycle && S.cycle.levels) || []).filter(l => !['done', 'skipped'].includes(l.status)).map(l => ({ n: l.n, drop: l.drop, price: Math.round(lvPrice(l)) })) : [];
-    return { v: 1, on: notifOn(), ath, athDate: (S.cycle && S.cycle.athDate) || '', levels: lv, goal: goalBtc(), seen: xGet().seen || {}, btc, at: Date.now() };
+    return { v: 1, on: notifOn(), ath, athDate: (S.cycle && S.cycle.athDate) || '', levels: lv, goal: goalBtc(), alerts: alGet().map(a => ({ id: a.id, sym: a.sym, price: a.price, dir: a.dir })), seen: xGet().seen || {}, btc, at: Date.now() };
   }
   let cfgLast = '';
   function cfgPush(D) { if (!('caches' in window)) return; const c = cfgForSw(D), s = JSON.stringify(Object.assign({}, c, { at: 0, btc: 0 })); if (s === cfgLast) return; cfgLast = s;
@@ -433,6 +439,8 @@
     fng: () => openFng(), goal: () => openGoal(), goalsave: () => saveGoal(), share: () => share(), refresh: () => { el('refreshBtn').click(); },
     backup: () => exportData(), rules: () => { closeSheets(); openSettings(false); setTimeout(() => { const r = el('rules'); if (r && r.scrollIntoView) r.scrollIntoView({ block: 'start', behavior: reduced ? 'auto' : 'smooth' }); }, 380); },
     orname: () => { closeSheets(); setTimeout(X.askName, 260); }, namesave: () => nameSave(),
+    alertnew: () => { const s = typeof cvSym === 'string' && cvSym ? cvSym : 'BTC'; closeSheets(); setTimeout(() => openAlert(s), 260); }, alsave: b => alertSave(b), aldel: b => alDel(b), alerts: () => { closeSheets(); setTimeout(openAlerts, 260); },
+    week: () => { try { if (window.Mascot && window.Mascot.ask) window.Mascot.ask('как прошла неделя'); } catch (e) {} },
     buy: () => openAct('buy'), dca: () => { openAct('buy'); setBuyMode('dca'); }, deposit: () => openAct('deposit')
   };
   document.addEventListener('click', e => {
@@ -440,7 +448,7 @@
     const qa = t.closest('[data-qa]'); if (qa && quiz) { answer(+qa.dataset.qa); return; }
     const st = t.closest('[data-step]'); if (st) { toggleStep(st.dataset.step, st); return; }
     const ls = t.closest('[data-les]'); if (ls) { play('tick'); const from = sheetKind; openLesson(ls.dataset.les, from === 'plan' ? () => showPlan(planGet()) : from === 'learn' ? () => openLearn() : null); return; }
-    const x = t.closest('[data-x]'); if (x && ACT[x.dataset.x]) { ACT[x.dataset.x](); return; }
+    const x = t.closest('[data-x]'); if (x && ACT[x.dataset.x]) { ACT[x.dataset.x](x); return; }
   });
   document.addEventListener('input', e => { if (e.target && /^fi(Exp|Sav|Add)$/.test(e.target.id)) fiInput(); });
   el('hInfo').addEventListener('click', openTotal);
@@ -451,6 +459,100 @@
 
   /* ================= отрисовка ================= */
   let firstReveal = false;
+  /* ================= оповещения о цене монеты (11.11.2026) =================
+     Хранятся на этом телефоне: ml-x:<uid>.alerts = [{id, sym, price, dir: 'up'|'down', at}]. Срабатывают один раз:
+     пока приложение открыто — при обновлении цен (сигнал на телефон, тост, Орион говорит); в фоне — sw.js по ценам Binance. */
+  function alGet() { return (xGet().alerts || []).filter(a => a && a.sym && +a.price > 0); }
+  function alSave(list) { xPatch({ alerts: list.slice(-20) }); cfgLast = ''; try { cfgPush(derive()); } catch (e) {} renderAlCount(); }
+  const livePx = sym => +(S.live && S.live.prices && S.live.prices[sym]) || 0;
+  const pxOf = (sym, D) => livePx(sym) || +(D && D.prices && D.prices[sym]) || 0;
+  const alUsd = v => usd(v, v >= 100 ? 0 : v >= 1 ? 2 : 4);
+  function alRow(a) {
+    return `<div class="row r3 static">${badge(a.sym)}<span class="col"><span class="nm wrap">${esc(a.sym)} ${a.dir === 'up' ? 'поднимется до' : 'опустится до'} ${alUsd(a.price)}</span><span class="sub">поставлено ${dShort(a.at)}</span></span><button type="button" class="btn sm ghost" data-x="aldel" data-id="${esc(a.id)}">Убрать</button></div>`;
+  }
+  function openAlert(sym) {
+    sym = String(sym || 'BTC').toUpperCase();
+    const p = pxOf(sym, derive()), mine = alGet().filter(a => a.sym === sym);
+    xOpen('alert', 'Оповещение · ' + sym, `<p>Сообщу, когда цена ${esc(sym)} дойдёт до вашей отметки: сигнал на телефон, и Орион скажет голосом. Сработает один раз.</p>
+      <label class="field"><span>Цена, $ за 1 ${esc(sym)}</span><input type="number" inputmode="decimal" min="0" step="any" id="alIn" placeholder="${p ? (p >= 100 ? Math.round(p * 1.1) : +(p * 1.1).toPrecision(3)) : ''}"></label>
+      <p class="hint">${p ? 'Сейчас ' + esc(sym) + ' ' + alUsd(p) + '.' : 'Цены этой монеты пока нет — оповещение проверится, когда она появится.'}${notifOn() ? '' : ' Сигналы на телефоне выключены: пока приложение закрыто, оповещение не придёт — включите их в «Настройках».'}</p>
+      <p class="err" id="alErr" role="alert"></p>
+      ${mine.length ? '<div class="sec-h"><span class="label">Уже ждут</span></div><div class="list">' + mine.map(alRow).join('') + '</div>' : ''}`,
+      `<button class="btn block" type="button" data-x="alsave" data-sym="${esc(sym)}">Сохранить оповещение</button>`);
+  }
+  function addAlert(sym, v) {
+    sym = String(sym || '').toUpperCase(); v = +v; if (!sym || !(v > 0)) return null;
+    const p = pxOf(sym, derive()); if (p && Math.abs(v / p - 1) < 0.001) return null;
+    const a = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 5), sym, price: v, dir: !p || v > p ? 'up' : 'down', at: Date.now() };
+    alSave(alGet().concat([a])); return a;
+  }
+  X.addAlert = addAlert;
+  function alertSave(btn) {
+    const sym = btn.dataset.sym, v = +String(el('alIn').value || '').replace(',', '.').replace(/\s/g, '');
+    if (!(v > 0)) { el('alErr').textContent = 'Укажите цену больше нуля'; return; }
+    const a = addAlert(sym, v); if (!a) { el('alErr').textContent = 'Цена уже на этой отметке'; return; }
+    play('cash'); closeSheets(); toast(sym + ': ' + (a.dir === 'up' ? 'сообщу, когда поднимется до ' : 'сообщу, когда опустится до ') + alUsd(v));
+  }
+  function openAlerts() {
+    const list = alGet();
+    xOpen('alerts', 'Оповещения о цене', list.length ? '<div class="list">' + list.map(alRow).join('') + '</div><p class="hint">Новое оповещение — в карточке монеты, кнопка «Оповещение о цене». Или зажмите Ориона и скажите: «сообщи, когда солана будет 150».</p>'
+      : '<p>Оповещений пока нет. Откройте монету во вкладке «Монеты» и нажмите «Оповещение о цене» — или зажмите Ориона и скажите: «сообщи, когда биткоин будет 120 тысяч».</p>');
+  }
+  function alDel(btn) { const id = btn.dataset.id, a = alGet().find(x => x.id === id); alSave(alGet().filter(x => x.id !== id)); play('tick'); if (sheetKind === 'alert' && a) openAlert(a.sym); else openAlerts(); }
+  function renderAlCount() { const c = el('alCnt'); if (c) { const n = alGet().length; c.textContent = n ? n + ' ' + (n % 10 === 1 && n % 100 !== 11 ? 'ждёт' : 'ждут') + ' срабатывания' : 'Скажу, когда монета дойдёт до вашей цены'; } }
+  function alertsCheck(D) {
+    if (!seenPulled || !S.ready || S.live.status !== 'ok') return;
+    const list = alGet(); if (!list.length) return;
+    const left = [], fired = [];
+    for (const a of list) { const p = livePx(a.sym); if (p && ((a.dir === 'up' && p >= a.price) || (a.dir === 'down' && p <= a.price))) fired.push(Object.assign({ now: p }, a)); else left.push(a); }
+    if (!fired.length) return;
+    const seen = Object.assign({}, xGet().seen || {});
+    for (const a of fired) {
+      const k = 'al:' + a.id, t = a.sym + (a.dir === 'up' ? ' поднялся до ' : ' опустился до ') + alUsd(a.price);
+      if (!seen[k]) { seen[k] = Date.now(); notify(t, 'Сейчас ' + alUsd(a.now) + '. Оповещение сработало и снято.', k); }
+      toast(a.sym + ': ' + alUsd(a.price) + ' — оповещение сработало');
+      try { if (window.Mascot) window.Mascot.event('priceAlert', { sym: a.sym, price: a.price, dir: a.dir }); } catch (e) {}
+    }
+    xPatch({ seen }); alSave(left);
+  }
+  X.alertsCheck = alertsCheck;
+
+  /* ================= серия дисциплины и итог недели ================= */
+  const BUY_T = ['buy', 'dca', 'dip', 'start'];
+  /* серия — месяцев подряд с покупками: для DCA регулярность важнее суммы. Текущий месяц без покупки серию не рвёт */
+  function streak() {
+    const months = new Set((S.tx || []).filter(t => t && BUY_T.includes(t.type)).map(t => String(t.ts || '').slice(0, 7)));
+    const d = new Date(); let y = d.getFullYear(), m = d.getMonth();
+    const key = () => y + '-' + String(m + 1).padStart(2, '0'), back = () => { m--; if (m < 0) { m = 11; y--; } };
+    const thisMonth = months.has(key()); if (!thisMonth) back();
+    let n = 0; while (months.has(key())) { n++; back(); }
+    return { n, thisMonth };
+  }
+  X.streak = streak;
+  const monW = n => n % 10 === 1 && n % 100 !== 11 ? 'месяц' : [2, 3, 4].includes(n % 10) && ![12, 13, 14].includes(n % 100) ? 'месяца' : 'месяцев';
+  /* итог недели: покупки за 7 дней, изменение портфеля без учёта новых денег, биткоин за неделю */
+  function week(D) {
+    D = D || derive();
+    const t0 = Date.now() - 7 * 864e5, iso0 = new Date(t0).toISOString(), day0 = iso0.slice(0, 10);
+    const tx = (S.tx || []).filter(t => t && String(t.ts || '') >= iso0);
+    const buys = tx.filter(t => BUY_T.includes(t.type)), spent = buys.reduce((a, t) => a + (+t.usd || 0), 0), sold = tx.filter(t => t.type === 'sell').reduce((a, t) => a + (+t.usd || 0), 0);
+    const snap = (S.history || []).filter(h => h && +h.value > 0 && typeof h.date === 'string' && h.date <= day0).sort((a, b) => (a.date < b.date ? 1 : -1))[0];
+    const chPct = snap && D.total > 0 && !D.noPrice ? ((D.total - spent + sold) / +snap.value - 1) * 100 : null;
+    const sp = S.live && S.live.spark && S.live.spark.BTC, chBtc = sp && sp.length > 1 && +sp[0] > 0 ? (+sp[sp.length - 1] / +sp[0] - 1) * 100 : null;
+    return { buys: buys.length, spent, chPct, chBtc };
+  }
+  X.week = week;
+  X.monthInfo = function (D) { D = D || derive(); return { hasDep: !!D.hasDep, dca: +D.dcaBudget || 0, bought: monthBought(), budget: budgetUsd() * depShare() }; };
+  /* рубеж серии (3, 6, 12, 24 месяцев) — праздник один раз */
+  function streakParty() {
+    const st = streak(), x = xGet(), mark = [24, 12, 6, 3].find(k => st.n >= k);
+    if (!mark || (x.streakMark || 0) >= mark) return;
+    xPatch({ streakMark: mark });
+    if (!x.streakMark && st.n > 3) return;   /* первая проверка у давнего пользователя — без праздника задним числом */
+    try { X.sparks(el('xToday'), 14); } catch (e) {}
+    try { if (window.Mascot) window.Mascot.event('streak', { n: st.n }); } catch (e) {}
+  }
+
   /* ================= Орион: индекс страха для сводки и имя для обращения ================= */
   X.fng = function () { const f = xGet().fng; return f && f.v != null && Date.now() - (f.at || 0) < 24 * 3600e3 ? { v: f.v, w: fngWord(f.v) } : null; };
   X.askName = function () {
@@ -466,14 +568,14 @@
   }
   function renderNameRow() { const r = el('orNameVal'); if (r) r.textContent = P.name ? P.name : 'не указано'; }
   document.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target && e.target.id === 'xName') { e.preventDefault(); nameSave(); } });
-  renderNameRow();
+  renderNameRow(); renderAlCount();
 
   X.render = function (D) {
     renderToday(D); renderPlanCards();
     const sw = el('swNotif'); if (sw) swSet('swNotif', notifOn());
     const gb = el('goalVal'); if (gb) gb.textContent = goalBtc() ? usd(goalBtc(), 0) : 'не задана';
     if (window.mlDemo) { const d = el('delBtn'); if (d) d.hidden = true; }
-    if (S.ready) { fngLoad(); sigCheck(D);
+    if (S.ready) { fngLoad(); sigCheck(D); alertsCheck(D); streakParty();
       if (!firstReveal) { firstReveal = true; if (!reduced) { const v = document.querySelector('.view:not([hidden])'); if (v) { v.classList.remove('enter'); void v.offsetWidth; v.classList.add('enter'); } } } }
     if (sheetKind === 'total' && el('xSheet').classList.contains('open')) { /* цены обновились — пересобрать итог, не сбивая прокрутку */ const b = el('xSheet').querySelector('.sh-body'), y = b ? b.scrollTop : 0; openTotal(); if (b) b.scrollTop = y; }
   };
