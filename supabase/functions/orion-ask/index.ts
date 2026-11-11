@@ -151,7 +151,7 @@ Deno.serve(async (req) => {
   const call = (model: string) => fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: { 'x-api-key': KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-    body: JSON.stringify({ model, max_tokens: 400, system: SYSTEM, messages })
+    body: JSON.stringify({ model, max_tokens: 2000, system: SYSTEM, messages })
   });
   let r = await call(MODEL);
   if (!r.ok && (r.status === 404 || r.status === 400)) {   /* модель недоступна этому ключу — запасная */
@@ -165,7 +165,11 @@ Deno.serve(async (req) => {
     return json({ error: 'llm', status: r.status, detail }, 502); }
   const out = await r.json();
   const text = String((out.content || []).filter((c: { type: string }) => c.type === 'text').map((c: { text: string }) => c.text).join(' ')).replace(/[*_#`]/g, '').replace(/\s+/g, ' ').trim().slice(0, 600);
-  if (!text) return json({ error: 'llm' }, 502);
+  if (!text) {   /* модель ответила без текста (например, всё ушло в размышления) — записываем почему */
+    const tag = ('empty_' + String(out.stop_reason || '') + '_' + (out.content || []).map((c: { type: string }) => c.type).join('-') + '_' + String(out.model || '')).replace(/[^A-Za-z0-9_-]+/g, '-').slice(0, 160);
+    await store.upload('diag/' + new Date().toISOString().replace(/[:.]/g, '-') + '_' + tag + '.txt', new Blob(['1'], { type: 'text/plain' }), { upsert: true }).catch(() => null);
+    return json({ error: 'llm' }, 502);
+  }
   const res = { text, sources: Array.from(new Set(pickN.slice(0, 8).map((n: { src: string }) => n.src))) };
   await Promise.allSettled([
     store.upload(ck, new Blob([JSON.stringify(res)], { type: 'application/json' }), { upsert: true }),

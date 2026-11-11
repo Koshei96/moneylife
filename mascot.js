@@ -315,7 +315,7 @@
     return intW(n, true) + ' ' + plural(n, 'целая', 'целых', 'целых') + ' ' + intW(f, true) + ' ' + (f % 10 === 1 && f % 100 !== 11 ? den[0] : den[1]);
   }
   function spokenRu(t) {
-    let s = String(t || '').replace(/[   ]/g, ' ').replace(/[«»]/g, '').replace(/—/g, ',');
+    let s = String(t || '').replace(/[   ]/g, ' ').replace(/[«»]/g, '').replace(/\s*—\s*/g, ' — ');   /* тире оставляем: живой голос сам делает естественную паузу, запятая давала лишнюю */
     s = s.replace(/(\d)\s(?=\d{3}(?!\d))/g, '$1');   /* «110 000» → «110000» */
     s = s.replace(/\bBTC\b/g, 'биткоина').replace(/\bETH\b/g, 'эфира').replace(/\bUSDT\b/g, 'тезер');
     s = s.replace(/×\s?(\d)/g, 'в $1').replace(/(\d)\s?×/g, '$1 раз');
