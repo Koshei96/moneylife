@@ -1070,6 +1070,28 @@ html.lite nav.tabs{background:var(--bg);-webkit-backdrop-filter:none;backdrop-fi
 .card svg circle[stroke="#1d1540"],[data-theme="light"] .card svg circle[stroke="#1d1540"]{stroke:var(--raise)}
 .card svg text[fill="#a99dcc"]{fill:var(--mute)}.card svg text[fill="#8e83b6"],[data-theme="light"] .card svg text[fill="#8e83b6"]{fill:var(--dim)}.card svg text[fill="#f5f1ff"]{fill:var(--fg)}
 .mv{border-color:transparent;border-radius:var(--r-l)}
+/* график под суммой (как у флагманских приложений): без рамки и осей, периоды — под линией */
+.gcard{background:none!important;padding:0!important;margin:2px 0 6px;border:0!important;box-shadow:none!important}
+.gcard .chart-read{padding:0 4px;display:flex;align-items:baseline;gap:8px;flex-wrap:nowrap;min-height:22px;white-space:nowrap;overflow:hidden}
+.gcard .chart-read .s{min-width:0;overflow:hidden;text-overflow:ellipsis}
+.gcard .chart-read .s{margin-top:0}
+.gcard .chart-read.rest{visibility:hidden}
+.hero.scrub~.gcard .chart-read .v{display:none}
+.gcard:not(.sparse) .note{display:none}
+.gcard.sparse .chartbox,.gcard.sparse .ranges,.gcard.sparse .legend{display:none}
+.gcard.sparse .note{margin-top:0}
+.gcard .chart-read .v{font-size:15px;font-weight:650}.gcard .chart-read .pc{font-size:12px;padding:2px 7px;top:-1px}
+.gcard .chartbox{margin:6px 0 0}
+.gcard .ranges{display:flex;justify-content:space-between;margin-top:6px}
+.gcard .ranges button{flex:1;min-height:40px}
+.gcard .legend{padding:0 4px;margin-top:6px}
+.gcard .note{padding:0 4px}
+.hero .bal{transition:opacity .15s}
+.hero.scrub .chips,.hero.scrub .bal-sub{opacity:.35}
+/* отклик на нажатие */
+.card[data-x],.tile,.mi,.qa button,.btn,.fchip,.xpc,.list>[role="button"],.list>button{transition:transform .16s cubic-bezier(.2,.8,.3,1)}
+.card[data-x]:active,.tile:active,.mi:active,.qa button:active,.btn:active,.xpc:active,.list>button:active{transform:scale(.97)}
+@media (prefers-reduced-motion:reduce){.card[data-x]:active,.tile:active,.mi:active,.qa button:active,.btn:active,.xpc:active,.list>button:active{transform:none}}
 /* вход */
 #mlAuth,[data-theme="light"] #mlAuth{background:var(--bg)}
 .mla-card{box-shadow:none;border-color:transparent}
@@ -1111,6 +1133,13 @@ html.lite nav.tabs{background:var(--bg);-webkit-backdrop-filter:none;backdrop-fi
       <div class="bal-sub skel" id="hSub">загружаю</div>
       <div class="chips" id="hChips"></div>
     </div>
+    <div class="card gcard" id="gCard">
+      <div class="chart-read" id="gRead"><div class="v skel">$0 000</div><div class="s">&nbsp;</div></div>
+      <div class="chartbox" id="gChart"></div>
+      <div class="ranges" id="gRanges"></div>
+      <div class="legend"><span><i style="background:var(--grad)"></i>Стоимость</span><span><i style="background:var(--lav);opacity:.75"></i>Вложено</span></div>
+      <p class="note" id="gNote"></p>
+    </div>
     <div class="qa">
       <button type="button" data-act="buy"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></i>Купить</button>
       <button type="button" data-act="sell"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M6 11l6-6 6 6"/></svg></i>Продать</button>
@@ -1121,12 +1150,6 @@ html.lite nav.tabs{background:var(--bg);-webkit-backdrop-filter:none;backdrop-fi
     <div id="xToday" hidden></div>
     <div id="d14" hidden></div>
     <div id="xPlan" hidden></div>
-    <div class="card">
-      <div class="chart-head"><div class="chart-read" id="gRead"><div class="v skel">$0 000</div><div class="s">&nbsp;</div></div><div class="ranges" id="gRanges"></div></div>
-      <div class="chartbox" id="gChart"></div>
-      <div class="legend"><span><i style="background:var(--grad)"></i>Стоимость</span><span><i style="background:var(--lav);opacity:.75"></i>Вложено</span></div>
-      <p class="note" id="gNote"></p>
-    </div>
     <div class="grid2">
       <div class="tile"><div class="k">Вложено</div><div class="v skel" id="tInv">$0 000</div><div class="s" id="tInvS"></div></div>
       <div class="tile"><div class="k">Резерв USDT</div><div class="v skel" id="tRes">$000</div><div class="s" id="tResS"></div><div class="meter"><i id="tResM"></i></div></div>
@@ -1411,9 +1434,9 @@ html.lite nav.tabs{background:var(--bg);-webkit-backdrop-filter:none;backdrop-fi
 
 <div class="toast" id="toast" role="status"><span id="toastMsg"></span><button type="button" id="toastBtn" hidden></button></div>
 
-<script src="config.js?v=20261110141500"></script>
+<script src="config.js?v=20261111170000"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="shim.js?v=20261110141500"></script>
+<script src="shim.js?v=20261111170000"></script>
 <script>
 /* ===== основа ===== */
 const $=id=>document.getElementById(id);
@@ -1676,7 +1699,7 @@ function lineChart(el,cfg){
   if(cfg.zero)lo=0;else{const pad=(hi-lo)*.12||Math.abs(hi)*.06||1;lo=Math.max(0,lo-pad);hi+=pad;}
   if(hi<=lo)hi=lo+1;
   const ticks=[0,1,2,3].map(i=>lo+(hi-lo)*i/3),tl=ticks.map(v=>String(cfg.fmtY(v)));
-  const R=mini?2:Math.round(Math.min(110,Math.max(40,Math.max(...tl.map(s=>s.length))*6.6+12)));
+  const R=mini?7:Math.round(Math.min(110,Math.max(40,Math.max(...tl.map(s=>s.length))*6.6+12)));
   const x=t=>L+(t1===t0?.5:(t-t0)/(t1-t0))*(W-L-R),y=v=>T+(1-(v-lo)/(hi-lo))*(H-T-B);
   let g='';if(!mini)ticks.forEach((v,i)=>{const yy=y(v);g+=`<line x1="${L}" x2="${W-R}" y1="${F(yy)}" y2="${F(yy)}" stroke="#ffffff10"/>`;/* одинаковые подписи соседних делений не повторяем */if(i&&tl[i]===tl[i-1])return;g+=`<text x="${W-R+8}" y="${F(yy+4)}" font-size="11" fill="#8e83b6">${esc(tl[i])}</text>`;});
   const oneDay=new Date(t0).toDateString()===new Date(t1).toDateString(),today=new Date(t1).toDateString()===new Date().toDateString();
@@ -1693,7 +1716,7 @@ function lineChart(el,cfg){
   if(last&&!main.dash)body+=`<circle cx="${F(x(last.t))}" cy="${F(y(last.v))}" r="9" fill="${col||'#ff52d9'}" opacity=".22"/><circle cx="${F(x(last.t))}" cy="${F(y(last.v))}" r="4.5" fill="${col||'#ff52d9'}" stroke="#0b0818" stroke-width="2"/>`;
   body+=`<g class="scrub" visibility="hidden"><line y1="${T}" y2="${H-B}" stroke="#cfbaff" stroke-opacity=".6" stroke-dasharray="3 3"/><circle r="5.5" fill="#fff" stroke="${col||'#a64dff'}" stroke-width="3"/></g>`;
   el.innerHTML=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(cfg.label||'График')}"><defs>${col?`<linearGradient id="${id}L" x1="0" x2="1" y1="0" y2="0"><stop offset="0" stop-color="${col}" stop-opacity=".55"/><stop offset="1" stop-color="${col}"/></linearGradient><linearGradient id="${id}A" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="${col}" stop-opacity=".3"/><stop offset="1" stop-color="${col}" stop-opacity="0"/></linearGradient>`:`<linearGradient id="${id}L" x1="0" x2="1" y1="0" y2="0"><stop offset="0" stop-color="#6a35ff"/><stop offset=".55" stop-color="#b15cff"/><stop offset="1" stop-color="#ff52d9"/></linearGradient><linearGradient id="${id}A" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#a64dff" stop-opacity=".34"/><stop offset="1" stop-color="#a64dff" stop-opacity="0"/></linearGradient>`}</defs>${g}${body}<rect x="${L}" y="0" width="${W-L-R}" height="${H}" fill="transparent"/></svg>`;
-  const svg=el.querySelector('svg');if(!svg||!svg.querySelector)return;
+  const svg=el.querySelector('svg');if(!svg||!svg.querySelector)return;if(svg.dataset){svg.dataset.lo=Math.round(lo);svg.dataset.hi=Math.round(hi);}
   const sc=svg.querySelector('.scrub'),sl=sc&&sc.querySelector('line'),sd=sc&&sc.querySelector('circle'),mp=main&&!main.dash?main.pts:[],mainPath=svg.querySelector('path.main');
   if(mainPath&&!reduced&&!drawn[id]&&mainPath.getTotalLength){drawn[id]=1;try{const len=mainPath.getTotalLength();mainPath.style.strokeDasharray=len;mainPath.style.strokeDashoffset=len;mainPath.getBoundingClientRect();mainPath.style.transition='stroke-dashoffset 1.1s cubic-bezier(.2,.8,.2,1)';mainPath.style.strokeDashoffset=0;setTimeout(()=>{mainPath.style.strokeDasharray='';mainPath.style.strokeDashoffset='';},1300);}catch(e){}}
   if(!sc||!svg.addEventListener)return;
@@ -1718,14 +1741,17 @@ function growthData(){const D=derive(),now=Date.now(),T=timelines(),tl=T.tl,inv=
   if(D.total>0)val.push({t:now,v:D.total});
   const invIn=inv.filter(p=>p.t>=t0),prev=inv.filter(p=>p.t<t0).pop();if(prev)invIn.unshift({t:t0,v:prev.v});if(invIn.length)invIn.push({t:now,v:invIn[invIn.length-1].v});
   return {val,inv:invIn,mode,t0};}
-function gReadSet(t,pt){const el=$('gRead'),D=derive();
+function gReadSet(t,pt){const el=$('gRead'),D=derive(),hb=$('hBal'),hero=hb&&hb.closest('.hero');
+  el.classList.toggle('rest',t==null&&gRange==='max'&&S.ready&&!D.noPrice);
+  if(t!=null&&pt&&hero&&!P.hide){hero.classList.add('scrub');hb.textContent=money(pt.v,{d:0});}
+  else if(t==null&&hero&&hero.classList.contains('scrub')){hero.classList.remove('scrub');if(hb._v!=null&&hb._msTo==null)hb.textContent=money(hb._v,{d:0});}
   if(t==null){if(!S.ready){el.innerHTML='<div class="v skel">$0 000</div><div class="s">&nbsp;</div>';return;}
     if(D.noPrice){el.innerHTML=`<div class="v">—</div><div class="s">${priceWait()?'загружаю цены…':'нет актуальных цен — прибыль посчитаю, когда биржи ответят'}</div>`;return;}
     let ch=null,base=0,lbl='';
     if(gRange==='max'){if(D.invPriced>0){ch=D.total-D.invPriced;base=D.invPriced;lbl='прибыль за всё время';}}
     else{const f=G.val[0];if(D.valued&&f&&f.v>0&&G.val.length>1){const iv0=G.inv.length?at(G.inv,f.t,'v'):0;ch=(D.total-D.inv)-(f.v-iv0);base=f.v+Math.max(0,D.inv-iv0);lbl='прибыль '+RLBL[gRange];}}
     if(ch!=null&&ch<0)lbl=lbl.replace('прибыль','результат'); /* минус — «результат», не «прибыль» */
-    el.innerHTML=ch==null?`<div class="v">${money(D.total,{d:0})}</div><div class="s">стоимость сейчас${D.valued?'':' · не у всех монет есть цена'}</div>`:`<div class="v ${ch>=0?'pos':'neg'}">${money(ch,{sign:true,d:0})}<span class="pc">${pct(base?ch/base*100:0)}</span></div><div class="s">${lbl} · веди пальцем по графику</div>`;return;}
+    el.innerHTML=ch==null?`<div class="v">${money(D.total,{d:0})}</div><div class="s">стоимость сейчас${D.valued?'':' · не у всех монет есть цена'}</div>`:`<div class="v ${ch>=0?'pos':'neg'}">${money(ch,{sign:true,d:0})}<span class="pc">${pct(base?ch/base*100:0)}</span></div><div class="s">${lbl}</div>`;return;}
   const iv=G.inv.length?at(G.inv,t,'v'):0,gain=pt.v-iv;
   el.innerHTML=`<div class="v">${money(pt.v,{d:0})}</div><div class="s">${dLong(t)} · вложено ${money(iv,{d:0})} · <span class="${gain>=0?'pos':'neg'}">${money(gain,{sign:true,d:0})}</span></div>`;}
 function renderGrowth(){const el=$('gChart');
@@ -1734,7 +1760,8 @@ function renderGrowth(){const el=$('gChart');
   G=growthData();
   if((G.val.length<2&&G.inv.length<2)||![...G.val,...G.inv].some(p=>+p.v>0)){/* пустой портфель — без графика из нулей */el.innerHTML=S.ready?'<div class="empty">'+(S.tx.length?'График появится, когда будут записи о покупках.':'Нажми «Купить» и запиши первую покупку — здесь появится твой портфель.')+'</div>':'';gReadSet(null);$('gNote').textContent='';return;}
   const long=gRange==='365'||gRange==='max';
-  lineChart(el,{id:'g',label:'Рост портфеля',lines:[{pts:G.val,stroke:'grad',w:2.6,area:true,glow:true},{pts:G.inv,stroke:'#cfbaff',w:1.6,dash:'5 5',step:true,op:.75}],fmtY:v=>money(v,{d:0}),fmtX:long?dMonY:dShort,minRel:.05,onRead:gReadSet});
+  $('gCard').classList.toggle('sparse',G.mode!=='market'&&G.val.length<3);   /* одна-две точки — не график: только подпись, как он наполнится */
+  lineChart(el,{id:'g',mini:true,h:150,label:'Рост портфеля',lines:[{pts:G.val,stroke:'grad',w:2.6,area:true,glow:true},{pts:G.inv,stroke:'#cfbaff',w:1.6,dash:'5 5',step:true,op:.75}],fmtY:v=>money(v,{d:0}),fmtX:long?dMonY:dShort,minRel:.05,onRead:gReadSet});
   gReadSet(null);
   $('gNote').textContent=G.mode==='market'?'Стоимость BTC и ETH посчитана по истории цен CoinGecko, остальные монеты — с даты, когда они внесены в учёт.':(G.val.length<3?'Линия стоимости наполнится из ежедневных снимков — или подключи CoinGecko для истории.':'');}
 function loadGrowth(){if(!mcp)return;const r=gRange;Promise.all([fetchMarket('bitcoin',r),fetchMarket('ethereum',r)]).then(()=>{if(gRange===r)renderGrowth();});}
@@ -1896,7 +1923,7 @@ function renderStrategy(D){
   $('levels').innerHTML=levels.map(l=>{const st=lvState(l,btc,D),pl=lvPlan(l,D),
     info=st==='skip'?'биткоин уже был ниже, когда ты начал — ждём следующие уровни':st==='done'?`потрачено ${usd(l.spent!=null?+l.spent:pl.parts.reduce((a,p)=>a+(+p.spent||0),0))}${l.doneAt?' · '+dShort(l.doneAt):''}`:`${l.pct>=100?'весь резерв':l.pct+'% резерва'} · ${usd(pl.amt)}`,
     coins=['skip','done'].includes(st)?'':lvCoins(l,pl,D);
-    return `<div class="lv ${st}"><div class="n">${l.n}</div><div class="t">−${l.drop}% · ${usd(lvPrice(l),0)}</div><div class="rr">${chip[st]}${st==='go'?`<button type="button" class="btn sm" data-dip="${l.n}">Записать</button>`:''}</div><div class="d">${info}</div>${coins}</div>`;}).join('')||'<div class="empty" style="border:0">Лестница загрузится вместе с данными.</div>';
+    return `<div class="lv ${st}"><div class="n">${l.n}</div><div class="t">−${l.drop}% · ${usd(lvPrice(l),0)}</div><div class="rr">${chip[st]}${st==='go'?`<button type="button" class="btn sm" data-dip="${l.n}">Записать</button>`:''}</div><div class="d">${info}</div>${coins}</div>`;}).join('')||'';$('levels').hidden=!levels.length;
   const k2=k2Cfg();$('lvNote').hidden=!$('levels').querySelector('.lvc');
   $('lvNote').innerHTML=`<b>≤</b> не дороже · <b>≈</b> ожидаемо, когда BTC дойдёт до уровня · <b class="g">зелёная</b> — можно сейчас. Потолок монеты — на ${k2.pct}% ниже средней покупки за ${k2.days} дней${split().ALT>0?`; альты — на уровнях 1–${ALT_MAX_LV}, пока их меньше ${altCapPct()}% портфеля`:''}.`;
   const capP=+S.settings.capPct||20,cap=D.total*capP/100,flow=budgetUsd()*(1-depShare());
@@ -2678,7 +2705,7 @@ function msSync(x){MSC.last=x;if(!msApply())return;if(!S.ready||document.getElem
   if(window.Mascot){try{window.Mascot.sync(msPayload(x));}catch(e){}}else msLoad();}
 function msLoad(){if(MSC.loading||MSC.failed)return;MSC.loading=true;
   const add=(src,ok)=>{try{const s=document.createElement('script');s.src=src;s.async=true;s.onload=ok;s.onerror=()=>{MSC.failed=true;};document.head.appendChild(s);}catch(e){MSC.failed=true;}};
-  const boot=()=>add('mascot.js?v=20261110141500',()=>{try{if(window.Mascot&&window.Mascot.init({host:$('mascot'),app:{audio:ac,buzz}})&&MSC.last&&$('ob').hidden&&!document.getElementById('mlAuth'))window.Mascot.sync(msPayload(MSC.last));}catch(e){}});
+  const boot=()=>add('mascot.js?v=20261111170000',()=>{try{if(window.Mascot&&window.Mascot.init({host:$('mascot'),app:{audio:ac,buzz}})&&MSC.last&&$('ob').hidden&&!document.getElementById('mlAuth'))window.Mascot.sync(msPayload(MSC.last));}catch(e){}});
   setTimeout(boot,300);}
 function render(){const D=derive();renderHeader();renderHome(D);renderGrowth();renderCoins(D);renderStrategy(D);renderActivity();renderD14();if(window.MLX)try{MLX.render(D);}catch(e){console.error(e);}earnNudge();if(cvSym&&$('coinSheet').classList.contains('open'))renderCoinView();}
 document.body.classList.add('loading');
@@ -2701,6 +2728,6 @@ render();requestAnimationFrame(inkMove);setTimeout(inkMove,600);
   db.collection('history').limit(1000).onSnapshot(q=>{S.history=q.docs.map(d=>d.data());renderGrowth();if(S.ready&&derive().noPrice)renderHome(derive());},fail);
 })();
 </script>
-<script src="plus.js?v=20261110141500"></script>
+<script src="plus.js?v=20261111170000"></script>
 </body>
 </html>
