@@ -1,0 +1,719 @@
+<!doctype html>
+<html lang="ru" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Движение MoneyLife</title>
+<meta name="description" content="Живой прототип этапов 2–5 редизайна: вкладки, шторки, вход, знакомство, микроанимации и пустые экраны. Суммы выдуманы.">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700;800&family=Unbounded:wght@400;600&family=Sora:wght@800&display=swap">
+<style>
+/* Прототип движения, этапы 2–5 (Вера, 08.11.2026). Токены цвета — копия :root и светлой темы index.html; новых цветов нет.
+   Все суммы, монеты и почта — демо, выдуманные. Только transform/opacity (кроме высоты карточки знакомства и цвета капли). */
+:root{
+  --bg:#06040e; --bg2:#0b0818; --surface:#100b21; --surface2:#160f2e; --raise:#1e1641; --field:#1a1336;
+  --line:#241b47; --line2:#372a68;
+  --fg:#f5f1ff; --mute:#a99dcc; --dim:#6d6396;
+  --violet:#6a35ff; --purple:#a64dff; --magenta:#e04dff; --pink:#ff52d9; --lav:#cfbaff;
+  --accent:#b15cff; --accent-soft:#b15cff24; --glow:#a64dff70;
+  --grad:linear-gradient(135deg,#6a35ff 0%,#a64dff 48%,#ff52d9 100%);
+  --pos:#34e0a1; --neg:#ff5f6d; --warn:#ffc65c;
+  --ui:"Onest","Golos Text",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --display:"Unbounded","Onest",system-ui,sans-serif;
+  --r-s:8px; --r-m:12px; --r-l:18px; --r-xl:24px; --r-pill:999px;
+  /* токены движения: этап 1 их уже положил; здесь — в рамках 120–340 мс (--dur-l 380 → 340) */
+  --k:1; /* замедление для показа: 1 или 3 */
+  --dur-xs:calc(120ms*var(--k)); --dur-s:calc(180ms*var(--k)); --dur-m:calc(260ms*var(--k)); --dur-l:calc(340ms*var(--k));
+  --ease:cubic-bezier(.2,.8,.2,1); --ease-in:cubic-bezier(.4,0,1,1); --ease-io:cubic-bezier(.65,0,.35,1);
+  --ease-sheet:cubic-bezier(.32,.72,0,1); --ease-spring:cubic-bezier(.34,1.3,.64,1);
+  --navbg:#0a0716; --press:#ffffff0a; --scrim:#05030cb8; --tc:var(--violet);
+  color-scheme:dark;
+}
+:root[data-theme="light"]{--bg:#f5f2fc;--bg2:#ffffff;--surface:#ffffff;--surface2:#faf8ff;--raise:#efe9fb;--field:#f0ebfa;--line:#e6dff5;--line2:#d4c8ee;
+  --fg:#1b1530;--mute:#665c86;--dim:#958cb0;--lav:#5b2fe0;--accent:#7a3cf0;--accent-soft:#7a3cf01a;--glow:#7a3cf040;
+  --pos:#0a8a5c;--neg:#e2364b;--warn:#b7791f;--navbg:#ffffff;--press:#1b15300a;--scrim:#1b153066;color-scheme:light}
+@media (prefers-color-scheme:light){:root:not([data-theme="dark"]){color-scheme:light}}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--ui);font-size:15px;line-height:1.45;font-variant-numeric:tabular-nums;-webkit-tap-highlight-color:transparent}
+button{font:inherit;color:inherit}
+p,h1,h2,h3{margin:0}
+html.rm *,html.rm *::before,html.rm *::after{animation:none!important;transition:none!important}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+
+.page{max-width:390px;margin:0 auto}
+/* панель показа (вне «телефона») */
+.ctl{position:sticky;top:0;z-index:300;display:flex;gap:6px;align-items:center;padding:8px 16px;background:var(--bg);border-bottom:1px solid var(--line)}
+.ctl b{flex:1;font-family:var(--display);font-weight:600;font-size:12px;line-height:1.2}
+.tg{min-height:48px;min-width:48px;padding:0 10px;border-radius:var(--r-m);border:1px solid var(--line2);background:var(--surface);font-size:12px;font-weight:600;cursor:pointer}
+.tg[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-soft);color:var(--lav)}
+
+/* «телефон» 390 × 760 */
+.phone{position:relative;height:760px;overflow:hidden;background:var(--bg);isolation:isolate;border-bottom:1px solid var(--line)}
+@media (min-width:430px){.phone{border:1px solid var(--line2);border-radius:28px;margin:12px 0;box-shadow:0 30px 80px -40px #000}}
+.bgfx{position:absolute;inset:0;pointer-events:none;background:radial-gradient(420px 300px at 105% -8%,#7c3aed33,transparent 60%),radial-gradient(360px 300px at -12% 42%,#e04dff14,transparent 60%)}
+[data-theme="light"] .bgfx{opacity:.5}
+.scr{position:absolute;inset:0;overflow-y:auto;padding:14px 16px 110px;scrollbar-width:none}
+.scr::-webkit-scrollbar{display:none}
+.top{position:relative;display:flex;align-items:center;gap:8px;margin-bottom:14px}
+.mark{width:40px;height:40px;border-radius:var(--r-m);overflow:hidden;flex:none;box-shadow:0 0 22px -8px var(--glow)}
+.mark svg{display:block;width:40px;height:40px}
+.wm{flex:1;font-family:"Sora",var(--ui);font-weight:800;font-size:21px;letter-spacing:-.035em;line-height:1.1}
+.wm-l{background:linear-gradient(100deg,#b98bff 0%,#e04dff 55%,#ff7ad9 100%);-webkit-background-clip:text;background-clip:text;color:transparent}
+[data-theme="light"] .wm-l{background-image:linear-gradient(100deg,#7a3cf0 0%,#c03ad8 55%,#e8409f 100%)}
+.ib{width:48px;height:48px;border-radius:var(--r-m);border:1px solid var(--line);background:var(--surface);display:grid;place-items:center;cursor:pointer;flex:none;padding:0;transition:transform var(--dur-xs) var(--ease)}
+.ib:active{transform:scale(.92)}
+.ib svg{width:22px;height:22px}
+.ib[aria-pressed="true"]{border-color:var(--accent);color:var(--lav);background:var(--accent-soft)}
+.h2{font-size:13px;font-weight:700;color:var(--mute);margin:18px 2px 8px;letter-spacing:.02em}
+
+/* карточка баланса — тёмная в обеих темах, как в приложении */
+.hero{position:relative;overflow:hidden;border-radius:var(--r-xl);padding:18px 18px 16px;border:1px solid #ffffff14;color:#f5f1ff;
+  background:radial-gradient(260px 180px at 100% 0%,#ff52d933,transparent 60%),radial-gradient(240px 200px at 0% 100%,#6a35ff40,transparent 60%),linear-gradient(160deg,#1c1240,#100b21)}
+.hero .lbl{font-size:13px;color:#c9bdf0}
+.bal{font-weight:800;font-size:40px;letter-spacing:-.02em;line-height:1.05;margin-top:6px}
+.bal-sub{margin-top:6px;display:flex;align-items:center;gap:8px;font-size:14px;color:#c9bdf0}
+.chip{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:var(--r-pill);font-size:12.5px;font-weight:700;background:#34e0a11f;color:#34e0a1}
+.mascot{position:absolute;right:14px;top:16px;width:64px;height:56px;transform-origin:50% 100%}
+.mascot svg{width:100%;height:100%;overflow:visible}
+
+/* переключатель периода с едущей пилюлей */
+.ranges{position:relative;display:flex;background:var(--field);border-radius:var(--r-m);padding:3px;margin-top:14px}
+.hero .ranges{background:#ffffff10}
+.ranges .pill{position:absolute;top:3px;bottom:3px;left:0;border-radius:9px;background:var(--raise);box-shadow:inset 0 0 0 1px var(--line2);transition:transform calc(220ms*var(--k)) var(--ease)}
+.hero .ranges .pill{background:#ffffff1c;box-shadow:inset 0 0 0 1px #ffffff26}
+.ranges button{position:relative;flex:1;min-height:40px;border:0;background:none;border-radius:9px;font-size:13px;font-weight:700;color:var(--mute);cursor:pointer;transition:color var(--dur-s)}
+.hero .ranges button{color:#c9bdf0}
+.ranges button[aria-pressed="true"]{color:var(--fg)}
+.hero .ranges button[aria-pressed="true"]{color:#fff}
+.ranges button::after{content:"";position:absolute;inset:-4px 0}
+
+/* быстрые действия */
+.qa{display:grid;grid-template-columns:repeat(4,1fr);margin-top:14px}
+.qa button{background:none;border:0;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--mute);padding:2px 0;min-height:48px}
+.qa i{width:52px;height:52px;border-radius:var(--r-l);display:grid;place-items:center;background:var(--surface);border:1px solid var(--line);transition:transform var(--dur-xs) var(--ease)}
+.qa button:first-child i{background:var(--grad);border-color:transparent;color:#fff;box-shadow:0 12px 26px -12px var(--glow)}
+.qa button:active i{transform:scale(.9)}
+.qa svg{width:22px;height:22px}
+
+.card{background:linear-gradient(180deg,var(--surface2),var(--surface));border:1px solid var(--line);border-radius:var(--r-l);padding:14px}
+[data-theme="light"] .card{background:#fff;box-shadow:0 1px 2px #1b153008,0 8px 24px -18px #1b153030}
+.alloc{display:flex;flex-direction:column;gap:10px}
+.al{display:grid;grid-template-columns:44px 1fr 44px;align-items:center;gap:10px;font-size:13px;font-weight:600}
+.al .tr{height:8px;border-radius:4px;background:var(--field);overflow:hidden}
+.al .bar{display:block;height:100%;border-radius:4px;background:var(--grad);transform-origin:0 50%}
+.al .p{text-align:right;color:var(--mute)}
+
+/* таблица монет (этап 1 + 5) */
+.tbl{padding:0;overflow:hidden}
+.th{display:grid;grid-template-columns:32px minmax(0,1fr) 96px 104px;gap:0 8px;padding:8px 12px;font-size:12px;font-weight:600;color:var(--mute);border-bottom:1px solid var(--line)}
+.th span:nth-child(n+3){text-align:right}
+.rw{display:grid;grid-template-columns:32px minmax(0,1fr) 96px 104px;gap:0 8px;align-items:center;padding:10px 12px;min-height:60px;border-top:1px solid var(--line)}
+.rw:first-of-type{border-top:0}
+.cic{width:32px;height:32px;border-radius:50%;display:grid;place-items:center;font-size:11px;font-weight:800;color:#fff}
+.rw b{display:block;font-size:15px;font-weight:600;line-height:20px}
+.rw small{display:block;font-size:12px;color:var(--mute);line-height:16px}
+.rw .r{text-align:right}
+.rw .r b{font-weight:700}
+.up{color:var(--pos)!important}.dn{color:var(--neg)!important}
+.num{display:inline-block}
+.skel{color:transparent!important;border-radius:6px;background:linear-gradient(90deg,var(--field) 25%,var(--raise) 50%,var(--field) 75%);background-size:200% 100%;animation:shimmer calc(1.2s*var(--k)) linear infinite}
+@keyframes shimmer{from{background-position:200% 0}to{background-position:-200% 0}}
+.hint{font-size:12px;color:var(--dim);margin:8px 2px 0}
+
+/* лестница / история */
+.lv{display:grid;grid-template-columns:38px 1fr auto;gap:10px;align-items:center;padding:10px 0;border-top:1px solid var(--line)}
+.lv:first-child{border-top:0}
+.lv .n{width:38px;height:38px;border-radius:var(--r-m);display:grid;place-items:center;font-family:var(--display);font-weight:600;background:var(--accent-soft);color:var(--lav)}
+.lv small{display:block;color:var(--mute);font-size:12.5px}
+.st{font-size:12px;font-weight:700;padding:4px 9px;border-radius:var(--r-pill);background:var(--field);color:var(--mute)}
+.st.go{background:#34e0a11f;color:var(--pos)}
+
+/* пустые состояния (этап 2) */
+.es{display:flex;flex-direction:column;align-items:center;text-align:center;gap:8px;padding:26px 18px 20px}
+.es .art{position:relative;width:132px;height:112px;margin-bottom:6px}
+.es .art::before{content:"";position:absolute;inset:8px 6px 0;border-radius:50%;background:radial-gradient(closest-side,var(--accent-soft),transparent);transform:scale(1.25)}
+.es .art svg{position:relative;width:100%;height:100%;overflow:visible}
+.es h3{font-size:17px;font-weight:800}
+.es p{font-size:14px;color:var(--mute);max-width:280px}
+.es .btn{margin-top:8px}
+
+/* кнопки */
+.btn{position:relative;border:0;border-radius:var(--r-m);min-height:48px;padding:12px 18px;font-weight:700;font-size:15px;cursor:pointer;background:var(--grad);color:#fff;box-shadow:0 10px 26px -12px var(--glow);transition:transform var(--dur-xs) var(--ease);overflow:hidden}
+.btn:active{transform:scale(.96)}
+.btn.ghost{background:var(--surface);color:var(--fg);border:1px solid var(--line2);box-shadow:none}
+.btn .lb,.btn .ok,.btn .dots{display:inline-flex;align-items:center;justify-content:center;gap:6px}
+.btn .ok,.btn .dots{position:absolute;inset:0;opacity:0}
+.dots i{width:6px;height:6px;border-radius:50%;background:#fff;animation:dot calc(.9s*var(--k)) var(--ease) infinite}
+.dots i:nth-child(2){animation-delay:calc(.15s*var(--k))}.dots i:nth-child(3){animation-delay:calc(.3s*var(--k))}
+@keyframes dot{0%,80%,100%{opacity:.35;transform:none}40%{opacity:1;transform:translateY(-3px)}}
+
+/* нижняя панель: капля-указатель */
+nav.tabs{position:absolute;left:0;right:0;bottom:0;z-index:30;background:var(--navbg);border-top:1px solid var(--line);padding:6px 8px 10px}
+nav.tabs .in{position:relative;display:grid;grid-template-columns:repeat(5,1fr);align-items:end}
+.tdrop{position:absolute;left:0;top:3px;width:56px;height:32px;border-radius:16px;background:color-mix(in srgb,var(--tc) 18%,transparent);box-shadow:inset 0 0 0 1px var(--line2);transition:background-color calc(320ms*var(--k)) linear;pointer-events:none}
+[data-theme="light"] .tdrop{background:color-mix(in srgb,var(--tc) 12%,transparent)}
+.tglow{position:absolute;left:0;bottom:-26px;width:120px;height:40px;border-radius:50%;background:radial-gradient(closest-side,var(--tc),transparent);opacity:.45;pointer-events:none;transition:background calc(320ms*var(--k)) linear;filter:blur(2px)}
+[data-theme="light"] .tglow{opacity:.18}
+.tab{position:relative;border:0;background:none;color:var(--mute);display:flex;flex-direction:column;align-items:center;gap:3px;font-size:11px;font-weight:600;padding:6px 0 2px;min-height:52px;cursor:pointer;transition:color var(--dur-s)}
+.tab svg{width:22px;height:22px;margin-top:2px;color:var(--dim);transition:transform var(--dur-xs) var(--ease),color var(--dur-s)}
+.tab:active svg{transform:scale(.88)}
+.tab[aria-current="page"]{color:var(--fg)}
+.tab[aria-current="page"] svg{color:var(--tc)}
+.plus{justify-self:center;width:58px;height:58px;margin-top:-26px;border-radius:var(--r-l);border:0;background:var(--grad);color:#fff;display:grid;place-items:center;cursor:pointer;box-shadow:0 12px 28px -8px var(--glow),0 0 0 6px var(--bg);transition:transform var(--dur-m) var(--ease-spring)}
+.plus svg{width:26px;height:26px}
+.plus:active{transform:scale(.9)}
+.phone.sheet-on .plus{transform:rotate(45deg)}
+
+/* шторки */
+.scrim{position:absolute;inset:0;z-index:50;background:var(--scrim);opacity:0;pointer-events:none;transition:opacity calc(200ms*var(--k)) linear}
+.scrim.open{opacity:1;pointer-events:auto;transition-duration:calc(260ms*var(--k))}
+.sheet{position:absolute;left:0;right:0;bottom:0;z-index:51;max-height:88%;display:flex;flex-direction:column;background:var(--bg2);border-top:1px solid var(--line2);border-radius:var(--r-xl) var(--r-xl) 0 0;transform:translateY(105%);visibility:hidden;box-shadow:0 -20px 60px -20px #000;
+  transition:transform calc(240ms*var(--k)) cubic-bezier(.3,0,.8,.15),visibility 0s linear calc(240ms*var(--k))}
+.sheet.open{transform:translateY(0);visibility:visible;transition:transform var(--dur-l) var(--ease-sheet),visibility 0s}
+.sheet.drag{transition:none}
+[data-theme="light"] .sheet{box-shadow:0 -20px 60px -30px #1b153060}
+.sh-head{padding:10px 16px 6px;touch-action:none;cursor:grab}
+.grab{width:40px;height:5px;border-radius:3px;background:var(--line2);margin:0 auto 10px}
+.sh-bar{display:flex;align-items:center;gap:8px;min-height:48px}
+.sh-bar h3{flex:1;font-size:18px;font-weight:800}
+.sh-bar .ib{width:48px;height:48px}
+.sh-body{overflow:hidden;padding:4px 16px 18px}
+.sh-in{display:flex;flex-direction:column;gap:10px}
+.mi{display:flex;align-items:center;gap:12px;min-height:60px;padding:10px 12px;border-radius:var(--r-l);border:1px solid var(--line);background:var(--surface);cursor:pointer;text-align:left;transition:transform var(--dur-xs) var(--ease)}
+.mi:active{transform:scale(.98)}
+.mi i{width:40px;height:40px;border-radius:var(--r-m);display:grid;place-items:center;background:var(--accent-soft);color:var(--lav);flex:none}
+.mi i svg{width:20px;height:20px}
+.mi b{display:block;font-size:15px}.mi small{display:block;color:var(--mute);font-size:12.5px}
+.fl{display:flex;flex-direction:column;gap:6px}
+.fl>span{font-size:13px;color:var(--mute)}
+.inp{min-height:48px;border-radius:var(--r-m);border:1px solid var(--line2);background:var(--field);color:var(--fg);padding:0 14px;font:inherit;font-size:16px;width:100%;outline:none;transition:box-shadow var(--dur-s)}
+.inp:focus{box-shadow:0 0 0 3px var(--accent-soft);border-color:var(--accent)}
+.inp.bad{border-color:var(--neg)}
+.err{font-size:12.5px;color:var(--neg);min-height:18px}
+.fchips{display:flex;gap:8px}
+.fchip{min-height:44px;padding:0 16px;border-radius:var(--r-pill);border:1px solid var(--line2);background:var(--surface);font-weight:700;cursor:pointer;transition:transform var(--dur-xs) var(--ease)}
+.fchip:active{transform:scale(.94)}
+.fchip[aria-pressed="true"]{border-color:transparent;background:var(--grad);color:#fff}
+
+/* тост */
+.toast{position:absolute;left:16px;right:16px;bottom:96px;z-index:60;display:flex;align-items:center;gap:10px;padding:8px 8px 8px 14px;border-radius:var(--r-l);background:var(--raise);border:1px solid var(--line2);box-shadow:0 14px 40px -16px #000;font-size:14px;
+  opacity:0;transform:translateY(16px);pointer-events:none;transition:opacity calc(180ms*var(--k)) var(--ease-in),transform calc(180ms*var(--k)) var(--ease-in)}
+.toast.show{opacity:1;transform:none;pointer-events:auto;transition-duration:var(--dur-m);transition-timing-function:var(--ease)}
+.toast span{flex:1}
+.toast .ok{width:24px;height:24px;border-radius:50%;background:#34e0a124;color:var(--pos);display:grid;place-items:center;flex:none}
+.toast button{min-height:48px;border:0;background:none;color:var(--lav);font-weight:700;cursor:pointer;padding:0 10px}
+[data-theme="light"] .toast{background:#fff;box-shadow:0 12px 30px -12px #1b153040}
+
+/* вход (этап 3) и знакомство (этап 4) */
+.ovl{position:absolute;inset:0;z-index:200;display:grid;place-items:center;padding:20px 16px;background:radial-gradient(420px 320px at 50% -10%,#3b1d7a55,transparent 60%),var(--bg)}
+[data-theme="light"] .ovl{background:radial-gradient(420px 320px at 50% -10%,#a64dff26,transparent 60%),var(--bg)}
+.acard{position:relative;overflow:hidden;width:100%;display:flex;flex-direction:column;gap:12px;background:linear-gradient(180deg,var(--surface2),var(--surface));border:1px solid var(--line);border-radius:var(--r-xl);padding:22px 20px}
+[data-theme="light"] .acard{background:#fff;box-shadow:0 20px 50px -30px #1b153050}
+.ahead{display:flex;align-items:flex-start;gap:8px}
+.ahead .wm{font-size:28px}
+.ahead .mascot{position:static;width:46px;height:40px}
+.acard h2{font-size:20px;font-weight:800}
+.acard .lnk{min-height:48px;border:0;background:none;color:var(--lav);font-weight:700;cursor:pointer;padding:0}
+.acard .note{font-size:12.5px;color:var(--dim);text-align:center}
+.curt{position:absolute;left:-30%;top:-30%;width:160%;height:160%;background:var(--grad);transform:translateX(-115%) rotate(-14deg);pointer-events:none;z-index:5;box-shadow:0 0 0 2px #ff52d999}
+.curt.full{position:absolute;z-index:400}
+.ob-dots{display:flex;gap:6px}
+.ob-dots i{position:relative;width:32px;height:5px;border-radius:3px;overflow:hidden;background:var(--line2)}
+.ob-dots i::after{content:"";position:absolute;inset:0;border-radius:3px;background:var(--accent);transform-origin:0 50%;transform:scaleX(0);transition:transform calc(220ms*var(--k)) var(--ease)}
+.ob-dots i.on::after{transform:scaleX(1)}
+.ob-opt{display:flex;align-items:center;gap:10px;min-height:52px;padding:0 14px;border-radius:var(--r-m);border:1px solid var(--line2);background:var(--surface);cursor:pointer;font-weight:600;text-align:left;transition:transform var(--dur-xs) var(--ease),box-shadow var(--dur-s),border-color var(--dur-s)}
+.ob-opt:active{transform:scale(.98)}
+.ob-opt[aria-pressed="true"]{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.ob-nav{display:flex;gap:10px}.ob-nav .btn{flex:1}
+.obody{display:flex;flex-direction:column;gap:12px}
+
+/* под телефоном */
+.demo{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:14px 16px 4px}
+.demo .tg{min-height:48px;font-size:13px}
+.spec{padding:10px 16px 40px}
+.spec h2{font-family:var(--display);font-weight:600;font-size:16px;margin:14px 0 6px}
+.spec p,.spec li{font-size:13.5px;color:var(--mute)}
+.spec ul{padding-left:18px;margin:6px 0}
+.spec table{width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed}
+.spec th,.spec td{border-top:1px solid var(--line);padding:7px 4px;vertical-align:top;text-align:left;overflow-wrap:anywhere}
+.spec th{color:var(--mute);font-weight:700}
+.spec td:last-child,.spec th:last-child{text-align:right;width:34px}
+.spec th:first-child{width:96px}
+.spec th:nth-child(3){width:96px}
+.spec code{font-size:11px;color:var(--lav)}
+.spec tr.stg td{text-align:left!important;width:auto;padding-top:12px;font-weight:800;color:var(--fg);font-size:13px}
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="ctl">
+    <b>Движение<br>этапы 2–5</b>
+    <button class="tg" id="tTheme" aria-pressed="false" title="Тема">Светлая</button>
+    <button class="tg" id="tSlow" aria-pressed="false" title="Замедлить в 3 раза, чтобы рассмотреть">×3</button>
+    <button class="tg" id="tRm" aria-pressed="false" title="Как системная настройка «меньше движения»">Без анимаций</button>
+  </div>
+
+  <div class="phone" id="phone">
+    <div class="bgfx"></div>
+    <div class="scr" id="scr">
+      <div class="top">
+        <div class="mark" aria-hidden="true"><svg viewBox="0 0 512 512"><defs><linearGradient id="mg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#6a35ff"/><stop offset=".5" stop-color="#a64dff"/><stop offset="1" stop-color="#ff52d9"/></linearGradient></defs><rect width="512" height="512" fill="url(#mg)"/><g stroke-linejoin="round" stroke-width="14"><polygon points="133,191 256,262 256,404 133,333" fill="#efe4ff" stroke="#efe4ff"/><polygon points="256,262 379,191 379,333 256,404" fill="#e0b4f7" stroke="#e0b4f7"/><polygon points="256,120 379,191 256,262 133,191" fill="#fff" stroke="#fff"/></g></svg></div>
+        <div class="wm"><span>Money</span><span class="wm-l">Life</span></div>
+        <button class="ib" id="eye" aria-label="Скрыть суммы" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></button>
+      </div>
+
+      <!-- Главная -->
+      <section class="view" data-view="home">
+        <div class="hero st-i">
+          <div class="lbl">Портфель · демо</div>
+          <div class="bal"><span class="num amt" id="bal">$12 480</span></div>
+          <div class="bal-sub"><span class="chip" id="dChip">+1,5%</span><span class="amt" id="dAbs">+$186 за 24ч</span></div>
+          <div class="mascot" id="msc"><svg viewBox="0 0 64 56"><defs><linearGradient id="mf" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#b45cff"/><stop offset="1" stop-color="#6a35ff"/></linearGradient></defs><polygon points="18,10 46,10 52,22 12,22" fill="#f3a6ec"/><polygon points="12,22 52,22 58,48 6,48" fill="url(#mf)"/><circle cx="25" cy="33" r="4" fill="#fff"/><circle cx="39" cy="33" r="4" fill="#fff"/><circle cx="26" cy="34" r="2" fill="#1b1530"/><circle cx="40" cy="34" r="2" fill="#1b1530"/><path d="M28 40q4 3 8 0" stroke="#fff" stroke-width="2" fill="none" stroke-linecap="round"/></svg></div>
+          <div class="ranges" data-r="home"><i class="pill"></i><button aria-pressed="true" data-p="0">24ч</button><button aria-pressed="false" data-p="1">1Н</button><button aria-pressed="false" data-p="2">1М</button><button aria-pressed="false" data-p="3">1Г</button></div>
+        </div>
+        <div class="qa st-i">
+          <button data-act="buy"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></i>Купить</button>
+          <button><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12h14"/></svg></i>Продать</button>
+          <button><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v12M7 11l5 5 5-5M5 20h14"/></svg></i>Пополнить</button>
+          <button><i><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="6" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="18" cy="12" r="1.8"/></svg></i>Ещё</button>
+        </div>
+        <div class="h2 st-i">Распределение</div>
+        <div class="card alloc st-i" id="alloc">
+          <div class="al"><span>BTC</span><span class="tr"><i class="bar" style="width:58%"></i></span><span class="p">58%</span></div>
+          <div class="al"><span>ETH</span><span class="tr"><i class="bar" style="width:22%"></i></span><span class="p">22%</span></div>
+          <div class="al"><span>SOL</span><span class="tr"><i class="bar" style="width:12%"></i></span><span class="p">12%</span></div>
+          <div class="al"><span>TON</span><span class="tr"><i class="bar" style="width:8%"></i></span><span class="p">8%</span></div>
+        </div>
+      </section>
+
+      <!-- Монеты -->
+      <section class="view" data-view="coins" hidden>
+        <div class="ranges st-i" data-r="coins"><i class="pill"></i><button aria-pressed="true" data-p="24ч">24ч</button><button aria-pressed="false" data-p="1Н">1Н</button><button aria-pressed="false" data-p="1М">1М</button><button aria-pressed="false" data-p="3М">3М</button><button aria-pressed="false" data-p="1Г">1Г</button><button aria-pressed="false" data-p="Всё">Всё</button></div>
+        <p class="hint st-i">3М — этап 5: пока история цен грузится, вместо цифр «скелет».</p>
+        <div class="card tbl st-i" style="margin-top:10px" id="coinTbl"></div>
+      </section>
+
+      <!-- Стратегия -->
+      <section class="view" data-view="strat" hidden>
+        <div class="h2 st-i" style="margin-top:4px">Лестница докупок BTC</div>
+        <div class="card st-i" id="stratBox"></div>
+      </section>
+
+      <!-- Активность -->
+      <section class="view" data-view="act" hidden>
+        <div class="h2 st-i" style="margin-top:4px">История</div>
+        <div class="card st-i" id="actBox"></div>
+      </section>
+    </div>
+
+    <nav class="tabs" aria-label="Разделы"><div class="in" id="tabsIn">
+      <i class="tglow" id="tglow"></i><i class="tdrop" id="tdrop"></i>
+      <button class="tab" data-tab="home" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M4 10.5 12 4l8 6.5V20H4z"/><path d="M10 20v-6h4v6"/></svg>Главная</button>
+      <button class="tab" data-tab="coins"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="9" r="5"/><circle cx="15" cy="15" r="5"/></svg>Монеты</button>
+      <button class="plus" id="plus" aria-label="Новая запись"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
+      <button class="tab" data-tab="strat"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 20h4v-5h4v-5h4V5h4"/></svg>Стратегия</button>
+      <button class="tab" data-tab="act"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h10M4 18h13"/></svg>Активность</button>
+    </div></nav>
+
+    <div class="scrim" id="scrim"></div>
+    <div class="sheet" id="sheet" role="dialog" aria-label="Новая запись">
+      <div class="sh-head" id="shHead"><div class="grab"></div><div class="sh-bar">
+        <button class="ib" id="shBack" aria-label="Назад" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button>
+        <h3 id="shTitle">Новая запись</h3>
+        <button class="ib" id="shClose" aria-label="Закрыть"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+      </div></div>
+      <div class="sh-body"><div class="sh-in" id="shIn"></div></div>
+    </div>
+    <div class="toast" id="toast"><i class="ok"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5 9-10"/></svg></i><span id="toastMsg">Покупка записана</span><button id="toastUndo">Отменить</button></div>
+
+    <div class="ovl" id="auth" hidden><div class="acard" id="acard"><i class="curt" id="acurt"></i><div class="obody" id="abody"></div></div></div>
+    <div class="ovl" id="ob" hidden><div class="acard" id="ocard"><div class="obody" id="obody"></div></div></div>
+    <i class="curt full" id="fcurt" hidden></i>
+  </div>
+
+  <div class="demo">
+    <button class="tg" id="dAuth">Этап 3 · вход</button>
+    <button class="tg" id="dOb">Этап 4 · знакомство</button>
+    <button class="tg" id="dEmpty" aria-pressed="false">Пустые экраны</button>
+    <button class="tg" id="dBuy">Записать покупку</button>
+  </div>
+
+  <section class="spec">
+    <h2>Что смотреть</h2>
+    <ul>
+      <li><b>Вкладки</b> — новая приходит с той стороны, куда нажали (±16 px); «капля» под значком перетекает и меняет цвет.</li>
+      <li><b>«+»</b> — шторка выезжает, содержимое лесенкой; «Купить» меняет форму сдвигом; «Сохранить» → галочка, шторка уходит, баланс досчитывает, Слиток подпрыгивает, тост.</li>
+      <li><b>Шторку</b> можно стянуть вниз за ручку.</li>
+      <li><b>Период</b> — пилюля едет, цифры коротко проявляются; на Главной сумма досчитывает.</li>
+      <li><b>Глаз</b> — суммы гаснут и сменяются точками.</li>
+      <li><b>Вход</b> — пустая почта: карточка «качает головой»; «Создать» — фирменная шторка меняет форму.</li>
+      <li><b>Знакомство</b> — шаги сдвигом, высота плавно, точки заполняются; «Начать» — шторка на весь экран и встреча со Слитком.</li>
+    </ul>
+    <p>Каждая отдельная анимация — 120–340 мс. Цепочки (шторка входа, «Начать») — несколько коротких подряд, всего до 0,9 с. «Без анимаций» — всё меняется сразу, как при системной настройке «меньше движения».</p>
+
+    <h2>Для Ильи: что, где, сколько</h2>
+    <table>
+      <thead><tr><th>Что</th><th>Где (index.html / shim.js)</th><th>мс · кривая</th><th>ч</th></tr></thead>
+      <tbody>
+        <tr class="stg"><td colspan="4">Этап 2 — вкладки, шторки, кнопки, числа, пустые экраны · выпуск 1</td></tr>
+        <tr><td>Токены в рамках 120–340</td><td><code>:root</code> стр. ≈21–33: <code>--dur-l</code> 380→340</td><td>—</td><td>0,2</td></tr>
+        <tr><td>Вкладка с направлением + лесенка карточек</td><td><code>show(tab)</code> ≈2115; убрать <code>.view.enter</code>/<code>@keyframes vin</code> стр. 72–73 → <code>el.animate</code></td><td>260 · <code>--ease</code>, ±16 px; шаг 35, до 5 шт.</td><td>1</td></tr>
+        <tr><td>Капля-указатель, свечение, цвет вкладки</td><td><code>nav.tabs .in</code>, <code>.tab</code>, <code>.tab[aria-current]</code> стр. 300–305; новые <code>i.tdrop</code>, <code>i.tglow</code>, перем. <code>--tc</code></td><td>320 · <code>--ease-spring</code>, scaleX 1→1,3→1</td><td>2</td></tr>
+        <tr><td>«+» поворот на 45°, пока шторка открыта</td><td><code>.plus</code> стр. 306–307, класс на <code>body.lock</code></td><td>260 · <code>--ease-spring</code></td><td>0,2</td></tr>
+        <tr><td>Шторка: открыть / закрыть, затемнение</td><td><code>.sheet</code>, <code>.sheet.open</code>, <code>.scrim</code> стр. 311–314</td><td>340 · <code>--ease-sheet</code> / 240 · (.3,0,.8,.15); фон 260/200 linear</td><td>0,5</td></tr>
+        <tr><td>Лесенка содержимого шторки</td><td><code>openSheet</code> ≈1703, первые 4 ребёнка <code>.sh-in</code></td><td>260 · <code>--ease</code>, 80 + 35×i, 12 px</td><td>0,5</td></tr>
+        <tr><td>Смена формы внутри шторки</td><td>общий помощник из <code>stepCoin</code> ≈1637 (меню → «Купить»)</td><td>150 · <code>--ease-in</code> −56 px / 260 · <code>--ease</code> +56 px</td><td>1</td></tr>
+        <tr><td>Стянуть шторку вниз</td><td>обработчик <code>.sh-head</code>; порог 90 px</td><td>доводка 240 · <code>--ease-sheet</code></td><td>0,3</td></tr>
+        <tr><td>Нажатия и «Сохранить» → галочка</td><td><code>.btn:active</code> 291, <code>.qa button:active i</code> 111, <code>.ib</code> 65, <code>.fchip</code></td><td>120 · <code>--ease</code>, scale .96/.92; галочка 260 · spring</td><td>0,7</td></tr>
+        <tr><td>Счёт суммы, чип «+$», «скрыть суммы»</td><td><code>countTo</code> ≈1083 (650→350 мс), <code>balTo</code> 1080; <code>#eyeBtn</code></td><td>350 · ease-out cubic; чип 220 · spring; глаз 120 out / 180 in</td><td>0,5</td></tr>
+        <tr><td>Пилюля периода едет</td><td><code>.ranges</code> стр. 134–136: <code>::before</code> вместо фона кнопки</td><td>220 · <code>--ease</code>; цифры .35→1 120</td><td>0,5</td></tr>
+        <tr><td>Тост</td><td><code>.toast</code> 462: <code>transition:all</code> → только transform/opacity</td><td>260 · <code>--ease</code> / 180 · <code>--ease-in</code></td><td>0,2</td></tr>
+        <tr><td>Пустые экраны: рисунок + заголовок + текст + кнопка</td><td><code>.empty</code> 79 и места вывода 1295, 1354, 1362, 1422, 1459, 1472, 1522–1524 → блок <code>.es</code></td><td>рисунок 260 · spring (.9→1), текст лесенкой 35</td><td>1,5</td></tr>
+        <tr><td>Тесты: браузер с reduced-motion, смена вкладки не ждёт анимацию</td><td><code>tests/run_tests.py</code></td><td>—</td><td>0,5</td></tr>
+        <tr class="stg"><td colspan="4">Этап 3 — вход и регистрация · отдельный выпуск (ворота входа)</td></tr>
+        <tr><td>Первое появление</td><td><code>overlay</code> 458, <code>#mlAuth</code>, <code>.mla-card</code> 660–662</td><td>карточка 320 · <code>--ease</code> (24 px, .98); поля 260, шаг 40, до 6</td><td>1</td></tr>
+        <tr><td>Вход ⇄ Регистрация, «Забыли пароль»</td><td><code>draw()</code> 467 вызывать под шторкой; <code>.mla-card{overflow:hidden}</code></td><td>уход 180 (шаг 30) · шторка 300 <code>--ease-io</code> + 280 (.33,1,.68,1) · приход 260 (шаг 40) ≈ 0,85 с</td><td>2</td></tr>
+        <tr><td>Слиток-проводник, «качает головой» при ошибке, точки загрузки</td><td>картинка <code>.ms-still</code> в шапке карточки</td><td>прыжок 340 · spring; тряска 300; точки — пока ждём ответ</td><td>1</td></tr>
+        <tr><td>reduced-motion в shim.js, фокус после анимации, id полей не менять</td><td><code>matchMedia</code> в shim.js; <code>mlaEmail</code>, <code>mlaPass</code></td><td>—</td><td>1</td></tr>
+        <tr class="stg"><td colspan="4">Этап 4 — знакомство и встреча со Слитком · отдельный выпуск</td></tr>
+        <tr><td>Шаги, высота карточки, точки</td><td><code>obDraw</code> ≈2006, <code>#ob</code> 580, <code>.ob-dots</code> 585 (scaleX вместо цвета)</td><td>160 out / 280 in ±32 px; высота 260; точки 220</td><td>2</td></tr>
+        <tr><td>«Начать» → шторка на весь экран → Главная</td><td>финал <code>obDraw</code>; <code>balTo</code> с 0</td><td>300 + 280 · <code>--ease-io</code>; карточка 16 px 260; счёт 350</td><td>2</td></tr>
+        <tr><td>Приветствие 3D, three.js заранее на шаге 3</td><td><code>mascot.js</code>, <code>msSync</code></td><td>событие Слитка ≈ +200 мс после шторки</td><td>1,5</td></tr>
+        <tr class="stg"><td colspan="4">Этап 5 — «Монеты: 3М» · выпуск после данных</td></tr>
+        <tr><td>Кнопка 3М, «скелет» цифр до прихода истории</td><td><code>.ranges</code> монет, <code>.skel</code> 467, <code>renderCoins</code> 1403, <code>chart()</code> в shim.js</td><td>скелет — пока грузится; цифры 120 .35→1</td><td>4</td></tr>
+      </tbody>
+    </table>
+    <p style="margin-top:10px"><b>Порядок:</b> 2 → 3 → 4 → 5, каждый — отдельный выпуск по кнопке владельца; 3 и 4 трогают вход — не совмещать с другим. Итого ≈ 9,6 + 5 + 5,5 + 4 ≈ <b>24 ч</b> Ильи (+ по 0,5 ч Веры на скриншоты каждого выпуска). Слабые телефоны: класс <code>html.lite</code> (концепт) — без размытия и свечения, лесенка до 3 элементов.</p>
+  </section>
+</div>
+
+<script>
+(() => {
+const $ = id => document.getElementById(id), root = document.documentElement, phone = $('phone');
+const mq = matchMedia('(prefers-reduced-motion: reduce)');
+let K = 1, rmToggle = false;
+const RM = () => rmToggle || mq.matches;
+const ms = x => x * K;
+const E = {ease:'cubic-bezier(.2,.8,.2,1)', in:'cubic-bezier(.4,0,1,1)', io:'cubic-bezier(.65,0,.35,1)', out:'cubic-bezier(.33,1,.68,1)', sheet:'cubic-bezier(.32,.72,0,1)', spring:'cubic-bezier(.34,1.3,.64,1)'};
+const anim = (el, kf, o) => RM() || !el.animate ? null : el.animate(kf, Object.assign({fill:'backwards'}, o, {duration:ms(o.duration), delay:ms(o.delay || 0)}));
+const done = a => a ? a.finished.catch(() => {}) : Promise.resolve();
+const wait = t => new Promise(r => setTimeout(r, RM() ? 0 : ms(t)));
+const fmt = v => '$' + Math.round(v).toLocaleString('ru-RU').replace(/ /g, ' ');
+const stagger = (els, o) => [...els].slice(0, o.max || 5).forEach((el, i) => anim(el, [{opacity:0, transform:o.from || 'translateY(10px)'}, {opacity:1, transform:'none'}], {duration:o.d || 260, easing:E.ease, delay:(o.base || 0) + i * (o.step || 35)}));
+
+/* ---------- панель показа ---------- */
+let hide = false;
+try { const t = localStorage.getItem('ml-proto-theme'); if (t) root.dataset.theme = t; } catch (e) {}
+if (!root.dataset.theme) root.dataset.theme = matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+const syncTheme = () => { const l = root.dataset.theme === 'light'; $('tTheme').textContent = l ? 'Тёмная' : 'Светлая'; };
+syncTheme();
+$('tTheme').onclick = () => { root.dataset.theme = root.dataset.theme === 'light' ? 'dark' : 'light'; syncTheme(); try { localStorage.setItem('ml-proto-theme', root.dataset.theme); } catch (e) {} };
+$('tSlow').onclick = e => { K = K === 1 ? 3 : 1; root.style.setProperty('--k', K); e.currentTarget.setAttribute('aria-pressed', K === 3); };
+$('tRm').onclick = e => { rmToggle = !rmToggle; root.classList.toggle('rm', rmToggle); e.currentTarget.setAttribute('aria-pressed', rmToggle); };
+
+/* ---------- счёт суммы ---------- */
+function countTo(el, to, f, dur = 350) {
+  const from = el._v == null ? to : el._v; el._v = to; cancelAnimationFrame(el._raf);
+  if (hide) { el.textContent = '••••'; return; }
+  if (RM() || from === to) { el.textContent = f(to); return; }
+  const st = performance.now(), D = ms(dur);
+  const step = n => { const k = Math.min(1, (n - st) / D), e = 1 - Math.pow(1 - k, 3); el.textContent = f(from + (to - from) * e); if (k < 1) el._raf = requestAnimationFrame(step); };
+  el._raf = requestAnimationFrame(step);
+}
+let bal = 12480, lastAdd = 0; $('bal')._v = bal;
+const jump = () => anim($('msc'), [{transform:'none'}, {transform:'translateY(-10px) scaleY(1.04)', offset:.45}, {transform:'translateY(0) scaleY(.94)', offset:.8}, {transform:'none'}], {duration:340, easing:E.spring});
+const pop = el => anim(el, [{transform:'scale(.8)', opacity:.4}, {transform:'none', opacity:1}], {duration:220, easing:E.spring});
+
+/* ---------- период с едущей пилюлей ---------- */
+function placePill(r) { const on = r.querySelector('[aria-pressed="true"]'), p = r.querySelector('.pill'); p.style.width = on.offsetWidth + 'px'; p.style.transform = `translateX(${on.offsetLeft}px)`; }
+const HOME = [[1.5, 186], [4.2, 503], [-3.1, -399], [38.0, 3437]], HL = ['за 24ч', 'за неделю', 'за месяц', 'за год'];
+document.querySelectorAll('.ranges').forEach(r => r.addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  r.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x === b)); placePill(r);
+  if (r.dataset.r === 'home') {
+    const [pc, ab] = HOME[+b.dataset.p], c = $('dChip');
+    c.textContent = (pc >= 0 ? '+' : '−') + Math.abs(pc).toLocaleString('ru-RU') + '%';
+    c.style.background = pc >= 0 ? '#34e0a11f' : '#ff5f6d1f'; c.style.color = pc >= 0 ? '#34e0a1' : '#ff5f6d'; pop(c);
+    $('dAbs').textContent = hide ? '••••' : (ab >= 0 ? '+' : '−') + fmt(Math.abs(ab)) + ' ' + HL[+b.dataset.p];
+    anim($('dAbs'), [{opacity:.35}, {opacity:1}], {duration:120, easing:'linear'});
+  } else setPeriod(b.dataset.p);
+}));
+
+/* ---------- монеты ---------- */
+const COINS = [['BTC', '0,0731', '#f7931a', 98450, 7197, {'24ч':1.5,'1Н':4.1,'1М':-2.8,'3М':12.4,'1Г':61,'Всё':74}],
+  ['ETH', '0,94', '#627eea', 2918, 2743, {'24ч':-0.8,'1Н':2.2,'1М':-6.1,'3М':8.9,'1Г':22,'Всё':31}],
+  ['SOL', '9,2', '#14b8a6', 162.7, 1497, {'24ч':3.4,'1Н':9.8,'1М':4.4,'3М':-11.2,'1Г':40,'Всё':18}],
+  ['TON', '182', '#0098ea', 5.48, 997, {'24ч':-1.9,'1Н':-4.6,'1М':-9.3,'3М':-21,'1Г':-35,'Всё':-12}],
+  ['DOGE', '2 940', '#c2a633', 0.2049, 602, {'24ч':0.6,'1Н':12.3,'1М':18.1,'3М':5.2,'1Г':140,'Всё':96}]];
+let empty = false, period = '24ч';
+const pct = v => (v >= 0 ? '+' : '−') + Math.abs(v).toLocaleString('ru-RU', {maximumFractionDigits:1}) + '%';
+const price = v => v >= 1000 ? fmt(v) : '$' + v.toLocaleString('ru-RU', {maximumFractionDigits:v < 1 ? 4 : 2});
+function renderCoins(skel) {
+  const box = $('coinTbl');
+  if (empty) { box.innerHTML = esHTML('coins'); return; }
+  box.innerHTML = `<div class="th"><span></span><span>Актив</span><span>Цена · ${period}</span><span>Портфель ▾</span></div>` + COINS.map(([s, q, c, p, v, ch]) => {
+    const d = ch[period], pl = v - v / (1 + d / 100), cls = d >= 0 ? 'up' : 'dn', sk = skel ? ' skel' : '';
+    return `<div class="rw"><span class="cic" style="background:${c}">${s[0]}</span><span><b>${s}</b><small>${q}</small></span>
+      <span class="r"><b>${price(p)}</b><small class="num ${cls}${sk}">${pct(d)}</small></span>
+      <span class="r"><b class="amt">${hide ? '••••' : fmt(v)}</b><small class="num amt ${cls}${sk}">${hide ? '••••' : (pl >= 0 ? '+' : '−') + fmt(Math.abs(pl))}</small></span></div>`;
+  }).join('');
+}
+function setPeriod(p) {
+  period = p;
+  if (p === '3М' && !RM()) { renderCoins(true); setTimeout(() => { if (period === '3М') { renderCoins(false); $('coinTbl').querySelectorAll('.num').forEach(n => anim(n, [{opacity:0}, {opacity:1}], {duration:180, easing:E.ease})); } }, ms(700)); return; }
+  renderCoins(false); $('coinTbl').querySelectorAll('.num').forEach(n => anim(n, [{opacity:.35}, {opacity:1}], {duration:120, easing:'linear'}));
+}
+
+/* ---------- стратегия, активность, пустые экраны ---------- */
+const ES = {
+  coins: ['Монет пока нет', 'Внеси то, что у тебя уже есть, — и здесь появится таблица с ценами и прибылью.', 'Внести остаток', '<circle cx="52" cy="58" r="26" fill="none" style="stroke:var(--lav)" stroke-width="3"/><circle cx="80" cy="62" r="26" style="fill:var(--bg2);stroke:var(--accent)"  stroke-width="3"/><path class="dr" d="M80 50v24M70 62h20" style="stroke:var(--accent)" stroke-width="3.5" stroke-linecap="round"/>'],
+  strat: ['Лестница ещё не настроена', 'Задай уровни докупок биткоина — Слиток подскажет, когда цена до них дойдёт.', 'Настроить лестницу', '<path class="dr" d="M22 92h22V74h22V56h22V38h22" fill="none" style="stroke:var(--accent)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="110" cy="38" r="6" style="fill:var(--pink)"/>'],
+  act: ['Записей пока нет', 'Запиши первую покупку — она появится здесь, а баланс посчитается сам.', 'Записать покупку', '<rect x="30" y="26" width="72" height="78" rx="12" style="fill:var(--bg2);stroke:var(--line2)"  stroke-width="3"/><path class="dr" d="M44 48h44M44 64h30M44 80h36" style="stroke:var(--lav)" stroke-width="4" stroke-linecap="round"/>']};
+function esHTML(k) { const [h, p, b, art] = ES[k]; return `<div class="es"><div class="art"><svg viewBox="0 0 132 112">${art}</svg></div><h3>${h}</h3><p>${p}</p><button class="btn" data-act="${k === 'act' ? 'buy' : ''}">${b}</button></div>`; }
+function animEmpty(box) {
+  const es = box.querySelector('.es'); if (!es) return;
+  anim(es.querySelector('.art'), [{opacity:0, transform:'scale(.9)'}, {opacity:1, transform:'none'}], {duration:260, easing:E.spring});
+  es.querySelectorAll('.dr').forEach(p => { const L = p.getTotalLength ? p.getTotalLength() : 100; p.style.strokeDasharray = L; anim(p, [{strokeDashoffset:L}, {strokeDashoffset:0}], {duration:340, easing:E.ease, delay:120}); });
+  stagger(es.querySelectorAll('h3,p,.btn'), {base:80, step:35, from:'translateY(8px)'});
+}
+function renderStrat() {
+  $('stratBox').innerHTML = empty ? esHTML('strat') : [[1, '−10% · $88 600', 'докуплено', ''], [2, '−20% · $78 760', 'цена рядом', 'go'], [3, '−30% · $68 900', 'ждём', ''], [4, '−40% · $59 070', 'ждём', '']]
+    .map(([n, t, s, c]) => `<div class="lv"><span class="n">${n}</span><span><b>${t}</b><small>${['$150', '$200', '$300', '$400'][n - 1]} на уровень</small></span><span class="st ${c}">${s}</span></div>`).join('');
+}
+let tx = [['Покупка BTC', '6 нояб., 10:12', '+$100'], ['Покупка ETH', '1 нояб., 09:40', '+$100'], ['Пополнение биржи', '30 окт., 18:05', '+$500']];
+function renderAct() {
+  $('actBox').innerHTML = empty ? esHTML('act') : tx.map(([a, d, v]) => `<div class="lv"><span class="n" style="font-size:14px">₿</span><span><b>${a}</b><small>${d}</small></span><span class="st go amt">${hide ? '••••' : v}</span></div>`).join('');
+}
+function renderAll() { renderCoins(false); renderStrat(); renderAct(); }
+$('dEmpty').onclick = e => { empty = !empty; e.currentTarget.setAttribute('aria-pressed', empty); renderAll(); if (cur === 'home') show('act'); else enterView(document.querySelector(`[data-view="${cur}"]`), 0); };
+
+/* ---------- вкладки + капля ---------- */
+const TABS = ['home', 'coins', 'strat', 'act'], TC = ['#6a35ff', '#a64dff', '#e04dff', '#ff52d9'];
+let cur = 'home';
+const tabBtn = t => document.querySelector(`.tab[data-tab="${t}"]`);
+const dropX = t => { const b = tabBtn(t); return b.offsetLeft + b.offsetWidth / 2; };
+function placeDrop(t, from) {
+  const d = $('tdrop'), g = $('tglow'), x1 = dropX(t), x0 = from ? dropX(from) : x1;
+  root.style.setProperty('--tc', TC[TABS.indexOf(t)]);
+  const T = x => `translateX(${x - 28}px)`, G = x => `translateX(${x - 60}px)`;
+  d.style.transform = T(x1) ; g.style.transform = G(x1);
+  if (from && from !== t) {
+    anim(d, [{transform:T(x0)}, {transform:`${T((x0 + x1) / 2)} scaleX(1.3)`, offset:.45}, {transform:T(x1)}], {duration:320, easing:E.spring});
+    anim(g, [{transform:G(x0)}, {transform:G(x1)}], {duration:320, easing:E.ease});
+  }
+}
+function enterView(v, dir) {
+  anim(v, [{opacity:0, transform:`translateX(${dir * 16}px)`}, {opacity:1, transform:'none'}], {duration:260, easing:E.ease});
+  stagger(v.querySelectorAll('.st-i'), {base:20, step:35, max:5});
+  if (v.dataset.view === 'home') v.querySelectorAll('.bar').forEach((b, i) => anim(b, [{transform:'scaleX(0)'}, {transform:'none'}], {duration:340, easing:E.ease, delay:120 + i * 35}));
+  v.querySelectorAll('.lv').forEach((r, i) => i < 5 && anim(r, [{opacity:0, transform:'translateY(8px)'}, {opacity:1, transform:'none'}], {duration:260, easing:E.ease, delay:90 + i * 35}));
+  v.querySelectorAll('.card').forEach(animEmpty);
+}
+function show(t) {
+  if (t === cur) return;
+  const dir = TABS.indexOf(t) > TABS.indexOf(cur) ? 1 : -1, prev = cur; cur = t;
+  document.querySelectorAll('.view').forEach(v => v.hidden = v.dataset.view !== t);
+  document.querySelectorAll('.tab').forEach(b => b.dataset.tab === t ? b.setAttribute('aria-current', 'page') : b.removeAttribute('aria-current'));
+  $('scr').scrollTop = 0;
+  placeDrop(t, prev);
+  const v = document.querySelector(`[data-view="${t}"]`); enterView(v, dir);
+  requestAnimationFrame(() => v.querySelectorAll('.ranges').forEach(placePill));
+}
+document.querySelectorAll('.tab').forEach(b => b.onclick = () => show(b.dataset.tab));
+
+/* ---------- скрыть суммы ---------- */
+$('eye').onclick = async e => {
+  const b = e.currentTarget; hide = !hide; b.setAttribute('aria-pressed', hide);
+  const els = [...document.querySelectorAll('.amt')];
+  await Promise.all(els.map(el => done(anim(el, [{opacity:1}, {opacity:0, transform:'translateY(-4px)'}], {duration:120, easing:E.in, fill:'forwards'}))));
+  $('bal').textContent = hide ? '••••' : fmt(bal);
+  document.querySelector('.ranges[data-r="home"] [aria-pressed="true"]').click();
+  renderAll();
+  document.querySelectorAll('.amt').forEach(el => { el.getAnimations().forEach(a => a.cancel()); anim(el, [{opacity:0, transform:'translateY(4px)'}, {opacity:1, transform:'none'}], {duration:180, easing:E.ease}); });
+};
+
+/* ---------- шторка ---------- */
+const sheet = $('sheet'), shIn = $('shIn');
+const MENU = `<button class="mi" data-go="buy"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></i><span><b>Купить</b><small>Покупка монеты за доллары</small></span></button>
+  <button class="mi"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M5 12h14"/></svg></i><span><b>Продать</b><small>Продажа и прибыль</small></span></button>
+  <button class="mi"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="7"/><path d="M12 9v6M9 12h6"/></svg></i><span><b>Остаток монеты</b><small>То, что уже есть</small></span></button>
+  <button class="mi"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v12M7 11l5 5 5-5M5 20h14"/></svg></i><span><b>Пополнить биржу</b><small>Доллары на счёт</small></span></button>`;
+const BUY = `<div class="fl"><span>Монета</span><div class="fchips"><button class="fchip" aria-pressed="true">BTC</button><button class="fchip" aria-pressed="false">ETH</button><button class="fchip" aria-pressed="false">SOL</button></div></div>
+  <label class="fl"><span>Сумма, $</span><input class="inp" inputmode="decimal" value="100" id="amt"></label>
+  <button class="btn" id="save"><span class="lb">Сохранить</span><span class="ok"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5 9-10"/></svg>Записано</span></button>`;
+function openSheet(form) {
+  shIn.innerHTML = form === 'buy' ? BUY : MENU; $('shTitle').textContent = form === 'buy' ? 'Купить' : 'Новая запись'; $('shBack').hidden = true;
+  sheet.style.transform = ''; sheet.classList.add('open'); $('scrim').classList.add('open'); phone.classList.add('sheet-on');
+  stagger(shIn.children, {base:80, step:35, max:4, from:'translateY(12px)'});
+}
+function closeSheet() { sheet.style.transform = ''; sheet.classList.remove('open'); $('scrim').classList.remove('open'); phone.classList.remove('sheet-on'); }
+async function swapForm(form, dir) {
+  const box = shIn;
+  await done(anim(box, [{opacity:1, transform:'none'}, {opacity:0, transform:`translateX(${-56 * dir}px)`}], {duration:150, easing:E.in, fill:'forwards'}));
+  box.innerHTML = form === 'buy' ? BUY : MENU; $('shTitle').textContent = form === 'buy' ? 'Купить' : 'Новая запись'; $('shBack').hidden = form !== 'buy';
+  box.getAnimations().forEach(a => a.cancel());
+  anim(box, [{opacity:0, transform:`translateX(${56 * dir}px)`}, {opacity:1, transform:'none'}], {duration:260, easing:E.ease});
+}
+$('plus').onclick = () => sheet.classList.contains('open') ? closeSheet() : openSheet('menu');
+$('shClose').onclick = closeSheet; $('scrim').onclick = closeSheet;
+$('shBack').onclick = () => swapForm('menu', -1);
+$('dBuy').onclick = () => { if (!sheet.classList.contains('open')) openSheet('buy'); else swapForm('buy', 1); $('shBack').hidden = true; };
+shIn.addEventListener('click', async e => {
+  const go = e.target.closest('[data-go]'); if (go) return swapForm(go.dataset.go, 1);
+  const ch = e.target.closest('.fchip'); if (ch) { ch.parentNode.querySelectorAll('.fchip').forEach(x => x.setAttribute('aria-pressed', x === ch)); return; }
+  const sv = e.target.closest('#save'); if (!sv || sv.disabled) return;
+  sv.disabled = true; const add = lastAdd = +($('amt').value.replace(',', '.')) || 0;
+  const lb = sv.querySelector('.lb'), ok = sv.querySelector('.ok');
+  if (RM()) { lb.style.opacity = 0; ok.style.opacity = 1; } else {
+    anim(lb, [{opacity:1}, {opacity:0, transform:'translateY(-8px)'}], {duration:120, easing:E.in, fill:'forwards'});
+    anim(ok, [{opacity:0, transform:'scale(.6)'}, {opacity:1, transform:'none'}], {duration:260, easing:E.spring, delay:80, fill:'both'});
+  }
+  await wait(420); closeSheet();
+  const coin = shIn.querySelector('.fchip[aria-pressed="true"]').textContent;
+  tx.unshift(['Покупка ' + coin, 'только что', '+' + fmt(add)]); if (!empty) renderAct();
+  if (cur !== 'home') show('home');
+  await wait(200); bal += add; countTo($('bal'), bal, fmt); jump();
+  $('toastMsg').textContent = `Покупка ${coin} на ${fmt(add)} записана`; $('toast').classList.add('show');
+  clearTimeout(window._tt); window._tt = setTimeout(() => $('toast').classList.remove('show'), 3200 * K);
+});
+$('toastUndo').onclick = () => { $('toast').classList.remove('show'); bal -= lastAdd; tx.shift(); if (!empty) renderAct(); countTo($('bal'), bal, fmt); };
+document.addEventListener('click', e => { const b = e.target.closest('[data-act="buy"]'); if (b) openSheet('buy'); });
+/* стянуть вниз */
+let dy0 = null, dy = 0;
+$('shHead').addEventListener('pointerdown', e => { if (e.target.closest('button')) return; dy0 = e.clientY; dy = 0; sheet.classList.add('drag'); $('shHead').setPointerCapture(e.pointerId); });
+$('shHead').addEventListener('pointermove', e => { if (dy0 == null) return; dy = Math.max(0, e.clientY - dy0); sheet.style.transform = `translateY(${dy}px)`; });
+$('shHead').addEventListener('pointerup', () => { if (dy0 == null) return; dy0 = null; sheet.classList.remove('drag');
+  if (dy > 90) closeSheet(); else { const from = sheet.style.transform; sheet.style.transform = ''; anim(sheet, [{transform:from}, {transform:'none'}], {duration:240, easing:E.sheet}); } });
+
+/* ---------- этап 3: вход ---------- */
+const MS = document.querySelector('#msc svg').outerHTML.replace(/id="mf"/, 'id="mf2"').replace(/url\(#mf\)/, 'url(#mf2)');
+const AUTH = {
+  in: `<div class="ahead"><div class="wm" style="flex:1"><span>Money</span><span class="wm-l">Life</span></div><div class="mascot" id="amsc">${MS}</div></div>
+    <h2>Вход</h2>
+    <label class="fl"><span>Почта</span><input class="inp" id="aMail" type="email" placeholder="name@mail.com" autocomplete="off"></label>
+    <label class="fl"><span>Пароль</span><input class="inp" type="password" value="demo-demo"></label>
+    <button class="btn" id="aGo"><span class="lb">Войти</span><span class="dots"><i></i><i></i><i></i></span></button>
+    <div style="display:flex;justify-content:space-between"><button class="lnk" data-m="up">Создать аккаунт</button><button class="lnk" style="color:var(--mute)">Забыли пароль?</button></div>`,
+  up: `<div class="ahead"><div class="wm" style="flex:1"><span>Money</span><span class="wm-l">Life</span></div><div class="mascot" id="amsc">${MS}</div></div>
+    <h2>Регистрация</h2>
+    <label class="fl"><span>Почта</span><input class="inp" id="aMail" type="email" value="demo@example.com" autocomplete="off"></label>
+    <label class="fl"><span>Пароль</span><input class="inp" type="password" value="demo-demo"></label>
+    <label class="fl"><span>Ещё раз пароль</span><input class="inp" type="password" value="demo-demo"></label>
+    <button class="btn" id="aGo" data-next="ob"><span class="lb">Создать аккаунт</span><span class="dots"><i></i><i></i><i></i></span></button>
+    <button class="lnk" data-m="in">Уже есть аккаунт? Войти</button>`};
+const abody = $('abody'), acurt = $('acurt');
+const aItems = () => [...abody.children].filter(x => x.className !== 'ahead');
+function openAuth() {
+  closeSheet(); abody.innerHTML = AUTH.in; abody.dataset.mode = 'in'; $('auth').hidden = false; acurt.style.transform = '';
+  anim($('auth'), [{opacity:0}, {opacity:1}], {duration:260, easing:'linear'});
+  anim($('acard'), [{opacity:0, transform:'translateY(24px) scale(.98)'}, {opacity:1, transform:'none'}], {duration:320, easing:E.ease, delay:60});
+  stagger(aItems(), {base:160, step:40, max:6, from:'translateY(12px)'});
+}
+async function switchAuth(m) {
+  const dir = m === 'up' ? -1 : 1;
+  if (RM()) { abody.innerHTML = AUTH[m]; abody.dataset.mode = m; return; }
+  aItems().slice(0, 6).forEach((el, i) => anim(el, [{opacity:1, transform:'none'}, {opacity:0, transform:`translateX(${24 * dir}px)`}], {duration:180, easing:E.in, delay:i * 30, fill:'forwards'}));
+  await wait(120);
+  const s = dir < 0 ? -1 : 1; // регистрация — шторка слева направо, обратно — справа налево
+  await done(anim(acurt, [{transform:`translateX(${-115 * s}%) rotate(-14deg)`}, {transform:'translateX(0) rotate(-14deg)'}], {duration:300, easing:E.io, fill:'forwards'}));
+  abody.innerHTML = AUTH[m]; abody.dataset.mode = m;
+  const a2 = anim(acurt, [{transform:'translateX(0) rotate(-14deg)'}, {transform:`translateX(${115 * s}%) rotate(-14deg)`}], {duration:280, easing:E.out, fill:'forwards'});
+  acurt.getAnimations().filter(a => a !== a2).forEach(a => a.cancel());
+  anim($('amsc'), [{transform:'none'}, {transform:'translateY(-8px)', offset:.45}, {transform:'none'}], {duration:340, easing:E.spring, delay:60});
+  stagger(aItems(), {base:80, step:40, max:6, from:`translateX(${-24 * dir}px)`});
+  await done(a2); acurt.getAnimations().forEach(a => a.cancel());
+}
+abody.addEventListener('click', async e => {
+  const l = e.target.closest('[data-m]'); if (l) return switchAuth(l.dataset.m);
+  const go = e.target.closest('#aGo'); if (!go) return;
+  const mail = $('aMail');
+  if (!mail.value.trim()) {
+    mail.classList.add('bad'); mail.placeholder = 'Введи почту';
+    anim($('acard'), [{transform:'none'}, {transform:'translateX(-6px)'}, {transform:'translateX(6px)'}, {transform:'translateX(-4px)'}, {transform:'translateX(3px)'}, {transform:'none'}], {duration:300, easing:'linear'});
+    anim($('amsc'), [{transform:'none'}, {transform:'rotate(-8deg)'}, {transform:'rotate(8deg)'}, {transform:'none'}], {duration:300, easing:E.ease});
+    setTimeout(() => mail.focus({preventScroll:true}), RM() ? 0 : ms(300)); return;
+  }
+  go.disabled = true;
+  anim(go.querySelector('.lb'), [{opacity:1}, {opacity:0}], {duration:120, easing:E.in, fill:'forwards'});
+  anim(go.querySelector('.dots'), [{opacity:0}, {opacity:1}], {duration:120, easing:E.ease, fill:'forwards', delay:60});
+  if (RM()) { go.querySelector('.lb').style.opacity = 0; go.querySelector('.dots').style.opacity = 1; }
+  await wait(700);
+  if (go.dataset.next === 'ob') { await fullCurtain(() => { $('auth').hidden = true; openOb(); }); }
+  else { await done(anim($('auth'), [{opacity:1}, {opacity:0}], {duration:200, easing:E.in, fill:'forwards'})); $('auth').hidden = true; $('auth').getAnimations().forEach(a => a.cancel()); }
+});
+$('dAuth').onclick = openAuth;
+
+/* общая шторка на весь экран */
+async function fullCurtain(swap) {
+  const c = $('fcurt');
+  if (RM()) { swap(); return; }
+  c.hidden = false;
+  await done(anim(c, [{transform:'translate(-115%,40%) rotate(-14deg)'}, {transform:'translate(0,0) rotate(-14deg)'}], {duration:300, easing:E.io, fill:'forwards'}));
+  swap();
+  const a = anim(c, [{transform:'translate(0,0) rotate(-14deg)'}, {transform:'translate(115%,-40%) rotate(-14deg)'}], {duration:280, easing:E.out, fill:'forwards'});
+  c.getAnimations().filter(x => x !== a).forEach(x => x.cancel());
+  await done(a); c.getAnimations().forEach(x => x.cancel()); c.hidden = true;
+}
+
+/* ---------- этап 4: знакомство ---------- */
+const OB = [
+  {h:'Привет! Я Слиток', p:'Помогу вести крипту без таблиц: сколько вложено, сколько стоит сейчас и когда докупать.', body:`<div style="display:grid;place-items:center;padding:6px 0"><div class="mascot" style="position:static;width:96px;height:84px" id="obm">${MS.replace(/mf2/g, 'mf3')}</div></div>`},
+  {h:'Что будешь отслеживать?', p:'Можно поменять потом в настройках.', body:['Биткоин', 'Альткоины', 'Всё вместе'].map((t, i) => `<button class="ob-opt" aria-pressed="${i === 2}">${t}</button>`).join('')},
+  {h:'Сколько вкладываешь в месяц?', p:'Это для подсказок по докупкам, не обязательство.', body:`<div class="fchips">${['$50', '$100', '$300'].map((t, i) => `<button class="fchip" aria-pressed="${i === 1}">${t}</button>`).join('')}</div>`},
+  {h:'Готово!', p:'Запиши первую покупку — и Главная оживёт.', body:''}];
+let obStep = 0;
+function obHTML() {
+  const s = OB[obStep];
+  return `<div class="ob-dots">${OB.map((_, i) => `<i class="${i <= obStep ? 'on' : ''}"></i>`).join('')}</div>
+    <div class="obody" id="ostep"><h2>${s.h}</h2><p style="color:var(--mute);font-size:14px">${s.p}</p>${s.body}</div>
+    <div class="ob-nav">${obStep ? '<button class="btn ghost" data-ob="-1">Назад</button>' : ''}<button class="btn" data-ob="1">${obStep === OB.length - 1 ? 'Начать' : 'Далее'}</button></div>`;
+}
+function openOb() {
+  obStep = 0; $('obody').innerHTML = obHTML(); $('ob').hidden = false;
+  anim($('ocard'), [{opacity:0, transform:'translateY(16px)'}, {opacity:1, transform:'none'}], {duration:280, easing:E.ease});
+  stagger($('ostep').children, {base:80, step:35, max:4});
+}
+async function obGo(d) {
+  if (obStep + d >= OB.length) return finishOb();
+  const card = $('ocard'), h0 = card.offsetHeight, st = $('ostep');
+  if (!RM()) await done(anim(st, [{opacity:1, transform:'none'}, {opacity:0, transform:`translateX(${-32 * d}px)`}], {duration:160, easing:E.in, fill:'forwards'}));
+  obStep += d;
+  const old = $('obody').querySelectorAll('.ob-dots i');
+  const tmp = document.createElement('div'); tmp.innerHTML = obHTML();
+  old.forEach((dot, i) => dot.classList.toggle('on', i <= obStep));
+  $('obody').replaceChild(tmp.children[1], $('ostep')); $('obody').replaceChild(tmp.children[1], $('obody').querySelector('.ob-nav'));
+  const h1 = card.offsetHeight;
+  anim(card, [{height:h0 + 'px'}, {height:h1 + 'px'}], {duration:260, easing:E.ease});
+  const ns = $('ostep');
+  anim(ns, [{opacity:0, transform:`translateX(${32 * d}px)`}, {opacity:1, transform:'none'}], {duration:280, easing:E.ease});
+  stagger([...ns.children].slice(1), {base:60, step:35, max:3, from:`translateX(${20 * d}px)`});
+  if ($('obm')) setTimeout(() => anim($('obm'), [{transform:'none'}, {transform:'translateY(-10px)', offset:.45}, {transform:'none'}], {duration:340, easing:E.spring}), ms(200));
+}
+async function finishOb() {
+  if (!RM()) await done(anim($('ocard'), [{opacity:1, transform:'none'}, {opacity:0, transform:'scale(.96)'}], {duration:200, easing:E.in, fill:'forwards'}));
+  await fullCurtain(() => {
+    $('ob').hidden = true; $('ocard').getAnimations().forEach(a => a.cancel());
+    if (cur !== 'home') show('home');
+    $('bal')._v = 0; $('bal').textContent = hide ? '••••' : '$0';
+  });
+  const hv = document.querySelector('[data-view="home"]');
+  anim(hv.querySelector('.hero'), [{opacity:0, transform:'translateY(16px)'}, {opacity:1, transform:'none'}], {duration:260, easing:E.ease});
+  stagger([...hv.querySelectorAll('.st-i')].slice(1), {base:60, step:40, max:4});
+  countTo($('bal'), bal, fmt);
+  setTimeout(jump, ms(200));
+}
+$('obody').addEventListener('click', e => {
+  const n = e.target.closest('[data-ob]'); if (n) return obGo(+n.dataset.ob);
+  const o = e.target.closest('.ob-opt,.fchip'); if (o) o.parentNode.querySelectorAll('.ob-opt,.fchip').forEach(x => x.setAttribute('aria-pressed', x === o));
+});
+$('dOb').onclick = () => { closeSheet(); $('auth').hidden = true; openOb(); };
+
+/* ---------- старт ---------- */
+renderAll();
+const init = () => { document.querySelectorAll('.ranges').forEach(r => r.offsetParent && placePill(r)); placeDrop('home'); };
+init(); addEventListener('resize', init); if (document.fonts) document.fonts.ready.then(init);
+enterView(document.querySelector('[data-view="home"]'), 0);
+})();
+</script>
+</body>
+</html>
