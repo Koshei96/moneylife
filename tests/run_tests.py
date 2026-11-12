@@ -1026,7 +1026,7 @@ def run_browser():
             else: fail('Орион: оповещение голосом', f'{a4} | {al}')
             # цена голосом: «63 тыс.», «63.000», «шестьдесят три тысячи», «63к», просто «63» у биткоина — это 63 000 (жалоба владельца 12.11)
             bad = []
-            for q in ['сообщи когда биткоин будет 63 тыс.', 'сообщи когда биткоин будет 63.000', 'сообщи когда биткоин будет шестьдесят три тысячи', 'сообщи когда биткоин упадет до 63к', 'сообщи когда биткоин будет 63']:
+            for q in ['сообщи когда биткоин будет 63 тыс.', 'сообщи когда биткоин будет 63.000', 'сообщи когда биткоин будет шестьдесят три тысячи', 'сообщи когда биткоин упадет до 63к', 'сообщи когда биткоин будет 63', 'поставь уведомление на 63 тыс', 'поставь оповещение на биткоин 63 тысячи']:
                 r = R(q); al = pg.evaluate("(()=>{const k=Object.keys(localStorage).find(k=>k.startsWith('ml-x:'));return k?(JSON.parse(localStorage.getItem(k)).alerts||[]):[]})()")
                 if not any(x['sym'] == 'BTC' and x['price'] == 63000 for x in al): bad.append(q + ' → ' + r)
                 pg.evaluate("(()=>{const k=Object.keys(localStorage).find(k=>k.startsWith('ml-x:'));const o=JSON.parse(localStorage.getItem(k));o.alerts=(o.alerts||[]).filter(a=>a.sym!=='BTC');localStorage.setItem(k,JSON.stringify(o));})()")

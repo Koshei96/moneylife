@@ -642,13 +642,17 @@
   const qtyW = v => (+v).toLocaleString(LOC, { maximumFractionDigits: v >= 100 ? 0 : v >= 1 ? 3 : 6 });
   function coinPrice(sym) { const S = ST.S || {}, D = ST.D || {}, lv = S.live || {}; return +(lv.prices && lv.prices[sym]) || +(D.prices && D.prices[sym]) || 0; }
   function priceW(v) { return v >= 10 ? moneyW(v) : (v >= 1 ? String(+v.toFixed(2)).replace('.', ',') : String(+v.toPrecision(3)).replace('.', ',')) + ' доллара'; }
+  /* просьба поставить оповещение о цене — любыми словами: «сообщи», «напомни», «поставь уведомление», «оповещение», «сигнал» (12.11.2026) */
+  function alertQ(t) { return /(сообщи|сповищ|нагадув|скажи,? когда|оповест|оповещ|уведом|напомни|напомин|предупреди|дай знать|сигнал|алерт|будильник)/.test(t); }
   function reply(q) {
     const t = norm(q), S = ST.S || {}, D = ST.D || {}, M = window.MLX || {};
     const has = (...k) => k.some(x => t.indexOf(x) >= 0);
     if (!t.trim()) return 'Не расслышал. Зажмите меня и спросите ещё раз.';
-    const sym = coinIn(t), num = numIn(t, sym);
+    let sym = coinIn(t); const num = numIn(t, sym || (alertQ(t) ? 'BTC' : ''));
     /* оповещение: «сообщи, когда солана будет 150» */
-    if (has('сообщи', 'скажи когда', 'скажи, когда', 'оповест', 'напомни', 'предупреди', 'дай знать') && (has('когда', 'если') || num)) {
+    if (alertQ(t) && (has('когда', 'если') || num)) {
+      /* монету не назвали («поставь уведомление на 74 тысячи») — берём ту, чья цена ближе всего к названной (обычно биткоин) */
+      if (!sym && num > 0) { let best = '', d = 1e9; ['BTC', 'ETH', 'SOL', 'BNB', 'XRP', 'TON', 'DOGE', 'ADA'].forEach(k => { const p = coinPrice(k); if (p > 0) { const x = Math.abs(Math.log(num / p)); if (x < d) { d = x; best = k; } } }); if (best && d < Math.log(3)) sym = best; }
       if (!sym) return 'Какая монета? Скажите, например: «сообщи, когда солана будет 150».';
       if (!(num > 0)) return 'Какую цену ждать? Скажите, например: «сообщи, когда ' + (NAME_N[sym] || sym).toLowerCase() + ' будет ' + Math.round((coinPrice(sym) || 100) * 1.1) + '».';
       const a = A.addAlert ? A.addAlert(sym, num) : null;
@@ -742,7 +746,7 @@
     const t = norm(q), local = t.trim() ? reply(q) : reply('');
     const sure = local && local.indexOf(UNK) !== 0 && !/^Не расслышал/.test(local);
     const follow = ST.lastBrain && now() - ST.lastBrain < 120 && (/^\s*(а|и|ну|тогда|а\s+если)\b/.test(t) || t.trim().split(/\s+/).length <= 3) && !/(у меня|мои |мой |сколько у)/.test(t);   /* переспрос: «а эфир?», «а почему?» */
-    const toBrain = A.ask && t.trim() && (marketQ(t) || !sure || follow);
+    const toBrain = A.ask && t.trim() && !(alertQ(t) && sure) && (marketQ(t) || !sure || follow);
     if (!toBrain) { remember(q, local); speak(local, { pri: 2, follow: byVoice }); return; }
     const sym = coinIn(t) || '';
     speak(sym || marketQ(t) ? FILL.news : FILL.think, { pri: 2 });
