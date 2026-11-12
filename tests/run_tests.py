@@ -419,6 +419,25 @@ def run_browser():
                 shot(pg, f'nav-{th}')
             scenario(f'Нижняя панель ({th})', {'session': True, 'docs': SEED}, s_nav_look, dsf=1, theme=th)
 
+        # --- А3б. метка сборки внизу «Настроек» (12.11, для тестировщиков): «Версия <метка из sw.js>», приглушённая, контраст ≥ 4,5:1
+        SW_V = re.search(r"const V='ml-(\d+)'", (ROOT / 'sw.js').read_text(encoding='utf-8')).group(1)
+        VER = """()=>{const lum=c=>{const m=c.match(/[\\d.]+/g).map(Number);return m.slice(0,3).map(v=>{v/=255;return v<=.03928?v/12.92:Math.pow((v+.055)/1.055,2.4)}).reduce((a,v,i)=>a+v*[.2126,.7152,.0722][i],0)};
+            const e=document.getElementById('appVer');let p=e,b='rgb(0,0,0)';for(;p;p=p.parentElement){const c=getComputedStyle(p).backgroundColor;if(c&&c!=='transparent'&&!/rgba\\(.*,\\s*0\\)$/.test(c)){b=c;break}}
+            const x=lum(getComputedStyle(e).color),y=lum(b),r=e.getBoundingClientRect();
+            return {txt:e.textContent.trim(),vis:!e.hidden&&r.height>0,cr:(Math.max(x,y)+.05)/(Math.min(x,y)+.05),fg:getComputedStyle(e).color===getComputedStyle(document.getElementById('setTitle')).color}}"""
+        for th in ('dark', 'light'):
+            def s_ver(pg, n, th=th):
+                wait_app(pg)
+                if pg.evaluate("document.documentElement.dataset.theme") != th: raise AssertionError('тема не включилась: ' + th)
+                pg.click('#setBtn'); pg.wait_for_selector('#setSheet.open', timeout=5000); pg.wait_for_timeout(500)
+                pg.evaluate("document.getElementById('appVer').scrollIntoView({block:'end'})"); pg.wait_for_timeout(300)
+                r = pg.evaluate(VER)
+                if r['vis'] and r['txt'] == f'Версия {SW_V}': ok(f'«Настройки» ({th}): внизу «{r["txt"]}» — та же метка, что в sw.js')
+                else: fail(f'«Настройки» ({th}): строка версии', f'{r} ≠ Версия {SW_V}')
+                ok(f'«Настройки» ({th}): версия приглушена, контраст {r["cr"]:.2f}:1') if r['cr'] >= 4.5 and not r['fg'] else fail(f'«Настройки» ({th}): цвет версии', str(r))
+                shot(pg, f'fix-version-{th}')
+            scenario(f'Версия в настройках ({th})', {'session': True, 'docs': SEED}, s_ver, dsf=1, theme=th)
+
         # --- А4. смена вкладок (08.11, «анимация вкладок»): содержимое проявляется 160–220 мс только через opacity/transform,
         #     полоска над активной вкладкой; при «уменьшить движение» в системе — без анимаций и переходов
         TABCLICK = """t=>{document.querySelector('nav.tabs [data-tab="'+t+'"]').click();const v=document.getElementById('v-'+t);
