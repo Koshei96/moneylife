@@ -96,14 +96,14 @@
   }
   function detect(S, D) {
     const ev = [];
-    let dep = false, buy = false, sell = false, air = false;
+    let dep = false, buy = false, sell = false, air = false; const bought = {};
     for (const t of S.tx || []) {
       if (!t || !t.id || BL.tx.has(t.id)) continue;
       BL.tx.add(t.id);
       const ts = Date.parse(t.ts || ''); if (isFinite(ts) && Date.now() - ts > 3 * 864e5) continue;
       const ty = t.type;
       if (ty === 'deposit' || ty === 'reserve_in' || ty === 'income') dep = true;
-      else if (ty === 'buy' || ty === 'dca' || ty === 'dip' || ty === 'start') buy = true;
+      else if (ty === 'buy' || ty === 'dca' || ty === 'dip' || ty === 'start') { buy = true; const y = String(t.symbol || '').toUpperCase(); if (y) bought[y] = (bought[y] || 0) + (+t.usd || (+t.qty || 0) * coinPrice(y) || 0); }
       else if (ty === 'sell') sell = true;
       else if (ty === 'airdrop') air = true;
     }
@@ -111,7 +111,11 @@
     if (sell) ev.push([dR >= 0 ? 'sellProfit' : 'sellLoss']);
     if (air) ev.push(['airdrop']);
     if (dep) ev.push(['deposit']);
-    if (buy) ev.push(['buy']);
+    if (buy) {
+      /* покупка «по плану» записывается несколькими строками подряд — собираем их 1,2 с и говорим один раз */
+      ST.buyAgg = ST.buyAgg || {}; Object.keys(bought).forEach(k => { ST.buyAgg[k] = (ST.buyAgg[k] || 0) + bought[k]; });
+      clearTimeout(ST.buyT); ST.buyT = setTimeout(() => { const a = ST.buyAgg || {}; ST.buyAgg = null; trigger('buy', { items: Object.keys(a).map(k => ({ sym: k, usd: a[k] })) }); }, 1200);
+    }
     const ath = +(S.cycle && S.cycle.ath) || 0;
     if (BL.ath && ath > BL.ath * 1.0005) ev.push(['ath', {}]);
     if (ath) BL.ath = Math.max(BL.ath, ath);
@@ -793,12 +797,34 @@
     speak((ST.name ? 'Приятно познакомиться, ' + ST.name + '. ' : 'Хорошо. ') + 'Я Орион. Слежу за портфелем и рынком и скажу, когда будет важное. Нажмите на меня — расскажу главное за сегодня. А если зажать — можно спросить голосом.', { pri: 2 });
   }
 
+  /* покупка (12.11.2026): что именно пополнено и на сколько, в конце — сколько теперь стоит портфель.
+     «Биткоин пополнен на 5 долларов, эфир — на 3 доллара, солана — на 2 доллара. Портфель теперь стоит 960 долларов.» */
+  const FEM_N = { SOL: 1 };
+  function buyLine(items, D) {
+    const its = items.filter(x => x && x.sym).sort((a, b) => (b.usd || 0) - (a.usd || 0)).slice(0, 5);
+    if (!its.length) return '';
+    const nameN = y => NAME_N[y] || ('монета ' + y), lower = y => NAME_N[y] ? NAME_N[y].toLowerCase() : y;
+    let alt = ''; try { alt = String((window.altNow && window.altNow()) || '').toUpperCase(); } catch (e) {}
+    const head = y => (y === alt && y !== 'BTC' && y !== 'ETH' && !NAME_N[y] ? 'Монета месяца ' + y : nameN(y));
+    const fem = y => !!FEM_N[y] || (!NAME_N[y]);
+    let t;
+    if (ST.hide) t = head(its[0].sym) + (fem(its[0].sym) ? ' пополнена' : ' пополнен') + (its.length > 1 ? ', а также ' + its.slice(1).map(x => lower(x.sym)).join(', ') : '') + '.';
+    else {
+      const f = its[0];
+      t = head(f.sym) + (fem(f.sym) ? ' пополнена' : ' пополнен') + (f.usd > 0 ? ' на ' + moneyW(f.usd) : '');
+      its.slice(1).forEach(x => { t += ', ' + (x.sym === alt && !NAME_N[x.sym] ? 'монета месяца ' + x.sym : lower(x.sym)) + (x.usd > 0 ? ' — на ' + moneyW(x.usd) : ''); });
+      t += '.';
+      if (D && D.total > 0) t += ' Портфель теперь стоит ' + moneyW(D.total) + '.';
+    }
+    return t;
+  }
   /* ---------- события ---------- */
   function trigger(name, data, force) {
     data = data || {};
     const D = ST.D || {}, S = ST.S || {};
     let t = '';
     if (name === 'deposit') { t = 'Пополнение записано' + nm() + '.'; buzz([10, 40, 10]); }
+    else if (name === 'buy' && data.items && data.items.length) t = buyLine(data.items, D);
     else if (name === 'buy') t = ST.hide || !(D.total > 0) ? pick(['Покупка записана.', 'Покупка записана. План работает, когда его выполняют.']) : pick(['Покупка записана. Портфель — ' + moneyW(D.total) + '.', 'Записал. План работает, когда его выполняют.']);
     else if (name === 'sellProfit') t = 'Продажа записана — с прибылью. Зафиксировано, поздравляю' + nm() + '.';
     else if (name === 'sellLoss') t = 'Продажа записана. Убыток — тоже часть пути; главное, что по плану.';
@@ -988,6 +1014,7 @@
       premium: on => { ST.forcePremium = !!on; VO.off = 0; },
       spoken: t => spokenRu(t),
       spokenUk: t => spokenUk(t),
+      buyLine: items => buyLine(items, ST.D || {}),
       norm: q => norm(q),
       lx: t => Lx(t),
       ask: q => answer(q), lastAsk: () => ST.lastAsk || null, ctx: () => brainCtx(), hist: () => ST.hist || [],

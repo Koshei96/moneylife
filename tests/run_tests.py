@@ -333,6 +333,13 @@ def run_browser():
         def shot(pg, name):
             pg.screenshot(path=str(OUT / f'{name}.png'))
 
+        def drag_buy(pg):
+            # ползунок «Купить» (12.11.2026): провести пальцем вправо
+            b = pg.evaluate("(()=>{const r=document.getElementById('saveBtn').getBoundingClientRect();return [r.left,r.top,r.width,r.height]})()")
+            y = b[1] + b[3] / 2
+            pg.mouse.move(b[0] + 30, y); pg.mouse.down()
+            for k in range(1, 11): pg.mouse.move(b[0] + 30 + (b[2] - 50) * k / 10, y); pg.wait_for_timeout(16)
+            pg.mouse.up()
         def scenario(name, cfg, body, prices=True, path='index.html', dsf=2, theme=None, extra=None, tz='Europe/Kyiv', clock=None, motion=None):
             if os.environ.get('ML_ONLY') and os.environ['ML_ONLY'] not in name: return
             ctx, pg, errs = page_for(name, cfg, prices, dsf, theme, extra, tz, motion)
@@ -571,7 +578,7 @@ def run_browser():
             if oh.replace('.', ',').startswith('всего будет 0,00045 BTC · средняя цена покупки $111 111'): ok(f'«Одна монета»: строка итога понятна («{oh}»)')
             else: fail('«Одна монета»: строка итога', repr(oh))
             # №5 (Вера 03.11): первая запись не выглядит провалом — расчёты те же, меняется только вид
-            pg.evaluate("""()=>{const b=[...document.querySelectorAll('#actSheet button')].find(x=>x.textContent.trim()==='Сохранить'&&x.offsetParent);if(b)b.click();}""")
+            drag_buy(pg)
             pg.wait_for_function("!document.querySelector('#actSheet.open')", polling=250, timeout=6000); pg.wait_for_timeout(1500)
             hs = norm(pg.inner_text('#hSub')).replace('−', '-')
             if hs == '-$0 · -1,0% результат сейчас' or hs == '-$1 · -1,0% результат сейчас': ok(f'первая покупка в минусе: под суммой «{hs}» (число прежнее, подпись «результат»)')
@@ -880,7 +887,7 @@ def run_browser():
             if not (pg.locator('#oSym').count() and pg.locator('#oSym').is_visible()):
                 ok('(форма разовой покупки другая — запись не проверялась)'); return
             pg.fill('#oSym', 'SOL'); pg.fill('#oUsd', '50'); pg.fill('#oQty', '0.25')
-            pg.evaluate("""()=>{const b=[...document.querySelectorAll('#actSheet button')].find(x=>x.textContent.trim()==='Сохранить'&&x.offsetParent);if(b)b.click();}""")
+            drag_buy(pg)
             pg.wait_for_timeout(1000); shot(pg, '07-after-buy')
             after = pg.evaluate("[...window.__mlRows.keys()].filter(k=>k.startsWith('tx/')).length")
             if after > before: ok('покупка SOL записана в базу')
@@ -913,7 +920,7 @@ def run_browser():
             pg.evaluate("document.querySelector('nav.tabs [data-tab=\"home\"]').click()"); pg.wait_for_timeout(500)
             pg.evaluate("scrollTo(0,0)")
             g = {}
-            pg.evaluate("document.getElementById('plusBtn').click()"); pg.wait_for_timeout(700)
+            pg.evaluate("openAct('menu')"); pg.wait_for_timeout(700)
             for m, title in [('menu', 'Новая запись'), ('deposit', 'Пополнить биржу'), ('sell', 'Продать'), ('buy', 'Купить')]:
                 if m != 'menu':
                     pg.evaluate("(()=>{const b=document.getElementById('actBack');if(!b.hidden)b.click();})()"); pg.wait_for_timeout(200)
@@ -1245,6 +1252,36 @@ def run_browser():
             else: fail('тема: растяжение', 'кружок растягивается')
             shot(pg, 'theme-switch')
         scenario('Тема', {'session': True, 'docs': SEED}, s_theme)
+
+        # --- 12.11.2026: «+» → покупка, ползунок «Купить», смахнуть запись, Орион называет пополненные монеты, шестерёнка
+        def s_slide(pg, n):
+            pg.click('#plusBtn'); pg.wait_for_timeout(800)
+            if pg.evaluate("mode") == 'buy' and pg.evaluate("document.getElementById('saveBtn').classList.contains('slide')"): ok('«+» сразу открывает покупку; внизу ползунок «Купить»')
+            else: fail('«+» → покупка', pg.evaluate("mode"))
+            before = pg.evaluate("[...window.__mlRows.keys()].filter(k=>k.startsWith('tx/')).length")
+            pg.evaluate("document.querySelector('#buyMode [data-m=\"one\"]').click()"); pg.wait_for_timeout(300)
+            pg.fill('#oSym', 'BTC'); pg.fill('#oUsd', '50'); pg.fill('#oQty', '0.0005')
+            pg.click('#saveBtn'); pg.wait_for_timeout(900)
+            mid = pg.evaluate("[...window.__mlRows.keys()].filter(k=>k.startsWith('tx/')).length")
+            drag_buy(pg); pg.wait_for_timeout(1500)
+            after = pg.evaluate("[...window.__mlRows.keys()].filter(k=>k.startsWith('tx/')).length")
+            if mid == before and after == before + 1: ok('ползунок: простое нажатие не покупает, провести вправо — покупка записана')
+            else: fail('ползунок «Купить»', f'{before} {mid} {after}')
+            line = pg.evaluate("Mascot.debug.buyLine([{sym:'BTC',usd:5},{sym:'ETH',usd:3},{sym:'SOL',usd:2}])").replace(' ', ' ')
+            if line.startswith('Биткоин пополнен на 5 долларов, эфир — на 3 доллара, солана — на 2 доллара.') and 'Портфель теперь стоит' in line: ok('Орион о покупке: «' + line[:90] + '…»')
+            else: fail('Орион о покупке', line)
+            pg.evaluate("show('activity')"); pg.wait_for_timeout(700)
+            n0 = pg.evaluate("document.querySelectorAll('#histList .row[data-tx]').length")
+            r = pg.evaluate("(()=>{const e=document.querySelector('#histList .row[data-tx]').getBoundingClientRect();return [e.left,e.top,e.width,e.height]})()")
+            y = r[1] + r[3] / 2; pg.mouse.move(r[0] + r[2] - 30, y); pg.mouse.down()
+            for k in range(1, 10): pg.mouse.move(r[0] + r[2] - 30 - 25 * k, y); pg.wait_for_timeout(20)
+            pg.mouse.up(); pg.wait_for_timeout(1500)
+            n1 = pg.evaluate("document.querySelectorAll('#histList .row[data-tx]').length"); t = pg.inner_text('#toastMsg')
+            if n1 == n0 - 1 and 'удалена' in t: ok('смахнуть запись влево — удалена, в подсказке «Отменить»')
+            else: fail('смахивание записи', f'{n0} → {n1} | {t}')
+            if pg.locator('#setBtn svg.gear').count(): ok('настройки — значок шестерёнки')
+            else: fail('шестерёнка', 'нет')
+        scenario('Ползунок и смахивание', {'session': True, 'docs': SEED}, s_slide)
 
         # --- надёжность интерфейса (12.11.2026): ошибки, найденные владельцем на телефоне, не должны вернуться
         def s_ui(pg, errs):

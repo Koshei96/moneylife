@@ -11,7 +11,7 @@ addEventListener('error',function(e){if(e&&e.message)add(e.message,(e.filename||
 addEventListener('unhandledrejection',function(e){var r=e&&e.reason;add(r&&(r.message||r)||'отклонённое обещание','promise');});
 window.mlErrLog=function(){try{return JSON.parse(localStorage.getItem(K)||'[]');}catch(e){return [];}};window.mlErrAdd=add;})();
 </script>
-<script src="i18n.js?v=20261112124500"></script>
+<script src="i18n.js?v=20261112133000"></script>
 <title>MoneyLife</title>
 <meta name="theme-color" content="#06040e">
 <script>/* тема до отрисовки: «Авто» — как в телефоне, иначе выбор из настроек */
@@ -1345,6 +1345,64 @@ html.lite .view.enter{animation:vin .2s var(--ease)}
 ::view-transition-old(root),::view-transition-new(root){animation:none;mix-blend-mode:normal}
 @media (prefers-reduced-motion:reduce){.thsw *{transition:none!important;animation:none!important}}
 </style>
+<style id="v10">
+/* ===== 12.11.2026: шестерёнка, «потянуть вниз» в цветах приложения, ползунок «Купить», смахнуть запись влево ===== */
+/* шестерёнка настроек: при нажатии проворачивается с пружинкой и вспышкой */
+#setBtn .gear{width:22px;height:22px;transition:transform .3s}
+#setBtn.spin .gear{animation:gearSpin .7s cubic-bezier(.34,1.56,.64,1)}
+#setBtn.spin::after{content:"";position:absolute;inset:6px;border-radius:50%;border:2px solid var(--accent);animation:gearRing .6s ease-out forwards;pointer-events:none}
+#setBtn{position:relative}
+@keyframes gearSpin{0%{transform:rotate(0)}100%{transform:rotate(180deg)}}
+@keyframes gearRing{0%{opacity:.8;transform:scale(.6)}100%{opacity:0;transform:scale(1.5)}}
+/* потянуть вниз: кольцо-градиент цветов логотипа наполняется по мере жеста, в центре — оранжевая точка как на логотипе */
+.ptr{width:44px;height:44px;margin-left:-22px;background:color-mix(in srgb,var(--surface2) 94%,transparent);border-color:color-mix(in srgb,#ff52d9 25%,var(--line2));transform:translateY(calc(var(--pull,0) * 1px - 52px))}
+.ptr .ptr-ring{position:absolute;inset:2px;width:40px;height:40px;transform:rotate(-90deg)}
+.ptr-bg{fill:none;stroke:var(--line2);stroke-width:3}
+.ptr-arc{fill:none;stroke-width:3.4;stroke-linecap:round;stroke-dasharray:88px;stroke-dashoffset:calc(88px - var(--pull,0) * 1.375px)}
+.ptr-dot{position:absolute;left:50%;top:50%;width:8px;height:8px;margin:-4px 0 0 -4px;border-radius:50%;background:#ffb347;box-shadow:0 0 10px #ffb347aa;transform:scale(calc(.4 + var(--pull,0) / 110));transition:transform .2s}
+.ptr-orb{position:absolute;inset:-1px;border-radius:50%;pointer-events:none;opacity:0}
+.ptr.ready{box-shadow:0 0 0 1px #ff52d966,0 10px 28px -8px #ff52d999}
+.ptr.ready .ptr-dot{animation:ptrBeat .5s ease-in-out infinite alternate}
+.ptr.spin .ptr-ring{animation:ptrs .75s linear infinite}
+.ptr.spin .ptr-arc{stroke-dashoffset:60px;transition:stroke-dashoffset .3s}
+.ptr.spin .ptr-dot{animation:ptrBeat .4s ease-in-out infinite alternate}
+.ptr.spin .ptr-orb{opacity:1;background:conic-gradient(from 0deg,transparent 0 70%,#ff52d955 85%,#ffb34788 100%);-webkit-mask:radial-gradient(circle,transparent 58%,#000 60%);mask:radial-gradient(circle,transparent 58%,#000 60%);animation:ptrs .75s linear infinite}
+.ptr svg.ptr-ring{color:inherit}
+@keyframes ptrBeat{from{transform:scale(.8)}to{transform:scale(1.25)}}
+/* ползунок «Купить»: провести вправо */
+#saveBtn.slide{position:relative;overflow:hidden;min-height:60px;border-radius:999px;padding:0;background:var(--surface2);color:var(--fg);border:1px solid var(--line2);box-shadow:inset 0 2px 8px #0005;touch-action:none;user-select:none;-webkit-user-select:none}
+#saveBtn.slide .sl-fill{position:absolute;left:0;top:0;bottom:0;width:calc(var(--sx,0px) + 58px);border-radius:999px;background:linear-gradient(90deg,#7566f5,#ff52d9);opacity:.9;transition:width .35s cubic-bezier(.34,1.3,.64,1)}
+#saveBtn.slide.drag .sl-fill,#saveBtn.slide.drag .sl-knob{transition:none}
+#saveBtn.slide .sl-txt{position:relative;display:flex;align-items:center;justify-content:center;gap:8px;font-weight:750;font-size:16px;letter-spacing:.01em;padding-left:40px;opacity:calc(1 - var(--sp,0) * 1.4);
+  background:linear-gradient(90deg,var(--mute) 0 35%,var(--fg) 50%,var(--mute) 65% 100%);background-size:250% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:slShine 2.4s linear infinite}
+#saveBtn.slide .sl-txt b{font-weight:800;letter-spacing:-2px}
+@keyframes slShine{from{background-position:120% 0}to{background-position:-120% 0}}
+#saveBtn.slide .sl-knob{position:absolute;left:4px;top:50%;width:52px;height:52px;margin-top:-26px;border-radius:50%;display:grid;place-items:center;color:#fff;
+  background:radial-gradient(circle at 35% 30%,#ffffff55,transparent 45%),linear-gradient(135deg,#7566f5,#ff52d9);box-shadow:0 6px 16px -4px #ff52d999,inset 0 -3px 6px #0003;
+  transform:translateX(var(--sx,0px));transition:transform .35s cubic-bezier(.34,1.3,.64,1)}
+#saveBtn.slide .sl-knob svg{width:24px;height:24px;transition:transform .4s,opacity .25s}
+#saveBtn.slide .sl-knob .ok{position:absolute;opacity:0;transform:scale(.3) rotate(-90deg)}
+#saveBtn.slide.nudge .sl-knob{animation:slNudge .7s cubic-bezier(.34,1.56,.64,1)}
+@keyframes slNudge{0%,100%{transform:translateX(0)}40%{transform:translateX(46px)}}
+#saveBtn.slide.done .sl-fill{width:100%;background:linear-gradient(90deg,#30d158,#2fd3a0)}
+#saveBtn.slide.done .sl-knob{box-shadow:0 0 0 6px #30d15833,0 0 24px #30d158aa}
+#saveBtn.slide.done .sl-knob .coin{opacity:0;transform:scale(.3) rotate(90deg)}
+#saveBtn.slide.done .sl-knob .ok{opacity:1;transform:none}
+#saveBtn.slide.done .sl-txt{opacity:0}
+#saveBtn.slide.shake{animation:slShake .4s}
+@keyframes slShake{0%,100%{transform:none}25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
+.buyfx{position:fixed;z-index:80;pointer-events:none;width:14px;height:14px;margin:-7px 0 0 -7px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fff8,transparent 50%),linear-gradient(135deg,#ffd76a,#f5a623);box-shadow:0 0 8px #ffcf5a99}
+.buyfx.r{width:10px;height:10px;margin:-5px 0 0 -5px;border-radius:3px;background:linear-gradient(135deg,#7566f5,#ff52d9);box-shadow:none}
+.buyring{position:fixed;z-index:79;pointer-events:none;width:40px;height:40px;margin:-20px 0 0 -20px;border-radius:50%;border:3px solid #30d158}
+/* смахнуть запись влево — удалить */
+#histList .row[data-tx]{position:relative;touch-action:pan-y;transition:transform .3s cubic-bezier(.2,.9,.2,1)}
+#histList .row[data-tx].sw{transition:none}
+#histList .row[data-tx]::after{content:var(--del,"Удалить");position:absolute;top:0;bottom:0;left:100%;width:140px;display:flex;align-items:center;padding-left:22px;font-weight:700;font-size:14px;color:#fff;background:linear-gradient(90deg,var(--neg),#d93636);pointer-events:none}
+#histList .row[data-tx].arm::after{background:linear-gradient(90deg,#ff3b3b,#c41f1f)}
+#histList .row[data-tx].gone{transform:translateX(-110%)!important;opacity:0;transition:transform .35s ease-in,opacity .35s ease-in}
+.crumb{position:fixed;z-index:80;pointer-events:none;border-radius:2px}
+@media (prefers-reduced-motion:reduce){#setBtn.spin .gear,#saveBtn.slide .sl-txt,.ptr.spin .ptr-ring,.ptr.spin .ptr-orb{animation:none}}
+</style>
 </head>
 <body class="loading">
 
@@ -1363,7 +1421,7 @@ html.lite .view.enter{animation:vin .2s var(--ease)}
     <div class="ttl"><h1 class="wm" aria-label="MoneyLife"><span>Money</span><span class="wm-l">Life</span></h1><div class="status" id="status"><i class="dot"></i><span>Загружаю…</span></div></div>
     <button type="button" class="ib" id="eyeBtn" aria-label="Скрыть суммы" aria-pressed="false"></button>
     <button type="button" class="ib" id="refreshBtn" aria-label="Обновить цены"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 0 0-14.9-3.9L4 9"/><path d="M4 4v5h5"/><path d="M4 13a8 8 0 0 0 14.9 3.9L20 15"/><path d="M20 20v-5h-5"/></svg></button>
-    <button type="button" class="ib" id="setBtn" aria-label="Настройки"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg></button>
+    <button type="button" class="ib" id="setBtn" aria-label="Настройки"><svg class="gear" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4z"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
   </header>
 
   <div class="banner" id="offline" hidden><span>Не удалось подключиться к базе. Проверь интернет и открой приложение заново.</span></div>
@@ -1691,9 +1749,9 @@ document.querySelectorAll('nav.tabs .tab').forEach(b=>{const v=b.querySelector('
 
 <div class="toast" id="toast" role="status"><span id="toastMsg"></span><button type="button" id="toastBtn" hidden></button></div>
 
-<script src="config.js?v=20261112124500"></script>
+<script src="config.js?v=20261112133000"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="shim.js?v=20261112124500"></script>
+<script src="shim.js?v=20261112133000"></script>
 <script>
 /* ===== основа ===== */
 const $=id=>document.getElementById(id);
@@ -2465,7 +2523,7 @@ function showForm(m,opt){opt=opt||{};mode=m;$('f-menu').hidden=m!=='menu';FORMS.
   const b=$('actSheet').querySelector('.sh-body');if(b)b.scrollTop=0;
   const init={buy:initBuy,dip:initDip,sell:initSell,deposit:initDep,reserve:initRes,earn:initEarn,income:initInc,start:initStart}[m];if(init)init(opt);}
 $('actBack').addEventListener('click',()=>{play('tick');showForm('menu');});
-$('plusBtn').addEventListener('click',()=>openAct('menu'));
+$('plusBtn').addEventListener('click',()=>openAct('buy'));   /* 12.11.2026: «+» сразу открывает покупку (по плану / одна монета); остальное — «Ещё» на главной */
 function tsFromDate(){const v=$('fDate').value;if(!v||v===isoDay(new Date()))return new Date().toISOString();const a=v.split('-').map(Number);return new Date(a[0],a[1]-1,a[2],12,0,0).toISOString();}
 const altSym=pf=>((($(pf==='b'?'bAlt':'dAlt')||{}).value||'').trim().toUpperCase())||altNow();
 const rowSym=(pf,s)=>s==='ALT'?altSym(pf):s;
@@ -2630,7 +2688,7 @@ function incCalc(){const v=+$('incUah').value||0,r=rate(),row=(k,g)=>`<div><span
   $('incCalc').innerHTML=v?row('30% в крипту',v*.3)+row('→ DCA',v*.3*depShare())+row('→ резерв USDT',v*.3*(1-depShare()))+row('10% на депозит',v*.1)+'<p class="hint">После этого пополни биржу и запиши «Пополнить биржу».</p>':'<p class="hint">Впиши сумму — посчитаю, сколько куда.</p>';}
 $('incUah').addEventListener('input',incCalc);
 function initStart(){symOptions();$('nsSym').value='';$('nsQty').value='';$('nsUsd').value='';}
-function finish(snd,n,msg){rememberCoins(formCoinInputs());closeSheets();play(snd);buzz([12,40,18]);if(snd!=='cash')coinFly($('plusBtn'),Math.min(n,4));toast(msg);}
+function finish(snd,n,msg){rememberCoins(formCoinInputs());closeSheets();play(snd);buzz([12,40,18]);if(snd!=='cash')coinFly(window.__buyFrom||$('plusBtn'),Math.min(n,4));window.__buyFrom=null;toast(msg);}
 async function saveForm(){const err=$('fErr');err.textContent='';if(!db){err.textContent='Нет подключения к данным — попробуй ещё раз чуть позже.';return;}
   const ts=tsFromDate(),btn=$('saveBtn');btn.disabled=true;
   try{
@@ -2695,8 +2753,9 @@ async function saveTx(){const t=S.tx.find(x=>x.id===eId);if(!t||!db){$('eErr').t
   if(coinT&&nd.usd&&nd.qty)nd.price=+(nd.usd/nd.qty).toPrecision(8);
   const note=$('eNote').value.trim();if(note)nd.note=note;else delete nd.note;
   try{await db.doc('tx/'+eId).set(nd);if(coinT)rememberCoins(['eSym']);closeSheets();play('coin');buzz(12);toast('Запись обновлена');}catch(e){$('eErr').textContent=failMsg(e,'Не сохранилось');}}
-async function delTx(){const t=S.tx.find(x=>x.id===eId);if(!t||!db)return;const id=eId,data=Object.assign({},t);delete data.id;
-  try{await db.doc('tx/'+id).delete();closeSheets();play('del');buzz(20);toast('Запись удалена',{label:'Отменить',fn:async()=>{try{await db.doc('tx/'+id).set(data);play('coin');toast('Запись восстановлена');}catch(e){toast(failMsg(e,'Не восстановилось'));}}});}catch(e){$('eErr').textContent=failMsg(e,'Не удалилось');}}
+async function delTx(){return delTxId(eId);}
+async function delTxId(eid,swiped){const t=S.tx.find(x=>x.id===eid);if(!t||!db)return false;const id=eid,data=Object.assign({},t);delete data.id;
+  try{await db.doc('tx/'+id).delete();if(!swiped)closeSheets();play('del');buzz(20);toast('Запись удалена',{label:'Отменить',fn:async()=>{try{await db.doc('tx/'+id).set(data);play('coin');toast('Запись восстановлена');}catch(e){toast(failMsg(e,'Не восстановилось'));}}});return true;}catch(e){if(swiped)toast(failMsg(e,'Не удалилось'));else $('eErr').textContent=failMsg(e,'Не удалилось');return false;}}
 $('eSave').addEventListener('click',saveTx);
 $('eDel').addEventListener('click',delTx);
 
@@ -2708,7 +2767,8 @@ function fillSettings(){if(window.mlLang)[...$('langSeg').children].forEach(b=>b
   const U=window.mlUser;$('accInfo').innerHTML=U?`<div><span>Почта</span><span>${esc(U.email||'—')}</span></div><div><span>Вход</span><span>${U.provider==='google'?'через Google':'почта и пароль'}</span></div>`:'<div><span>Аккаунт</span><span>—</span></div>';$('delBtn').hidden=!(window.ML_CONFIG&&ML_CONFIG.accountDelete);
   const L=S.live;$('dataInfo').innerHTML=`<div><span>Курс доллара</span><span>${rate()?nf(rate(),2)+' грн за $':'—'}</span></div>${S.settings.usdUahSrc?`<div><span>Откуда курс</span><span>${esc(S.settings.usdUahSrc)}${S.settings.usdUahAt?' · '+dShort(S.settings.usdUahAt)+', '+tHM(S.settings.usdUahAt):''}</span></div>`:''}${S.settings.usdUahNbu?`<div><span>Курс НБУ</span><span>${nf(+S.settings.usdUahNbu,2)} грн</span></div>`:''}<div><span>Живые цены</span><span>${L.status==='ok'?'CoinGecko · '+tHM(L.at):L.status==='stale'?'с задержкой':LIVE_MSG[L.code]||'нет'}</span></div><div><span>Монеты и логотипы</span><span>CoinGecko${DIR.n?' · '+nf(DIR.n,0)+' в поиске':''}</span></div><div><span>Последняя проверка</span><span>${S.market&&S.market.updatedAt?dShort(S.market.updatedAt)+', '+tHM(S.market.updatedAt):'—'}</span></div><div><span>Проверка рынка</span><span>8:41 и 20:41</span></div><div><span>Записей</span><span>${S.tx.length}</span></div>`;}
 function openSettings(toStrat){fillSettings();openSheet('setSheet');const b=$('setSheet').querySelector('.sh-body');if(b)b.scrollTop=0;if(toStrat)setTimeout(()=>{const el=$('stratLbl');if(el&&el.scrollIntoView)el.scrollIntoView({behavior:reduced?'auto':'smooth',block:'start'});},380);}
-$('setBtn').addEventListener('click',()=>openSettings(false));
+$('setBtn').addEventListener('click',()=>{const g=$('setBtn');g.classList.remove('spin');void g.offsetWidth;g.classList.add('spin');openSettings(false);});
+$('setBtn').addEventListener('animationend',()=>$('setBtn').classList.remove('spin'));
 // Метка сборки — из того же ?v=, что и у shim.js (его меняют вместе с sw.js по правилу 8): тестировщик пишет, на какой версии ошибка
 (()=>{const s=document.querySelector('script[src*="shim.js?v="]'),m=s&&/[?&]v=(\d+)/.exec(s.getAttribute('src')),e=$('appVer');if(m&&e){e.textContent='Версия '+m[1];e.hidden=false;}})();
 /* «Сообщить об ошибке»: письмо разработчику с версией, телефоном и последними сбоями — без записей портфеля и сумм */
@@ -2728,7 +2788,7 @@ function themeTo(t,from){const cur=thEff();const apply=()=>{P.theme=t;savePrefs(
   const next=t==='system'?(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark'):t;
   if(next===cur||reduced||!document.startViewTransition||!from){apply();return;}
   const r=from.getBoundingClientRect(),x=r.left+r.width/2,y=r.top+r.height/2,R=Math.hypot(Math.max(x,innerWidth-x),Math.max(y,innerHeight-y));
-  setTimeout(()=>{try{const vt=document.startViewTransition(apply);vt.ready.then(()=>{document.documentElement.animate({clipPath:[`circle(0px at ${x}px ${y}px)`,`circle(${R}px at ${x}px ${y}px)`]},{duration:700,easing:'cubic-bezier(.65,0,.35,1)',pseudoElement:'::view-transition-new(root)'});}).catch(()=>{});}catch(e){apply();}},520);}
+  setTimeout(()=>{try{const vt=document.startViewTransition(apply);vt.ready.then(()=>{document.documentElement.animate({clipPath:[`circle(0px at ${x}px ${y}px)`,`circle(${R}px at ${x}px ${y}px)`]},{duration:700,easing:'cubic-bezier(.65,0,.35,1)',pseudoElement:'::view-transition-new(root)'});}).catch(()=>{});}catch(e){apply();}},0);}
 $('thSw').addEventListener('click',()=>{const sw=$('thSw'),toL=sw.getAttribute('aria-checked')!=='true';sw.setAttribute('aria-checked',String(toL));$('thName').textContent=toL?'Светлая':'Тёмная';
   play('toggle',{on:toL});buzz&&buzz(10);themeTo(toL?'light':'dark',sw);});
 $('curSeg').addEventListener('click',e=>{const b=e.target.closest('[data-c]');if(!b)return;if(b.dataset.c==='UAH'&&!rate()){toast('Курс гривны ещё не загружен');return;}P.cur=b.dataset.c;savePrefs();play('tick');fillSettings();render();});
@@ -2982,7 +3042,7 @@ function msSync(x){MSC.last=x;if(!msApply())return;if(!S.ready||document.getElem
   if(window.Mascot){try{window.Mascot.sync(msPayload(x));}catch(e){}}else msLoad();}
 function msLoad(){if(MSC.loading||MSC.failed)return;MSC.loading=true;
   const add=(src,ok)=>{try{const s=document.createElement('script');s.src=src;s.async=true;s.onload=ok;s.onerror=()=>{MSC.failed=true;};document.head.appendChild(s);}catch(e){MSC.failed=true;}};
-  const boot=()=>add('mascot.js?v=20261112124500',()=>{try{if(window.Mascot&&window.Mascot.init({host:$('mascot'),app:{buzz,askName:()=>{if(window.MLX&&MLX.askName)MLX.askName();},addAlert:(y,v)=>window.MLX&&MLX.addAlert?MLX.addAlert(y,v):null,voice:(t,x)=>window.mlVoice?window.mlVoice(t,x):null,ask:(q,y,x)=>window.mlAsk?window.mlAsk(q,y,x):null}})&&MSC.last&&$('ob').hidden&&!document.getElementById('mlAuth'))window.Mascot.sync(msPayload(MSC.last));}catch(e){}});
+  const boot=()=>add('mascot.js?v=20261112133000',()=>{try{if(window.Mascot&&window.Mascot.init({host:$('mascot'),app:{buzz,askName:()=>{if(window.MLX&&MLX.askName)MLX.askName();},addAlert:(y,v)=>window.MLX&&MLX.addAlert?MLX.addAlert(y,v):null,voice:(t,x)=>window.mlVoice?window.mlVoice(t,x):null,ask:(q,y,x)=>window.mlAsk?window.mlAsk(q,y,x):null}})&&MSC.last&&$('ob').hidden&&!document.getElementById('mlAuth'))window.Mascot.sync(msPayload(MSC.last));}catch(e){}});
   setTimeout(boot,300);}
 function render(){const D=derive();renderHeader();renderHome(D);renderGrowth();renderCoins(D);renderStrategy(D);renderActivity();renderD14();if(window.MLX)try{MLX.render(D);}catch(e){console.error(e);}earnNudge();if(cvSym&&$('coinSheet').classList.contains('open'))renderCoinView();}
 document.body.classList.add('loading');
@@ -3049,12 +3109,12 @@ render();requestAnimationFrame(inkMove);setTimeout(inkMove,600);
   window.MLFX={armReveal};
   setTimeout(armReveal,900);new MutationObserver(()=>{clearTimeout(armReveal._t);armReveal._t=setTimeout(armReveal,250);}).observe(document.querySelector('.app'),{childList:true,subtree:true});
   /* потянуть вниз от верха страницы — обновить цены */
-  const ptr=document.createElement('div');ptr.className='ptr';ptr.setAttribute('aria-hidden','true');ptr.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg>';document.body.appendChild(ptr);
+  const ptr=document.createElement('div');ptr.className='ptr';ptr.setAttribute('aria-hidden','true');ptr.innerHTML='<svg class="ptr-ring" viewBox="0 0 40 40" aria-hidden="true"><defs><linearGradient id="ptrG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7566f5"/><stop offset=".55" stop-color="#ff52d9"/><stop offset="1" stop-color="#ffb347"/></linearGradient></defs><circle class="ptr-bg" cx="20" cy="20" r="14"/><circle class="ptr-arc" cx="20" cy="20" r="14" stroke="url(#ptrG)"/></svg><i class="ptr-dot"></i><i class="ptr-orb"></i>';document.body.appendChild(ptr);
   let sy=null,sx=0,pull=0,armed=false,swipe=null;
   const hsc=el=>{for(let n=el;n&&n!==document.body;n=n.parentElement){if(n.scrollWidth>n.clientWidth+4){const o=getComputedStyle(n).overflowX;if(o==='auto'||o==='scroll')return true;}}return false;};   /* внутри ленты, которая листается вбок, свайп вкладок не срабатывает */
   const busy=()=>document.querySelector('.sheet.open')||document.body.classList.contains('lock');
   addEventListener('touchstart',e=>{if(busy()||e.touches.length!==1)return;const t=e.touches[0];sx=t.clientX;sy=scrollY<=0?t.clientY:null;pull=0;armed=false;
-    swipe=e.target.closest&&e.target.closest('.app')&&!e.target.closest('input,textarea,select,canvas,svg,[data-noswipe],.sheet,.tabs,.ms')&&!hsc(e.target)?{x:t.clientX,y:t.clientY,t:Date.now()}:null;},{passive:true});
+    swipe=e.target.closest&&e.target.closest('.app')&&!e.target.closest('input,textarea,select,canvas,svg,[data-noswipe],.sheet,.tabs,.ms,#histList [data-tx]')&&!hsc(e.target)?{x:t.clientX,y:t.clientY,t:Date.now()}:null;},{passive:true});
   addEventListener('touchmove',e=>{if(sy==null||busy())return;const d=e.touches[0].clientY-sy;if(d<=0||scrollY>0){pull=0;ptr.classList.remove('go');return;}
     pull=Math.min(110,d*.5);ptr.style.setProperty('--pull',pull.toFixed(0));ptr.classList.add('go');const r=pull>64;if(r!==armed){armed=r;ptr.classList.toggle('ready',r);if(r){play('pull');buzz(8);}}},{passive:true});
   addEventListener('touchend',e=>{
@@ -3066,8 +3126,64 @@ render();requestAnimationFrame(inkMove);setTimeout(inkMove,600);
     sy=null;swipe=null;pull=0;armed=false;},{passive:true});
 })();
 </script>
-<script src="plus.js?v=20261112124500"></script>
-<script src="wins.js?v=20261112124500"></script>
-<script src="folds.js?v=20261112124500"></script>
+<script src="plus.js?v=20261112133000"></script>
+<script src="wins.js?v=20261112133000"></script>
+<script src="folds.js?v=20261112133000"></script>
+<script>
+/* ===== 12.11.2026: ползунок «Купить», смахнуть запись влево с «рассыпанием» монеты ===== */
+(function(){
+  const COIN='<svg class="coin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5v9M9.5 10a2.5 2 0 0 1 2.5-1.5h.6a2.2 2.2 0 0 1 0 4.4h-1.2a2.2 2.2 0 0 0 0 4.4h.6A2.5 2 0 0 0 14.5 14"/></svg>';
+  const OK='<svg class="ok" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
+  const btn=$('saveBtn');let on=false;
+  function setSlide(v){on=v;btn.classList.toggle('slide',v);btn.classList.remove('done','drag','nudge','shake');btn.style.removeProperty('--sx');btn.style.removeProperty('--sp');btn.disabled=false;
+    if(v){btn.innerHTML='<span class="sl-fill"></span><span class="sl-txt">Купить <b aria-hidden="true">›››</b></span><span class="sl-knob">'+COIN+OK+'</span>';btn.setAttribute('aria-label','Купить — проведите вправо');}
+    else{btn.textContent='Сохранить';btn.removeAttribute('aria-label');}}
+  const _show=showForm;window.showForm=showForm=function(m,o){_show(m,o);setSlide(m==='buy'||m==='dip');};
+  /* перетаскивание */
+  let x0=null,dx=0,max=0,moved=false,skipClick=false;
+  btn.addEventListener('pointerdown',e=>{if(!on||btn.classList.contains('done'))return;x0=e.clientX;dx=0;moved=false;max=btn.clientWidth-60;btn.classList.add('drag');try{btn.setPointerCapture(e.pointerId);}catch(_){}});
+  btn.addEventListener('pointermove',e=>{if(x0==null)return;dx=Math.max(0,Math.min(max,e.clientX-x0));if(dx>6)moved=true;btn.style.setProperty('--sx',dx+'px');btn.style.setProperty('--sp',(dx/max).toFixed(3));});
+  const up=()=>{if(x0==null)return;x0=null;btn.classList.remove('drag');
+    if(moved){skipClick=true;setTimeout(()=>skipClick=false,350);}
+    if(moved&&dx>=max*.82){done();return;}
+    btn.style.setProperty('--sx','0px');btn.style.setProperty('--sp','0');
+    if(!moved){btn.classList.remove('nudge');void btn.offsetWidth;btn.classList.add('nudge');buzz&&buzz(6);}};
+  btn.addEventListener('pointerup',up);btn.addEventListener('pointercancel',up);
+  btn.addEventListener('animationend',e=>{if(e.target.classList.contains('sl-knob'))btn.classList.remove('nudge');if(e.target===btn)btn.classList.remove('shake');});
+  /* в режиме ползунка обычное нажатие не покупает (кроме клавиатуры/диктора) */
+  btn.addEventListener('click',e=>{if(on&&(skipClick||e.detail>0)){e.stopImmediatePropagation();e.preventDefault();}},true);
+  async function done(){btn.style.setProperty('--sx',max+'px');btn.style.setProperty('--sp','1');btn.classList.add('done');play('coin');buzz&&buzz([10,30,20]);
+    const k=btn.querySelector('.sl-knob').getBoundingClientRect(),cx=k.left+k.width/2,cy=k.top+k.height/2;window.__buyFrom=btn.querySelector('.sl-knob');
+    burst(cx,cy);await saveForm();
+    if($('actSheet').classList.contains('open')){setSlide(true);btn.classList.add('shake');buzz&&buzz(30);}}
+  window.mlSlideBuy=()=>{if(!on)return saveForm();max=btn.clientWidth-60;return done();};   /* для автотестов */
+  /* «покупка»: зелёное кольцо и фонтан монет от ползунка */
+  function burst(x,y){if(reduced)return;const ring=document.createElement('i');ring.className='buyring';ring.style.left=x+'px';ring.style.top=y+'px';document.body.appendChild(ring);
+    ring.animate([{transform:'scale(.6)',opacity:1},{transform:'scale(3.2)',opacity:0}],{duration:650,easing:'cubic-bezier(.2,.8,.2,1)'}).onfinish=()=>ring.remove();
+    for(let i=0;i<16;i++){const c=document.createElement('i');c.className='buyfx'+(i%4===3?' r':'');c.style.left=x+'px';c.style.top=y+'px';document.body.appendChild(c);
+      const a=-Math.PI/2+(Math.random()-.5)*Math.PI*1.1,v=90+Math.random()*120,tx=Math.cos(a)*v,ty=Math.sin(a)*v,rot=(Math.random()-.5)*720;
+      c.animate([{transform:'translate(0,0) scale(.4) rotate(0)',opacity:1},{transform:`translate(${tx*.7}px,${ty*.9}px) scale(1.1) rotate(${rot/2}deg)`,opacity:1,offset:.55},{transform:`translate(${tx}px,${ty+90}px) scale(.6) rotate(${rot}deg)`,opacity:0}],
+        {duration:900+Math.random()*350,delay:i*12,easing:'cubic-bezier(.25,.6,.4,1)'}).onfinish=()=>c.remove();}}
+  /* смахнуть запись влево: удалить с «рассыпанием» значка монеты и отменой в подсказке */
+  let sw=null;
+  const hl=$('histList');try{hl.style.setProperty('--del',JSON.stringify(window.L?L('Удалить'):'Удалить'));}catch(_){}
+  hl.addEventListener('pointerdown',e=>{const r=e.target.closest('.row[data-tx]');if(!r||e.button>0)return;sw={r,x:e.clientX,y:e.clientY,dx:0,on:false,id:e.pointerId};});
+  hl.addEventListener('pointermove',e=>{if(!sw)return;const dx=e.clientX-sw.x,dy=e.clientY-sw.y;
+    if(!sw.on){if(Math.abs(dy)>10&&Math.abs(dy)>Math.abs(dx)){sw=null;return;}if(dx<-10&&Math.abs(dx)>Math.abs(dy)*1.3){sw.on=true;sw.r.classList.add('sw');try{sw.r.setPointerCapture(sw.id);}catch(_){}}else return;}
+    sw.dx=Math.min(0,dx);const w=sw.r.offsetWidth,arm=sw.dx<-Math.min(150,w*.4);sw.r.style.transform=`translateX(${sw.dx}px)`;if(arm!==sw.r.classList.contains('arm')){sw.r.classList.toggle('arm',arm);if(arm)buzz&&buzz(10);}});
+  const end=()=>{if(!sw)return;const {r,on:was}=sw,arm=r.classList.contains('arm');sw=null;r.classList.remove('sw','arm');
+    if(was){const stop=ev=>{ev.stopPropagation();ev.preventDefault();};r.addEventListener('click',stop,{capture:true,once:true});setTimeout(()=>r.removeEventListener('click',stop,true),400);}
+    if(!arm){r.style.transform='';return;}
+    crumble(r);r.classList.add('gone');play('del');
+    setTimeout(async()=>{const ok=await delTxId(r.dataset.tx,true);if(!ok){r.classList.remove('gone');r.style.transform='';}},380);};
+  hl.addEventListener('pointerup',end);hl.addEventListener('pointercancel',end);
+  function crumble(r){if(reduced)return;const ic=r.querySelector('.badge,img,.ico,.ib-badge')||r.firstElementChild;if(!ic)return;const b=ic.getBoundingClientRect();
+    let col=getComputedStyle(ic).getPropertyValue('--c').trim()||getComputedStyle(ic).backgroundColor||'#b15cff';if(!col||col==='rgba(0, 0, 0, 0)')col='#b15cff';
+    ic.animate([{transform:'scale(1)',filter:'blur(0)',opacity:1},{transform:'scale(.6) rotate(-12deg)',filter:'blur(2px)',opacity:0}],{duration:420,fill:'forwards'});
+    for(let i=0;i<18;i++){const p=document.createElement('i');p.className='crumb';const sz=3+Math.random()*5;p.style.width=p.style.height=sz+'px';
+      p.style.left=(b.left+Math.random()*b.width)+'px';p.style.top=(b.top+Math.random()*b.height)+'px';p.style.background=i%3?col:'#ffffffcc';document.body.appendChild(p);
+      const tx=(Math.random()-.7)*70,ty=20+Math.random()*60;p.animate([{transform:'translate(0,0) rotate(0)',opacity:1},{transform:`translate(${tx}px,${ty}px) rotate(${(Math.random()-.5)*540}deg)`,opacity:0}],{duration:600+Math.random()*400,easing:'cubic-bezier(.3,.1,.6,1)'}).onfinish=()=>p.remove();}}
+})();
+</script>
 </body>
 </html>
