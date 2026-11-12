@@ -11,7 +11,7 @@ addEventListener('error',function(e){if(e&&e.message)add(e.message,(e.filename||
 addEventListener('unhandledrejection',function(e){var r=e&&e.reason;add(r&&(r.message||r)||'отклонённое обещание','promise');});
 window.mlErrLog=function(){try{return JSON.parse(localStorage.getItem(K)||'[]');}catch(e){return [];}};window.mlErrAdd=add;})();
 </script>
-<script src="i18n.js?v=20261112090000"></script>
+<script src="i18n.js?v=20261112100000"></script>
 <title>MoneyLife</title>
 <meta name="theme-color" content="#06040e">
 <script>/* тема до отрисовки: «Авто» — как в телефоне, иначе выбор из настроек */
@@ -1236,6 +1236,64 @@ html.lite .view.enter{animation:vin .2s var(--ease)}
 .st-big.st-na{font-size:56px;color:#d9c9ff}
 @media (prefers-reduced-motion:reduce){.story,.st-s,.st-s>*,.st-coins>span,.st-flames i,.st-ach .win-b,.st-ach small,.win-cell,.win-inv-g{animation:none;transition:none}}
 </style>
+<style id="v7">
+/* ===== «Складки» (12.11.2026): разделы сложены, одно нажатие — раскрываются (folds.js) ===== */
+.fold{position:relative;min-width:0}
+.fold-h{position:relative;isolation:isolate;overflow:hidden;width:100%;display:flex;align-items:center;text-align:left;color:var(--fg);font:inherit;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.fold-h::before{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;background:linear-gradient(100deg,transparent 28%,color-mix(in srgb,var(--fc) 34%,transparent) 50%,transparent 72%);transform:translateX(-115%)}
+.fold.flash .fold-h::before{animation:fSheen .85s cubic-bezier(.3,.7,.2,1)}
+@keyframes fSheen{to{transform:translateX(115%)}}
+.fold-h:active{transform:scale(.985)}
+.fold-h{transition:transform .2s var(--ease,ease),box-shadow .55s cubic-bezier(.2,.9,.2,1),border-color .4s,background .4s}
+/* значок: цвет складки, при открытии подпрыгивает и пускает кольцо */
+.fold-ic{flex:none;width:38px;height:38px;border-radius:12px;display:grid;place-items:center;position:relative;color:var(--fc);background:color-mix(in srgb,var(--fc) 15%,transparent)}
+.fold-ic svg{width:20px;height:20px}
+.fold-ic::after{content:"";position:absolute;inset:-2px;border-radius:14px;border:2px solid var(--fc);opacity:0;pointer-events:none}
+.fold-ic.sm{width:28px;height:28px;border-radius:9px}.fold-ic.sm svg{width:16px;height:16px}.fold-ic.sm::after{border-radius:11px}
+.fold.flash .fold-ic{animation:fIc .6s cubic-bezier(.34,1.56,.64,1)}
+.fold.flash .fold-ic::after{animation:fRing .75s ease-out}
+@keyframes fIc{0%{transform:none}35%{transform:scale(1.18) rotate(-10deg)}100%{transform:none}}
+@keyframes fRing{0%{opacity:.75;transform:scale(.85)}100%{opacity:0;transform:scale(1.7)}}
+/* «+» поворачивается и становится «−» */
+.fold-x{flex:none;width:28px;height:28px;border-radius:50%;position:relative;background:var(--raise);transition:transform .6s cubic-bezier(.34,1.56,.64,1),background .35s}
+.fold-x::before,.fold-x::after{content:"";position:absolute;left:50%;top:50%;width:12px;height:2px;margin:-1px 0 0 -6px;border-radius:2px;background:var(--fg);transition:transform .5s cubic-bezier(.34,1.56,.64,1),background .35s}
+.fold-x::after{transform:rotate(90deg)}
+.fold.open .fold-x{transform:rotate(180deg);background:var(--fc)}
+.fold.open .fold-x::before,.fold.open .fold-x::after{background:var(--bg)}
+.fold.open .fold-x::after{transform:rotate(180deg)}
+/* тело: высота раскрывается плавно, строки разворачиваются по одной, как сложенный лист */
+.fold-b{display:grid;grid-template-rows:0fr;transition:grid-template-rows .58s cubic-bezier(.2,.85,.15,1),margin-top .58s cubic-bezier(.2,.85,.15,1)}
+.fold.open>.fold-b{grid-template-rows:1fr;margin-top:10px}
+.fold-in{min-height:0;overflow:hidden}
+.fold.done>.fold-b>.fold-in{overflow:visible}
+.fold [data-fi]{transform-origin:50% 0;transition:transform .62s cubic-bezier(.2,.9,.25,1.04) calc(var(--fi,0)*45ms + 90ms),opacity .42s ease calc(var(--fi,0)*45ms + 90ms)}
+.fold:not(.open) [data-fi]{transform:perspective(900px) rotateX(-78deg) translateY(-8px);opacity:0;transition-duration:.24s,.18s;transition-delay:0s,0s}
+.fold.instant,.fold.instant *,.fold.instant *::before,.fold.instant *::after{transition:none!important;animation:none!important}
+/* настройки: крупный заголовок-карточка; закрытый — со «стопкой листов» под ним */
+.fold-set{margin-bottom:6px}
+.fold-set>.fold-h{gap:12px;padding:13px 12px 13px 12px;min-height:66px;border-radius:20px;background:var(--surface);border:1px solid var(--line);
+  box-shadow:0 7px 0 -3px var(--raise),0 13px 0 -7px var(--line2)}
+.fold-set.open>.fold-h{box-shadow:0 0 0 -3px var(--raise),0 0 0 -7px var(--line2);border-color:color-mix(in srgb,var(--fc) 45%,var(--line));background:linear-gradient(120deg,color-mix(in srgb,var(--fc) 13%,var(--surface)),var(--surface) 65%)}
+.fold-set.open{margin-bottom:0}
+.fold-tt{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.fold-tt b{font-size:16px;font-weight:650;letter-spacing:-.01em}
+.fold-s{font-size:12.5px;line-height:1.35;color:var(--mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-height:18px;transition:opacity .3s,max-height .45s}
+.fold-s:empty{display:none}
+.fold.open .fold-s{opacity:0;max-height:0}
+.fold-n{flex:none;min-width:24px;height:24px;padding:0 7px;border-radius:999px;font-size:12px;font-weight:700;display:grid;place-items:center;color:var(--fc);background:color-mix(in srgb,var(--fc) 14%,transparent);transition:opacity .3s,transform .45s cubic-bezier(.34,1.56,.64,1)}
+.fold-n:empty{display:none}
+.fold.open .fold-n{opacity:0;transform:scale(.4)}
+/* вкладки: заголовок раздела — кнопка; закрытый показывает край сложенной карточки */
+.sec-h.fold-sec{display:block;margin-bottom:0}
+.fold-tab>.sec-h>.fold-h{gap:10px;min-height:48px;padding:10px 2px;margin:-10px 0;background:none;border:0;border-radius:12px}
+.fold-tab .fold-h .small{margin-left:auto;min-width:0;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fold-tab .fold-h .label{flex:none}
+.fold-tab .fold-x{width:24px;height:24px}
+.fold-tab>.sec-h::after{content:"";display:block;height:9px;margin:10px 10px 0;border-radius:0 0 14px 14px;background:var(--surface);box-shadow:0 5px 0 -2px var(--raise);transform-origin:50% 0;transition:transform .45s cubic-bezier(.2,.9,.2,1),opacity .3s,height .45s,margin .45s}
+.fold-tab.open>.sec-h::after{transform:scaleY(0);opacity:0;height:0;margin-top:0}
+.card .fold-tab>.sec-h::after{display:none}
+@media (prefers-reduced-motion:reduce){.fold *,.fold-b{transition:none!important;animation:none!important}}
+</style>
 </head>
 <body class="loading">
 
@@ -1294,8 +1352,8 @@ html.lite .view.enter{animation:vin .2s var(--ease)}
       <div class="tile"><div class="k">BTC сейчас</div><div class="v skel" id="tBtc">$00 000</div><div class="s" id="tBtcS"></div></div>
       <div class="tile"><div class="k" id="tDcaK">DCA в месяц</div><div class="v skel" id="tDca">$000</div><div class="s" id="tDcaS"></div></div>
     </div>
-    <div id="moversWrap" hidden><div class="sec-h"><span class="label">Лидеры дня</span><span class="small mute">изменение за 24 часа</span></div><div class="movers" id="movers"></div></div>
-    <div><div class="sec-h"><span class="label">Распределение</span><span class="small mute">цель <span id="tgt">50 / 30 / 20</span></span></div><div class="card"><div class="alloc" id="alloc"></div></div></div>
+    <div id="moversWrap" hidden><div class="sec-h" data-fold="movers"><span class="label">Лидеры дня</span><span class="small mute">изменение за 24 часа</span></div><div class="movers" id="movers"></div></div>
+    <div><div class="sec-h" data-fold="alloc"><span class="label">Распределение</span><span class="small mute">цель <span id="tgt">50 / 30 / 20</span></span></div><div class="card"><div class="alloc" id="alloc"></div></div></div>
     <div class="list"><button type="button" class="row r3" id="sigBtn" aria-haspopup="dialog"></button><button type="button" class="row r3" id="teaser"></button></div>
   </section>
 
@@ -1317,15 +1375,15 @@ html.lite .view.enter{animation:vin .2s var(--ease)}
       <div class="gauge" id="gauge"></div>
       <p class="hint" id="nextLbl" style="margin-top:12px"></p>
     </div>
-    <div class="list" id="levels"></div>
-    <p class="note" id="lvNote" style="margin:-4px 6px 0" hidden></p>
+    <div id="lvWrap"><div class="sec-h" data-fold="levels"><span class="label">Ступени лестницы</span><span class="small mute" id="lvCnt"></span></div><div class="list" id="levels"></div>
+    <p class="note" id="lvNote" style="margin:6px 6px 0" hidden></p></div>
     <div class="card" id="ladOff" hidden><div class="sec-h"><span class="label">Лестница докупок</span><span class="chip">выключена</span></div><p class="hint" style="margin-top:6px">Докупки на просадках биткоина из резерва. Включить: «Настройки» → «Изменить правила» → «Лестница докупок».</p></div>
     <div class="card" id="planCard">
-      <div class="sec-h"><span class="label">План альткоинов</span><span class="small mute" id="planLbl"></span></div>
+      <div class="sec-h" data-fold="altplan"><span class="label">План альткоинов</span><span class="small mute" id="planLbl"></span></div>
       <div class="months" id="planMonths"></div>
       <p class="hint" id="planNote" style="margin-top:10px"></p>
     </div>
-    <div><div class="sec-h"><span class="label">Подбор и рынок</span><span class="small mute" id="stLbl"></span></div><div class="list" id="stMenu"></div></div>
+    <div><div class="sec-h" data-fold="market"><span class="label">Подбор и рынок</span><span class="small mute" id="stLbl"></span></div><div class="list" id="stMenu"></div></div>
     <div id="xLearn" hidden></div>
   </section>
 
@@ -1505,7 +1563,7 @@ html.lite .view.enter{animation:vin .2s var(--ease)}
 <div class="sheet" id="setSheet" role="dialog" aria-modal="true" aria-labelledby="setTitle">
   <div class="sh-head"><div class="grab"></div><div class="sh-bar"><h3 id="setTitle">Настройки</h3><button type="button" class="ib" data-close aria-label="Закрыть"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div></div>
   <div class="sh-body"><div class="sh-in">
-    <span class="label">Отображение</span>
+    <span class="label" data-fold="view">Отображение</span>
     <div class="card" style="padding:4px 16px">
       <div class="setrow" translate="no"><div><b>Мова / Язык</b><small>Українська · Русский</small></div><div class="seg" id="langSeg" style="width:132px;flex:none"><button type="button" data-lang="uk">UA</button><button type="button" data-lang="ru">RU</button></div></div>
       <div class="setrow" style="flex-wrap:wrap"><div><b>Тема</b><small>«Авто» — как в настройках телефона</small></div><div class="seg" id="themeSeg" style="width:100%"><button type="button" data-th="system">Авто</button><button type="button" data-th="dark">Тёмная</button><button type="button" data-th="light">Светлая</button></div></div>
@@ -1520,7 +1578,7 @@ html.lite .view.enter{animation:vin .2s var(--ease)}
       <button type="button" class="setrow setbtn" data-x="orname"><div><b>Как Орион обращается к вам</b><small id="orNameVal">не указано</small></div><span class="chev" aria-hidden="true">›</span></button>
       <div class="setrow" id="d14Row"><div><b>Карточка «14 дней»</b><small>Короткие подсказки о приложении на главной</small></div><button type="button" class="switch" id="swD14" role="switch" aria-checked="true" aria-label="Карточка «14 дней»"></button></div>
     </div>
-    <span class="label">План и сигналы</span>
+    <span class="label" data-fold="plan">План и сигналы</span>
     <div class="card" style="padding:4px 16px">
       <button type="button" class="setrow setbtn" data-x="plan"><div><b>Личный план</b><small>Твой этап, потолок крипты и шаги — по 14 книгам о деньгах</small></div><span class="chev" aria-hidden="true">›</span></button>
       <button type="button" class="setrow setbtn" id="goalBtn"><div><b>Цель BTC</b><small>Напомнить, когда цена дойдёт до твоей отметки: <span id="goalVal">не задана</span></small></div><span class="chev" aria-hidden="true">›</span></button>
@@ -1529,9 +1587,9 @@ html.lite .view.enter{animation:vin .2s var(--ease)}
       <button type="button" class="setrow setbtn" data-x="learn0"><div><b>Знания</b><small>Короткие уроки из 14 книг о деньгах</small></div><span class="chev" aria-hidden="true">›</span></button>
       <button type="button" class="setrow setbtn" data-x="share"><div><b>Поделиться результатом</b><small>Картинка с процентом и долями — без сумм</small></div><span class="chev" aria-hidden="true">›</span></button>
     </div>
-    <span class="label">Правила</span>
+    <span class="label" data-fold="rules">Правила</span>
     <div class="card"><div class="kv" id="rules"></div></div>
-    <span class="label" id="stratLbl">Изменить правила</span>
+    <span class="label" id="stratLbl" data-fold="edit">Изменить правила</span>
     <div class="card" style="display:flex;flex-direction:column;gap:12px">
       <p class="hint">Эти правила общие для приложения и для проверки рынка 2 раза в день.</p>
       <div class="f3"><label class="field"><span>BTC, %</span><input type="number" id="stB" min="0" max="100" inputmode="numeric"></label><label class="field"><span>ETH, %</span><input type="number" id="stE" min="0" max="100" inputmode="numeric"></label><label class="field"><span>Альты, %</span><input type="number" id="stA" min="0" max="100" inputmode="numeric"></label></div>
@@ -1542,9 +1600,9 @@ html.lite .view.enter{animation:vin .2s var(--ease)}
       <p class="err" id="setErr" role="alert"></p>
       <button type="button" class="btn block" id="saveStrat">Сохранить правила</button>
     </div>
-    <span class="label">Данные</span>
+    <span class="label" data-fold="data">Данные</span>
     <div class="card"><div class="kv" id="dataInfo"></div></div>
-    <span class="label">Аккаунт</span>
+    <span class="label" data-fold="acc">Аккаунт</span>
     <div class="card" style="display:flex;flex-direction:column;gap:10px">
       <div class="kv" id="accInfo"></div>
       <button type="button" class="btn block ghost" id="expBtn">Скачать мои данные</button>
@@ -1579,9 +1637,9 @@ html.lite .view.enter{animation:vin .2s var(--ease)}
 
 <div class="toast" id="toast" role="status"><span id="toastMsg"></span><button type="button" id="toastBtn" hidden></button></div>
 
-<script src="config.js?v=20261112090000"></script>
+<script src="config.js?v=20261112100000"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="shim.js?v=20261112090000"></script>
+<script src="shim.js?v=20261112100000"></script>
 <script>
 /* ===== основа ===== */
 const $=id=>document.getElementById(id);
@@ -2052,7 +2110,7 @@ $('dustNote').addEventListener('click',e=>{if(e.target.id==='showDust'||e.target
 
 /* ===== стратегия ===== */
 function renderStrategy(D){
-  const lOn=ladderOn();$('gauge').closest('.card').hidden=!lOn;$('levels').hidden=!lOn;$('ladOff').hidden=lOn;
+  const lOn=ladderOn();$('gauge').closest('.card').hidden=!lOn;$('levels').hidden=!lOn;$('lvWrap').hidden=!lOn;$('ladOff').hidden=lOn;
   $('planCard').hidden=!S.altplan;
   {const lbl=$('stMenu').parentElement.querySelector('.label');if(lbl)lbl.textContent=(S.screen||S.altplan)?'Подбор и рынок':'Резерв и DCA';}
   const btc=+D.prices.BTC||null,ath=S.cycle&&S.cycle.ath,levels=(S.cycle&&S.cycle.levels)||[];
@@ -2069,6 +2127,7 @@ function renderStrategy(D){
     info=st==='skip'?'биткоин уже был ниже, когда ты начал — ждём следующие уровни':st==='done'?`потрачено ${usd(l.spent!=null?+l.spent:pl.parts.reduce((a,p)=>a+(+p.spent||0),0))}${l.doneAt?' · '+dShort(l.doneAt):''}`:`${l.pct>=100?'весь резерв':l.pct+'% резерва'} · ${usd(pl.amt)}`,
     coins=['skip','done'].includes(st)?'':lvCoins(l,pl,D);
     return `<div class="lv ${st}"><div class="n">${l.n}</div><div class="t">−${l.drop}% · ${usd(lvPrice(l),0)}</div><div class="rr">${chip[st]}${st==='go'?`<button type="button" class="btn sm" data-dip="${l.n}">Записать</button>`:''}</div><div class="d">${info}</div>${coins}</div>`;}).join('')||'';$('levels').hidden=!levels.length;
+  {const done=levels.filter(l=>lvState(l,btc,D)==='done').length,go=levels.filter(l=>lvState(l,btc,D)==='go').length;$('lvWrap').hidden=$('levels').hidden||!levels.length;$('lvCnt').textContent=levels.length?pl(levels.length,'ступень','ступени','ступеней')+(go?' · пора: '+go:done?' · выполнено: '+done:''):'';}   /* сводка для закрытой складки */
   const k2=k2Cfg();$('lvNote').hidden=!$('levels').querySelector('.lvc');
   $('lvNote').innerHTML=`<b>≤</b> не дороже · <b>≈</b> ожидаемо, когда BTC дойдёт до уровня · <b class="g">зелёная</b> — можно сейчас. Потолок монеты — на ${k2.pct}% ниже средней покупки за ${k2.days} дней${split().ALT>0?`; альты — на уровнях 1–${ALT_MAX_LV}, пока их меньше ${altCapPct()}% портфеля`:''}.`;
   const capP=+S.settings.capPct||20,cap=D.total*capP/100,flow=budgetUsd()*(1-depShare());
@@ -2860,7 +2919,7 @@ function msSync(x){MSC.last=x;if(!msApply())return;if(!S.ready||document.getElem
   if(window.Mascot){try{window.Mascot.sync(msPayload(x));}catch(e){}}else msLoad();}
 function msLoad(){if(MSC.loading||MSC.failed)return;MSC.loading=true;
   const add=(src,ok)=>{try{const s=document.createElement('script');s.src=src;s.async=true;s.onload=ok;s.onerror=()=>{MSC.failed=true;};document.head.appendChild(s);}catch(e){MSC.failed=true;}};
-  const boot=()=>add('mascot.js?v=20261112090000',()=>{try{if(window.Mascot&&window.Mascot.init({host:$('mascot'),app:{buzz,askName:()=>{if(window.MLX&&MLX.askName)MLX.askName();},addAlert:(y,v)=>window.MLX&&MLX.addAlert?MLX.addAlert(y,v):null,voice:(t,x)=>window.mlVoice?window.mlVoice(t,x):null,ask:(q,y,x)=>window.mlAsk?window.mlAsk(q,y,x):null}})&&MSC.last&&$('ob').hidden&&!document.getElementById('mlAuth'))window.Mascot.sync(msPayload(MSC.last));}catch(e){}});
+  const boot=()=>add('mascot.js?v=20261112100000',()=>{try{if(window.Mascot&&window.Mascot.init({host:$('mascot'),app:{buzz,askName:()=>{if(window.MLX&&MLX.askName)MLX.askName();},addAlert:(y,v)=>window.MLX&&MLX.addAlert?MLX.addAlert(y,v):null,voice:(t,x)=>window.mlVoice?window.mlVoice(t,x):null,ask:(q,y,x)=>window.mlAsk?window.mlAsk(q,y,x):null}})&&MSC.last&&$('ob').hidden&&!document.getElementById('mlAuth'))window.Mascot.sync(msPayload(MSC.last));}catch(e){}});
   setTimeout(boot,300);}
 function render(){const D=derive();renderHeader();renderHome(D);renderGrowth();renderCoins(D);renderStrategy(D);renderActivity();renderD14();if(window.MLX)try{MLX.render(D);}catch(e){console.error(e);}earnNudge();if(cvSym&&$('coinSheet').classList.contains('open'))renderCoinView();}
 document.body.classList.add('loading');
@@ -2944,7 +3003,8 @@ render();requestAnimationFrame(inkMove);setTimeout(inkMove,600);
     sy=null;swipe=null;pull=0;armed=false;},{passive:true});
 })();
 </script>
-<script src="plus.js?v=20261112090000"></script>
-<script src="wins.js?v=20261112090000"></script>
+<script src="plus.js?v=20261112100000"></script>
+<script src="wins.js?v=20261112100000"></script>
+<script src="folds.js?v=20261112100000"></script>
 </body>
 </html>

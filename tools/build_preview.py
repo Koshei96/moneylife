@@ -19,7 +19,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT = Path(sys.argv[1] if len(sys.argv) > 1 else '/tmp/ml-preview')
-ASSETS = ['i18n.js', 'mascot.js', 'plus.js', 'wins.js', 'manifest.webmanifest']
+ASSETS = ['i18n.js', 'mascot.js', 'plus.js', 'wins.js', 'folds.js', 'manifest.webmanifest']
 ASSET_GLOBS = ['*.bin', 'logos/*', 'icons/*', 'data/*.json']
 
 def main():
