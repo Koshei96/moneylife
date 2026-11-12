@@ -1024,6 +1024,14 @@ def run_browser():
             al = pg.evaluate("(()=>{const k=Object.keys(localStorage).find(k=>k.startsWith('ml-x:'));return k?(JSON.parse(localStorage.getItem(k)).alerts||[]):[]})()")
             if a4.startswith('Готово') and any(x['sym'] == 'ETH' and x['price'] == 5000 and x['dir'] == 'up' for x in al): ok('Орион: «сообщи, когда эфир будет 5000» — оповещение поставлено')
             else: fail('Орион: оповещение голосом', f'{a4} | {al}')
+            # цена голосом: «63 тыс.», «63.000», «шестьдесят три тысячи», «63к», просто «63» у биткоина — это 63 000 (жалоба владельца 12.11)
+            bad = []
+            for q in ['сообщи когда биткоин будет 63 тыс.', 'сообщи когда биткоин будет 63.000', 'сообщи когда биткоин будет шестьдесят три тысячи', 'сообщи когда биткоин упадет до 63к', 'сообщи когда биткоин будет 63']:
+                r = R(q); al = pg.evaluate("(()=>{const k=Object.keys(localStorage).find(k=>k.startsWith('ml-x:'));return k?(JSON.parse(localStorage.getItem(k)).alerts||[]):[]})()")
+                if not any(x['sym'] == 'BTC' and x['price'] == 63000 for x in al): bad.append(q + ' → ' + r)
+                pg.evaluate("(()=>{const k=Object.keys(localStorage).find(k=>k.startsWith('ml-x:'));const o=JSON.parse(localStorage.getItem(k));o.alerts=(o.alerts||[]).filter(a=>a.sym!=='BTC');localStorage.setItem(k,JSON.stringify(o));})()")
+            if not bad: ok('Орион: цена голосом — «63 тыс.», «63.000», «шестьдесят три тысячи», «63к», «63» у биткоина = $63 000')
+            else: fail('Орион: цена голосом', ' | '.join(bad))
             # оповещение срабатывает один раз и снимается
             pg.evaluate("(()=>{const k=Object.keys(localStorage).find(k=>k.startsWith('ml-x:'));const o=JSON.parse(localStorage.getItem(k));o.alerts=[{id:'t1',sym:'ETH',price:99999,dir:'down',at:Date.now()}];localStorage.setItem(k,JSON.stringify(o));MLX.alertsCheck(derive())})()")
             pg.wait_for_timeout(300)
