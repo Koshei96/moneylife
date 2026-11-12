@@ -11,7 +11,7 @@ addEventListener('error',function(e){if(e&&e.message)add(e.message,(e.filename||
 addEventListener('unhandledrejection',function(e){var r=e&&e.reason;add(r&&(r.message||r)||'отклонённое обещание','promise');});
 window.mlErrLog=function(){try{return JSON.parse(localStorage.getItem(K)||'[]');}catch(e){return [];}};window.mlErrAdd=add;})();
 </script>
-<script src="i18n.js?v=20261112140000"></script>
+<script src="i18n.js?v=20261112141500"></script>
 <title>MoneyLife</title>
 <meta name="theme-color" content="#06040e">
 <script>/* тема до отрисовки: «Авто» — как в телефоне, иначе выбор из настроек */
@@ -1328,6 +1328,8 @@ html.lite .view.enter{animation:vin .2s var(--ease)}
 @media (prefers-reduced-motion:reduce){.thsw *{transition:none!important;animation:none!important}}
 </style>
 <style id="v10">
+/* браузерное «потянуть вниз» перезагружало всю страницу (видео владельца 12.11) — отключено, работает только своё обновление цен */
+html,body{overscroll-behavior-y:none}
 /* ===== 12.11.2026 (спокойная версия): шестерёнка, «потянуть вниз», ползунок «Купить», смахнуть запись. Без конфетти, градиентов и «пружин» ===== */
 #setBtn{position:relative}
 #setBtn .gear{width:21px;height:21px;transition:transform .45s cubic-bezier(.3,0,.2,1)}
@@ -1715,9 +1717,9 @@ document.querySelectorAll('nav.tabs .tab').forEach(b=>{const v=b.querySelector('
 
 <div class="toast" id="toast" role="status"><span id="toastMsg"></span><button type="button" id="toastBtn" hidden></button></div>
 
-<script src="config.js?v=20261112140000"></script>
+<script src="config.js?v=20261112141500"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="shim.js?v=20261112140000"></script>
+<script src="shim.js?v=20261112141500"></script>
 <script>
 /* ===== основа ===== */
 const $=id=>document.getElementById(id);
@@ -3013,7 +3015,7 @@ function msSync(x){MSC.last=x;if(!msApply())return;if(!S.ready||document.getElem
   if(window.Mascot){try{window.Mascot.sync(msPayload(x));}catch(e){}}else msLoad();}
 function msLoad(){if(MSC.loading||MSC.failed)return;MSC.loading=true;
   const add=(src,ok)=>{try{const s=document.createElement('script');s.src=src;s.async=true;s.onload=ok;s.onerror=()=>{MSC.failed=true;};document.head.appendChild(s);}catch(e){MSC.failed=true;}};
-  const boot=()=>add('mascot.js?v=20261112140000',()=>{try{if(window.Mascot&&window.Mascot.init({host:$('mascot'),app:{buzz,askName:()=>{if(window.MLX&&MLX.askName)MLX.askName();},addAlert:(y,v)=>window.MLX&&MLX.addAlert?MLX.addAlert(y,v):null,voice:(t,x)=>window.mlVoice?window.mlVoice(t,x):null,ask:(q,y,x)=>window.mlAsk?window.mlAsk(q,y,x):null}})&&MSC.last&&$('ob').hidden&&!document.getElementById('mlAuth'))window.Mascot.sync(msPayload(MSC.last));}catch(e){}});
+  const boot=()=>add('mascot.js?v=20261112141500',()=>{try{if(window.Mascot&&window.Mascot.init({host:$('mascot'),app:{buzz,askName:()=>{if(window.MLX&&MLX.askName)MLX.askName();},addAlert:(y,v)=>window.MLX&&MLX.addAlert?MLX.addAlert(y,v):null,voice:(t,x)=>window.mlVoice?window.mlVoice(t,x):null,ask:(q,y,x)=>window.mlAsk?window.mlAsk(q,y,x):null}})&&MSC.last&&$('ob').hidden&&!document.getElementById('mlAuth'))window.Mascot.sync(msPayload(MSC.last));}catch(e){}});
   setTimeout(boot,300);}
 function render(){const D=derive();renderHeader();renderHome(D);renderGrowth();renderCoins(D);renderStrategy(D);renderActivity();renderD14();if(window.MLX)try{MLX.render(D);}catch(e){console.error(e);}earnNudge();if(cvSym&&$('coinSheet').classList.contains('open'))renderCoinView();}
 document.body.classList.add('loading');
@@ -3098,9 +3100,9 @@ render();requestAnimationFrame(inkMove);setTimeout(inkMove,600);
     sy=null;swipe=null;pull=0;armed=false;},{passive:true});
 })();
 </script>
-<script src="plus.js?v=20261112140000"></script>
-<script src="wins.js?v=20261112140000"></script>
-<script src="folds.js?v=20261112140000"></script>
+<script src="plus.js?v=20261112141500"></script>
+<script src="wins.js?v=20261112141500"></script>
+<script src="folds.js?v=20261112141500"></script>
 <script>
 /* ===== 12.11.2026: ползунок «Купить», смахнуть запись влево с «рассыпанием» монеты ===== */
 (function(){
@@ -3108,7 +3110,7 @@ render();requestAnimationFrame(inkMove);setTimeout(inkMove,600);
   const OK='<svg class="ok" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
   const btn=$('saveBtn');let on=false;
   function setSlide(v){on=v;btn.classList.toggle('slide',v);btn.classList.remove('done','drag','nudge','shake');btn.style.removeProperty('--sx');btn.style.removeProperty('--sp');btn.disabled=false;
-    if(v){btn.innerHTML='<span class="sl-fill"></span><span class="sl-txt">Проведите, чтобы купить</span><span class="sl-knob">'+COIN+OK+'</span>';btn.setAttribute('aria-label','Купить — проведите вправо');}
+    if(v){btn.innerHTML='<span class="sl-fill"></span><span class="sl-txt">Купить</span><span class="sl-knob">'+COIN+OK+'</span>';btn.setAttribute('aria-label','Купить — проведите вправо');}
     else{btn.textContent='Сохранить';btn.removeAttribute('aria-label');}}
   const _show=showForm;window.showForm=showForm=function(m,o){_show(m,o);setSlide(m==='buy'||m==='dip');};
   /* перетаскивание */
@@ -3149,12 +3151,20 @@ render();requestAnimationFrame(inkMove);setTimeout(inkMove,600);
     crumble(r);r.classList.add('gone');play('del');
     setTimeout(async()=>{const ok=await delTxId(r.dataset.tx,true);if(!ok){r.classList.remove('gone');r.style.transform='';}},380);};
   hl.addEventListener('pointerup',end);hl.addEventListener('pointercancel',end);
-  function crumble(r){if(reduced)return;const ic=r.querySelector('.badge,img,.ico,.ib-badge')||r.firstElementChild;if(!ic)return;const b=ic.getBoundingClientRect();
-    let col=getComputedStyle(ic).getPropertyValue('--c').trim()||getComputedStyle(ic).backgroundColor||'#b15cff';if(!col||col==='rgba(0, 0, 0, 0)')col='#b15cff';
-    ic.animate([{transform:'scale(1)',filter:'blur(0)',opacity:1},{transform:'scale(.85)',filter:'blur(1.5px)',opacity:0}],{duration:300,fill:'forwards'});
-    for(let i=0;i<10;i++){const p=document.createElement('i');p.className='crumb';const sz=2+Math.random()*3;p.style.width=p.style.height=sz+'px';
-      p.style.left=(b.left+Math.random()*b.width)+'px';p.style.top=(b.top+Math.random()*b.height)+'px';p.style.background=col;p.style.opacity='.8';document.body.appendChild(p);
-      const tx=-(6+Math.random()*26),ty=(Math.random()-.3)*22;p.animate([{transform:'translate(0,0) rotate(0)',opacity:1},{transform:`translate(${tx}px,${ty}px) rotate(${(Math.random()-.5)*540}deg)`,opacity:0}],{duration:380+Math.random()*220,easing:'cubic-bezier(.3,0,.2,1)'}).onfinish=()=>p.remove();}}
+  /* «разрушение» монеты: значок раскалывается на осколки (копии значка, каждая со своей частью), осколки разлетаются и осыпаются */
+  function crumble(r){if(reduced)return;const ic=r.querySelector('.badge,img,.ico,.ib-badge')||r.firstElementChild;if(!ic)return;const b0=ic.getBoundingClientRect();if(!b0.width)return;
+    /* строка уже сдвинута пальцем — осколки появляются там, где монета стояла */
+    const m=/translateX\((-?[\d.]+)px\)/.exec(r.style.transform||''),off=m?+m[1]:0,b={left:b0.left-off,top:b0.top,width:b0.width,height:b0.height};
+    const N=4,cs=getComputedStyle(ic);
+    for(let y=0;y<N;y++)for(let x=0;x<N;x++){const c=ic.cloneNode(true);c.removeAttribute('id');
+      Object.assign(c.style,{position:'fixed',left:b.left+'px',top:b.top+'px',width:b.width+'px',height:b.height+'px',margin:'0',zIndex:'80',pointerEvents:'none',boxSizing:'border-box',
+        fontSize:cs.fontSize,lineHeight:cs.lineHeight,fontWeight:cs.fontWeight,borderRadius:cs.borderRadius,
+        clipPath:`polygon(${x/N*100}% ${y/N*100}%,${(x+1)/N*100}% ${y/N*100+(x%2?3:-3)}%,${(x+1)/N*100}% ${(y+1)/N*100}%,${x/N*100}% ${(y+1)/N*100+(y%2?-3:3)}%)`});
+      document.body.appendChild(c);
+      const cx=(x+.5)/N-.5,cy=(y+.5)/N-.5,tx=cx*46+(Math.random()-.5)*14-10,ty=cy*30+26+Math.random()*30,rot=(Math.random()-.5)*160;
+      c.animate([{transform:'translate(0,0) rotate(0)',opacity:1},{transform:`translate(${tx*.45}px,${cy*14-4}px) rotate(${rot*.3}deg)`,opacity:1,offset:.3},{transform:`translate(${tx}px,${ty}px) rotate(${rot}deg)`,opacity:0}],
+        {duration:620+Math.random()*180,delay:Math.random()*60,easing:'cubic-bezier(.4,.1,.7,1)',fill:'forwards'}).onfinish=()=>c.remove();}
+    ic.style.visibility='hidden';}
 })();
 </script>
 </body>
