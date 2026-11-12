@@ -896,6 +896,9 @@
   /* ---------- кадр ---------- */
   const rgb = (c, a) => 'rgba(' + (c[0] | 0) + ',' + (c[1] | 0) + ',' + (c[2] | 0) + ',' + a + ')';
   function draw(t) {
+    /* телефон может сбросить холст, пока приложение свёрнуто (Android) — тогда масштаб слетал и Орион рисовался вдвое меньше; восстанавливаем каждый кадр */
+    const dp = Math.min(window.devicePixelRatio || 1, 2);
+    if (dp !== DPR || cv.width !== Math.round(W * dp)) fit(); else g.setTransform(DPR, 0, 0, DPR, 0, 0);
     const w = W, cx = w / 2, cy = w / 2, L = ST.lvl, dim = ST.mood === 'sleep' ? 0.55 : ST.mood === 'offline' ? 0.75 : 1;
     const R = 29 * (1 + L * 0.1);
     g.clearRect(0, 0, w, w);
@@ -989,6 +992,8 @@
     cv = document.createElement('canvas'); cv.className = 'ms-cv'; cv.setAttribute('aria-hidden', 'true');
     g = cv.getContext('2d'); if (!g) return false;
     host.appendChild(cv); fit();
+    cv.addEventListener('contextrestored', () => { fit(); wake(); });
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) { fit(); wake(); } });
     ui.hit = document.createElement('button'); ui.hit.type = 'button'; ui.hit.className = 'ms-hit';
     ui.hit.setAttribute('aria-label', 'Орион, голосовой помощник: нажмите — сводка, зажмите — вопрос голосом'); host.appendChild(ui.hit);
     let lpT = 0, lp = false;
