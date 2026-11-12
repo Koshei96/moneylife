@@ -1220,6 +1220,23 @@ def run_browser():
             shot(pg, 'tabs-orb')
         scenario('Панель вкладок', {'session': True, 'docs': SEED}, s_orb)
 
+        # --- переключатель темы (12.11.2026): луна/голубое ↔ солнце/оранжевое, надпись «Тёмная/Светлая», «Как в телефоне»
+        def s_theme(pg, n):
+            pg.evaluate("openSettings()"); pg.wait_for_timeout(700)
+            pg.evaluate("document.getElementById('thSw').scrollIntoView({block:'center'})")
+            pg.evaluate("P.theme='dark';savePrefs();applyTheme();fillSettings()"); pg.wait_for_timeout(300)
+            pg.click('#thSw'); pg.wait_for_timeout(1600)
+            r1 = pg.evaluate("[document.documentElement.dataset.theme,P.theme,document.getElementById('thSw').getAttribute('aria-checked'),document.getElementById('thLbl').dataset.on]")
+            pg.click('#thSw'); pg.wait_for_timeout(1600)
+            r2 = pg.evaluate("[document.documentElement.dataset.theme,P.theme,document.getElementById('thSw').getAttribute('aria-checked'),document.getElementById('thLbl').dataset.on]")
+            if r1 == ['light', 'light', 'true', 'light'] and r2 == ['dark', 'dark', 'false', 'dark']: ok('тема: переключатель меняет тёмную ↔ светлую, надпись «Тёмная/Светлая» следует')
+            else: fail('тема: переключатель', f'{r1} {r2}')
+            pg.click('#thAuto'); pg.wait_for_timeout(600)
+            if pg.evaluate("P.theme") == 'system' and pg.evaluate("document.getElementById('thAuto').getAttribute('aria-pressed')") == 'true': ok('тема: «Как в телефоне» включает авто-тему')
+            else: fail('тема: авто', pg.evaluate("P.theme"))
+            shot(pg, 'theme-switch')
+        scenario('Тема', {'session': True, 'docs': SEED}, s_theme)
+
         # --- надёжность интерфейса (12.11.2026): ошибки, найденные владельцем на телефоне, не должны вернуться
         def s_ui(pg, errs):
             pg.wait_for_timeout(2500)

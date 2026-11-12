@@ -37,7 +37,7 @@
   var segOn = function (id) { var s = document.getElementById(id); if (!s) return ''; var b = s.querySelector('[aria-pressed="true"],.on,.active'); return txt(b); };
   var L = function (s) { return window.L ? window.L(s) : s; };
   var SUM = {
-    view: function () { var a = [segOn('themeSeg'), segOn('curSeg')].filter(Boolean); a.push(L(on('swMascot') ? 'Орион вкл.' : 'Орион выкл.')); a.push(L(on('swSound') ? 'звуки вкл.' : 'звуки выкл.')); return a.join(' · '); },
+    view: function () { var tl = document.getElementById('thLbl'), th = tl ? txt(tl.querySelector('[data-t="' + (tl.dataset.on || 'dark') + '"]')) : ''; var a = [th, segOn('curSeg')].filter(Boolean); a.push(L(on('swMascot') ? 'Орион вкл.' : 'Орион выкл.')); a.push(L(on('swSound') ? 'звуки вкл.' : 'звуки выкл.')); return a.join(' · '); },
     plan: function () { return L('Личный план, цель BTC, сигналы, оповещения, уроки'); },
     rules: function (b) { var v = b.querySelector('.kv .v, .kv dd, .kv > div > :last-child'); return txt(v) || L('Твоя стратегия'); },
     edit: function () { return L('Доли монет, резерв, лестница, ключ 2'); },
@@ -158,7 +158,7 @@
     Array.prototype.slice.call(document.querySelectorAll('.view .sec-h[data-fold]')).forEach(function (h) { build(h, null, 'tab'); });
     /* сводки обновляются, когда меняются значения внутри (тема, выключатели, правила) */
     var pend = false, mo = new MutationObserver(function () { if (pend) return; pend = true; requestAnimationFrame(function () { pend = false; folds.forEach(summary); }); });
-    folds.forEach(function (f) { mo.observe(f.inn, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ['aria-checked', 'aria-pressed', 'class', 'hidden'] }); });
+    folds.forEach(function (f) { mo.observe(f.inn, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ['aria-checked', 'aria-pressed', 'class', 'hidden', 'data-on'] }); });
     /* прокрутка к содержимому складки (кнопки «Изменить правила», «Распределение» в подсказках) — складка открывается сама */
     var sv = Element.prototype.scrollIntoView;
     if (sv && !sv.__fold) {
