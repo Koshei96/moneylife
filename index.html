@@ -3,6 +3,14 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,interactive-widget=resizes-content">
+<script>
+/* журнал ошибок (12.11.2026): последние 20 сбоев — только на телефоне, без личных данных; уходят разработчику, только если человек сам нажмёт «Сообщить об ошибке» */
+(function(){var K='ml-err',noise=/ResizeObserver loop|Script error\.?$|extension:\/\//;
+function add(m,src){try{m=String(m||'').slice(0,240);if(!m||noise.test(m)||noise.test(src||''))return;var a=JSON.parse(localStorage.getItem(K)||'[]');a.push({t:new Date().toISOString().slice(0,19),m:m,s:String(src||'').replace(/^.*\//,'').slice(0,80)});localStorage.setItem(K,JSON.stringify(a.slice(-20)));}catch(e){}}
+addEventListener('error',function(e){if(e&&e.message)add(e.message,(e.filename||'')+':'+(e.lineno||0));},true);
+addEventListener('unhandledrejection',function(e){var r=e&&e.reason;add(r&&(r.message||r)||'отклонённое обещание','promise');});
+window.mlErrLog=function(){try{return JSON.parse(localStorage.getItem(K)||'[]');}catch(e){return [];}};window.mlErrAdd=add;})();
+</script>
 <title>MoneyLife</title>
 <meta name="theme-color" content="#06040e">
 <script>/* тема до отрисовки: «Авто» — как в телефоне, иначе выбор из настроек */
@@ -1542,6 +1550,7 @@ html.lite .view.enter{animation:vin .2s var(--ease)}
       <button type="button" class="btn block danger" id="delBtn">Удалить аккаунт</button>
     </div>
     <p class="hint">MoneyLife — дневник и калькулятор для твоей стратегии, а не инвестиционный совет: решения о покупке и продаже принимаешь ты. <a href="privacy.html" target="_blank" rel="noopener">Политика конфиденциальности</a></p>
+    <button type="button" class="btn block ghost" id="bugBtn">Сообщить об ошибке</button>
     <p class="hint" id="appVer" hidden></p>
   </div></div>
 </div>
@@ -1568,9 +1577,9 @@ html.lite .view.enter{animation:vin .2s var(--ease)}
 
 <div class="toast" id="toast" role="status"><span id="toastMsg"></span><button type="button" id="toastBtn" hidden></button></div>
 
-<script src="config.js?v=20261112073500"></script>
+<script src="config.js?v=20261112082000"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="shim.js?v=20261112073500"></script>
+<script src="shim.js?v=20261112082000"></script>
 <script>
 /* ===== основа ===== */
 const $=id=>document.getElementById(id);
@@ -2587,6 +2596,13 @@ function openSettings(toStrat){fillSettings();openSheet('setSheet');const b=$('s
 $('setBtn').addEventListener('click',()=>openSettings(false));
 // Метка сборки — из того же ?v=, что и у shim.js (его меняют вместе с sw.js по правилу 8): тестировщик пишет, на какой версии ошибка
 (()=>{const s=document.querySelector('script[src*="shim.js?v="]'),m=s&&/[?&]v=(\d+)/.exec(s.getAttribute('src')),e=$('appVer');if(m&&e){e.textContent='Версия '+m[1];e.hidden=false;}})();
+/* «Сообщить об ошибке»: письмо разработчику с версией, телефоном и последними сбоями — без записей портфеля и сумм */
+function bugReport(){const v=($('appVer')&&$('appVer').textContent)||'',E=(window.mlErrLog?mlErrLog():[]).slice(-8);
+  return ['Что случилось (опишите своими словами):','','',
+    '— техническая часть, не удаляйте —',v||'Версия ?','Экран: '+innerWidth+'×'+innerHeight+' @'+(devicePixelRatio||1)+', тема '+(document.documentElement.getAttribute('data-theme')||'?'),
+    'Устройство: '+navigator.userAgent.slice(0,180),'Сеть: '+(navigator.onLine===false?'нет':'есть')+', цены: '+(S.live&&S.live.status||'?'),
+    'Сбои: '+(E.length?'':'не было'),...E.map(x=>x.t.replace('T',' ')+' · '+x.m+(x.s?' · '+x.s:''))].join('\n');}
+$('bugBtn').addEventListener('click',()=>{buzz(6);const body=bugReport();location.href='mailto:moneylife.ap@gmail.com?subject='+encodeURIComponent('MoneyLife: ошибка')+'&body='+encodeURIComponent(body);});
 const SW={swHide:'hide',swDust:'dust',swSound:'sound',swHaptic:'haptic',swMascot:'mascot',swMsSound:'msVoice',swMsFx:'msFx'};
 Object.keys(SW).forEach(id=>$(id).addEventListener('click',()=>{const k=SW[id];P[k]=!P[k];savePrefs();swSet(id,P[k]);if(k==='sound'&&P.sound)play('tick');if(k==='haptic')buzz(10);render();}));
 $('themeSeg').addEventListener('click',e=>{const b=e.target.closest('[data-th]');if(!b)return;P.theme=b.dataset.th;savePrefs();applyTheme();play('tick');fillSettings();render();});
@@ -2841,7 +2857,7 @@ function msSync(x){MSC.last=x;if(!msApply())return;if(!S.ready||document.getElem
   if(window.Mascot){try{window.Mascot.sync(msPayload(x));}catch(e){}}else msLoad();}
 function msLoad(){if(MSC.loading||MSC.failed)return;MSC.loading=true;
   const add=(src,ok)=>{try{const s=document.createElement('script');s.src=src;s.async=true;s.onload=ok;s.onerror=()=>{MSC.failed=true;};document.head.appendChild(s);}catch(e){MSC.failed=true;}};
-  const boot=()=>add('mascot.js?v=20261112073500',()=>{try{if(window.Mascot&&window.Mascot.init({host:$('mascot'),app:{buzz,askName:()=>{if(window.MLX&&MLX.askName)MLX.askName();},addAlert:(y,v)=>window.MLX&&MLX.addAlert?MLX.addAlert(y,v):null,voice:(t,x)=>window.mlVoice?window.mlVoice(t,x):null,ask:(q,y,x)=>window.mlAsk?window.mlAsk(q,y,x):null}})&&MSC.last&&$('ob').hidden&&!document.getElementById('mlAuth'))window.Mascot.sync(msPayload(MSC.last));}catch(e){}});
+  const boot=()=>add('mascot.js?v=20261112082000',()=>{try{if(window.Mascot&&window.Mascot.init({host:$('mascot'),app:{buzz,askName:()=>{if(window.MLX&&MLX.askName)MLX.askName();},addAlert:(y,v)=>window.MLX&&MLX.addAlert?MLX.addAlert(y,v):null,voice:(t,x)=>window.mlVoice?window.mlVoice(t,x):null,ask:(q,y,x)=>window.mlAsk?window.mlAsk(q,y,x):null}})&&MSC.last&&$('ob').hidden&&!document.getElementById('mlAuth'))window.Mascot.sync(msPayload(MSC.last));}catch(e){}});
   setTimeout(boot,300);}
 function render(){const D=derive();renderHeader();renderHome(D);renderGrowth();renderCoins(D);renderStrategy(D);renderActivity();renderD14();if(window.MLX)try{MLX.render(D);}catch(e){console.error(e);}earnNudge();if(cvSym&&$('coinSheet').classList.contains('open'))renderCoinView();}
 document.body.classList.add('loading');
@@ -2925,7 +2941,7 @@ render();requestAnimationFrame(inkMove);setTimeout(inkMove,600);
     sy=null;swipe=null;pull=0;armed=false;},{passive:true});
 })();
 </script>
-<script src="plus.js?v=20261112073500"></script>
-<script src="wins.js?v=20261112073500"></script>
+<script src="plus.js?v=20261112082000"></script>
+<script src="wins.js?v=20261112082000"></script>
 </body>
 </html>

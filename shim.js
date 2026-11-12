@@ -645,7 +645,7 @@
     const c = client(); if (!c || !uid) throw new Error('not signed in');
     if (navigator.onLine === false) { const e = new Error('offline'); e.code = 'offline'; throw e; }
     const r = await c.rpc('delete_my_account'); if (r.error) throw r.error;
-    try { localStorage.removeItem(lsDocs()); localStorage.removeItem(LS_UID); localStorage.removeItem('ml-cmeta'); for (const k of ['ml-14d:', 'ml-plan:', 'ml-x:', 'ml-win:']) localStorage.removeItem(k + uid); } catch (e) {}   /* личное на телефоне уходит вместе с аккаунтом */
+    try { localStorage.removeItem(lsDocs()); localStorage.removeItem(LS_UID); localStorage.removeItem('ml-cmeta'); localStorage.removeItem('ml-err'); for (const k of ['ml-14d:', 'ml-plan:', 'ml-x:', 'ml-win:']) localStorage.removeItem(k + uid); } catch (e) {}   /* личное на телефоне уходит вместе с аккаунтом */
     try { await c.auth.signOut({ scope: 'local' }); } catch (e) {}
     history.replaceState(null, '', location.pathname + '#deleted'); location.reload();   /* экран входа покажет «аккаунт удалён» */
   };

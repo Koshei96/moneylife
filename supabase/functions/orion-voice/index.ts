@@ -1,7 +1,7 @@
 /* MoneyLife — голос Ориона (11.11.2026). Серверная функция Supabase: текст → озвучка ElevenLabs (mp3).
    Ключ и голос — только в секретах Supabase (ELEVENLABS_API_KEY, ORION_VOICE_ID); в приложение не попадают.
    - пускает только вошедших пользователей (JWT из приложения);
-   - готовые фразы хранит в закрытом хранилище orion-voice: одна и та же фраза одним голосом озвучивается один раз;
+   - готовые фразы хранит в закрытом хранилище orion-voice (папка месяца, не дольше двух месяцев): одна и та же фраза в месяц озвучивается один раз;
    - лимиты: на человека в сутки (ORION_DAY_LIMIT фраз, по умолчанию 80) и на всё приложение в месяц
      (ORION_MONTH_CHARS знаков, по умолчанию 120 000) — дальше приложение говорит голосом телефона;
    - модель — ORION_MODEL (по умолчанию eleven_multilingual_v2).
@@ -56,7 +56,8 @@ Deno.serve(async (req) => {
   if (!text || text.length > 700) return json({ error: 'bad_text' }, 400);
 
   const hash = await sha256(VOICE + '|' + MODEL + '|' + JSON.stringify(VS) + '|' + prev + '|' + text + '|' + next);
-  const path = 'phrases/' + hash.slice(0, 2) + '/' + hash + '.mp3';
+  const ym = new Date().toISOString().slice(0, 7);
+  const path = 'phrases/' + ym + '/' + hash.slice(0, 2) + '/' + hash + '.mp3';   /* папка месяца: фразы живут не дольше двух месяцев (уборка ниже) */
   const store = sb.storage.from(BUCKET);
 
   /* 1. фраза уже озвучена — отдаём из хранилища, кредиты не тратятся */
@@ -87,5 +88,19 @@ Deno.serve(async (req) => {
     writeNum(dayKey, dn + 1),
     writeNum(monthKey, mn + text.length)
   ]);
+  if (Math.random() < 0.05) await cleanup(store, ym).catch(() => null);
   return new Response(audio, { headers: { ...CORS, 'content-type': 'audio/mpeg', 'cache-control': 'private, max-age=31536000', 'x-orion': 'new' } });
 });
+
+/* уборка: звуковые фразы старше прошлого месяца стираются (в них могут быть округлённые суммы портфеля) — по 100 файлов за раз */
+// deno-lint-ignore no-explicit-any
+async function cleanup(store: any, ym: string) {
+  const d = new Date(ym + '-01T00:00:00Z'); d.setUTCMonth(d.getUTCMonth() - 1); const keep = d.toISOString().slice(0, 7);
+  const { data: tops } = await store.list('phrases', { limit: 100 });
+  for (const t of tops || []) {
+    const name = t.name; let paths: string[] = [];
+    if (/^[0-9a-f]{2}$/.test(name)) { const { data } = await store.list('phrases/' + name, { limit: 100 }); paths = (data || []).map((f: { name: string }) => 'phrases/' + name + '/' + f.name); }   /* старая раскладка без месяца */
+    else if (/^\d{4}-\d{2}$/.test(name) && name < keep) { const { data: subs } = await store.list('phrases/' + name, { limit: 20 }); for (const sd of subs || []) { const { data } = await store.list('phrases/' + name + '/' + sd.name, { limit: 100 }); paths.push(...(data || []).map((f: { name: string }) => 'phrases/' + name + '/' + sd.name + '/' + f.name)); if (paths.length >= 100) break; } }
+    if (paths.length) { await store.remove(paths.slice(0, 100)); return; }
+  }
+}

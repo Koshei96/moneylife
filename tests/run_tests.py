@@ -1129,6 +1129,55 @@ def run_browser():
             else: fail('итог месяца: закрытие', 'осталось')
         scenario('Достижения', {'session': True, 'docs': SEED}, s_wins)
 
+        # --- надёжность интерфейса (12.11.2026): ошибки, найденные владельцем на телефоне, не должны вернуться
+        def s_ui(pg, errs):
+            pg.wait_for_timeout(2500)
+            # 1) панель вкладок стоит на месте во время перехода, страница не шире экрана (снимок 11.11 23:35)
+            moves, wide = [], []
+            for tab in ['coins', 'strategy', 'activity', 'home', 'activity', 'coins', 'home']:
+                r = pg.evaluate("""(t)=>new Promise(res=>{const n=document.querySelector('nav.tabs'),a=n.getBoundingClientRect(),out={dy:0,dx:0,w:0};
+                  show(t);let k=0;const f=()=>{const b=n.getBoundingClientRect();out.dy=Math.max(out.dy,Math.abs(b.top-a.top));out.dx=Math.max(out.dx,Math.abs(b.left-a.left));
+                  out.w=Math.max(out.w,document.documentElement.scrollWidth-innerWidth);if(++k<30)requestAnimationFrame(f);else res(out);};requestAnimationFrame(f);})""", tab)
+                moves.append(max(r['dy'], r['dx'])); wide.append(r['w'])
+            if max(moves) < 0.5 and max(wide) <= 0: ok('интерфейс: нижняя панель не сдвигается при смене вкладок, страница не шире экрана во время перехода')
+            else: fail('интерфейс: панель вкладок', f'сдвиг {max(moves):.1f}px, лишняя ширина {max(wide)}px')
+            # 2) на каждой вкладке в обеих темах ничего не вылезает вбок
+            bad = []
+            for th in ['dark', 'light']:
+                pg.evaluate(f"document.documentElement.setAttribute('data-theme','{th}')")
+                for tab in ['home', 'coins', 'strategy', 'activity']:
+                    pg.evaluate(f"show('{tab}')"); pg.wait_for_timeout(450)
+                    w = pg.evaluate("document.documentElement.scrollWidth-innerWidth")
+                    if w > 0: bad.append(f'{th}/{tab}: +{w}px')
+            if not bad: ok('интерфейс: ни на одной вкладке (тёмная и светлая тема) нет прокрутки вбок')
+            else: fail('интерфейс: прокрутка вбок', ', '.join(bad))
+            # 3) при прокрутке главной сумма не наезжает на карточки ниже (снимок 11.11 23:27)
+            pg.evaluate("show('home')"); pg.wait_for_timeout(500)
+            over = []
+            for y in (120, 300, 600):
+                pg.evaluate(f"scrollTo(0,{y})"); pg.wait_for_timeout(250)
+                o = pg.evaluate("""(()=>{const h=document.querySelector('#v-home .hero');if(!h)return 0;const hb=h.getBoundingClientRect();let n=h.nextElementSibling;while(n&&!n.getBoundingClientRect().height)n=n.nextElementSibling;if(!n)return 0;return Math.max(0,hb.bottom-n.getBoundingClientRect().top);})()""")
+                if o > 1: over.append(f'{y}px: {o:.0f}')
+            pg.evaluate("scrollTo(0,0)")
+            if not over: ok('интерфейс: при прокрутке главной сумма не наезжает на карточки ниже')
+            else: fail('интерфейс: наезд суммы', ', '.join(over))
+            # 4) шапка прилипает и не меняет высоту при прокрутке
+            h0 = pg.evaluate("document.querySelector('.top').getBoundingClientRect().height")
+            pg.evaluate("show('strategy')"); pg.wait_for_timeout(500); h0 = pg.evaluate("document.querySelector('.top').getBoundingClientRect().height")
+            pg.evaluate("scrollTo(0,400)"); pg.wait_for_timeout(400)
+            h1 = pg.evaluate("document.querySelector('.top').getBoundingClientRect().height"); t1 = pg.evaluate("document.querySelector('.top').getBoundingClientRect().top")
+            sy = pg.evaluate("scrollY"); sc = pg.evaluate("document.body.classList.contains('scrolled')")
+            pg.evaluate("scrollTo(0,0)")
+            if sy > 8 and sc and abs(h1 - h0) < 0.5 and abs(t1) < 1: ok('интерфейс: шапка прилипает к верху и не меняет высоту при прокрутке')
+            else: fail('интерфейс: шапка', f'прокрутка {sy}, стекло {sc}, высота {h0:.1f}→{h1:.1f}, верх {t1:.1f}')
+            # 5) журнал ошибок и «Сообщить об ошибке»: сбой попадает в отчёт, сумм портфеля в отчёте нет
+            pg.evaluate("dispatchEvent(new ErrorEvent('error',{message:'проверка журнала',filename:'https://x/app.js',lineno:7}))"); pg.wait_for_timeout(200)
+            rep = pg.evaluate("bugReport()"); tot = pg.evaluate("String(Math.round(derive().total))")
+            bh = pg.evaluate("document.getElementById('bugBtn').getBoundingClientRect().height") if pg.evaluate("!!document.getElementById('bugBtn')") else 0
+            if 'проверка журнала' in rep and 'Версия' in rep and tot not in rep.replace(' ', '') and bh >= 44: ok('журнал ошибок: сбой попадает в «Сообщить об ошибке», версия есть, сумм портфеля нет, кнопка ≥44 px')
+            else: fail('журнал ошибок', rep[-200:] + f' | сумма {tot} | кнопка {bh}')
+        scenario('Интерфейс', {'session': True, 'docs': SEED}, s_ui)
+
         # --- Г4. карточка докупки «ждём ключ 2» (владелец 05.11): в чипе «BTC $38,39» сумму покупки приняли за цену BTC —
         #     теперь «BTC на $… · когда цена ≤ $…»: видно, что $ — сумма, а порог — цена монеты
         import datetime as _dt

@@ -175,7 +175,16 @@ Deno.serve(async (req) => {
   const res = { text, sources: Array.from(new Set(pickN.slice(0, 8).map((n: { src: string }) => n.src))) };
   await Promise.allSettled([
     store.upload(ck, new Blob([JSON.stringify(res)], { type: 'application/json' }), { upsert: true }),
-    writeNum(dk, dn + 1), writeNum(mk, mn + 1)
+    writeNum(dk, dn + 1), writeNum(mk, mn + 1),
+    Math.random() < 0.25 ? cleanAsk(store) : Promise.resolve()
   ]);
   return json(res);
 });
+
+/* уборка: сохранённые ответы старше часа стираются (кэш нужен лишь на 20 минут) */
+// deno-lint-ignore no-explicit-any
+async function cleanAsk(store: any) {
+  const { data } = await store.list('ask', { limit: 100, sortBy: { column: 'created_at', order: 'asc' } });
+  const old = (data || []).filter((f: { created_at?: string }) => f.created_at && Date.now() - Date.parse(f.created_at) > 3600e3).map((f: { name: string }) => 'ask/' + f.name);
+  if (old.length) await store.remove(old);
+}
