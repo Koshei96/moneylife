@@ -277,7 +277,7 @@
   /* фраза → части по предложениям: первая короткая озвучивается быстро и звучит, пока готовятся остальные */
   function splitParts(t) {
     const ss = t.match(/[^.!?…]+[.!?…]+["»]?|[^.!?…]+$/g) || [t], out = [];
-    for (const x of ss.map(z => z.trim()).filter(Boolean)) { if (out.length && (out[out.length - 1].length < 28 || out.length >= 4)) out[out.length - 1] += ' ' + x; else out.push(x); }
+    for (const x of ss.map(z => z.trim()).filter(Boolean)) { if (out.length > 1 && (out[out.length - 1].length < 28 || out.length >= 4)) out[out.length - 1] += ' ' + x; else out.push(x); }   /* первая фраза всегда отдельно: короткая, часто из памяти — звучит сразу */
     return out;
   }
   async function voGet(text, ctx) {
@@ -467,6 +467,19 @@
     try { const f = window.MLX && window.MLX.fng && window.MLX.fng(); if (f) out.push('Индекс страха и жадности — ' + f.v + ', ' + f.w + '.'); } catch (e) {}
     out.push(ch != null && Math.abs(ch) < 1 ? 'Рынок спокоен. Скучно — значит, всё по плану.' : pick(['На этом всё.', 'Если понадоблюсь — я рядом.', 'Остальное — штатно.']));
     return out.join(' ');
+  }
+  /* сводку озвучиваем заранее, в фоне: нажали на сферу — звук уже в памяти телефона и начинается сразу.
+     Не чаще раза в 5 минут и только если текст изменился; под тестами и без живого голоса — нет */
+  let preT = 0, preText = '', preAt = 0;
+  function prefetchBrief(delay) {
+    clearTimeout(preT);
+    preT = setTimeout(() => {
+      if (navigator.webdriver || !premiumOK() || !ST.S || !ST.D || ST.hide) return;
+      const t = brief(); if (!t || (t === preText && now() - preAt < 1800) || now() - preAt < 300) return;
+      preText = t; preAt = now();
+      const parts = splitParts(spokenRu(t));
+      parts.forEach((p, i) => voGet(p, parts.length > 1 ? { prev: parts[i - 1] || '', next: parts[i + 1] || '' } : {}));
+    }, delay == null ? 4000 : delay);
   }
   function tell(auto) {
     const t = brief(); if (!t) return;
@@ -793,6 +806,7 @@
     const S = info.S, D = info.D, P = info.P || {};
     ST.hide = !!P.hide; ST.sound = P.msVoice !== false; if (ST.fx !== !!P.msFx) { ST.fx = !!P.msFx; voFx(); } ST.go = !!info.go; ST.fresh = info.fresh || 0; ST.money = info.money || ST.money;
     ST.name = String(P.name || '').trim().slice(0, 24);
+    prefetchBrief();
     if (!ST.sound && TTS.ok && TTS.cur) try { speechSynthesis.cancel(); } catch (e) {}
     ST.S = S; ST.D = D;
     const off = !!info.offline; if (off && !ST.offline) ST.offSince = now(); ST.offline = off;
