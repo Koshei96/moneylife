@@ -1127,6 +1127,8 @@ html.lite nav.tabs{background:var(--bg);-webkit-backdrop-filter:none;backdrop-fi
 .mla-card{box-shadow:none;border-color:transparent}
 .mla-logo{box-shadow:none}
 .mla-curtain{box-shadow:none}
+/* метка сборки внизу «Настроек» — для тестировщиков */
+#appVer{text-align:center;margin:-4px 0 4px;font-variant-numeric:tabular-nums;letter-spacing:.02em}
 </style>
 <style id="v5">
 /* сдвиг экрана при смене вкладки не должен расширять страницу вбок — иначе на телефоне дёргается нижняя панель */
@@ -1540,6 +1542,7 @@ html.lite .view.enter{animation:vin .2s var(--ease)}
       <button type="button" class="btn block danger" id="delBtn">Удалить аккаунт</button>
     </div>
     <p class="hint">MoneyLife — дневник и калькулятор для твоей стратегии, а не инвестиционный совет: решения о покупке и продаже принимаешь ты. <a href="privacy.html" target="_blank" rel="noopener">Политика конфиденциальности</a></p>
+    <p class="hint" id="appVer" hidden></p>
   </div></div>
 </div>
 
@@ -2582,6 +2585,8 @@ function fillSettings(){[...$('themeSeg').children].forEach(b=>b.setAttribute('a
   const L=S.live;$('dataInfo').innerHTML=`<div><span>Курс доллара</span><span>${rate()?nf(rate(),2)+' грн за $':'—'}</span></div>${S.settings.usdUahSrc?`<div><span>Откуда курс</span><span>${esc(S.settings.usdUahSrc)}${S.settings.usdUahAt?' · '+dShort(S.settings.usdUahAt)+', '+tHM(S.settings.usdUahAt):''}</span></div>`:''}${S.settings.usdUahNbu?`<div><span>Курс НБУ</span><span>${nf(+S.settings.usdUahNbu,2)} грн</span></div>`:''}<div><span>Живые цены</span><span>${L.status==='ok'?'CoinGecko · '+tHM(L.at):L.status==='stale'?'с задержкой':LIVE_MSG[L.code]||'нет'}</span></div><div><span>Монеты и логотипы</span><span>CoinGecko${DIR.n?' · '+nf(DIR.n,0)+' в поиске':''}</span></div><div><span>Последняя проверка</span><span>${S.market&&S.market.updatedAt?dShort(S.market.updatedAt)+', '+tHM(S.market.updatedAt):'—'}</span></div><div><span>Проверка рынка</span><span>8:41 и 20:41</span></div><div><span>Записей</span><span>${S.tx.length}</span></div>`;}
 function openSettings(toStrat){fillSettings();openSheet('setSheet');const b=$('setSheet').querySelector('.sh-body');if(b)b.scrollTop=0;if(toStrat)setTimeout(()=>{const el=$('stratLbl');if(el&&el.scrollIntoView)el.scrollIntoView({behavior:reduced?'auto':'smooth',block:'start'});},380);}
 $('setBtn').addEventListener('click',()=>openSettings(false));
+// Метка сборки — из того же ?v=, что и у shim.js (его меняют вместе с sw.js по правилу 8): тестировщик пишет, на какой версии ошибка
+(()=>{const s=document.querySelector('script[src*="shim.js?v="]'),m=s&&/[?&]v=(\d+)/.exec(s.getAttribute('src')),e=$('appVer');if(m&&e){e.textContent='Версия '+m[1];e.hidden=false;}})();
 const SW={swHide:'hide',swDust:'dust',swSound:'sound',swHaptic:'haptic',swMascot:'mascot',swMsSound:'msVoice',swMsFx:'msFx'};
 Object.keys(SW).forEach(id=>$(id).addEventListener('click',()=>{const k=SW[id];P[k]=!P[k];savePrefs();swSet(id,P[k]);if(k==='sound'&&P.sound)play('tick');if(k==='haptic')buzz(10);render();}));
 $('themeSeg').addEventListener('click',e=>{const b=e.target.closest('[data-th]');if(!b)return;P.theme=b.dataset.th;savePrefs();applyTheme();play('tick');fillSettings();render();});
@@ -2624,7 +2629,7 @@ function obDraw(){const st=OB.step,N=4,dots='<div class="ob-dots" aria-hidden="t
     <div class="field"><span>Валюта</span><div class="seg" id="obAmtCur"><button type="button" data-c="UAH" aria-pressed="${OB.amtCur==='UAH'}">₴</button><button type="button" data-c="USD" aria-pressed="${OB.amtCur==='USD'}">$</button></div></div></div>
     <label class="field"><span>В какой день обычно пополняешь биржу?</span><select id="obDay"><option value="">Не важно</option>${Array.from({length:28},(_,i)=>`<option value="${i+1}"${+OB.day===i+1?' selected':''}>${i+1}-го числа</option>`).join('')}</select></label>
     <div class="ob-calc" id="obCalc">${a?(ds<1?`Каждый месяц: <b>${obMoney(a*ds)}</b> на покупки по плану и <b>${obMoney(a*(1-ds))}</b> в резерв для докупок.`:`Каждый месяц: <b>${obMoney(a)}</b> на покупки — BTC ${t.split.BTC}% и ETH ${t.split.ETH}%.`):'Впиши сумму — покажу, как она разделится.'}</div>
-    <p class="ob-note">Можно пропустить и вписать позже в «Настройках».</p>${nav('Дальше',true)}`;}
+    <p class="ob-note" id="obRough">Точной суммы нет — впиши примерную, потом всё легко поправить в «Настройках». Можно и пропустить.</p>${nav('Дальше',true)}`;}
   else if(st===3){h=`${top}<h2 id="obTitle">Что у тебя уже есть?</h2><p class="ob-lead">Добавь монеты, которые уже купил, — портфель сразу покажет их стоимость. Если только начинаешь — просто нажми «Готово».</p>
     <div class="ob-coins" id="obCoins">${OB.coins.map((c,i)=>`<div class="ob-coin" data-i="${i}"><label class="field"><span>Монета</span><input type="text" class="ob-sym" maxlength="12" placeholder="например, BTC" autocomplete="off" value="${esc(c.sym)}"></label><label class="field"><span>Количество</span><input type="number" class="ob-qty" min="0" step="any" inputmode="decimal" value="${esc(c.qty)}"></label><button type="button" class="ib ob-del" aria-label="Убрать монету"${OB.coins.length<2?' hidden':''}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>`).join('')}</div>
     <button type="button" class="btn ghost" id="obAdd">+ Ещё монета</button>
