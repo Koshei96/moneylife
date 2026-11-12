@@ -398,13 +398,14 @@
   X.notifOn = notifOn;
   function cfgForSw(D) {
     const ath = +(S.cycle && S.cycle.ath) || 0, btc = +D.prices.BTC || 0, lv = ladderOn() ? ((S.cycle && S.cycle.levels) || []).filter(l => !['done', 'skipped'].includes(l.status)).map(l => ({ n: l.n, drop: l.drop, price: Math.round(lvPrice(l)) })) : [];
-    return { v: 1, on: notifOn(), ath, athDate: (S.cycle && S.cycle.athDate) || '', levels: lv, goal: goalBtc(), alerts: alGet().map(a => ({ id: a.id, sym: a.sym, price: a.price, dir: a.dir })), seen: xGet().seen || {}, btc, at: Date.now() };
+    return { v: 1, lang: window.mlLang ? window.mlLang() : 'ru', on: notifOn(), ath, athDate: (S.cycle && S.cycle.athDate) || '', levels: lv, goal: goalBtc(), alerts: alGet().map(a => ({ id: a.id, sym: a.sym, price: a.price, dir: a.dir })), seen: xGet().seen || {}, btc, at: Date.now() };
   }
   let cfgLast = '';
   function cfgPush(D) { if (!('caches' in window)) return; const c = cfgForSw(D), s = JSON.stringify(Object.assign({}, c, { at: 0, btc: 0 })); if (s === cfgLast) return; cfgLast = s;
     caches.open('ml-cfg').then(ch => ch.put('cfg.json', new Response(JSON.stringify(c), { headers: { 'content-type': 'application/json' } }))).catch(() => {}); }
   async function notify(title, body, tag) {
     if (!notifOn()) return;
+    if (window.L) { title = window.L(title); body = window.L(body); }   /* украинский язык — уведомления тоже */
     try { const reg = navigator.serviceWorker && await navigator.serviceWorker.getRegistration(); const opt = { body, tag, icon: 'icons/icon-192.png', badge: 'icons/badge-96.png', data: { url: './' } };
       if (reg && reg.showNotification) await reg.showNotification(title, opt); else new Notification(title, opt); } catch (e) {}
   }

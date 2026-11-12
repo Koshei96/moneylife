@@ -1077,7 +1077,7 @@ def run_browser():
             b1 = asks[0] if asks else {}
             ctx = b1.get('ctx') or {}
             flat = json.dumps(ctx)
-            no_sums = set(b1) <= {'q', 'sym', 'hist', 'ctx'} and all(0 < v <= 100 for v in (ctx.get('shares') or {}).values()) and 'total' not in flat and '@' not in flat
+            no_sums = set(b1) <= {'q', 'sym', 'hist', 'ctx', 'lang'} and b1.get('lang') == 'ru' and all(0 < v <= 100 for v in (ctx.get('shares') or {}).values()) and 'total' not in flat and '@' not in flat
             if b1.get('sym') == 'BTC' and 'растёт' in b1.get('q', '') and ctx.get('shares') and no_sums and 'Cointelegraph' in cap: ok('Орион: «почему биткоин растёт» — ответ «мозга»; портфель уходит только долями в %, без сумм')
             else: fail('Орион: вопрос «мозгу»', str(b1) + ' | ' + cap)
             pg.evaluate("document.querySelector('.or-cap') && document.querySelector('.or-cap').click()")
@@ -1128,6 +1128,48 @@ def run_browser():
             if pg.locator('#mlStory').count() == 0 and not pg.evaluate("document.body.classList.contains('lock')"): ok('итог месяца: закрывается, страница снова листается')
             else: fail('итог месяца: закрытие', 'осталось')
         scenario('Достижения', {'session': True, 'docs': SEED}, s_wins)
+
+        # --- украинский язык (12.11.2026): весь интерфейс и Орион по-украински, переключатель в настройках, русский не меняется
+        RU_ONLY = r"""() => { const out = []; const w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT); let n;
+          while ((n = w.nextNode())) { const p = n.parentElement; if (!p || p.closest('script,style,[translate="no"],[hidden]')) continue; const r = p.getBoundingClientRect(); if (!r.width || !r.height) continue;
+            const t = n.nodeValue.trim(); if (/[ыэъё]/i.test(t)) out.push(t.slice(0, 80)); }
+          document.querySelectorAll('[placeholder],[aria-label]').forEach(e => { if (e.closest('[translate="no"]')) return; for (const a of ['placeholder', 'aria-label']) { const v = e.getAttribute(a) || ''; if (/[ыэъё]/i.test(v)) out.push('@' + v.slice(0, 60)); } });
+          return out; }"""
+        def s_uk(pg, n):
+            pg.evaluate("localStorage.setItem('ml-lang','uk'); location.reload()"); pg.wait_for_timeout(2500)
+            tabs = pg.evaluate("[...document.querySelectorAll('[data-tab]')].map(b=>b.textContent.trim()).join('|')")
+            if pg.evaluate("document.documentElement.lang") == 'uk' and 'Головна' in tabs and 'Монети' in tabs and 'Стратегія' in tabs and 'Активність' in tabs: ok('украинский: язык страницы uk, вкладки по-украински')
+            else: fail('украинский: вкладки', tabs)
+            left = []
+            for tab in ['home', 'coins', 'strategy', 'activity']:
+                pg.evaluate(f"show('{tab}')"); pg.wait_for_timeout(500); left += pg.evaluate(RU_ONLY)
+            for js in ["openSettings()", "openAct('menu')", "openAct('buy')", "openAct('sell')", "openAct('deposit')", "MLX.openLearn()", "MLX.openAch()", "MLX.openPlan()"]:
+                pg.evaluate("closeSheets()"); pg.wait_for_timeout(250); pg.evaluate(js); pg.wait_for_timeout(600); left += pg.evaluate(RU_ONLY)
+            pg.evaluate("closeSheets()"); pg.wait_for_timeout(300)
+            left = list(dict.fromkeys(left))
+            if not left: ok('украинский: на вкладках, в настройках, формах, уроках и достижениях нет русских букв ы/э/ъ/ё')
+            else: fail('украинский: остался русский текст', ' | '.join(left[:12]))
+            shot(pg, 'uk-home')
+            M = 'window.Mascot.debug'
+            cases = [('до 74 тисяч доларів', 'до сімдесяти чотирьох тисяч доларів'), ('мінус 2,5%', "мінус дві цілих п'ять десятих відсотка"), ('21 гривня, 2 гривні, 5 гривень', "двадцять одна гривня, дві гривні, п'ять гривень"),
+                     ('OKX і ETF', 'о-кей-ікс і і-ті-еф'), ('$950', "дев'ятсот п'ятдесят доларів")]
+            bad = [(a, pg.evaluate(f"{M}.spokenUk({json.dumps(a)})")) for a, b in cases if b not in pg.evaluate(f"{M}.spokenUk({json.dumps(a)})")]
+            if not bad: ok('Орион по-украински: числа словами в нужном падеже, аббревиатуры по буквам')
+            else: fail('Орион по-украински: числа', str(bad))
+            br = pg.evaluate(f"{M}.lx({M}.brief())"); r1 = pg.evaluate(f"{M}.lx({M}.reply('скільки в мене біткоїна'))")
+            if br and not re.search('[ыэъё]', br + r1) and 'біткоїна' in r1: ok('Орион по-украински: сводка и ответ на украинский вопрос')
+            else: fail('Орион по-украински: сводка', br[:120] + ' | ' + r1[:120])
+            pg.evaluate("window.__askX=null; window.mlAsk=async(q,s,x)=>{window.__askX=x;return {text:'Схоже, біткоїн зростає через новини про ETF.'};}")
+            pg.evaluate(f"{M}.ask('чому біткоїн росте')"); pg.wait_for_timeout(1200)
+            lang = pg.evaluate("window.__askX&&window.__askX.lang"); said = pg.evaluate(f"{M}.state().said")
+            if lang == 'uk' and said == 'Схоже, біткоїн зростає через новини про ETF.': ok('Орион по-украински: «мозг» получает язык uk, ответ звучит без переделки')
+            else: fail('Орион по-украински: мозг', f'{lang} | {said}')
+            pg.evaluate("openSettings()"); pg.wait_for_timeout(500)
+            pg.click('#langSeg [data-lang="ru"]'); pg.wait_for_timeout(2500)
+            tabs = pg.evaluate("[...document.querySelectorAll('[data-tab]')].map(b=>b.textContent.trim()).join('|')")
+            if pg.evaluate("document.documentElement.lang") == 'ru' and 'Главная' in tabs and pg.evaluate("window.L('Главная')") == 'Главная': ok('украинский: переключатель «Мова / Язык» возвращает русский')
+            else: fail('украинский: возврат к русскому', tabs)
+        scenario('Украинский язык', {'session': True, 'docs': SEED}, s_uk)
 
         # --- надёжность интерфейса (12.11.2026): ошибки, найденные владельцем на телефоне, не должны вернуться
         def s_ui(pg, errs):

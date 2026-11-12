@@ -197,7 +197,7 @@
     row(830, 'Покупок по плану', String(r.buys));
     row(1190, 'Серия, месяцев подряд', String(r.streak), '#ffc24d');
     g.fillStyle = '#b8a8e8'; g.font = '500 40px system-ui,sans-serif'; g.fillText('Достижений в этом месяце: ' + r.ach.length, 90, 1560);
-    g.fillStyle = '#ffffffb0'; g.font = 'italic 500 38px system-ui,sans-serif'; wrap(g, '«' + orionLine(r) + '»', 90, 1660, 900, 52);
+    g.fillStyle = '#ffffffb0'; g.font = 'italic 500 38px system-ui,sans-serif'; wrap(g, '«' + (window.L ? window.L(orionLine(r)) : orionLine(r)) + '»', 90, 1660, 900, 52);   /* перевод — целой фразой, до разбивки на строки */
     g.fillStyle = '#ffffff70'; g.font = '500 30px system-ui,sans-serif'; g.fillText('Дисциплина важнее прогноза · не инвестиционный совет', 90, 1860);
     return c;
   }

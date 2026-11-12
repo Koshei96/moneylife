@@ -143,13 +143,15 @@
     }
     for (const e of ev) trigger(e[0], e[1]);
   }
-  function fmtMoney(v) { try { if (ST.money) return ST.money(v, { d: 0, show: true }); } catch (e) {} return '$' + Math.round(v).toLocaleString('ru-RU'); }
+  /* украинский интерфейс (i18n.js): фразы Ориона переводятся на лету, живой голос и распознавание — на украинском */
+  const UK = !!(window.mlLang && window.mlLang() === 'uk'), Lx = s => (UK && window.L ? window.L(s) : s), LOC = UK ? 'uk-UA' : 'ru-RU';
+  function fmtMoney(v) { try { if (ST.money) return ST.money(v, { d: 0, show: true }); } catch (e) {} return '$' + Math.round(v).toLocaleString(LOC); }
   /* ---------- речь: голос телефона + субтитры ---------- */
   const TTS = { ok: !!(window.speechSynthesis && window.SpeechSynthesisUtterance), voice: null, cur: null, beat: 0, sim: 0, guard: 0, q: [] };
   function pickVoice() {
     if (!TTS.ok) return null;
     let vs = []; try { vs = speechSynthesis.getVoices() || []; } catch (e) {}
-    const ru = vs.filter(v => /^ru/i.test(v.lang || ''));
+    const ru = vs.filter(v => (UK ? /^uk/i : /^ru/i).test(v.lang || ''));   /* украинский — только украинский голос телефона, иначе субтитры */
     if (!ru.length) return (TTS.voice = null);
     /* мужской голос, если в телефоне он есть, иначе голос Google, иначе любой русский */
     TTS.voice = ru.find(v => /(dmitr|pavel|yuri|maxim|male|муж)/i.test(v.name)) || ru.find(v => /google/i.test(v.name)) || ru.find(v => v.localService) || ru[0];
@@ -161,7 +163,7 @@
     if (!ui.cap) return;
     ui.capT.textContent = text;
     ui.cap.classList.add('on', 'talk');
-    ui.cap.setAttribute('aria-label', 'Орион: ' + text + '. Нажмите, чтобы остановить');
+    ui.cap.setAttribute('aria-label', Lx('Орион') + ': ' + text + '. ' + Lx('Нажмите, чтобы остановить'));
   }
   function capDone(cur, quick) {
     if (!ui.cap) return;
@@ -192,6 +194,7 @@
   function speak(text, o) {
     o = o || {};
     text = String(text || '').replace(/\s+/g, ' ').trim();
+    if (UK && !o.raw) text = Lx(text);   /* ответ «мозга» уже по-украински — его не переводим */
     if (!text) return false;
     if (TTS.cur && (TTS.cur.pri || 0) > (o.pri || 0)) {   /* занят важным — скажет следом (не больше двух в очереди) */
       if (o.queue !== false && TTS.q.length < 2 && !TTS.q.some(x => x.text === text)) TTS.q.push({ text, o, at: now() });
@@ -218,7 +221,7 @@
     try {
       speechSynthesis.cancel();
       const u = new SpeechSynthesisUtterance(text.replace(/[«»]/g, '').replace(/—/g, ','));
-      u.voice = v; u.lang = v.lang || 'ru-RU'; u.rate = 1.0; u.pitch = 0.9; u.volume = 1;
+      u.voice = v; u.lang = v.lang || LOC; u.rate = 1.0; u.pitch = 0.9; u.volume = 1;
       u.onstart = () => { TTS.beat = now(); };
       u.onboundary = () => { if (TTS.cur === cur) TTS.beat = now(); };
       u.onend = () => finish(cur);
@@ -292,7 +295,7 @@
   async function premium(cur) {
     const c = voCtx(); if (!c) return false;
     if (c.state === 'suspended') { try { await c.resume(); } catch (e) {} if (c.state !== 'running') return false; }
-    const parts = splitParts(spokenRu(cur.text));
+    const parts = splitParts(spoken(cur.text));
     const reqs = parts.map((p, i) => voGet(p, parts.length > 1 ? { prev: parts[i - 1] || '', next: parts[i + 1] || '' } : {}));   /* все части сразу, параллельно */
     let at = 0, played = 0, lastSrc = null;
     for (let i = 0; i < parts.length; i++) {
@@ -401,13 +404,87 @@
     });
     return s.replace(/\s+/g, ' ').replace(/\s+([,.!?])/g, '$1').trim();
   }
+  /* ---------- то же для украинского: числа словами по-украински, с падежами ----------
+     «$950» → «дев'ятсот п'ятдесят доларів», «до 74 тисяч» → «до сімдесяти чотирьох тисяч», «2,5%» → «дві цілих п'ять десятих відсотка» */
+  const U1 = ['нуль', 'один', 'два', 'три', 'чотири', "п'ять", 'шість', 'сім', 'вісім', "дев'ять", 'десять', 'одинадцять', 'дванадцять', 'тринадцять', 'чотирнадцять', "п'ятнадцять", 'шістнадцять', 'сімнадцять', 'вісімнадцять', "дев'ятнадцять"];
+  const U10 = ['', '', 'двадцять', 'тридцять', 'сорок', "п'ятдесят", 'шістдесят', 'сімдесят', 'вісімдесят', "дев'яносто"];
+  const U100 = ['', 'сто', 'двісті', 'триста', 'чотириста', "п'ятсот", 'шістсот', 'сімсот', 'вісімсот', "дев'ятсот"];
+  const UGEN = { нуль: 'нуля', один: 'одного', одна: 'однієї', два: 'двох', дві: 'двох', три: 'трьох', чотири: 'чотирьох', "п'ять": "п'яти", шість: 'шести', сім: 'семи', вісім: 'восьми', "дев'ять": "дев'яти",
+    сорок: 'сорока', "дев'яносто": "дев'яноста", сто: 'ста', двісті: 'двохсот', триста: 'трьохсот', чотириста: 'чотирьохсот', "п'ятсот": "п'ятисот", шістсот: 'шестисот', сімсот: 'семисот', вісімсот: 'восьмисот', "дев'ятсот": "дев'ятисот",
+    "п'ятдесят": "п'ятдесяти", шістдесят: 'шістдесяти', сімдесят: 'сімдесяти', вісімдесят: 'вісімдесяти' };
+  const ugenW = w => UGEN[w] || w.replace(/ть$/, 'ти');   /* «двадцять» → «двадцяти», «одинадцять» → «одинадцяти» */
+  function triU(n, fem, gen) {
+    const o = []; const h = Math.floor(n / 100), r = n % 100;
+    if (h) o.push(U100[h]);
+    if (r >= 20) { o.push(U10[Math.floor(r / 10)]); if (r % 10) o.push(U1[r % 10]); } else if (r || !h) o.push(U1[r]);
+    if (fem) { const k = o.length - 1; if (o[k] === 'один') o[k] = 'одна'; else if (o[k] === 'два') o[k] = 'дві'; }
+    return (gen ? o.map(ugenW) : o).join(' ');
+  }
+  const USCALE = { K: ['тисяча', 'тисячі', 'тисяч', 'тисячі', 'тисяч', true], M: ['мільйон', 'мільйони', 'мільйонів', 'мільйона', 'мільйонів', false], B: ['мільярд', 'мільярди', 'мільярдів', 'мільярда', 'мільярдів', false], T: ['трильйон', 'трильйони', 'трильйонів', 'трильйона', 'трильйонів', false] };
+  const uscaleW = (k, sc, gen) => gen ? (one(k) ? sc[3] : sc[4]) : plural(k, sc[0], sc[1], sc[2]);
+  function intU(n, fem, gen) {
+    n = Math.floor(Math.abs(n)); if (!n) return gen ? 'нуля' : 'нуль';
+    const parts = [];
+    for (const [d, sc] of [[1e9, USCALE.B], [1e6, USCALE.M], [1e3, USCALE.K]]) { const k = Math.floor(n / d) % 1000; if (k) parts.push(triU(k, sc[5], gen) + ' ' + uscaleW(k, sc, gen)); }
+    const r = n % 1000; if (r) parts.push(triU(r, fem, gen));
+    return parts.join(' ');
+  }
+  const UFEM = /^(тисяч|гривн|гривен|сходин|монет|хвилин|секунд|годин|доб|покуп|угод|позиці|частк|сотн|ціл)/i;
+  function numU(intS, fracS, fem, gen) {
+    const n = +intS;
+    fracS = (fracS || '').slice(0, 3).replace(/0+$/, '');
+    if (!fracS) return intU(n, fem, gen);
+    const f = +fracS, den = [null, ['десята', 'десятих', 'десятої'], ['сота', 'сотих', 'сотої'], ['тисячна', 'тисячних', 'тисячної']][fracS.length];
+    const cel = gen ? (one(n) ? 'цілої' : 'цілих') : plural(n, 'ціла', 'цілих', 'цілих');
+    return intU(n, true, gen) + ' ' + cel + ' ' + intU(f, true, gen) + ' ' + (one(f) ? (gen ? den[2] : den[0]) : den[1]);
+  }
+  const UPREP_GEN = /(?:^|\s)(до|від|близько|понад|більше|менше|після|з|із|зі|без|для|проти|крім|біля|нижче|вище|порядку|замість|дорожче|дешевше|навколо|майже до)\s*$/i;
+  /* одиниці: [1, 2–4, 5+, родовий однини (для дробів и «до одного»)] */
+  const UUNITS = { '$': ['долар', 'долари', 'доларів', 'долара'], '₴': ['гривня', 'гривні', 'гривень', 'гривні'], '%': ['відсоток', 'відсотки', 'відсотків', 'відсотка'] };
+  const SAY_UK = [
+    [/\bBTC\b/g, 'біткоїна'], [/\bETH\b/g, 'ефіру'], [/\bUSDT\b/g, 'тезер'], [/\bUSDC\b/g, 'ю-ес-ді-сі'],
+    [/\bOKX\b/g, 'о-кей-ікс'], [/(^|[^А-ЯЁа-яёІіЇїЄєҐґA-Za-z])(ОКХ|ОКX|OКХ)(?![А-ЯЁа-яёІіЇїЄєҐґA-Za-z])/g, '$1о-кей-ікс'], [/\bETFs?\b/g, 'і-ті-еф'], [/\bSEC\b/g, 'ес-і-сі'], [/\bNFT\b/g, 'ен-еф-ті'], [/\bDeFi\b/gi, 'дефай'], [/\bAI\b/g, 'ей-ай'],
+    [/\bCEO\b/g, 'сі-і-оу'], [/\bIPO\b/g, 'ай-пі-оу'], [/\bUSA\b/g, 'ю-ес-ей'], [/\bS&P\s?500\b/g, "ес-енд-пі п'ятсот"], [/\bFed\b/g, 'ФРС'], [/\bFOMC\b/g, 'еф-оу-ем-сі'],
+    [/\bBinance\b/gi, 'Бінанс'], [/\bCoinbase\b/gi, 'Коїнбейс'], [/\bBybit\b/gi, 'Байбіт'], [/\bKraken\b/gi, 'Кракен'], [/\bBlackRock\b/gi, 'Блекрок'], [/\bFidelity\b/gi, 'Фіделіті'],
+    [/\bGrayscale\b/gi, 'Грейскейл'], [/\b(Micro)?Strategy\b/g, 'Майкростратеджі'], [/\bTether\b/gi, 'Тезер'], [/\bCircle\b/g, 'Серкл'], [/\bRipple\b/gi, 'Ріпл'], [/\bSolana\b/gi, 'Солана'],
+    [/\bEthereum\b/gi, 'Ефіріум'], [/\bBitcoin\b/gi, 'біткоїн'], [/\bCointelegraph\b/gi, 'Коїнтелеграф'], [/\bCoinDesk\b/gi, 'Коїндеск'], [/\bForkLog\b/gi, 'Форклог'], [/\bDecrypt\b/g, 'Декрипт'],
+    [/\bIncrypted\b/gi, 'Інкриптед'], [/\bNasdaq\b/gi, 'Насдак'], [/\bTrump\b/g, 'Трамп'], [/\bPowell\b/g, 'Пауелл'], [/\bSaylor\b/g, 'Сейлор'], [/\bMetaMask\b/gi, 'Метамаск'], [/\bLedger\b/g, 'Леджер'],
+    [/\bTrezor\b/g, 'Трезор'], [/\bBNB\b/g, 'бі-ен-бі'], [/\bXRP\b/g, 'ікс-ар-пі'], [/\bSOL\b/g, 'солана'], [/\bTON\b/g, 'тон'], [/\bDOGE\b/g, 'доге'], [/\bADA\b/g, 'кардано'], [/\bTRX\b/g, 'трон'],
+    [/\bLTC\b/g, 'лайткоїн'], [/\bLINK\b/g, 'чейнлінк'], [/\bAVAX\b/g, 'аваланч'], [/\bDCA\b/g, 'ді-сі-ей'],
+    [/(^|[^А-Яа-яІіЇїЄєҐґ])ФРС(?![А-Яа-яІіЇїЄєҐґ])/g, '$1еф-ер-ес'], [/(^|[^А-Яа-яІіЇїЄєҐґ])США(?![А-Яа-яІіЇїЄєҐґ])/g, '$1ес-ша-а'], [/(^|[^А-Яа-яІіЇїЄєҐґ])(ЄС|ЕС)(?![А-Яа-яІіЇїЄєҐґ])/g, '$1є-ес'],
+    [/(^|[^А-Яа-яІіЇїЄєҐґ])МВФ(?![А-Яа-яІіЇїЄєҐґ])/g, '$1ем-ве-еф'], [/(^|[^А-Яа-яІіЇїЄєҐґ])НБУ(?![А-Яа-яІіЇїЄєҐґ])/g, '$1ен-бе-у'], [/(^|[^А-Яа-яІіЇїЄєҐґ])ВВП(?![А-Яа-яІіЇїЄєҐґ])/g, '$1ве-ве-пе']
+  ];
+  const EN_UK = { A: 'ей', B: 'бі', C: 'сі', D: 'ді', E: 'і', F: 'еф', G: 'джі', H: 'ейч', I: 'ай', J: 'джей', K: 'кей', L: 'ел', M: 'ем', N: 'ен', O: 'оу', P: 'пі', Q: "к'ю", R: 'ар', S: 'ес', T: 'ті', U: 'ю', V: 'ві', W: 'дабл-ю', X: 'ікс', Y: 'уай', Z: 'зед' };
+  function spokenUk(t) {
+    for (const [re, to] of SAY_UK) t = String(t || '').replace(re, to);
+    let s = t.replace(/\b[A-Z]{2,5}\b/g, w => w.split('').map(ch => EN_UK[ch]).join('-'))
+      .replace(/[   ]/g, ' ').replace(/[«»]/g, '').replace(/\s*—\s*/g, ' — ').replace(/(\d)\s(?=\d{3}(?!\d))/g, '$1')
+      .replace(/×\s?(\d)/g, 'у $1').replace(/(\d)\s?×/g, '$1 разів');
+    const UL = "А-Яа-яЁёІіЇїЄєҐґ'’";
+    const RE = new RegExp('(^|[\\s(:])([−\\-+]?)(\\$)?(\\d+)(?:[.,](\\d+))?(?:\\s?(тис\\.?|тисяч[аі]?|млн\\.?|мільйон(?:а|и|ів)?|млрд\\.?|мільярд(?:а|и|ів)?|трлн\\.?|трильйон(?:а|и|ів)?)(?![' + UL + ']))?(\\s?(%|₴|\\$|дол\\.|долар(?:а|и|ів)?|грн\\.?|гривн[яі]|гривень|відсот(?:ок|ки|ків|ка))(?![' + UL + ']))?(?=(\\s*)([' + UL + ']*))', 'g');
+    s = s.replace(RE, (m, pre, sg, d1, ip, fp, mult, _u, u, _sp, next, off, all) => {
+      const gen = UPREP_GEN.test(all.slice(0, off) + pre);
+      const unit = u ? (/^(\$|дол)/.test(u) ? '$' : /^(₴|грн|грив)/.test(u) ? '₴' : '%') : (d1 ? '$' : '');
+      const sc = mult ? (/^тис/.test(mult) ? USCALE.K : /^(млн|мільйон)/.test(mult) ? USCALE.M : /^(трлн|трильйон)/.test(mult) ? USCALE.T : USCALE.B) : null;
+      const n = +ip, frac = !!(fp && +fp.slice(0, 3));
+      const fem = sc ? sc[5] : unit ? unit === '₴' : UFEM.test(next || '');
+      let w = numU(ip, fp, fem, gen);
+      if (sc) w += ' ' + (frac ? sc[3] : uscaleW(n, sc, gen));
+      if (unit) { const U = UUNITS[unit]; w += ' ' + (sc || (n >= 1000 && n % 1000 === 0) ? U[2] : frac ? U[3] : gen ? (one(n) ? U[3] : U[2]) : plural(n, U[0], U[1], U[2])); }
+      const sign = sg === '+' ? 'плюс ' : sg ? 'мінус ' : '';
+      const ate = /\.$/.test(mult && !u ? mult : u || ''), rest = all.slice(off + m.length);
+      return pre + sign + w + (ate && (!rest.trim() || /^\s+[А-ЯІЇЄҐA-Z]/.test(rest)) ? '.' : '');
+    });
+    return s.replace(/\s+/g, ' ').replace(/\s+([,.!?])/g, '$1').trim();
+  }
+  const spoken = t => (UK ? spokenUk(t) : spokenRu(t));
   async function voFetch(text, ctx) { try { return await A.voice(text, ctx || {}); } catch (e) { return null; } }
   /* короткие фразы-«подхваты» заранее в памяти телефона — Орион отзывается сразу, пока думает над ответом */
   const FILL = { news: 'Секунду, смотрю новости.', think: 'Секунду.' };
   let preloaded = false;
   function preloadFill() {
     if (preloaded || !A.voice || !ST.sound || (navigator.webdriver && !ST.forcePremium)) return; preloaded = true;
-    Object.values(FILL).forEach((t, i) => setTimeout(async () => { const k = spokenRu(t); if (VO.buf.has(k)) return; const r = await voFetch(k); if (r && r.audio) VO.buf.set(k, r.audio); }, 1500 + i * 700));
+    Object.values(FILL).forEach((t, i) => setTimeout(async () => { const k = spoken(Lx(t)); if (VO.buf.has(k)) return; const r = await voFetch(k); if (r && r.audio) VO.buf.set(k, r.audio); }, 1500 + i * 700));
   }
   function voLevel() {
     if (!VO.src || !VO.an) return null;
@@ -477,7 +554,7 @@
       if (navigator.webdriver || !premiumOK() || !ST.S || !ST.D || ST.hide) return;
       const t = brief(); if (!t || (t === preText && now() - preAt < 1800) || now() - preAt < 300) return;
       preText = t; preAt = now();
-      const parts = splitParts(spokenRu(t));
+      const parts = splitParts(spoken(Lx(t)));
       parts.forEach((p, i) => voGet(p, parts.length > 1 ? { prev: parts[i - 1] || '', next: parts[i + 1] || '' } : {}));
     }, delay == null ? 4000 : delay);
   }
@@ -503,7 +580,19 @@
   };
   const NAME_G = { BTC: 'биткоина', ETH: 'эфира', SOL: 'соланы', XRP: 'рипла', DOGE: 'доги', TON: 'тона', ADA: 'кардано' };
   const NAME_N = { BTC: 'Биткоин', ETH: 'Эфир', SOL: 'Солана', XRP: 'Рипл', DOGE: 'Доги', TON: 'Тон', ADA: 'Кардано' };
-  const norm = q => String(q || '').toLowerCase().replace(/ё/g, 'е');
+  /* украинский вопрос → русские основы слов, по которым Орион понимает вопрос на телефоне */
+  const UKQ = [['скільки', 'сколько'], ['в мене', 'у меня'], ['у мене', 'у меня'], ['мене', 'меня'], ['моїх', 'моих'], ['мої', 'мои'], ['мій', 'мой'], ['мого', 'моего'], ['чи є', 'есть ли'],
+    ['повідом', 'сообщи'], ['нагадай', 'напомни'], ['попередь', 'предупреди'], ['дай знати', 'дай знать'], ['сповіст', 'оповест'], ['коли', 'когда'], ['якщо', 'если'], ['буде', 'будет'],
+    ['тижн', 'недел'], ['тиждень', 'неделя'], ['серія', 'серия'], ['серії', 'серии'], ['поспіль', 'подряд'], ['сходинк', 'ступен'], ['сходин', 'ступен'], ['сходами', 'лестницей'], ['сходах', 'лестнице'], ['сходів', 'лестницы'], ['сходи', 'лестница'], ['що з', 'что с'], ['що зі', 'что с'],
+    ['просідан', 'просадк'], ['докупівл', 'докупк'], ['місяц', 'месяц'], ['місяць', 'месяц'], ['жадібн', 'жадн'], ['настр', 'настроени'], ['усього', 'всего'], ['всього', 'всего'], ['грошей', 'денег'],
+    ['підсумок', 'итог'], ['підсумк', 'итог'], ['дякую', 'спасибо'], ['хто ти', 'кто ты'], ['що ти вмієш', 'что ты умеешь'], ['що вмієш', 'что умеешь'], ['допомож', 'помоги'], ['допомог', 'помощ'],
+    ['зведення', 'сводка'], ['головне', 'главное'], ['новин', 'новост'], ['як справи', 'как дела'], ['що там', 'что там'], ['привіт', 'привет'], ['чому', 'почему'], ['через що', 'из-за чего'],
+    ['ринок', 'рынок'], ['ринк', 'рынк'], ['що відбувається', 'что происходит'], ['що сталося', 'что случилось'], ['що з крипт', 'что с крипт'], ['зростає', 'растет'], ['росте', 'растет'], ['зростан', 'рост'], ['зріс', 'вырос'],
+    ['виріс', 'вырос'], ['падає', 'падает'], ['падіння', 'падение'], ['впав', 'упал'], ['чи варто', 'стоит ли'], ['що думаєш', 'что думаешь'], ['поясни', 'объясни'], ['розкажи про', 'расскажи про'],
+    ['що таке', 'что такое'], ['як працює', 'как работает'], ['навіщо', 'зачем'], ['а якщо', 'а если'], ['а що', 'а что'], ['тоді', 'тогда'], ['біткоїн', 'биткоин'], ['біткойн', 'биткойн'], ['біток', 'биток'],
+    ['ефіріум', 'эфириум'], ['ефір', 'эфир'], ['ріпл', 'рипл'], ['тисяч', 'тысяч'], ['мільйон', 'миллион'], ['портфел', 'портфел'], ['ціна', 'цена'], ['ціни', 'цены']];
+  const UKQ_RE = new RegExp(UKQ.slice().sort((a, b) => b[0].length - a[0].length).map(x => x[0].replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|'), 'g'), UKQ_M = new Map(UKQ);
+  const norm = q => { let t = String(q || '').toLowerCase().replace(/ё/g, 'е').replace(/[’ʼ']/g, ''); if (UK) t = t.replace(UKQ_RE, m => UKQ_M.get(m)).replace(/[ії]/g, 'и').replace(/є/g, 'е').replace(/ґ/g, 'г'); return t; };
   function coinIn(q) {
     const w = norm(q).split(/[^a-zа-я0-9]+/).filter(Boolean), D = ST.D || {};
     const syms = Object.keys(ALIAS).concat((D.syms || []).filter(s => !ALIAS[s]));
@@ -521,7 +610,7 @@
     if (m[2]) v *= /милл|млн/.test(m[2]) ? 1e6 : 1e3;
     return v;
   }
-  const qtyW = v => (+v).toLocaleString('ru-RU', { maximumFractionDigits: v >= 100 ? 0 : v >= 1 ? 3 : 6 });
+  const qtyW = v => (+v).toLocaleString(LOC, { maximumFractionDigits: v >= 100 ? 0 : v >= 1 ? 3 : 6 });
   function coinPrice(sym) { const S = ST.S || {}, D = ST.D || {}, lv = S.live || {}; return +(lv.prices && lv.prices[sym]) || +(D.prices && D.prices[sym]) || 0; }
   function priceW(v) { return v >= 10 ? moneyW(v) : (v >= 1 ? String(+v.toFixed(2)).replace('.', ',') : String(+v.toPrecision(3)).replace('.', ',')) + ' доллара'; }
   function reply(q) {
@@ -629,9 +718,9 @@
     const sym = coinIn(t) || '';
     speak(sym || marketQ(t) ? FILL.news : FILL.think, { pri: 2 });
     const hist = (ST.hist || []).filter(x => now() - x.at < 900).slice(-6).map(x => ({ q: x.q, a: x.a }));
-    let r = null; try { r = await A.ask(q, sym, { hist, ctx: brainCtx() }); } catch (e) { r = null; }
+    let r = null; try { r = await A.ask(q, sym, { hist, ctx: brainCtx(), lang: UK ? 'uk' : 'ru' }); } catch (e) { r = null; }
     ST.lastAsk = r;
-    if (r && r.text) { ST.lastBrain = now(); remember(q, r.text); speak(r.text, { pri: 2, follow: byVoice }); return; }
+    if (r && r.text) { ST.lastBrain = now(); remember(q, r.text); speak(r.text, { pri: 2, follow: byVoice, raw: true }); return; }
     const msg = (r && ASK_ERR[r.error]) || (sure ? local : (sym && coinPrice(sym) ? reply(NAME_N[sym] || sym) + ' ' : '') + 'Сейчас не могу связаться с сервером — попробуйте чуть позже.');
     speak(msg, { pri: 2 });
   }
@@ -642,9 +731,9 @@
     if (!SRC) { speak('Голосовые вопросы на этом телефоне недоступны. Нажмите на меня — расскажу главное за сегодня.', { pri: 2 }); return; }
     if (ST.rec) { try { ST.rec.abort(); } catch (e) {} ST.rec = null; }
     let rec; try { rec = new SRC(); } catch (e) { speak('Микрофон сейчас недоступен.', { pri: 2 }); return; }
-    rec.lang = 'ru-RU'; rec.interimResults = true; rec.maxAlternatives = 1; rec.continuous = false;
+    rec.lang = LOC; rec.interimResults = true; rec.maxAlternatives = 1; rec.continuous = false;
     ST.rec = rec; let heard = '', done = false;
-    if (ui.cap) { ui.capT.textContent = 'Слушаю…'; ui.cap.classList.add('on', 'talk', 'listen'); clearTimeout(ui.capOff); }
+    if (ui.cap) { ui.capT.textContent = Lx('Слушаю…'); ui.cap.classList.add('on', 'talk', 'listen'); clearTimeout(ui.capOff); }
     pulse(1); buzz(12);
     let idle = 0;
     const quiet = () => { if (done) return; done = true; ST.rec = null; clearTimeout(idle); try { rec.abort(); } catch (e) {} if (ui.cap) ui.cap.classList.remove('listen', 'on', 'talk'); };   /* тишина — молча заканчиваем разговор */
@@ -842,8 +931,8 @@
     ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => ui.hit.addEventListener(ev, () => clearTimeout(lpT)));
     ui.hit.addEventListener('contextmenu', e => e.preventDefault());
     ui.hit.addEventListener('click', () => { if (lp) { lp = false; return; } tapped(); });
-    ui.cap = document.createElement('button'); ui.cap.type = 'button'; ui.cap.className = 'or-cap'; ui.cap.setAttribute('aria-live', 'polite');
-    ui.cap.innerHTML = '<i aria-hidden="true"></i><b>Орион</b><span></span>'; ui.capT = ui.cap.querySelector('span');
+    ui.cap = document.createElement('button'); ui.cap.type = 'button'; ui.cap.className = 'or-cap'; ui.cap.setAttribute('aria-live', 'polite'); ui.cap.setAttribute('translate', 'no');   /* субтитры переводит сам Орион (ответы «мозга» уже на нужном языке) */
+    ui.cap.innerHTML = '<i aria-hidden="true"></i><b>' + Lx('Орион') + '</b><span></span>'; ui.capT = ui.cap.querySelector('span');
     ui.cap.addEventListener('click', () => { stopVoice(); ui.cap.classList.remove('on'); });
     document.body.appendChild(ui.cap);
     window.addEventListener('resize', () => { fit(); wake(); });
@@ -865,6 +954,9 @@
       hour: h => { ST.forceHour = h; },
       premium: on => { ST.forcePremium = !!on; VO.off = 0; },
       spoken: t => spokenRu(t),
+      spokenUk: t => spokenUk(t),
+      norm: q => norm(q),
+      lx: t => Lx(t),
       ask: q => answer(q), lastAsk: () => ST.lastAsk || null, ctx: () => brainCtx(), hist: () => ST.hist || [],
       mood: m => { if (ST.forceHour == null) ST.forceHour = 12; ST.pct = { calm: 0, up: 3, rocket: 9, down: -3, crash: -9 }[m]; ST.go = m === 'hunter'; if (m === 'offline') { ST.offline = true; ST.offSince = now() - 120; } else ST.offline = false; ST.lastInput = now(); wake(); },
       say: t => speak(t, { pri: 2 }),

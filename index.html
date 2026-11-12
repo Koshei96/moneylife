@@ -11,6 +11,7 @@ addEventListener('error',function(e){if(e&&e.message)add(e.message,(e.filename||
 addEventListener('unhandledrejection',function(e){var r=e&&e.reason;add(r&&(r.message||r)||'отклонённое обещание','promise');});
 window.mlErrLog=function(){try{return JSON.parse(localStorage.getItem(K)||'[]');}catch(e){return [];}};window.mlErrAdd=add;})();
 </script>
+<script src="i18n.js?v=20261112090000"></script>
 <title>MoneyLife</title>
 <meta name="theme-color" content="#06040e">
 <script>/* тема до отрисовки: «Авто» — как в телефоне, иначе выбор из настроек */
@@ -1506,6 +1507,7 @@ html.lite .view.enter{animation:vin .2s var(--ease)}
   <div class="sh-body"><div class="sh-in">
     <span class="label">Отображение</span>
     <div class="card" style="padding:4px 16px">
+      <div class="setrow" translate="no"><div><b>Мова / Язык</b><small>Українська · Русский</small></div><div class="seg" id="langSeg" style="width:132px;flex:none"><button type="button" data-lang="uk">UA</button><button type="button" data-lang="ru">RU</button></div></div>
       <div class="setrow" style="flex-wrap:wrap"><div><b>Тема</b><small>«Авто» — как в настройках телефона</small></div><div class="seg" id="themeSeg" style="width:100%"><button type="button" data-th="system">Авто</button><button type="button" data-th="dark">Тёмная</button><button type="button" data-th="light">Светлая</button></div></div>
       <div class="setrow"><div><b>Валюта</b><small>Суммы в долларах или гривне</small></div><div class="seg" id="curSeg" style="width:132px;flex:none"><button type="button" data-c="USD">$</button><button type="button" data-c="UAH">₴</button></div></div>
       <div class="setrow"><div><b>Скрывать суммы</b><small>Вместо цифр — точки</small></div><button type="button" class="switch" id="swHide" role="switch" aria-checked="false" aria-label="Скрывать суммы"></button></div>
@@ -1577,9 +1579,9 @@ html.lite .view.enter{animation:vin .2s var(--ease)}
 
 <div class="toast" id="toast" role="status"><span id="toastMsg"></span><button type="button" id="toastBtn" hidden></button></div>
 
-<script src="config.js?v=20261112082000"></script>
+<script src="config.js?v=20261112090000"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="shim.js?v=20261112082000"></script>
+<script src="shim.js?v=20261112090000"></script>
 <script>
 /* ===== основа ===== */
 const $=id=>document.getElementById(id);
@@ -1657,7 +1659,7 @@ const pl=(n,a,b,c)=>n+NB+plural(n,a,b,c);
 const cap=s=>s.charAt(0).toUpperCase()+s.slice(1);
 const monthLabel=d=>cap(d.toLocaleDateString('ru-RU',{month:'long'}))+' '+d.getFullYear();
 const IMPORT_NOTE=/^(история DropsTab|из DropsTab)/;
-const noteOf=t=>t.note&&!IMPORT_NOTE.test(t.note)?' · '+esc(t.note):'';
+const noteOf=t=>t.note&&!IMPORT_NOTE.test(t.note)?' · <span translate="no">'+esc(window.L1?L1(t.note):t.note)+'</span>':'';   /* заметку пользователя не переводим; служебные — переводим целиком */
 const uah=v=>Math.round(v).toLocaleString('ru-RU')+NB+'грн';
 const uahM=v=>P.hide?'••••':uah(v);
 const dShort=ts=>new Date(ts).toLocaleDateString('ru-RU',{day:'numeric',month:'short'});
@@ -2587,7 +2589,7 @@ $('eDel').addEventListener('click',delTx);
 
 /* ===== настройки ===== */
 const swSet=(id,on)=>$(id).setAttribute('aria-checked',String(!!on));
-function fillSettings(){[...$('themeSeg').children].forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.th===(P.theme||'system'))));[...$('curSeg').children].forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.c===P.cur)));
+function fillSettings(){if(window.mlLang)[...$('langSeg').children].forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.lang===mlLang())));[...$('themeSeg').children].forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.th===(P.theme||'system'))));[...$('curSeg').children].forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.c===P.cur)));
   swSet('swHide',P.hide);swSet('swDust',P.dust);swSet('swSound',P.sound);swSet('swHaptic',P.haptic);swSet('swMascot',P.mascot!==false);swSet('swMsSound',P.msVoice!==false);swSet('swMsFx',!!P.msFx);swSet('swD14',!d14Load().hid);$('d14Row').hidden=!window.mlUser;
   const sp=split();$('stB').value=sp.BTC;$('stE').value=sp.ETH;$('stA').value=sp.ALT;$('stCap').value=S.settings.capPct||20;$('stDep').value=Math.round(depShare()*100);$('stAlt').value=S.settings.altOfMonth||'';{const b=S.settings.budget;$('stIncL').textContent=b?'В крипту в месяц, '+(b.cur==='USD'?'$':'грн'):'Доход в месяц, грн';$('stInc').value=b?(b.amount||''):(S.settings.incomeMonthlyUah||'');}swSet('swLadder',ladderOn());$('stK2').value=k2Cfg().pct;$('stAltCap').value=altCapPct();$('setErr').textContent='';
   const U=window.mlUser;$('accInfo').innerHTML=U?`<div><span>Почта</span><span>${esc(U.email||'—')}</span></div><div><span>Вход</span><span>${U.provider==='google'?'через Google':'почта и пароль'}</span></div>`:'<div><span>Аккаунт</span><span>—</span></div>';$('delBtn').hidden=!(window.ML_CONFIG&&ML_CONFIG.accountDelete);
@@ -2605,6 +2607,7 @@ function bugReport(){const v=($('appVer')&&$('appVer').textContent)||'',E=(windo
 $('bugBtn').addEventListener('click',()=>{buzz(6);const body=bugReport();location.href='mailto:moneylife.ap@gmail.com?subject='+encodeURIComponent('MoneyLife: ошибка')+'&body='+encodeURIComponent(body);});
 const SW={swHide:'hide',swDust:'dust',swSound:'sound',swHaptic:'haptic',swMascot:'mascot',swMsSound:'msVoice',swMsFx:'msFx'};
 Object.keys(SW).forEach(id=>$(id).addEventListener('click',()=>{const k=SW[id];P[k]=!P[k];savePrefs();swSet(id,P[k]);if(k==='sound'&&P.sound)play('tick');if(k==='haptic')buzz(10);render();}));
+$('langSeg').addEventListener('click',e=>{const b=e.target.closest('[data-lang]');if(!b||!window.mlSetLang||b.dataset.lang===mlLang())return;play('tick');mlSetLang(b.dataset.lang);});
 $('themeSeg').addEventListener('click',e=>{const b=e.target.closest('[data-th]');if(!b)return;P.theme=b.dataset.th;savePrefs();applyTheme();play('tick');fillSettings();render();});
 $('curSeg').addEventListener('click',e=>{const b=e.target.closest('[data-c]');if(!b)return;if(b.dataset.c==='UAH'&&!rate()){toast('Курс гривны ещё не загружен');return;}P.cur=b.dataset.c;savePrefs();play('tick');fillSettings();render();});
 $('saveStrat').addEventListener('click',()=>saveStrategy());
@@ -2857,7 +2860,7 @@ function msSync(x){MSC.last=x;if(!msApply())return;if(!S.ready||document.getElem
   if(window.Mascot){try{window.Mascot.sync(msPayload(x));}catch(e){}}else msLoad();}
 function msLoad(){if(MSC.loading||MSC.failed)return;MSC.loading=true;
   const add=(src,ok)=>{try{const s=document.createElement('script');s.src=src;s.async=true;s.onload=ok;s.onerror=()=>{MSC.failed=true;};document.head.appendChild(s);}catch(e){MSC.failed=true;}};
-  const boot=()=>add('mascot.js?v=20261112082000',()=>{try{if(window.Mascot&&window.Mascot.init({host:$('mascot'),app:{buzz,askName:()=>{if(window.MLX&&MLX.askName)MLX.askName();},addAlert:(y,v)=>window.MLX&&MLX.addAlert?MLX.addAlert(y,v):null,voice:(t,x)=>window.mlVoice?window.mlVoice(t,x):null,ask:(q,y,x)=>window.mlAsk?window.mlAsk(q,y,x):null}})&&MSC.last&&$('ob').hidden&&!document.getElementById('mlAuth'))window.Mascot.sync(msPayload(MSC.last));}catch(e){}});
+  const boot=()=>add('mascot.js?v=20261112090000',()=>{try{if(window.Mascot&&window.Mascot.init({host:$('mascot'),app:{buzz,askName:()=>{if(window.MLX&&MLX.askName)MLX.askName();},addAlert:(y,v)=>window.MLX&&MLX.addAlert?MLX.addAlert(y,v):null,voice:(t,x)=>window.mlVoice?window.mlVoice(t,x):null,ask:(q,y,x)=>window.mlAsk?window.mlAsk(q,y,x):null}})&&MSC.last&&$('ob').hidden&&!document.getElementById('mlAuth'))window.Mascot.sync(msPayload(MSC.last));}catch(e){}});
   setTimeout(boot,300);}
 function render(){const D=derive();renderHeader();renderHome(D);renderGrowth();renderCoins(D);renderStrategy(D);renderActivity();renderD14();if(window.MLX)try{MLX.render(D);}catch(e){console.error(e);}earnNudge();if(cvSym&&$('coinSheet').classList.contains('open'))renderCoinView();}
 document.body.classList.add('loading');
@@ -2941,7 +2944,7 @@ render();requestAnimationFrame(inkMove);setTimeout(inkMove,600);
     sy=null;swipe=null;pull=0;armed=false;},{passive:true});
 })();
 </script>
-<script src="plus.js?v=20261112082000"></script>
-<script src="wins.js?v=20261112082000"></script>
+<script src="plus.js?v=20261112090000"></script>
+<script src="wins.js?v=20261112090000"></script>
 </body>
 </html>
