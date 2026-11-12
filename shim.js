@@ -452,7 +452,7 @@
       const t = setInterval(() => run(true), every);
       return () => { stop = true; clearInterval(t); watches.delete(w); };
     },
-    async invalidate() { for (const w of watches) w.run(true); }
+    async invalidate() { await Promise.all([...watches].map(w => w.run(true))); }   /* ждём свежие цены — приложение покажет итог обновления */
   };
 
   window.claude = {

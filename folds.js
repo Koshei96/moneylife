@@ -1,7 +1,6 @@
 /* MoneyLife — «Складки» (12.11.2026): разделы настроек и вкладок сложены, одно нажатие — раскрываются.
-   Как выглядит: закрытая складка — заголовок с цветным значком, краткой сводкой и «стопкой листов» под ним;
-   при открытии по заголовку пробегает блик, значок подпрыгивает с кольцом, «+» превращается в «−»,
-   а строки раздела разворачиваются по одной, как сложенный лист бумаги (поворот сверху вниз).
+   Как выглядит (спокойная версия, 12.11.2026): заголовок с серым значком и краткой сводкой, шеврон поворачивается,
+   содержимое плавно проявляется — без бликов, цветных значков и «пружин».
    Разметка: data-fold="ключ" на заголовке. Для <span class="label"> телом служит следующий элемент,
    для .sec-h — всё, что идёт после него в том же блоке. Открытые складки запоминаются на телефоне (ml-fold).
    Если код приложения прокручивает к чему-то внутри складки (scrollIntoView) — складка открывается сама.
@@ -79,9 +78,9 @@
     f.root.classList.remove('done', 'flash'); void f.root.offsetWidth;
     if (open) f.root.classList.add('flash');
     setOpen(f, open);
-    sound(open); try { if (window.buzz) window.buzz(open ? 8 : 5); } catch (e) {}
+    try { if (window.buzz) window.buzz(6); } catch (e) {}   /* без звука — только лёгкая вибрация */
     clearTimeout(f.t);
-    f.t = setTimeout(function () { f.root.classList.remove('flash'); if (f.open) f.root.classList.add('done'); }, 700 + Math.min(f.n || 0, 12) * 45);
+    f.t = setTimeout(function () { f.root.classList.remove('flash'); if (f.open) f.root.classList.add('done'); }, 340 + Math.min(f.n || 0, 12) * 18);
     if (open) setTimeout(function () {
       /* раскрылась внизу экрана — мягко подвинуть, чтобы было видно содержимое */
       var r = f.head.getBoundingClientRect(); if (r.top > innerHeight * 0.58) try { f.head.scrollIntoView({ block: 'start', behavior: 'smooth' }); } catch (e) {}

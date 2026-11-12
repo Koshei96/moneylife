@@ -11,7 +11,7 @@ addEventListener('error',function(e){if(e&&e.message)add(e.message,(e.filename||
 addEventListener('unhandledrejection',function(e){var r=e&&e.reason;add(r&&(r.message||r)||'отклонённое обещание','promise');});
 window.mlErrLog=function(){try{return JSON.parse(localStorage.getItem(K)||'[]');}catch(e){return [];}};window.mlErrAdd=add;})();
 </script>
-<script src="i18n.js?v=20261112133000"></script>
+<script src="i18n.js?v=20261112140000"></script>
 <title>MoneyLife</title>
 <meta name="theme-color" content="#06040e">
 <script>/* тема до отрисовки: «Авто» — как в телефоне, иначе выбор из настроек */
@@ -1237,61 +1237,43 @@ html.lite .view.enter{animation:vin .2s var(--ease)}
 @media (prefers-reduced-motion:reduce){.story,.st-s,.st-s>*,.st-coins>span,.st-flames i,.st-ach .win-b,.st-ach small,.win-cell,.win-inv-g{animation:none;transition:none}}
 </style>
 <style id="v7">
-/* ===== «Складки» (12.11.2026): разделы сложены, одно нажатие — раскрываются (folds.js) ===== */
+/* ===== «Складки» (12.11.2026, спокойная версия): разделы сложены, нажатие раскрывает. Без цветных значков, бликов и «пружин» — коротко и ровно ===== */
 .fold{position:relative;min-width:0}
-.fold-h{position:relative;isolation:isolate;overflow:hidden;width:100%;display:flex;align-items:center;text-align:left;color:var(--fg);font:inherit;cursor:pointer;-webkit-tap-highlight-color:transparent}
-.fold-h::before{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;background:linear-gradient(100deg,transparent 28%,color-mix(in srgb,var(--fc) 34%,transparent) 50%,transparent 72%);transform:translateX(-115%)}
-.fold.flash .fold-h::before{animation:fSheen .85s cubic-bezier(.3,.7,.2,1)}
-@keyframes fSheen{to{transform:translateX(115%)}}
-.fold-h:active{transform:scale(.985)}
-.fold-h{transition:transform .2s var(--ease,ease),box-shadow .55s cubic-bezier(.2,.9,.2,1),border-color .4s,background .4s}
-/* значок: цвет складки, при открытии подпрыгивает и пускает кольцо */
-.fold-ic{flex:none;width:38px;height:38px;border-radius:12px;display:grid;place-items:center;position:relative;color:var(--fc);background:color-mix(in srgb,var(--fc) 15%,transparent)}
-.fold-ic svg{width:20px;height:20px}
-.fold-ic::after{content:"";position:absolute;inset:-2px;border-radius:14px;border:2px solid var(--fc);opacity:0;pointer-events:none}
-.fold-ic.sm{width:28px;height:28px;border-radius:9px}.fold-ic.sm svg{width:16px;height:16px}.fold-ic.sm::after{border-radius:11px}
-.fold.flash .fold-ic{animation:fIc .6s cubic-bezier(.34,1.56,.64,1)}
-.fold.flash .fold-ic::after{animation:fRing .75s ease-out}
-@keyframes fIc{0%{transform:none}35%{transform:scale(1.18) rotate(-10deg)}100%{transform:none}}
-@keyframes fRing{0%{opacity:.75;transform:scale(.85)}100%{opacity:0;transform:scale(1.7)}}
-/* «+» поворачивается и становится «−» */
-.fold-x{flex:none;width:28px;height:28px;border-radius:50%;position:relative;background:var(--raise);transition:transform .6s cubic-bezier(.34,1.56,.64,1),background .35s}
-.fold-x::before,.fold-x::after{content:"";position:absolute;left:50%;top:50%;width:12px;height:2px;margin:-1px 0 0 -6px;border-radius:2px;background:var(--fg);transition:transform .5s cubic-bezier(.34,1.56,.64,1),background .35s}
-.fold-x::after{transform:rotate(90deg)}
-.fold.open .fold-x{transform:rotate(180deg);background:var(--fc)}
-.fold.open .fold-x::before,.fold.open .fold-x::after{background:var(--bg)}
-.fold.open .fold-x::after{transform:rotate(180deg)}
-/* тело: высота раскрывается плавно, строки разворачиваются по одной, как сложенный лист */
-.fold-b{display:grid;grid-template-rows:0fr;transition:grid-template-rows .58s cubic-bezier(.2,.85,.15,1),margin-top .58s cubic-bezier(.2,.85,.15,1)}
-.fold.open>.fold-b{grid-template-rows:1fr;margin-top:10px}
+.fold-h{position:relative;width:100%;display:flex;align-items:center;text-align:left;color:var(--fg);font:inherit;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:background-color .2s ease,border-color .2s ease}
+.fold-h::before{content:none}
+.fold-ic{flex:none;width:34px;height:34px;border-radius:10px;display:grid;place-items:center;color:var(--mute);background:var(--raise)}
+.fold-ic svg{width:18px;height:18px}
+.fold-ic.sm{width:26px;height:26px;border-radius:8px;background:none;color:var(--dim)}.fold-ic.sm svg{width:16px;height:16px}
+/* стрелка-шеврон: поворот на 180° */
+.fold-x{flex:none;width:24px;height:24px;position:relative;color:var(--dim);transition:transform .28s cubic-bezier(.3,0,.2,1),color .2s}
+.fold-x::before{content:"";position:absolute;left:50%;top:50%;width:7px;height:7px;margin:-6px 0 0 -4px;border:solid currentColor;border-width:0 1.8px 1.8px 0;transform:rotate(45deg)}
+.fold-x::after{content:none}
+.fold.open .fold-x{transform:rotate(180deg);color:var(--fg)}
+/* тело: высота плавно, содержимое проявляется без «прыжков» */
+.fold-b{display:grid;grid-template-rows:0fr;transition:grid-template-rows .3s cubic-bezier(.3,0,.2,1),margin-top .3s cubic-bezier(.3,0,.2,1)}
+.fold.open>.fold-b{grid-template-rows:1fr;margin-top:8px}
 .fold-in{min-height:0;overflow:hidden}
 .fold.done>.fold-b>.fold-in{overflow:visible}
-.fold [data-fi]{transform-origin:50% 0;transition:transform .62s cubic-bezier(.2,.9,.25,1.04) calc(var(--fi,0)*45ms + 90ms),opacity .42s ease calc(var(--fi,0)*45ms + 90ms)}
-.fold:not(.open) [data-fi]{transform:perspective(900px) rotateX(-78deg) translateY(-8px);opacity:0;transition-duration:.24s,.18s;transition-delay:0s,0s}
-.fold.instant,.fold.instant *,.fold.instant *::before,.fold.instant *::after{transition:none!important;animation:none!important}
-/* настройки: крупный заголовок-карточка; закрытый — со «стопкой листов» под ним */
-.fold-set{margin-bottom:6px}
-.fold-set>.fold-h{gap:12px;padding:13px 12px 13px 12px;min-height:66px;border-radius:20px;background:var(--surface);border:1px solid var(--line);
-  box-shadow:0 7px 0 -3px var(--raise),0 13px 0 -7px var(--line2)}
-.fold-set.open>.fold-h{box-shadow:0 0 0 -3px var(--raise),0 0 0 -7px var(--line2);border-color:color-mix(in srgb,var(--fc) 45%,var(--line));background:linear-gradient(120deg,color-mix(in srgb,var(--fc) 13%,var(--surface)),var(--surface) 65%)}
-.fold-set.open{margin-bottom:0}
+.fold [data-fi]{transition:opacity .22s ease calc(var(--fi,0)*18ms + 60ms),transform .26s cubic-bezier(.3,0,.2,1) calc(var(--fi,0)*18ms + 60ms)}
+.fold:not(.open) [data-fi]{opacity:0;transform:translateY(-4px);transition-duration:.12s,.12s;transition-delay:0s,0s}
+.fold.instant,.fold.instant *{transition:none!important;animation:none!important}
+/* настройки: строка-карточка */
+.fold-set{margin-bottom:0}
+.fold-set>.fold-h{gap:12px;padding:12px 14px 12px 12px;min-height:62px;border-radius:16px;background:var(--surface);border:1px solid var(--line)}
+.fold-set>.fold-h:active{background:var(--raise)}
+.fold-set.open>.fold-h{border-color:var(--line2)}
 .fold-tt{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
-.fold-tt b{font-size:16px;font-weight:650;letter-spacing:-.01em}
-.fold-s{font-size:12.5px;line-height:1.35;color:var(--mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-height:18px;transition:opacity .3s,max-height .45s}
+.fold-tt b{font-size:15.5px;font-weight:600;letter-spacing:-.01em}
+.fold-s{font-size:12.5px;line-height:1.35;color:var(--mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-height:18px;transition:opacity .2s,max-height .25s}
 .fold-s:empty{display:none}
 .fold.open .fold-s{opacity:0;max-height:0}
-.fold-n{flex:none;min-width:24px;height:24px;padding:0 7px;border-radius:999px;font-size:12px;font-weight:700;display:grid;place-items:center;color:var(--fc);background:color-mix(in srgb,var(--fc) 14%,transparent);transition:opacity .3s,transform .45s cubic-bezier(.34,1.56,.64,1)}
-.fold-n:empty{display:none}
-.fold.open .fold-n{opacity:0;transform:scale(.4)}
-/* вкладки: заголовок раздела — кнопка; закрытый показывает край сложенной карточки */
+.fold-n{display:none}
+/* вкладки: заголовок раздела — кнопка */
 .sec-h.fold-sec{display:block;margin-bottom:0}
-.fold-tab>.sec-h>.fold-h{gap:10px;min-height:48px;padding:10px 2px;margin:-10px 0;background:none;border:0;border-radius:12px}
+.fold-tab>.sec-h>.fold-h{gap:8px;min-height:48px;padding:10px 0;margin:-10px 0;background:none;border:0}
 .fold-tab .fold-h .small{margin-left:auto;min-width:0;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .fold-tab .fold-h .label{flex:none}
-.fold-tab .fold-x{width:24px;height:24px}
-.fold-tab>.sec-h::after{content:"";display:block;height:9px;margin:10px 10px 0;border-radius:0 0 14px 14px;background:var(--surface);box-shadow:0 5px 0 -2px var(--raise);transform-origin:50% 0;transition:transform .45s cubic-bezier(.2,.9,.2,1),opacity .3s,height .45s,margin .45s}
-.fold-tab.open>.sec-h::after{transform:scaleY(0);opacity:0;height:0;margin-top:0}
-.card .fold-tab>.sec-h::after{display:none}
+.fold-tab>.sec-h::after{content:none}
 @media (prefers-reduced-motion:reduce){.fold *,.fold-b{transition:none!important;animation:none!important}}
 </style>
 <style id="v8">
@@ -1305,7 +1287,7 @@ html.lite .view.enter{animation:vin .2s var(--ease)}
   opacity:0;transform:translateY(8px) scale(.9);transition:opacity .25s ease,transform .5s cubic-bezier(.34,1.56,.64,1)}
 .tab[aria-current="page"] .tab-orb{transform:translateY(-22px);background:var(--bg);
   box-shadow:inset 0 0 0 2px color-mix(in srgb,var(--fg) 78%,transparent),0 0 0 5px var(--bg),0 10px 22px -8px #000a}
-.tab[aria-current="page"] .tab-orb::after{animation:orbPulse .75s ease-out .18s}
+.tab[aria-current="page"] .tab-orb::after{animation:none}
 .tab[aria-current="page"] .tab-lbl{opacity:1;transform:none;transition-delay:.12s,.08s}
 .tab[aria-current="page"] svg{color:var(--fg)}
 .tab .spark{top:6px}
@@ -1346,62 +1328,46 @@ html.lite .view.enter{animation:vin .2s var(--ease)}
 @media (prefers-reduced-motion:reduce){.thsw *{transition:none!important;animation:none!important}}
 </style>
 <style id="v10">
-/* ===== 12.11.2026: шестерёнка, «потянуть вниз» в цветах приложения, ползунок «Купить», смахнуть запись влево ===== */
-/* шестерёнка настроек: при нажатии проворачивается с пружинкой и вспышкой */
-#setBtn .gear{width:22px;height:22px;transition:transform .3s}
-#setBtn.spin .gear{animation:gearSpin .7s cubic-bezier(.34,1.56,.64,1)}
-#setBtn.spin::after{content:"";position:absolute;inset:6px;border-radius:50%;border:2px solid var(--accent);animation:gearRing .6s ease-out forwards;pointer-events:none}
+/* ===== 12.11.2026 (спокойная версия): шестерёнка, «потянуть вниз», ползунок «Купить», смахнуть запись. Без конфетти, градиентов и «пружин» ===== */
 #setBtn{position:relative}
-@keyframes gearSpin{0%{transform:rotate(0)}100%{transform:rotate(180deg)}}
-@keyframes gearRing{0%{opacity:.8;transform:scale(.6)}100%{opacity:0;transform:scale(1.5)}}
-/* потянуть вниз: кольцо-градиент цветов логотипа наполняется по мере жеста, в центре — оранжевая точка как на логотипе */
-.ptr{width:44px;height:44px;margin-left:-22px;background:color-mix(in srgb,var(--surface2) 94%,transparent);border-color:color-mix(in srgb,#ff52d9 25%,var(--line2));transform:translateY(calc(var(--pull,0) * 1px - 52px))}
-.ptr .ptr-ring{position:absolute;inset:2px;width:40px;height:40px;transform:rotate(-90deg)}
-.ptr-bg{fill:none;stroke:var(--line2);stroke-width:3}
-.ptr-arc{fill:none;stroke-width:3.4;stroke-linecap:round;stroke-dasharray:88px;stroke-dashoffset:calc(88px - var(--pull,0) * 1.375px)}
-.ptr-dot{position:absolute;left:50%;top:50%;width:8px;height:8px;margin:-4px 0 0 -4px;border-radius:50%;background:#ffb347;box-shadow:0 0 10px #ffb347aa;transform:scale(calc(.4 + var(--pull,0) / 110));transition:transform .2s}
-.ptr-orb{position:absolute;inset:-1px;border-radius:50%;pointer-events:none;opacity:0}
-.ptr.ready{box-shadow:0 0 0 1px #ff52d966,0 10px 28px -8px #ff52d999}
-.ptr.ready .ptr-dot{animation:ptrBeat .5s ease-in-out infinite alternate}
-.ptr.spin .ptr-ring{animation:ptrs .75s linear infinite}
-.ptr.spin .ptr-arc{stroke-dashoffset:60px;transition:stroke-dashoffset .3s}
-.ptr.spin .ptr-dot{animation:ptrBeat .4s ease-in-out infinite alternate}
-.ptr.spin .ptr-orb{opacity:1;background:conic-gradient(from 0deg,transparent 0 70%,#ff52d955 85%,#ffb34788 100%);-webkit-mask:radial-gradient(circle,transparent 58%,#000 60%);mask:radial-gradient(circle,transparent 58%,#000 60%);animation:ptrs .75s linear infinite}
-.ptr svg.ptr-ring{color:inherit}
-@keyframes ptrBeat{from{transform:scale(.8)}to{transform:scale(1.25)}}
+#setBtn .gear{width:21px;height:21px;transition:transform .45s cubic-bezier(.3,0,.2,1)}
+#setBtn.spin .gear{animation:gearSpin .45s cubic-bezier(.3,0,.2,1)}
+@keyframes gearSpin{from{transform:rotate(0)}to{transform:rotate(90deg)}}
+/* потянуть вниз: тонкая дуга наполняется по мере жеста и вращается во время обновления */
+.ptr{width:40px;height:40px;margin-left:-20px;background:var(--surface2);border:1px solid var(--line2);box-shadow:0 8px 22px -12px #000;transform:translateY(calc(var(--pull,0) * 1px - 52px))}
+.ptr .ptr-ring{position:absolute;inset:3px;width:32px;height:32px;transform:rotate(-90deg)}
+.ptr-bg{fill:none;stroke:var(--line2);stroke-width:2}
+.ptr-arc{fill:none;stroke:var(--fg);stroke-width:2.2;stroke-linecap:round;stroke-dasharray:76px;stroke-dashoffset:calc(76px - var(--pull,0) * 1.19px)}
+.ptr-dot,.ptr-orb{display:none}
+.ptr.ready .ptr-arc{stroke-dashoffset:0}
+.ptr.spin .ptr-ring{animation:ptrs .8s linear infinite}
+.ptr.spin .ptr-arc{stroke-dashoffset:54px}
 /* ползунок «Купить»: провести вправо */
-#saveBtn.slide{position:relative;overflow:hidden;min-height:60px;border-radius:999px;padding:0;background:var(--surface2);color:var(--fg);border:1px solid var(--line2);box-shadow:inset 0 2px 8px #0005;touch-action:none;user-select:none;-webkit-user-select:none}
-#saveBtn.slide .sl-fill{position:absolute;left:0;top:0;bottom:0;width:calc(var(--sx,0px) + 58px);border-radius:999px;background:linear-gradient(90deg,#7566f5,#ff52d9);opacity:.9;transition:width .35s cubic-bezier(.34,1.3,.64,1)}
+#saveBtn.slide{position:relative;overflow:hidden;min-height:58px;border-radius:999px;padding:0;background:var(--surface2);color:var(--mute);border:1px solid var(--line2);touch-action:none;user-select:none;-webkit-user-select:none}
+#saveBtn.slide .sl-fill{position:absolute;left:0;top:0;bottom:0;width:calc(var(--sx,0px) + 54px);border-radius:999px;background:color-mix(in srgb,var(--fg) 9%,transparent);transition:width .28s cubic-bezier(.3,0,.2,1),background-color .25s}
 #saveBtn.slide.drag .sl-fill,#saveBtn.slide.drag .sl-knob{transition:none}
-#saveBtn.slide .sl-txt{position:relative;display:flex;align-items:center;justify-content:center;gap:8px;font-weight:750;font-size:16px;letter-spacing:.01em;padding-left:40px;opacity:calc(1 - var(--sp,0) * 1.4);
-  background:linear-gradient(90deg,var(--mute) 0 35%,var(--fg) 50%,var(--mute) 65% 100%);background-size:250% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:slShine 2.4s linear infinite}
-#saveBtn.slide .sl-txt b{font-weight:800;letter-spacing:-2px}
-@keyframes slShine{from{background-position:120% 0}to{background-position:-120% 0}}
-#saveBtn.slide .sl-knob{position:absolute;left:4px;top:50%;width:52px;height:52px;margin-top:-26px;border-radius:50%;display:grid;place-items:center;color:#fff;
-  background:radial-gradient(circle at 35% 30%,#ffffff55,transparent 45%),linear-gradient(135deg,#7566f5,#ff52d9);box-shadow:0 6px 16px -4px #ff52d999,inset 0 -3px 6px #0003;
-  transform:translateX(var(--sx,0px));transition:transform .35s cubic-bezier(.34,1.3,.64,1)}
-#saveBtn.slide .sl-knob svg{width:24px;height:24px;transition:transform .4s,opacity .25s}
-#saveBtn.slide .sl-knob .ok{position:absolute;opacity:0;transform:scale(.3) rotate(-90deg)}
-#saveBtn.slide.nudge .sl-knob{animation:slNudge .7s cubic-bezier(.34,1.56,.64,1)}
-@keyframes slNudge{0%,100%{transform:translateX(0)}40%{transform:translateX(46px)}}
-#saveBtn.slide.done .sl-fill{width:100%;background:linear-gradient(90deg,#30d158,#2fd3a0)}
-#saveBtn.slide.done .sl-knob{box-shadow:0 0 0 6px #30d15833,0 0 24px #30d158aa}
-#saveBtn.slide.done .sl-knob .coin{opacity:0;transform:scale(.3) rotate(90deg)}
+#saveBtn.slide .sl-txt{position:relative;display:block;text-align:center;padding-left:44px;font-weight:600;font-size:15px;color:var(--mute);opacity:calc(1 - var(--sp,0) * 1.6);transition:opacity .2s}
+#saveBtn.slide .sl-knob{position:absolute;left:4px;top:50%;width:48px;height:48px;margin-top:-24px;border-radius:50%;display:grid;place-items:center;color:var(--btn-fg);background:var(--btn-bg);
+  transform:translateX(var(--sx,0px));transition:transform .28s cubic-bezier(.3,0,.2,1),background-color .25s,color .25s}
+#saveBtn.slide .sl-knob svg{width:22px;height:22px;transition:opacity .18s,transform .25s}
+#saveBtn.slide .sl-knob .ok{position:absolute;opacity:0;transform:scale(.6)}
+#saveBtn.slide.nudge .sl-knob{animation:slNudge .5s cubic-bezier(.3,0,.2,1)}
+@keyframes slNudge{0%,100%{transform:translateX(0)}45%{transform:translateX(28px)}}
+#saveBtn.slide.done .sl-fill{width:100%;background:color-mix(in srgb,var(--pos) 16%,transparent)}
+#saveBtn.slide.done .sl-knob{background:var(--pos);color:#fff}
+#saveBtn.slide.done .sl-knob .arr{opacity:0;transform:scale(.6)}
 #saveBtn.slide.done .sl-knob .ok{opacity:1;transform:none}
 #saveBtn.slide.done .sl-txt{opacity:0}
-#saveBtn.slide.shake{animation:slShake .4s}
-@keyframes slShake{0%,100%{transform:none}25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
-.buyfx{position:fixed;z-index:80;pointer-events:none;width:14px;height:14px;margin:-7px 0 0 -7px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fff8,transparent 50%),linear-gradient(135deg,#ffd76a,#f5a623);box-shadow:0 0 8px #ffcf5a99}
-.buyfx.r{width:10px;height:10px;margin:-5px 0 0 -5px;border-radius:3px;background:linear-gradient(135deg,#7566f5,#ff52d9);box-shadow:none}
-.buyring{position:fixed;z-index:79;pointer-events:none;width:40px;height:40px;margin:-20px 0 0 -20px;border-radius:50%;border:3px solid #30d158}
+#saveBtn.slide.shake{animation:slShake .35s}
+@keyframes slShake{0%,100%{transform:none}30%{transform:translateX(-5px)}70%{transform:translateX(5px)}}
 /* смахнуть запись влево — удалить */
-#histList .row[data-tx]{position:relative;touch-action:pan-y;transition:transform .3s cubic-bezier(.2,.9,.2,1)}
+#histList .row[data-tx]{position:relative;touch-action:pan-y;transition:transform .26s cubic-bezier(.3,0,.2,1)}
 #histList .row[data-tx].sw{transition:none}
-#histList .row[data-tx]::after{content:var(--del,"Удалить");position:absolute;top:0;bottom:0;left:100%;width:140px;display:flex;align-items:center;padding-left:22px;font-weight:700;font-size:14px;color:#fff;background:linear-gradient(90deg,var(--neg),#d93636);pointer-events:none}
-#histList .row[data-tx].arm::after{background:linear-gradient(90deg,#ff3b3b,#c41f1f)}
-#histList .row[data-tx].gone{transform:translateX(-110%)!important;opacity:0;transition:transform .35s ease-in,opacity .35s ease-in}
-.crumb{position:fixed;z-index:80;pointer-events:none;border-radius:2px}
-@media (prefers-reduced-motion:reduce){#setBtn.spin .gear,#saveBtn.slide .sl-txt,.ptr.spin .ptr-ring,.ptr.spin .ptr-orb{animation:none}}
+#histList .row[data-tx]::after{content:var(--del,"Удалить");position:absolute;top:0;bottom:0;left:100%;width:140px;display:flex;align-items:center;padding-left:20px;font-weight:600;font-size:14px;color:#fff;background:var(--neg);opacity:.85;pointer-events:none;transition:opacity .15s}
+#histList .row[data-tx].arm::after{opacity:1}
+#histList .row[data-tx].gone{transform:translateX(-100%)!important;opacity:0;transition:transform .28s ease-in,opacity .28s ease-in}
+.crumb{position:fixed;z-index:80;pointer-events:none;border-radius:1px}
+@media (prefers-reduced-motion:reduce){#setBtn.spin .gear,.ptr.spin .ptr-ring{animation:none}}
 </style>
 </head>
 <body class="loading">
@@ -1749,9 +1715,9 @@ document.querySelectorAll('nav.tabs .tab').forEach(b=>{const v=b.querySelector('
 
 <div class="toast" id="toast" role="status"><span id="toastMsg"></span><button type="button" id="toastBtn" hidden></button></div>
 
-<script src="config.js?v=20261112133000"></script>
+<script src="config.js?v=20261112140000"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="shim.js?v=20261112133000"></script>
+<script src="shim.js?v=20261112140000"></script>
 <script>
 /* ===== основа ===== */
 const $=id=>document.getElementById(id);
@@ -2916,7 +2882,12 @@ async function allowLive(){if(!mcp)return;const ids=liveIds();
   try{for(let i=0;i<ids.length;i+=20){const r=await mcp.callTool('CoinGecko','get-coin-markets',{ids:ids.slice(i,i+20)});onLive({type:'data',result:r});}loadGrowth();}catch(err){onLive({type:'error',error:err});}}
 $('refreshBtn').addEventListener('click',async()=>{play('tick');buzz(8);const b=$('refreshBtn');if(b.animate)b.animate([{transform:'rotate(0)'},{transform:'rotate(360deg)'}],{duration:700,easing:'cubic-bezier(.2,.8,.2,1)'});
   if(!mcp){toast('Живые цены недоступны — показана последняя проверка');return;}
-  try{await mcp.invalidate('CoinGecko','get-coin-markets');}catch(e){startLive(true);}toast('Обновляю цены…');});
+  if(refreshing)return refreshing;toast('Обновляю цены…');
+  /* обновление ждёт ответа бирж и говорит, чем кончилось (12.11.2026: раньше подсказка «Обновляю…» оставалась без итога) */
+  refreshing=(async()=>{const t0=+(S.live&&S.live.at)||0;try{await Promise.race([mcp.invalidate('CoinGecko','get-coin-markets'),new Promise(r=>setTimeout(r,12000))]);}catch(e){startLive(true);}
+    const ok=S.live&&S.live.status==='ok'&&(+(S.live.at)||0)>=t0;toast(ok?'Цены обновлены':'Не удалось обновить цены — проверьте интернет');if(ok)play('done');})().finally(()=>{refreshing=null;});
+  return refreshing;});
+let refreshing=null;
 
 /* ===== навигация и общие клики ===== */
 let curTab='home';
@@ -3042,7 +3013,7 @@ function msSync(x){MSC.last=x;if(!msApply())return;if(!S.ready||document.getElem
   if(window.Mascot){try{window.Mascot.sync(msPayload(x));}catch(e){}}else msLoad();}
 function msLoad(){if(MSC.loading||MSC.failed)return;MSC.loading=true;
   const add=(src,ok)=>{try{const s=document.createElement('script');s.src=src;s.async=true;s.onload=ok;s.onerror=()=>{MSC.failed=true;};document.head.appendChild(s);}catch(e){MSC.failed=true;}};
-  const boot=()=>add('mascot.js?v=20261112133000',()=>{try{if(window.Mascot&&window.Mascot.init({host:$('mascot'),app:{buzz,askName:()=>{if(window.MLX&&MLX.askName)MLX.askName();},addAlert:(y,v)=>window.MLX&&MLX.addAlert?MLX.addAlert(y,v):null,voice:(t,x)=>window.mlVoice?window.mlVoice(t,x):null,ask:(q,y,x)=>window.mlAsk?window.mlAsk(q,y,x):null}})&&MSC.last&&$('ob').hidden&&!document.getElementById('mlAuth'))window.Mascot.sync(msPayload(MSC.last));}catch(e){}});
+  const boot=()=>add('mascot.js?v=20261112140000',()=>{try{if(window.Mascot&&window.Mascot.init({host:$('mascot'),app:{buzz,askName:()=>{if(window.MLX&&MLX.askName)MLX.askName();},addAlert:(y,v)=>window.MLX&&MLX.addAlert?MLX.addAlert(y,v):null,voice:(t,x)=>window.mlVoice?window.mlVoice(t,x):null,ask:(q,y,x)=>window.mlAsk?window.mlAsk(q,y,x):null}})&&MSC.last&&$('ob').hidden&&!document.getElementById('mlAuth'))window.Mascot.sync(msPayload(MSC.last));}catch(e){}});
   setTimeout(boot,300);}
 function render(){const D=derive();renderHeader();renderHome(D);renderGrowth();renderCoins(D);renderStrategy(D);renderActivity();renderD14();if(window.MLX)try{MLX.render(D);}catch(e){console.error(e);}earnNudge();if(cvSym&&$('coinSheet').classList.contains('open'))renderCoinView();}
 document.body.classList.add('loading');
@@ -3109,16 +3080,17 @@ render();requestAnimationFrame(inkMove);setTimeout(inkMove,600);
   window.MLFX={armReveal};
   setTimeout(armReveal,900);new MutationObserver(()=>{clearTimeout(armReveal._t);armReveal._t=setTimeout(armReveal,250);}).observe(document.querySelector('.app'),{childList:true,subtree:true});
   /* потянуть вниз от верха страницы — обновить цены */
-  const ptr=document.createElement('div');ptr.className='ptr';ptr.setAttribute('aria-hidden','true');ptr.innerHTML='<svg class="ptr-ring" viewBox="0 0 40 40" aria-hidden="true"><defs><linearGradient id="ptrG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7566f5"/><stop offset=".55" stop-color="#ff52d9"/><stop offset="1" stop-color="#ffb347"/></linearGradient></defs><circle class="ptr-bg" cx="20" cy="20" r="14"/><circle class="ptr-arc" cx="20" cy="20" r="14" stroke="url(#ptrG)"/></svg><i class="ptr-dot"></i><i class="ptr-orb"></i>';document.body.appendChild(ptr);
+  const ptr=document.createElement('div');ptr.className='ptr';ptr.setAttribute('aria-hidden','true');ptr.innerHTML='<svg class="ptr-ring" viewBox="0 0 32 32" aria-hidden="true"><circle class="ptr-bg" cx="16" cy="16" r="12"/><circle class="ptr-arc" cx="16" cy="16" r="12"/></svg>';document.body.appendChild(ptr);
   let sy=null,sx=0,pull=0,armed=false,swipe=null;
   const hsc=el=>{for(let n=el;n&&n!==document.body;n=n.parentElement){if(n.scrollWidth>n.clientWidth+4){const o=getComputedStyle(n).overflowX;if(o==='auto'||o==='scroll')return true;}}return false;};   /* внутри ленты, которая листается вбок, свайп вкладок не срабатывает */
   const busy=()=>document.querySelector('.sheet.open')||document.body.classList.contains('lock');
-  addEventListener('touchstart',e=>{if(busy()||e.touches.length!==1)return;const t=e.touches[0];sx=t.clientX;sy=scrollY<=0?t.clientY:null;pull=0;armed=false;
+  addEventListener('touchstart',e=>{if(busy()||e.touches.length!==1)return;const t=e.touches[0];sx=t.clientX;sy=scrollY<3?t.clientY:null;pull=0;armed=false;
     swipe=e.target.closest&&e.target.closest('.app')&&!e.target.closest('input,textarea,select,canvas,svg,[data-noswipe],.sheet,.tabs,.ms,#histList [data-tx]')&&!hsc(e.target)?{x:t.clientX,y:t.clientY,t:Date.now()}:null;},{passive:true});
-  addEventListener('touchmove',e=>{if(sy==null||busy())return;const d=e.touches[0].clientY-sy;if(d<=0||scrollY>0){pull=0;ptr.classList.remove('go');return;}
+  addEventListener('touchmove',e=>{if(sy==null||busy())return;const d=e.touches[0].clientY-sy;if(d<=0||scrollY>3){pull=0;armed=false;ptr.classList.remove('go','ready');return;}
     pull=Math.min(110,d*.5);ptr.style.setProperty('--pull',pull.toFixed(0));ptr.classList.add('go');const r=pull>64;if(r!==armed){armed=r;ptr.classList.toggle('ready',r);if(r){play('pull');buzz(8);}}},{passive:true});
   addEventListener('touchend',e=>{
-    if(sy!=null&&armed&&!busy()){ptr.classList.add('spin');ptr.classList.remove('go','ready');$('refreshBtn').click();setTimeout(()=>{ptr.classList.remove('spin');play('done');},1100);}
+    if(sy!=null&&armed&&!busy()){ptr.classList.add('spin');ptr.classList.remove('go','ready');$('refreshBtn').click();const st=Date.now(),stop=()=>{ptr.classList.remove('spin');ptr.style.setProperty('--pull',0);};
+      const w=()=>{if(!refreshing||Date.now()-st>13000){setTimeout(stop,Math.max(0,700-(Date.now()-st)));return;}setTimeout(w,150);};setTimeout(w,150);}
     else{ptr.classList.remove('go','ready');ptr.style.setProperty('--pull',0);}
     /* свайп влево/вправо — соседняя вкладка */
     const t=e.changedTouches&&e.changedTouches[0];
@@ -3126,17 +3098,17 @@ render();requestAnimationFrame(inkMove);setTimeout(inkMove,600);
     sy=null;swipe=null;pull=0;armed=false;},{passive:true});
 })();
 </script>
-<script src="plus.js?v=20261112133000"></script>
-<script src="wins.js?v=20261112133000"></script>
-<script src="folds.js?v=20261112133000"></script>
+<script src="plus.js?v=20261112140000"></script>
+<script src="wins.js?v=20261112140000"></script>
+<script src="folds.js?v=20261112140000"></script>
 <script>
 /* ===== 12.11.2026: ползунок «Купить», смахнуть запись влево с «рассыпанием» монеты ===== */
 (function(){
-  const COIN='<svg class="coin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5v9M9.5 10a2.5 2 0 0 1 2.5-1.5h.6a2.2 2.2 0 0 1 0 4.4h-1.2a2.2 2.2 0 0 0 0 4.4h.6A2.5 2 0 0 0 14.5 14"/></svg>';
+  const COIN='<svg class="arr" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h13M13 6.5l5.5 5.5-5.5 5.5"/></svg>';
   const OK='<svg class="ok" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
   const btn=$('saveBtn');let on=false;
   function setSlide(v){on=v;btn.classList.toggle('slide',v);btn.classList.remove('done','drag','nudge','shake');btn.style.removeProperty('--sx');btn.style.removeProperty('--sp');btn.disabled=false;
-    if(v){btn.innerHTML='<span class="sl-fill"></span><span class="sl-txt">Купить <b aria-hidden="true">›››</b></span><span class="sl-knob">'+COIN+OK+'</span>';btn.setAttribute('aria-label','Купить — проведите вправо');}
+    if(v){btn.innerHTML='<span class="sl-fill"></span><span class="sl-txt">Проведите, чтобы купить</span><span class="sl-knob">'+COIN+OK+'</span>';btn.setAttribute('aria-label','Купить — проведите вправо');}
     else{btn.textContent='Сохранить';btn.removeAttribute('aria-label');}}
   const _show=showForm;window.showForm=showForm=function(m,o){_show(m,o);setSlide(m==='buy'||m==='dip');};
   /* перетаскивание */
@@ -3154,7 +3126,7 @@ render();requestAnimationFrame(inkMove);setTimeout(inkMove,600);
   btn.addEventListener('click',e=>{if(on&&(skipClick||e.detail>0)){e.stopImmediatePropagation();e.preventDefault();}},true);
   async function done(){btn.style.setProperty('--sx',max+'px');btn.style.setProperty('--sp','1');btn.classList.add('done');play('coin');buzz&&buzz([10,30,20]);
     const k=btn.querySelector('.sl-knob').getBoundingClientRect(),cx=k.left+k.width/2,cy=k.top+k.height/2;window.__buyFrom=btn.querySelector('.sl-knob');
-    burst(cx,cy);await saveForm();
+    await saveForm();
     if($('actSheet').classList.contains('open')){setSlide(true);btn.classList.add('shake');buzz&&buzz(30);}}
   window.mlSlideBuy=()=>{if(!on)return saveForm();max=btn.clientWidth-60;return done();};   /* для автотестов */
   /* «покупка»: зелёное кольцо и фонтан монет от ползунка */
@@ -3179,10 +3151,10 @@ render();requestAnimationFrame(inkMove);setTimeout(inkMove,600);
   hl.addEventListener('pointerup',end);hl.addEventListener('pointercancel',end);
   function crumble(r){if(reduced)return;const ic=r.querySelector('.badge,img,.ico,.ib-badge')||r.firstElementChild;if(!ic)return;const b=ic.getBoundingClientRect();
     let col=getComputedStyle(ic).getPropertyValue('--c').trim()||getComputedStyle(ic).backgroundColor||'#b15cff';if(!col||col==='rgba(0, 0, 0, 0)')col='#b15cff';
-    ic.animate([{transform:'scale(1)',filter:'blur(0)',opacity:1},{transform:'scale(.6) rotate(-12deg)',filter:'blur(2px)',opacity:0}],{duration:420,fill:'forwards'});
-    for(let i=0;i<18;i++){const p=document.createElement('i');p.className='crumb';const sz=3+Math.random()*5;p.style.width=p.style.height=sz+'px';
-      p.style.left=(b.left+Math.random()*b.width)+'px';p.style.top=(b.top+Math.random()*b.height)+'px';p.style.background=i%3?col:'#ffffffcc';document.body.appendChild(p);
-      const tx=(Math.random()-.7)*70,ty=20+Math.random()*60;p.animate([{transform:'translate(0,0) rotate(0)',opacity:1},{transform:`translate(${tx}px,${ty}px) rotate(${(Math.random()-.5)*540}deg)`,opacity:0}],{duration:600+Math.random()*400,easing:'cubic-bezier(.3,.1,.6,1)'}).onfinish=()=>p.remove();}}
+    ic.animate([{transform:'scale(1)',filter:'blur(0)',opacity:1},{transform:'scale(.85)',filter:'blur(1.5px)',opacity:0}],{duration:300,fill:'forwards'});
+    for(let i=0;i<10;i++){const p=document.createElement('i');p.className='crumb';const sz=2+Math.random()*3;p.style.width=p.style.height=sz+'px';
+      p.style.left=(b.left+Math.random()*b.width)+'px';p.style.top=(b.top+Math.random()*b.height)+'px';p.style.background=col;p.style.opacity='.8';document.body.appendChild(p);
+      const tx=-(6+Math.random()*26),ty=(Math.random()-.3)*22;p.animate([{transform:'translate(0,0) rotate(0)',opacity:1},{transform:`translate(${tx}px,${ty}px) rotate(${(Math.random()-.5)*540}deg)`,opacity:0}],{duration:380+Math.random()*220,easing:'cubic-bezier(.3,0,.2,1)'}).onfinish=()=>p.remove();}}
 })();
 </script>
 </body>

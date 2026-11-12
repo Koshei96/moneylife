@@ -1283,6 +1283,20 @@ def run_browser():
             else: fail('шестерёнка', 'нет')
         scenario('Ползунок и смахивание', {'session': True, 'docs': SEED}, s_slide)
 
+        # --- потянуть вниз (жалоба владельца 12.11): жест обновляет цены и сообщает итог
+        def s_ptr(pg, n):
+            pg.wait_for_timeout(1500)
+            pg.evaluate("window.__inv=0; window.claude.use('mcp').then(m=>{const o=m.invalidate.bind(m);m.invalidate=async(...a)=>{window.__inv++;return o(...a);};})"); pg.wait_for_timeout(200)
+            cdp = pg.context.new_cdp_session(pg)
+            def t(type, y): cdp.send('Input.dispatchTouchEvent', {'type': type, 'touchPoints': [] if type == 'touchEnd' else [{'x': 200, 'y': y}]})
+            t('touchStart', 300)
+            for k in range(1, 16): t('touchMove', 300 + k * 15); pg.wait_for_timeout(16)
+            t('touchEnd', 0); pg.wait_for_timeout(2500)
+            inv = pg.evaluate("window.__inv"); msg = pg.inner_text('#toastMsg'); spin = pg.evaluate("document.querySelector('.ptr').classList.contains('spin')")
+            if inv >= 1 and 'Цены обновлены' in msg and not spin: ok('потянуть вниз: цены обновляются, в конце подсказка «Цены обновлены»')
+            else: fail('потянуть вниз', f'{inv} | {msg} | spin={spin}')
+        scenario('Потянуть вниз', {'session': True, 'docs': SEED}, s_ptr)
+
         # --- надёжность интерфейса (12.11.2026): ошибки, найденные владельцем на телефоне, не должны вернуться
         def s_ui(pg, errs):
             pg.wait_for_timeout(2500)
