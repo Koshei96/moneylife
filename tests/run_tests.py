@@ -1072,6 +1072,14 @@ def run_browser():
             if v2['engine'] == 'phone' and v2['err'] == 'not_configured' and v2['cap']: ok('Орион: функция голоса недоступна — говорит голосом телефона, субтитры на месте')
             else: fail('Орион: запасной голос', str(v2))
             pg.evaluate("document.querySelector('.or-cap').click()"); pg.unroute('**/functions/v1/orion-voice')
+            # живой голос: не больше двух запросов одновременно (ElevenLabs отказывает при большем числе — Орион уходил на голос телефона, 12.11)
+            pg.evaluate("""(()=>{window.__vq={n:0,max:0,calls:0};const o=window.mlVoice;window.__mlVoiceOrig=o;window.mlVoice=async(t,c)=>{const q=window.__vq;q.n++;q.calls++;q.max=Math.max(q.max,q.n);await new Promise(r=>setTimeout(r,250));q.n--;return {error:'net'};};})()""")
+            pg.evaluate("Mascot.debug.premium(true)")
+            pg.evaluate("Mascot.debug.say('Первая фраза для проверки. Вторая фраза подлиннее для проверки. Третья фраза тоже длинная для проверки. Четвёртая фраза в конце для проверки.')"); pg.wait_for_timeout(2500)
+            vq = pg.evaluate("window.__vq")
+            if vq['max'] <= 2 and vq['calls'] >= 3: ok(f"Орион: запросы живого голоса — не больше двух одновременно ({vq['calls']} запросов)")
+            else: fail('Орион: одновременные запросы голоса', str(vq))
+            pg.evaluate("window.mlVoice=window.__mlVoiceOrig; document.querySelector('.or-cap')&&document.querySelector('.or-cap').click()")
             # живой голос: числа словами в нужном падеже («до семидесяти четырёх тысяч», «к … тысячам»), «тыс.», «млн»
             sp = pg.evaluate("[Mascot.debug.spoken('Биткоин держится около 74 тысяч долларов.'), Mascot.debug.spoken('Упал до $74 тыс. и отскочил к 76 000 $.'), Mascot.debug.spoken('Оборот 1,2 млн долларов, рост более 2%.'), Mascot.debug.spoken('Серия 21 месяц, 41 покупка, 2 тысячи гривен.')]")
             want = ['около семидесяти четырёх тысяч долларов.', 'до семидесяти четырёх тысяч долларов и отскочил к семидесяти шести тысячам долларов.', 'одна целая две десятых миллиона долларов, рост более двух процентов.', 'двадцать один месяц, сорок одна покупка, две тысячи гривен.']

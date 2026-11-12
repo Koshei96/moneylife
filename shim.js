@@ -621,7 +621,7 @@
     try {
       const r = await fetch(CFG.supabaseUrl.replace(/\/$/, '') + '/functions/v1/orion-voice', { method: 'POST', signal: ctl ? ctl.signal : undefined,
         headers: { Authorization: 'Bearer ' + ses.access_token, apikey: CFG.supabaseKey, 'content-type': 'application/json' }, body: JSON.stringify({ text, prev: (ctx && ctx.prev) || '', next: (ctx && ctx.next) || '' }) });
-      if (!r.ok || !/audio/.test(r.headers.get('content-type') || '')) { let e = ''; try { e = (await r.json()).error || ''; } catch (x) {} return { error: e || ('http ' + r.status) }; }
+      if (!r.ok || !/audio/.test(r.headers.get('content-type') || '')) { let e = ''; try { const j = await r.json(); e = j.error || ''; if (e === 'tts' && /quota|credits/i.test(String(j.detail || ''))) e = 'quota'; } catch (x) {} return { error: e || ('http ' + r.status) }; }
       return { audio: await r.arrayBuffer() };
     } catch (e) { return null; } finally { clearTimeout(t); }
   };

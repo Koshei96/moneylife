@@ -306,7 +306,7 @@
       const r = await reqs[i];
       if (TTS.cur !== cur) return true;   /* пока ждали — речь сменилась: это не ошибка голоса */
       if (!r || !r.audio) {
-        if (!played) { VO.off = now() + (r && r.error && r.error !== 'net' ? 600 : 20); TTS.lastErr = (r && r.error) || 'net'; return false; }   /* лимит или настройки — 10 минут голос телефона; сеть — 20 секунд */
+        if (!played) { const e = (r && r.error) || 'net', long = /^(day_limit|month_limit|not_configured|auth|quota)$/.test(e); VO.off = now() + (long ? 600 : 15); TTS.lastErr = e; return false; }   /* лимит или настройки — 10 минут голос телефона; занятость/сеть — 15 секунд   /* лимит или настройки — 10 минут голос телефона; сеть — 20 секунд */
         continue;
       }
       let audio; try { audio = await c.decodeAudioData(r.audio.slice(0)); } catch (e) { if (!played) { VO.off = now() + 600; TTS.lastErr = 'decode'; return false; } continue; }
@@ -482,7 +482,11 @@
     return s.replace(/\s+/g, ' ').replace(/\s+([,.!?])/g, '$1').trim();
   }
   const spoken = t => (UK ? spokenUk(t) : spokenRu(t));
-  async function voFetch(text, ctx) { try { return await A.voice(text, ctx || {}); } catch (e) { return null; } }
+  /* не больше двух запросов голоса одновременно: ElevenLabs отказывает, если их больше (12.11.2026 — из-за этого Орион переходил на голос телефона) */
+  const VQ = { n: 0, q: [] };
+  const vqTake = () => new Promise(res => { if (VQ.n < 2) { VQ.n++; res(); } else VQ.q.push(res); });
+  const vqFree = () => { const nx = VQ.q.shift(); if (nx) nx(); else VQ.n--; };
+  async function voFetch(text, ctx) { await vqTake(); try { return await A.voice(text, ctx || {}); } catch (e) { return null; } finally { vqFree(); } }
   /* короткие фразы-«подхваты» заранее в памяти телефона — Орион отзывается сразу, пока думает над ответом */
   const FILL = { news: 'Секунду, смотрю новости.', think: 'Секунду.' };
   let preloaded = false;
@@ -978,6 +982,8 @@
     if (!host) return false;
     if (!document.getElementById('ms-css')) { const st = document.createElement('style'); st.id = 'ms-css'; st.textContent = CSS; document.head.appendChild(st); }
     ST.reduced = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
+    /* звук на телефоне разрешается только после касания: включаем аудио при любом касании экрана, чтобы Орион мог сказать о записи, сделанной формой (12.11.2026) */
+    ['pointerdown', 'touchend', 'keydown'].forEach(ev => document.addEventListener(ev, () => { if (A.voice && ST.sound) voUnlock(); }, { capture: true, passive: true }));
     ST.asked = !!lsGet('or-asked', 0);
     host.querySelectorAll('.ms-cv,.ms-hit,.ms-sign,.ms-still').forEach(c => c.remove());
     cv = document.createElement('canvas'); cv.className = 'ms-cv'; cv.setAttribute('aria-hidden', 'true');

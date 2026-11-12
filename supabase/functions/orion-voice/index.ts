@@ -74,12 +74,19 @@ Deno.serve(async (req) => {
   if (mn + text.length > MONTH_CHARS) return json({ error: 'month_limit' }, 429);
 
   /* 3. озвучка ElevenLabs */
-  const r = await fetch('https://api.elevenlabs.io/v1/text-to-speech/' + encodeURIComponent(VOICE) + '?output_format=mp3_44100_64', {
-    method: 'POST',
-    headers: { 'xi-api-key': KEY, 'content-type': 'application/json', accept: 'audio/mpeg' },
-    body: JSON.stringify({ text, model_id: MODEL, voice_settings: VS, ...(prev ? { previous_text: prev } : {}), ...(next ? { next_text: next } : {}) })
-  });
-  if (!r.ok) { let detail = ''; try { detail = (await r.text()).slice(0, 200); } catch (_) { /* пусто */ } return json({ error: 'tts', status: r.status, detail }, 502); }
+  /* ElevenLabs отвечает 429, когда одновременно идёт больше запросов, чем позволяет тариф, — ждём и пробуем ещё (до 4 раз) */
+  let r: Response | null = null;
+  for (let i = 0; i < 4; i++) {
+    r = await fetch('https://api.elevenlabs.io/v1/text-to-speech/' + encodeURIComponent(VOICE) + '?output_format=mp3_44100_64', {
+      method: 'POST',
+      headers: { 'xi-api-key': KEY, 'content-type': 'application/json', accept: 'audio/mpeg' },
+      body: JSON.stringify({ text, model_id: MODEL, voice_settings: VS, ...(prev ? { previous_text: prev } : {}), ...(next ? { next_text: next } : {}) })
+    });
+    if (r.status !== 429 || i === 3) break;
+    await r.body?.cancel().catch(() => null);
+    await new Promise(res => setTimeout(res, 400 + i * 500 + Math.random() * 300));
+  }
+  if (!r || !r.ok) { let detail = ''; try { detail = (await r!.text()).slice(0, 300); } catch (_) { /* пусто */ } console.error('orion-voice: tts', r && r.status, detail); return json({ error: 'tts', status: r && r.status, detail }, 502); }
   const audio = new Uint8Array(await r.arrayBuffer());
 
   /* 4. сохраняем фразу и счётчики (ошибка записи не мешает ответу) */
