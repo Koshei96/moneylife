@@ -1567,9 +1567,9 @@ html.lite .view.enter{animation:vin .2s var(--ease)}
 
 <div class="toast" id="toast" role="status"><span id="toastMsg"></span><button type="button" id="toastBtn" hidden></button></div>
 
-<script src="config.js?v=20261112030000"></script>
+<script src="config.js?v=20261112031000"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="shim.js?v=20261112030000"></script>
+<script src="shim.js?v=20261112031000"></script>
 <script>
 /* ===== основа ===== */
 const $=id=>document.getElementById(id);
@@ -2628,7 +2628,7 @@ function obDraw(){const st=OB.step,N=4,dots='<div class="ob-dots" aria-hidden="t
     <div class="field"><span>Валюта</span><div class="seg" id="obAmtCur"><button type="button" data-c="UAH" aria-pressed="${OB.amtCur==='UAH'}">₴</button><button type="button" data-c="USD" aria-pressed="${OB.amtCur==='USD'}">$</button></div></div></div>
     <label class="field"><span>В какой день обычно пополняешь биржу?</span><select id="obDay"><option value="">Не важно</option>${Array.from({length:28},(_,i)=>`<option value="${i+1}"${+OB.day===i+1?' selected':''}>${i+1}-го числа</option>`).join('')}</select></label>
     <div class="ob-calc" id="obCalc">${a?(ds<1?`Каждый месяц: <b>${obMoney(a*ds)}</b> на покупки по плану и <b>${obMoney(a*(1-ds))}</b> в резерв для докупок.`:`Каждый месяц: <b>${obMoney(a)}</b> на покупки — BTC ${t.split.BTC}% и ETH ${t.split.ETH}%.`):'Впиши сумму — покажу, как она разделится.'}</div>
-    <p class="ob-note">Можно пропустить и вписать позже в «Настройках».</p>${nav('Дальше',true)}`;}
+    <p class="ob-note" id="obRough">Точной суммы нет — впиши примерную, потом всё легко поправить в «Настройках». Можно и пропустить.</p>${nav('Дальше',true)}`;}
   else if(st===3){h=`${top}<h2 id="obTitle">Что у тебя уже есть?</h2><p class="ob-lead">Добавь монеты, которые уже купил, — портфель сразу покажет их стоимость. Если только начинаешь — просто нажми «Готово».</p>
     <div class="ob-coins" id="obCoins">${OB.coins.map((c,i)=>`<div class="ob-coin" data-i="${i}"><label class="field"><span>Монета</span><input type="text" class="ob-sym" maxlength="12" placeholder="например, BTC" autocomplete="off" value="${esc(c.sym)}"></label><label class="field"><span>Количество</span><input type="number" class="ob-qty" min="0" step="any" inputmode="decimal" value="${esc(c.qty)}"></label><button type="button" class="ib ob-del" aria-label="Убрать монету"${OB.coins.length<2?' hidden':''}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>`).join('')}</div>
     <button type="button" class="btn ghost" id="obAdd">+ Ещё монета</button>
@@ -2840,7 +2840,7 @@ function msSync(x){MSC.last=x;if(!msApply())return;if(!S.ready||document.getElem
   if(window.Mascot){try{window.Mascot.sync(msPayload(x));}catch(e){}}else msLoad();}
 function msLoad(){if(MSC.loading||MSC.failed)return;MSC.loading=true;
   const add=(src,ok)=>{try{const s=document.createElement('script');s.src=src;s.async=true;s.onload=ok;s.onerror=()=>{MSC.failed=true;};document.head.appendChild(s);}catch(e){MSC.failed=true;}};
-  const boot=()=>add('mascot.js?v=20261112030000',()=>{try{if(window.Mascot&&window.Mascot.init({host:$('mascot'),app:{buzz,askName:()=>{if(window.MLX&&MLX.askName)MLX.askName();},addAlert:(y,v)=>window.MLX&&MLX.addAlert?MLX.addAlert(y,v):null,voice:(t,x)=>window.mlVoice?window.mlVoice(t,x):null,ask:(q,y,x)=>window.mlAsk?window.mlAsk(q,y,x):null}})&&MSC.last&&$('ob').hidden&&!document.getElementById('mlAuth'))window.Mascot.sync(msPayload(MSC.last));}catch(e){}});
+  const boot=()=>add('mascot.js?v=20261112031000',()=>{try{if(window.Mascot&&window.Mascot.init({host:$('mascot'),app:{buzz,askName:()=>{if(window.MLX&&MLX.askName)MLX.askName();},addAlert:(y,v)=>window.MLX&&MLX.addAlert?MLX.addAlert(y,v):null,voice:(t,x)=>window.mlVoice?window.mlVoice(t,x):null,ask:(q,y,x)=>window.mlAsk?window.mlAsk(q,y,x):null}})&&MSC.last&&$('ob').hidden&&!document.getElementById('mlAuth'))window.Mascot.sync(msPayload(MSC.last));}catch(e){}});
   setTimeout(boot,300);}
 function render(){const D=derive();renderHeader();renderHome(D);renderGrowth();renderCoins(D);renderStrategy(D);renderActivity();renderD14();if(window.MLX)try{MLX.render(D);}catch(e){console.error(e);}earnNudge();if(cvSym&&$('coinSheet').classList.contains('open'))renderCoinView();}
 document.body.classList.add('loading');
@@ -2924,7 +2924,7 @@ render();requestAnimationFrame(inkMove);setTimeout(inkMove,600);
     sy=null;swipe=null;pull=0;armed=false;},{passive:true});
 })();
 </script>
-<script src="plus.js?v=20261112030000"></script>
-<script src="wins.js?v=20261112030000"></script>
+<script src="plus.js?v=20261112031000"></script>
+<script src="wins.js?v=20261112031000"></script>
 </body>
 </html>

@@ -510,6 +510,13 @@ def run_browser():
             low = []
             for i in range(3):
                 if i == 1: pg.click('[data-tpl="simple"]'); pg.wait_for_timeout(200)   # новичок выбирает «Простой»
+                if i == 2:   # 12.11: шаг суммы — подсказка «можно примерную, потом поправить» видна (только текст, без обещаний доходности)
+                    rt = pg.evaluate("(()=>{const e=document.getElementById('obRough');if(!e)return '';const r=e.getBoundingClientRect();return r.height>0&&r.bottom<=innerHeight?e.textContent.trim():'скрыта: '+e.textContent.trim()})()")
+                    if rt.startswith('Точной суммы нет — впиши примерную') and 'легко поправить' in rt: ok(f'знакомство, шаг суммы: видна подсказка «{rt}»')
+                    else: fail('знакомство, шаг суммы: подсказка про примерную сумму', repr(rt))
+                    for th in ['dark', 'light']:
+                        pg.evaluate(f"document.documentElement.setAttribute('data-theme','{th}')"); pg.wait_for_timeout(400)
+                        shot(pg, f'fix-demo-{th}')
                 for th in ['dark', 'light']:
                     pg.evaluate(f"document.documentElement.setAttribute('data-theme','{th}')"); pg.wait_for_timeout(80)
                     low += [f'{th}: {r:.2f}' for r in pg.evaluate(CONTRAST, '#ob .ob-note') if r < 4.5]
