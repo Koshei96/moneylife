@@ -1209,6 +1209,17 @@ def run_browser():
             else: fail('складки: запоминание', str(st2))
         scenario('Складки', {'session': True, 'docs': SEED}, s_folds)
 
+        # --- панель вкладок (12.11.2026): у активной вкладки значок поднимается в круге, подпись видна только у неё
+        def s_orb(pg, n):
+            pg.click('[data-tab="coins"]'); pg.wait_for_timeout(1000)
+            r = pg.evaluate("""(()=>{const a=document.querySelector('.tab[data-tab="coins"] .tab-orb').getBoundingClientRect(),b=document.querySelector('.tab[data-tab="home"] .tab-orb').getBoundingClientRect(),
+              la=getComputedStyle(document.querySelector('.tab[data-tab="coins"] .tab-lbl')).opacity,lb=getComputedStyle(document.querySelector('.tab[data-tab="home"] .tab-lbl')).opacity,
+              nav=document.querySelector('nav.tabs').getBoundingClientRect();return {up:b.top-a.top,la:+la,lb:+lb,above:nav.top-a.top}})()""")
+            if r['up'] > 15 and r['la'] > .9 and r['lb'] < .1 and r['above'] > 5: ok('панель вкладок: значок активной вкладки поднят в круге над панелью, подпись только у неё')
+            else: fail('панель вкладок: шар', str(r))
+            shot(pg, 'tabs-orb')
+        scenario('Панель вкладок', {'session': True, 'docs': SEED}, s_orb)
+
         # --- надёжность интерфейса (12.11.2026): ошибки, найденные владельцем на телефоне, не должны вернуться
         def s_ui(pg, errs):
             pg.wait_for_timeout(2500)

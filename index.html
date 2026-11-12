@@ -11,7 +11,7 @@ addEventListener('error',function(e){if(e&&e.message)add(e.message,(e.filename||
 addEventListener('unhandledrejection',function(e){var r=e&&e.reason;add(r&&(r.message||r)||'отклонённое обещание','promise');});
 window.mlErrLog=function(){try{return JSON.parse(localStorage.getItem(K)||'[]');}catch(e){return [];}};window.mlErrAdd=add;})();
 </script>
-<script src="i18n.js?v=20261112100000"></script>
+<script src="i18n.js?v=20261112110000"></script>
 <title>MoneyLife</title>
 <meta name="theme-color" content="#06040e">
 <script>/* тема до отрисовки: «Авто» — как в телефоне, иначе выбор из настроек */
@@ -1294,6 +1294,25 @@ html.lite .view.enter{animation:vin .2s var(--ease)}
 .card .fold-tab>.sec-h::after{display:none}
 @media (prefers-reduced-motion:reduce){.fold *,.fold-b{transition:none!important;animation:none!important}}
 </style>
+<style id="v8">
+/* ===== «Волшебная» панель вкладок (12.11.2026): значок активной вкладки поднимается в круге над панелью, под ним — подпись ===== */
+.tab-ink{display:none!important}
+.tab{height:56px;padding:0 0 3px;gap:0;justify-content:flex-end}
+.tab-orb{position:relative;width:44px;height:44px;margin-bottom:6px;border-radius:50%;display:grid;place-items:center;background:transparent;
+  transition:transform .6s cubic-bezier(.34,1.56,.64,1),background-color .35s ease,box-shadow .45s ease}
+.tab-orb::after{content:"";position:absolute;inset:-1px;border-radius:50%;border:2px solid var(--fg);opacity:0;pointer-events:none}
+.tab-lbl{position:absolute;left:-4px;right:-4px;bottom:3px;text-align:center;font-size:11px;line-height:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--fg);
+  opacity:0;transform:translateY(8px) scale(.9);transition:opacity .25s ease,transform .5s cubic-bezier(.34,1.56,.64,1)}
+.tab[aria-current="page"] .tab-orb{transform:translateY(-22px);background:var(--bg);
+  box-shadow:inset 0 0 0 2px color-mix(in srgb,var(--fg) 78%,transparent),0 0 0 5px var(--bg),0 10px 22px -8px #000a}
+.tab[aria-current="page"] .tab-orb::after{animation:orbPulse .75s ease-out .18s}
+.tab[aria-current="page"] .tab-lbl{opacity:1;transform:none;transition-delay:.12s,.08s}
+.tab[aria-current="page"] svg{color:var(--fg)}
+.tab .spark{top:6px}
+@keyframes orbPulse{0%{opacity:.55;transform:scale(1)}100%{opacity:0;transform:scale(1.55)}}
+[data-theme="light"] .tab[aria-current="page"] .tab-orb{box-shadow:inset 0 0 0 2px color-mix(in srgb,var(--fg) 70%,transparent),0 0 0 5px var(--bg),0 10px 22px -10px #0004}
+@media (prefers-reduced-motion:reduce){.tab-orb,.tab-lbl{transition:none}.tab[aria-current="page"] .tab-orb::after{animation:none}}
+</style>
 </head>
 <body class="loading">
 
@@ -1414,6 +1433,9 @@ html.lite .view.enter{animation:vin .2s var(--ease)}
   <button type="button" class="tab" data-tab="strategy"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5l6 6 4-3 6 8"/><path d="M15 16h5v-5"/></svg>Стратегия</button>
   <button type="button" class="tab" data-tab="activity"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>Активность</button>
 </div></nav>
+<script>/* панель вкладок: значок — в «шар», который поднимается у активной вкладки; подпись — отдельно, видна у активной */
+document.querySelectorAll('nav.tabs .tab').forEach(b=>{const v=b.querySelector('svg');if(!v||b.querySelector('.tab-orb'))return;const o=document.createElement('span');o.className='tab-orb';b.insertBefore(o,v);o.appendChild(v);
+  const l=document.createElement('span');l.className='tab-lbl';[...b.childNodes].filter(n=>n.nodeType===3&&n.nodeValue.trim()).forEach(n=>l.appendChild(n));b.appendChild(l);});</script>
 
 <div class="scrim" id="scrim"></div>
 
@@ -1637,9 +1659,9 @@ html.lite .view.enter{animation:vin .2s var(--ease)}
 
 <div class="toast" id="toast" role="status"><span id="toastMsg"></span><button type="button" id="toastBtn" hidden></button></div>
 
-<script src="config.js?v=20261112100000"></script>
+<script src="config.js?v=20261112110000"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="shim.js?v=20261112100000"></script>
+<script src="shim.js?v=20261112110000"></script>
 <script>
 /* ===== основа ===== */
 const $=id=>document.getElementById(id);
@@ -2919,7 +2941,7 @@ function msSync(x){MSC.last=x;if(!msApply())return;if(!S.ready||document.getElem
   if(window.Mascot){try{window.Mascot.sync(msPayload(x));}catch(e){}}else msLoad();}
 function msLoad(){if(MSC.loading||MSC.failed)return;MSC.loading=true;
   const add=(src,ok)=>{try{const s=document.createElement('script');s.src=src;s.async=true;s.onload=ok;s.onerror=()=>{MSC.failed=true;};document.head.appendChild(s);}catch(e){MSC.failed=true;}};
-  const boot=()=>add('mascot.js?v=20261112100000',()=>{try{if(window.Mascot&&window.Mascot.init({host:$('mascot'),app:{buzz,askName:()=>{if(window.MLX&&MLX.askName)MLX.askName();},addAlert:(y,v)=>window.MLX&&MLX.addAlert?MLX.addAlert(y,v):null,voice:(t,x)=>window.mlVoice?window.mlVoice(t,x):null,ask:(q,y,x)=>window.mlAsk?window.mlAsk(q,y,x):null}})&&MSC.last&&$('ob').hidden&&!document.getElementById('mlAuth'))window.Mascot.sync(msPayload(MSC.last));}catch(e){}});
+  const boot=()=>add('mascot.js?v=20261112110000',()=>{try{if(window.Mascot&&window.Mascot.init({host:$('mascot'),app:{buzz,askName:()=>{if(window.MLX&&MLX.askName)MLX.askName();},addAlert:(y,v)=>window.MLX&&MLX.addAlert?MLX.addAlert(y,v):null,voice:(t,x)=>window.mlVoice?window.mlVoice(t,x):null,ask:(q,y,x)=>window.mlAsk?window.mlAsk(q,y,x):null}})&&MSC.last&&$('ob').hidden&&!document.getElementById('mlAuth'))window.Mascot.sync(msPayload(MSC.last));}catch(e){}});
   setTimeout(boot,300);}
 function render(){const D=derive();renderHeader();renderHome(D);renderGrowth();renderCoins(D);renderStrategy(D);renderActivity();renderD14();if(window.MLX)try{MLX.render(D);}catch(e){console.error(e);}earnNudge();if(cvSym&&$('coinSheet').classList.contains('open'))renderCoinView();}
 document.body.classList.add('loading');
@@ -3003,8 +3025,8 @@ render();requestAnimationFrame(inkMove);setTimeout(inkMove,600);
     sy=null;swipe=null;pull=0;armed=false;},{passive:true});
 })();
 </script>
-<script src="plus.js?v=20261112100000"></script>
-<script src="wins.js?v=20261112100000"></script>
-<script src="folds.js?v=20261112100000"></script>
+<script src="plus.js?v=20261112110000"></script>
+<script src="wins.js?v=20261112110000"></script>
+<script src="folds.js?v=20261112110000"></script>
 </body>
 </html>
