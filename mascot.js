@@ -252,8 +252,16 @@
     inp.connect(low); low.connect(pres); pres.connect(comp); comp.connect(dry); comp.connect(conv); conv.connect(wet);
     dry.connect(out); wet.connect(out); out.connect(an); an.connect(c.destination);
     an.fftSize = 512; VO.data = new Uint8Array(an.fftSize);
-    Object.assign(VO, { ctx: c, inp, wet: conv, an });
+    Object.assign(VO, { ctx: c, inp, wet: conv, an, low, pres, comp, dry, wg: wet });
+    voFx();
     return c;
+  }
+  /* «шлем» (низ, присутствие, сжатие, эхо зала) — только по выключателю; без него голос звучит как на сайте ElevenLabs */
+  function voFx() {
+    if (!VO.ctx) return; const on = !!ST.fx;
+    VO.low.gain.value = on ? 3.5 : 0; VO.pres.gain.value = on ? 2.5 : 0;
+    VO.comp.threshold.value = on ? -22 : -6; VO.comp.ratio.value = on ? 3 : 1.5;
+    VO.dry.gain.value = on ? 0.92 : 1; VO.wg.gain.value = on ? 0.17 : 0;
   }
   function voUnlock() { const c = voCtx(); if (c && c.state === 'suspended') c.resume().catch(() => {}); }
   /* тихий звук включения: две короткие ноты с эхом */
@@ -296,7 +304,7 @@
       }
       let audio; try { audio = await c.decodeAudioData(r.audio.slice(0)); } catch (e) { if (!played) { VO.off = now() + 600; TTS.lastErr = 'decode'; return false; } continue; }
       if (TTS.cur !== cur) return true;
-      if (!played) { at = c.currentTime + 0.03; chime(at); at += 0.22; TTS.engine = 'premium'; if (cur.cap) cur.cap(); }
+      if (!played) { at = c.currentTime + 0.03; if (ST.fx) { chime(at); at += 0.22; } TTS.engine = 'premium'; if (cur.cap) cur.cap(); }
       const src = c.createBufferSource(); src.buffer = audio; src.connect(VO.inp);
       const st = Math.max(at, c.currentTime + 0.01);
       src.onended = () => { if (VO.src === src) VO.src = null; };
@@ -783,7 +791,7 @@
   function sync(info) {
     if (!info || !info.S || !info.D) return;
     const S = info.S, D = info.D, P = info.P || {};
-    ST.hide = !!P.hide; ST.sound = P.msVoice !== false; ST.go = !!info.go; ST.fresh = info.fresh || 0; ST.money = info.money || ST.money;
+    ST.hide = !!P.hide; ST.sound = P.msVoice !== false; if (ST.fx !== !!P.msFx) { ST.fx = !!P.msFx; voFx(); } ST.go = !!info.go; ST.fresh = info.fresh || 0; ST.money = info.money || ST.money;
     ST.name = String(P.name || '').trim().slice(0, 24);
     if (!ST.sound && TTS.ok && TTS.cur) try { speechSynthesis.cancel(); } catch (e) {}
     ST.S = S; ST.D = D;

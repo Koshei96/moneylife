@@ -1504,6 +1504,7 @@ html.lite .view.enter{animation:vin .2s var(--ease)}
       <div class="setrow"><div><b>Вибрация</b><small>Отклик на нажатия</small></div><button type="button" class="switch" id="swHaptic" role="switch" aria-checked="true" aria-label="Вибрация"></button></div>
       <div class="setrow"><div><b>Орион — голосовой помощник</b><small>Сфера рядом с суммой: докладывает о событиях, по нажатию — сводка за день</small></div><button type="button" class="switch" id="swMascot" role="switch" aria-checked="true" aria-label="Орион — голосовой помощник"></button></div>
       <div class="setrow"><div><b>Голос Ориона</b><small>Живой голос, без интернета — голос телефона. Выключено — только субтитры</small></div><button type="button" class="switch" id="swMsSound" role="switch" aria-checked="true" aria-label="Голос Ориона"></button></div>
+      <div class="setrow"><div><b>Эффект «шлема»</b><small>Плотный низ, эхо зала и звук включения. Выключено — голос как на сайте ElevenLabs</small></div><button type="button" class="switch" id="swMsFx" role="switch" aria-checked="false" aria-label="Эффект шлема"></button></div>
       <button type="button" class="setrow setbtn" data-x="orname"><div><b>Как Орион обращается к вам</b><small id="orNameVal">не указано</small></div><span class="chev" aria-hidden="true">›</span></button>
       <div class="setrow" id="d14Row"><div><b>Карточка «14 дней»</b><small>Короткие подсказки о приложении на главной</small></div><button type="button" class="switch" id="swD14" role="switch" aria-checked="true" aria-label="Карточка «14 дней»"></button></div>
     </div>
@@ -1564,9 +1565,9 @@ html.lite .view.enter{animation:vin .2s var(--ease)}
 
 <div class="toast" id="toast" role="status"><span id="toastMsg"></span><button type="button" id="toastBtn" hidden></button></div>
 
-<script src="config.js?v=20261112011500"></script>
+<script src="config.js?v=20261112072000"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="shim.js?v=20261112011500"></script>
+<script src="shim.js?v=20261112072000"></script>
 <script>
 /* ===== основа ===== */
 const $=id=>document.getElementById(id);
@@ -1612,7 +1613,7 @@ const I={
 
 /* ===== состояние и настройки ===== */
 const S={settings:{},cycle:null,market:null,altplan:null,screen:null,screenreq:null,tx:[],alerts:[],history:[],live:{prices:{},change:{},spark:{},peak:{},at:null,status:'wait',code:null},ready:false};
-const P=(()=>{const d={cur:'USD',theme:'system',hide:false,dust:true,sound:true,haptic:true,sort:'value',cper:'24h',mascot:true,msVoice:true};try{return Object.assign(d,JSON.parse(localStorage.getItem('cp-prefs2')||'{}'));}catch(e){return d;}})();
+const P=(()=>{const d={cur:'USD',theme:'system',hide:false,dust:true,sound:true,haptic:true,sort:'value',cper:'24h',mascot:true,msVoice:true,msFx:false};try{return Object.assign(d,JSON.parse(localStorage.getItem('cp-prefs2')||'{}'));}catch(e){return d;}})();
 /* тема: data-theme на <html>, цвет строки состояния; «Авто» следит за телефоном */
 function applyTheme(){const t=P.theme||'system',d=t==='system'?(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark'):t;document.documentElement.setAttribute('data-theme',d);const m=document.querySelector('meta[name=theme-color]');if(m)m.content=d==='light'?'#f5f2fc':'#06040e';}
 try{matchMedia('(prefers-color-scheme: light)').addEventListener('change',()=>{if((P.theme||'system')==='system'){applyTheme();try{render()}catch(e){}}});}catch(e){}
@@ -2575,13 +2576,13 @@ $('eDel').addEventListener('click',delTx);
 /* ===== настройки ===== */
 const swSet=(id,on)=>$(id).setAttribute('aria-checked',String(!!on));
 function fillSettings(){[...$('themeSeg').children].forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.th===(P.theme||'system'))));[...$('curSeg').children].forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.c===P.cur)));
-  swSet('swHide',P.hide);swSet('swDust',P.dust);swSet('swSound',P.sound);swSet('swHaptic',P.haptic);swSet('swMascot',P.mascot!==false);swSet('swMsSound',P.msVoice!==false);swSet('swD14',!d14Load().hid);$('d14Row').hidden=!window.mlUser;
+  swSet('swHide',P.hide);swSet('swDust',P.dust);swSet('swSound',P.sound);swSet('swHaptic',P.haptic);swSet('swMascot',P.mascot!==false);swSet('swMsSound',P.msVoice!==false);swSet('swMsFx',!!P.msFx);swSet('swD14',!d14Load().hid);$('d14Row').hidden=!window.mlUser;
   const sp=split();$('stB').value=sp.BTC;$('stE').value=sp.ETH;$('stA').value=sp.ALT;$('stCap').value=S.settings.capPct||20;$('stDep').value=Math.round(depShare()*100);$('stAlt').value=S.settings.altOfMonth||'';{const b=S.settings.budget;$('stIncL').textContent=b?'В крипту в месяц, '+(b.cur==='USD'?'$':'грн'):'Доход в месяц, грн';$('stInc').value=b?(b.amount||''):(S.settings.incomeMonthlyUah||'');}swSet('swLadder',ladderOn());$('stK2').value=k2Cfg().pct;$('stAltCap').value=altCapPct();$('setErr').textContent='';
   const U=window.mlUser;$('accInfo').innerHTML=U?`<div><span>Почта</span><span>${esc(U.email||'—')}</span></div><div><span>Вход</span><span>${U.provider==='google'?'через Google':'почта и пароль'}</span></div>`:'<div><span>Аккаунт</span><span>—</span></div>';$('delBtn').hidden=!(window.ML_CONFIG&&ML_CONFIG.accountDelete);
   const L=S.live;$('dataInfo').innerHTML=`<div><span>Курс доллара</span><span>${rate()?nf(rate(),2)+' грн за $':'—'}</span></div>${S.settings.usdUahSrc?`<div><span>Откуда курс</span><span>${esc(S.settings.usdUahSrc)}${S.settings.usdUahAt?' · '+dShort(S.settings.usdUahAt)+', '+tHM(S.settings.usdUahAt):''}</span></div>`:''}${S.settings.usdUahNbu?`<div><span>Курс НБУ</span><span>${nf(+S.settings.usdUahNbu,2)} грн</span></div>`:''}<div><span>Живые цены</span><span>${L.status==='ok'?'CoinGecko · '+tHM(L.at):L.status==='stale'?'с задержкой':LIVE_MSG[L.code]||'нет'}</span></div><div><span>Монеты и логотипы</span><span>CoinGecko${DIR.n?' · '+nf(DIR.n,0)+' в поиске':''}</span></div><div><span>Последняя проверка</span><span>${S.market&&S.market.updatedAt?dShort(S.market.updatedAt)+', '+tHM(S.market.updatedAt):'—'}</span></div><div><span>Проверка рынка</span><span>8:41 и 20:41</span></div><div><span>Записей</span><span>${S.tx.length}</span></div>`;}
 function openSettings(toStrat){fillSettings();openSheet('setSheet');const b=$('setSheet').querySelector('.sh-body');if(b)b.scrollTop=0;if(toStrat)setTimeout(()=>{const el=$('stratLbl');if(el&&el.scrollIntoView)el.scrollIntoView({behavior:reduced?'auto':'smooth',block:'start'});},380);}
 $('setBtn').addEventListener('click',()=>openSettings(false));
-const SW={swHide:'hide',swDust:'dust',swSound:'sound',swHaptic:'haptic',swMascot:'mascot',swMsSound:'msVoice'};
+const SW={swHide:'hide',swDust:'dust',swSound:'sound',swHaptic:'haptic',swMascot:'mascot',swMsSound:'msVoice',swMsFx:'msFx'};
 Object.keys(SW).forEach(id=>$(id).addEventListener('click',()=>{const k=SW[id];P[k]=!P[k];savePrefs();swSet(id,P[k]);if(k==='sound'&&P.sound)play('tick');if(k==='haptic')buzz(10);render();}));
 $('themeSeg').addEventListener('click',e=>{const b=e.target.closest('[data-th]');if(!b)return;P.theme=b.dataset.th;savePrefs();applyTheme();play('tick');fillSettings();render();});
 $('curSeg').addEventListener('click',e=>{const b=e.target.closest('[data-c]');if(!b)return;if(b.dataset.c==='UAH'&&!rate()){toast('Курс гривны ещё не загружен');return;}P.cur=b.dataset.c;savePrefs();play('tick');fillSettings();render();});
@@ -2835,7 +2836,7 @@ function msSync(x){MSC.last=x;if(!msApply())return;if(!S.ready||document.getElem
   if(window.Mascot){try{window.Mascot.sync(msPayload(x));}catch(e){}}else msLoad();}
 function msLoad(){if(MSC.loading||MSC.failed)return;MSC.loading=true;
   const add=(src,ok)=>{try{const s=document.createElement('script');s.src=src;s.async=true;s.onload=ok;s.onerror=()=>{MSC.failed=true;};document.head.appendChild(s);}catch(e){MSC.failed=true;}};
-  const boot=()=>add('mascot.js?v=20261112011500',()=>{try{if(window.Mascot&&window.Mascot.init({host:$('mascot'),app:{buzz,askName:()=>{if(window.MLX&&MLX.askName)MLX.askName();},addAlert:(y,v)=>window.MLX&&MLX.addAlert?MLX.addAlert(y,v):null,voice:(t,x)=>window.mlVoice?window.mlVoice(t,x):null,ask:(q,y,x)=>window.mlAsk?window.mlAsk(q,y,x):null}})&&MSC.last&&$('ob').hidden&&!document.getElementById('mlAuth'))window.Mascot.sync(msPayload(MSC.last));}catch(e){}});
+  const boot=()=>add('mascot.js?v=20261112072000',()=>{try{if(window.Mascot&&window.Mascot.init({host:$('mascot'),app:{buzz,askName:()=>{if(window.MLX&&MLX.askName)MLX.askName();},addAlert:(y,v)=>window.MLX&&MLX.addAlert?MLX.addAlert(y,v):null,voice:(t,x)=>window.mlVoice?window.mlVoice(t,x):null,ask:(q,y,x)=>window.mlAsk?window.mlAsk(q,y,x):null}})&&MSC.last&&$('ob').hidden&&!document.getElementById('mlAuth'))window.Mascot.sync(msPayload(MSC.last));}catch(e){}});
   setTimeout(boot,300);}
 function render(){const D=derive();renderHeader();renderHome(D);renderGrowth();renderCoins(D);renderStrategy(D);renderActivity();renderD14();if(window.MLX)try{MLX.render(D);}catch(e){console.error(e);}earnNudge();if(cvSym&&$('coinSheet').classList.contains('open'))renderCoinView();}
 document.body.classList.add('loading');
@@ -2919,7 +2920,7 @@ render();requestAnimationFrame(inkMove);setTimeout(inkMove,600);
     sy=null;swipe=null;pull=0;armed=false;},{passive:true});
 })();
 </script>
-<script src="plus.js?v=20261112011500"></script>
-<script src="wins.js?v=20261112011500"></script>
+<script src="plus.js?v=20261112072000"></script>
+<script src="wins.js?v=20261112072000"></script>
 </body>
 </html>
