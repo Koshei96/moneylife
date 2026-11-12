@@ -306,7 +306,7 @@
       const r = await reqs[i];
       if (TTS.cur !== cur) return true;   /* пока ждали — речь сменилась: это не ошибка голоса */
       if (!r || !r.audio) {
-        if (!played) { const e = (r && r.error) || 'net', long = /^(day_limit|month_limit|not_configured|auth|quota)$/.test(e); VO.off = now() + (long ? 600 : 15); TTS.lastErr = e; return false; }   /* лимит или настройки — 10 минут голос телефона; занятость/сеть — 15 секунд   /* лимит или настройки — 10 минут голос телефона; сеть — 20 секунд */
+        if (!played) { const e = (r && r.error) || 'net', long = /^(day_limit|month_limit|not_configured|auth|quota)$/.test(e); VO.off = now() + (long ? 600 : 15); TTS.lastErr = e; return false; }   /* лимит, кончились символы или настройки — 10 минут голос телефона; занятость/сеть — 15 секунд */
         continue;
       }
       let audio; try { audio = await c.decodeAudioData(r.audio.slice(0)); } catch (e) { if (!played) { VO.off = now() + 600; TTS.lastErr = 'decode'; return false; } continue; }

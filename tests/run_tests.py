@@ -1258,7 +1258,18 @@ def run_browser():
             sx = pg.evaluate("(()=>{const m=new DOMMatrix(getComputedStyle(document.querySelector('.thsw-knob')).transform);return Math.abs(m.a-1)<0.01})()")
             if sx: ok('тема: кружок переезжает без растяжения')
             else: fail('тема: растяжение', 'кружок растягивается')
+            sc = pg.evaluate("[getComputedStyle(document.querySelector('.thsw-sun')).color,getComputedStyle(document.querySelector('.thsw-moon')).color]")
+            if sc == ['rgb(255, 154, 60)', 'rgb(63, 169, 255)']: ok('тема: солнце всегда оранжевое, луна всегда голубая (солнце не синеет при уходе)')
+            else: fail('тема: цвета значков', str(sc))
             shot(pg, 'theme-switch')
+            pg.evaluate("closeSheets()"); pg.wait_for_timeout(400)
+            pg.evaluate("openCoin('BTC')"); pg.wait_for_timeout(600)
+            pg.go_back(); pg.wait_for_timeout(600)
+            b1 = pg.evaluate("typeof S!=='undefined'&&!document.querySelector('.sheet.open')")
+            pg.evaluate("openSettings()"); pg.wait_for_timeout(400); pg.evaluate("closeSheets()"); pg.wait_for_timeout(500)
+            b2 = pg.evaluate("!(history.state&&history.state.mlSheet)")
+            if b1 and b2: ok('«Назад» на телефоне закрывает открытое окно, а не приложение; крестик не оставляет лишней записи в истории')
+            else: fail('«Назад» и окна', f'{b1} {b2}')
         scenario('Тема', {'session': True, 'docs': SEED}, s_theme)
 
         # --- 12.11.2026: «+» → покупка, ползунок «Купить», смахнуть запись, Орион называет пополненные монеты, шестерёнка
