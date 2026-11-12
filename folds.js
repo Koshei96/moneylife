@@ -37,7 +37,7 @@
   var segOn = function (id) { var s = document.getElementById(id); if (!s) return ''; var b = s.querySelector('[aria-pressed="true"],.on,.active'); return txt(b); };
   var L = function (s) { return window.L ? window.L(s) : s; };
   var SUM = {
-    view: function () { var tl = document.getElementById('thLbl'), th = tl ? txt(tl.querySelector('[data-t="' + (tl.dataset.on || 'dark') + '"]')) : ''; var a = [th, segOn('curSeg')].filter(Boolean); a.push(L(on('swMascot') ? 'Орион вкл.' : 'Орион выкл.')); a.push(L(on('swSound') ? 'звуки вкл.' : 'звуки выкл.')); return a.join(' · '); },
+    view: function () { var th = txt(document.getElementById('thName')); var a = [th, segOn('curSeg')].filter(Boolean); a.push(L(on('swMascot') ? 'Орион вкл.' : 'Орион выкл.')); a.push(L(on('swSound') ? 'звуки вкл.' : 'звуки выкл.')); return a.join(' · '); },
     plan: function () { return L('Личный план, цель BTC, сигналы, оповещения, уроки'); },
     rules: function (b) { var v = b.querySelector('.kv .v, .kv dd, .kv > div > :last-child'); return txt(v) || L('Твоя стратегия'); },
     edit: function () { return L('Доли монет, резерв, лестница, ключ 2'); },

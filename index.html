@@ -11,7 +11,7 @@ addEventListener('error',function(e){if(e&&e.message)add(e.message,(e.filename||
 addEventListener('unhandledrejection',function(e){var r=e&&e.reason;add(r&&(r.message||r)||'отклонённое обещание','promise');});
 window.mlErrLog=function(){try{return JSON.parse(localStorage.getItem(K)||'[]');}catch(e){return [];}};window.mlErrAdd=add;})();
 </script>
-<script src="i18n.js?v=20261112113000"></script>
+<script src="i18n.js?v=20261112120000"></script>
 <title>MoneyLife</title>
 <meta name="theme-color" content="#06040e">
 <script>/* тема до отрисовки: «Авто» — как в телефоне, иначе выбор из настроек */
@@ -1315,14 +1315,9 @@ html.lite .view.enter{animation:vin .2s var(--ease)}
 </style>
 <style id="v9">
 /* ===== переключатель темы (12.11.2026): стеклянный кружок со светящимся кольцом — луна и голубое свечение (тёмная), солнце и оранжевое (светлая);
-   кружок тянется при переезде, под переключателем надпись «Тёмная/Светлая»; тема меняется круговой волной от переключателя ===== */
+   кружок плавно переезжает без растяжения, название темы — слева под словом «Тема»; тема меняется круговой волной от переключателя ===== */
 .themerow>div:first-child{display:flex;flex-direction:column;align-items:flex-start;gap:2px}
-.th-auto{display:inline-flex;align-items:center;gap:7px;min-height:48px;margin:-10px 0 -12px;padding:0;border:0;background:none;color:var(--mute);font:inherit;font-size:13px;cursor:pointer}
-.th-auto i{width:16px;height:16px;border-radius:5px;border:2px solid var(--line2);position:relative;transition:background .25s,border-color .25s}
-.th-auto[aria-pressed="true"]{color:var(--fg)}
-.th-auto[aria-pressed="true"] i{background:var(--accent);border-color:var(--accent)}
-.th-auto[aria-pressed="true"] i::after{content:"";position:absolute;left:3.5px;top:0;width:4px;height:8px;border:solid #fff;border-width:0 2px 2px 0;transform:rotate(45deg)}
-.thsw-box{display:flex;flex-direction:column;align-items:center;gap:7px;flex:none}
+.thsw-box{display:flex;align-items:center;flex:none}
 .thsw{--g:#3fa9ff;position:relative;width:96px;height:52px;border-radius:999px;padding:0;cursor:pointer;-webkit-tap-highlight-color:transparent;
   background:linear-gradient(180deg,#050507,#141419);border:1px solid #2a2f3a;
   box-shadow:inset 0 4px 10px #000c,inset 0 -1px 0 #ffffff10,0 10px 24px -12px #000;transition:background .6s ease,border-color .6s ease,box-shadow .6s ease}
@@ -1331,7 +1326,7 @@ html.lite .view.enter{animation:vin .2s var(--ease)}
 .thsw-knob{position:absolute;top:4px;left:4px;width:42px;height:42px;border-radius:999px;transform:translateX(44px);
   background:radial-gradient(circle at 50% 35%,#2b2d35,#141519 70%);
   box-shadow:inset 0 0 0 2px color-mix(in srgb,var(--g) 85%,#fff),0 0 0 1px #0008,0 0 14px 1px color-mix(in srgb,var(--g) 55%,transparent),0 0 34px 2px color-mix(in srgb,var(--g) 25%,transparent);
-  transition:transform .6s cubic-bezier(.65,0,.35,1),box-shadow .6s ease}
+  transition:transform .5s cubic-bezier(.4,0,.2,1),box-shadow .6s ease,background .5s ease}
 .thsw[aria-checked="true"] .thsw-knob{transform:translateX(0);background:radial-gradient(circle at 50% 35%,#ffffff,#f1ece6 70%)}
 /* блики на кольце — медленно кружат */
 .thsw-fl{position:absolute;inset:-3px;border-radius:50%;pointer-events:none;
@@ -1347,19 +1342,8 @@ html.lite .view.enter{animation:vin .2s var(--ease)}
 .thsw[aria-checked="true"] .thsw-moon{transform:scale(.2) rotate(120deg);opacity:0;transition-delay:0s}
 .thsw[aria-checked="true"] .thsw-sun{transform:none;opacity:1;transition-delay:.15s}
 .thsw[aria-checked="true"] .thsw-sun .ray{stroke-dashoffset:0;transition-delay:.45s}
-/* при переезде кружок тянется */
-.thsw.go-l .thsw-knob{animation:thToL .6s cubic-bezier(.65,0,.35,1) both}
-.thsw.go-r .thsw-knob{animation:thToR .6s cubic-bezier(.65,0,.35,1) both}
-@keyframes thToL{0%{transform:translateX(44px)}45%{transform:translateX(24px) scaleX(1.45)}100%{transform:translateX(0)}}
-@keyframes thToR{0%{transform:translateX(0)}45%{transform:translateX(20px) scaleX(1.45)}100%{transform:translateX(44px)}}
-.thsw-lbl{position:relative;height:18px;width:96px;overflow:hidden;text-align:center;font-size:13px;font-weight:800;letter-spacing:.02em}
-.thsw-lbl b{position:absolute;inset:0;transition:transform .5s cubic-bezier(.34,1.56,.64,1),opacity .3s}
-.thsw-lbl b[data-t="dark"]{color:#5ab4ff;text-shadow:0 0 10px #3fa9ff88}
-.thsw-lbl b[data-t="light"]{color:#ff8a2a;text-shadow:0 0 10px #ff9a3c66;transform:translateY(100%);opacity:0}
-.thsw-lbl[data-on="light"] b[data-t="dark"]{transform:translateY(-100%);opacity:0}
-.thsw-lbl[data-on="light"] b[data-t="light"]{transform:none;opacity:1}
 ::view-transition-old(root),::view-transition-new(root){animation:none;mix-blend-mode:normal}
-@media (prefers-reduced-motion:reduce){.thsw *,.thsw-lbl b{transition:none!important;animation:none!important}}
+@media (prefers-reduced-motion:reduce){.thsw *{transition:none!important;animation:none!important}}
 </style>
 </head>
 <body class="loading">
@@ -1636,7 +1620,7 @@ document.querySelectorAll('nav.tabs .tab').forEach(b=>{const v=b.querySelector('
     <span class="label" data-fold="view">Отображение</span>
     <div class="card" style="padding:4px 16px">
       <div class="setrow" translate="no"><div><b>Мова / Язык</b><small>Українська · Русский</small></div><div class="seg" id="langSeg" style="width:132px;flex:none"><button type="button" data-lang="uk">UA</button><button type="button" data-lang="ru">RU</button></div></div>
-      <div class="setrow themerow"><div><b>Тема</b><button type="button" class="th-auto" id="thAuto" aria-pressed="false"><i aria-hidden="true"></i>Как в телефоне</button></div><div class="thsw-box"><button type="button" class="thsw" id="thSw" role="switch" aria-checked="false" aria-label="Светлая тема"><span class="thsw-knob" aria-hidden="true"><i class="thsw-fl"></i><span class="thsw-moon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 14.5A7.5 7.5 0 0 1 9.5 5a7.5 7.5 0 1 0 9.5 9.5z"/></svg></span><span class="thsw-sun"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3.8"/><path class="ray" d="M12 2.5v2.6M12 18.9v2.6M2.5 12h2.6M18.9 12h2.6M5.3 5.3l1.8 1.8M16.9 16.9l1.8 1.8M5.3 18.7l1.8-1.8M16.9 7.1l1.8-1.8"/></svg></span></span></button><span class="thsw-lbl" id="thLbl" aria-hidden="true"><b data-t="dark">Тёмная</b><b data-t="light">Светлая</b></span></div></div>
+      <div class="setrow themerow"><div><b>Тема</b><small id="thName">Тёмная</small></div><div class="thsw-box"><button type="button" class="thsw" id="thSw" role="switch" aria-checked="false" aria-label="Светлая тема"><span class="thsw-knob" aria-hidden="true"><i class="thsw-fl"></i><span class="thsw-moon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 14.5A7.5 7.5 0 0 1 9.5 5a7.5 7.5 0 1 0 9.5 9.5z"/></svg></span><span class="thsw-sun"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3.8"/><path class="ray" d="M12 2.5v2.6M12 18.9v2.6M2.5 12h2.6M18.9 12h2.6M5.3 5.3l1.8 1.8M16.9 16.9l1.8 1.8M5.3 18.7l1.8-1.8M16.9 7.1l1.8-1.8"/></svg></span></span></button></div></div>
       <div class="setrow"><div><b>Валюта</b><small>Суммы в долларах или гривне</small></div><div class="seg" id="curSeg" style="width:132px;flex:none"><button type="button" data-c="USD">$</button><button type="button" data-c="UAH">₴</button></div></div>
       <div class="setrow"><div><b>Скрывать суммы</b><small>Вместо цифр — точки</small></div><button type="button" class="switch" id="swHide" role="switch" aria-checked="false" aria-label="Скрывать суммы"></button></div>
       <div class="setrow"><div><b>Скрывать мелочь</b><small>Монеты дешевле $10</small></div><button type="button" class="switch" id="swDust" role="switch" aria-checked="true" aria-label="Скрывать мелочь"></button></div>
@@ -1707,9 +1691,9 @@ document.querySelectorAll('nav.tabs .tab').forEach(b=>{const v=b.querySelector('
 
 <div class="toast" id="toast" role="status"><span id="toastMsg"></span><button type="button" id="toastBtn" hidden></button></div>
 
-<script src="config.js?v=20261112113000"></script>
+<script src="config.js?v=20261112120000"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="shim.js?v=20261112113000"></script>
+<script src="shim.js?v=20261112120000"></script>
 <script>
 /* ===== основа ===== */
 const $=id=>document.getElementById(id);
@@ -2739,16 +2723,14 @@ Object.keys(SW).forEach(id=>$(id).addEventListener('click',()=>{const k=SW[id];P
 $('langSeg').addEventListener('click',e=>{const b=e.target.closest('[data-lang]');if(!b||!window.mlSetLang||b.dataset.lang===mlLang())return;play('tick');mlSetLang(b.dataset.lang);});
 /* тема (12.11.2026): переключатель «луна/солнце» с тянущимся кружком и надписью «Тёмная/Светлая»; смена темы — круговой волной от переключателя */
 function thEff(){const t=P.theme||'system';return t==='system'?(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark'):t;}
-function thSync(){const l=thEff()==='light',sw=$('thSw');sw.setAttribute('aria-checked',String(l));$('thLbl').dataset.on=l?'light':'dark';$('thAuto').setAttribute('aria-pressed',String((P.theme||'system')==='system'));}
+function thSync(){const l=thEff()==='light';$('thSw').setAttribute('aria-checked',String(l));$('thName').textContent=l?'Светлая':'Тёмная';}
 function themeTo(t,from){const cur=thEff();const apply=()=>{P.theme=t;savePrefs();applyTheme();fillSettings();render();};
   const next=t==='system'?(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark'):t;
   if(next===cur||reduced||!document.startViewTransition||!from){apply();return;}
   const r=from.getBoundingClientRect(),x=r.left+r.width/2,y=r.top+r.height/2,R=Math.hypot(Math.max(x,innerWidth-x),Math.max(y,innerHeight-y));
-  setTimeout(()=>{try{const vt=document.startViewTransition(apply);vt.ready.then(()=>{document.documentElement.animate({clipPath:[`circle(0px at ${x}px ${y}px)`,`circle(${R}px at ${x}px ${y}px)`]},{duration:700,easing:'cubic-bezier(.65,0,.35,1)',pseudoElement:'::view-transition-new(root)'});}).catch(()=>{});}catch(e){apply();}},360);}
-$('thSw').addEventListener('click',()=>{const sw=$('thSw'),toL=sw.getAttribute('aria-checked')!=='true';sw.setAttribute('aria-checked',String(toL));$('thLbl').dataset.on=toL?'light':'dark';
-  sw.classList.remove('go-l','go-r');void sw.offsetWidth;sw.classList.add(toL?'go-l':'go-r');play('toggle',{on:toL});buzz&&buzz(10);themeTo(toL?'light':'dark',sw);});
-$('thSw').addEventListener('animationend',e=>{if(e.target.classList.contains('thsw-knob'))$('thSw').classList.remove('go-l','go-r');});
-$('thAuto').addEventListener('click',()=>{const on=(P.theme||'system')==='system';themeTo(on?thEff():'system',$('thSw'));play('tick');});
+  setTimeout(()=>{try{const vt=document.startViewTransition(apply);vt.ready.then(()=>{document.documentElement.animate({clipPath:[`circle(0px at ${x}px ${y}px)`,`circle(${R}px at ${x}px ${y}px)`]},{duration:700,easing:'cubic-bezier(.65,0,.35,1)',pseudoElement:'::view-transition-new(root)'});}).catch(()=>{});}catch(e){apply();}},520);}
+$('thSw').addEventListener('click',()=>{const sw=$('thSw'),toL=sw.getAttribute('aria-checked')!=='true';sw.setAttribute('aria-checked',String(toL));$('thName').textContent=toL?'Светлая':'Тёмная';
+  play('toggle',{on:toL});buzz&&buzz(10);themeTo(toL?'light':'dark',sw);});
 $('curSeg').addEventListener('click',e=>{const b=e.target.closest('[data-c]');if(!b)return;if(b.dataset.c==='UAH'&&!rate()){toast('Курс гривны ещё не загружен');return;}P.cur=b.dataset.c;savePrefs();play('tick');fillSettings();render();});
 $('saveStrat').addEventListener('click',()=>saveStrategy());
 async function saveStrategy(){const B=+$('stB').value,E=+$('stE').value,A=+$('stA').value,cap=+$('stCap').value,dep=+$('stDep').value,alt=($('stAlt').value||'').trim().toUpperCase(),inc=+$('stInc').value,k2=+$('stK2').value,ac=+$('stAltCap').value;
@@ -3000,7 +2982,7 @@ function msSync(x){MSC.last=x;if(!msApply())return;if(!S.ready||document.getElem
   if(window.Mascot){try{window.Mascot.sync(msPayload(x));}catch(e){}}else msLoad();}
 function msLoad(){if(MSC.loading||MSC.failed)return;MSC.loading=true;
   const add=(src,ok)=>{try{const s=document.createElement('script');s.src=src;s.async=true;s.onload=ok;s.onerror=()=>{MSC.failed=true;};document.head.appendChild(s);}catch(e){MSC.failed=true;}};
-  const boot=()=>add('mascot.js?v=20261112113000',()=>{try{if(window.Mascot&&window.Mascot.init({host:$('mascot'),app:{buzz,askName:()=>{if(window.MLX&&MLX.askName)MLX.askName();},addAlert:(y,v)=>window.MLX&&MLX.addAlert?MLX.addAlert(y,v):null,voice:(t,x)=>window.mlVoice?window.mlVoice(t,x):null,ask:(q,y,x)=>window.mlAsk?window.mlAsk(q,y,x):null}})&&MSC.last&&$('ob').hidden&&!document.getElementById('mlAuth'))window.Mascot.sync(msPayload(MSC.last));}catch(e){}});
+  const boot=()=>add('mascot.js?v=20261112120000',()=>{try{if(window.Mascot&&window.Mascot.init({host:$('mascot'),app:{buzz,askName:()=>{if(window.MLX&&MLX.askName)MLX.askName();},addAlert:(y,v)=>window.MLX&&MLX.addAlert?MLX.addAlert(y,v):null,voice:(t,x)=>window.mlVoice?window.mlVoice(t,x):null,ask:(q,y,x)=>window.mlAsk?window.mlAsk(q,y,x):null}})&&MSC.last&&$('ob').hidden&&!document.getElementById('mlAuth'))window.Mascot.sync(msPayload(MSC.last));}catch(e){}});
   setTimeout(boot,300);}
 function render(){const D=derive();renderHeader();renderHome(D);renderGrowth();renderCoins(D);renderStrategy(D);renderActivity();renderD14();if(window.MLX)try{MLX.render(D);}catch(e){console.error(e);}earnNudge();if(cvSym&&$('coinSheet').classList.contains('open'))renderCoinView();}
 document.body.classList.add('loading');
@@ -3084,8 +3066,8 @@ render();requestAnimationFrame(inkMove);setTimeout(inkMove,600);
     sy=null;swipe=null;pull=0;armed=false;},{passive:true});
 })();
 </script>
-<script src="plus.js?v=20261112113000"></script>
-<script src="wins.js?v=20261112113000"></script>
-<script src="folds.js?v=20261112113000"></script>
+<script src="plus.js?v=20261112120000"></script>
+<script src="wins.js?v=20261112120000"></script>
+<script src="folds.js?v=20261112120000"></script>
 </body>
 </html>
