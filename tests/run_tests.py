@@ -66,6 +66,29 @@ def static_checks():
     manifest_checks(html)
     deletion_checks()
     signal_checks()
+    sw_nav_checks()
+
+def sw_nav_checks():
+    """Открытие приложения при ошибке сервера (13.11.2026). В тест-браузере service worker выключен (service_workers='block'),
+    поэтому обработчик fetch из sw.js запускается в node с подменёнными fetch/caches: 404/5xx на открытие приложения → копия index.html."""
+    js = r"""const fs=require('fs'),vm=require('vm');let H=null,cache=null,put=0;
+const res=(st,type)=>({status:st,ok:st>=200&&st<300,type:type||'basic',tag:'net'+st,clone(){return this}});
+const ctx={self:{addEventListener(t,f){if(t==='fetch')H=f},registration:{}},location:{origin:'https://x.test'},URL,Response:{error:()=>({tag:'err'})},
+  caches:{match:async k=>k==='index.html'?cache:undefined,open:async()=>({put(){put++},match:async()=>undefined})},fetch:null};
+vm.createContext(ctx);vm.runInContext(fs.readFileSync(process.argv[1],'utf8'),ctx);
+const go=async(path,net,c)=>{cache=c;ctx.fetch=async()=>{if(net==='off')throw new TypeError('Failed to fetch');return net};let p=null;
+  H({request:{url:'https://x.test'+path,method:'GET',mode:'navigate'},respondWith(x){p=x}});const r=await p;return r&&r.tag};
+const C={tag:'cache'};(async()=>{const o=[];
+  o.push(await go('/moneylife/',res(404),C));o.push(await go('/moneylife/index.html',res(503),C));o.push(await go('/moneylife/',res(404),undefined));
+  o.push(await go('/moneylife/privacy.html',res(404),C));put=0;o.push(await go('/moneylife/',res(200),C));o.push(put);
+  o.push(await go('/moneylife/','off',C));o.push(await go('/moneylife/',res(0,'opaqueredirect'),C));console.log(JSON.stringify(o));})();"""
+    try:
+        out = subprocess.run(['node', '-e', js, str(ROOT / 'sw.js')], capture_output=True, text=True, timeout=30)
+        got = json.loads(out.stdout.strip() or 'null')
+        if got == ['cache', 'cache', 'net404', 'net404', 'net200', 1, 'cache', 'net0']:
+            ok('при 404 на открытие страницы приложение открывается из кэша (и при 5xx; без копии и для privacy.html — ответ сервера; без сети — копия)')
+        else: fail('sw.js: 404 на открытие приложения', (out.stdout + out.stderr)[:300])
+    except Exception as e: fail('sw.js: 404 на открытие приложения', str(e)[:200])
 
 def signal_checks():
     """Фоновые сигналы (sw.js, 10.11.2026): ступень лестницы и цель BTC — событие один раз, повтор не шлём."""
