@@ -1681,6 +1681,23 @@ def run_browser():
                 pg.evaluate(f"document.documentElement.setAttribute('data-theme','{th}')"); pg.wait_for_timeout(250)
                 pg.locator('#d14').screenshot(path=str(OUT / f'14d-{th}.png'))
                 pg.screenshot(path=str(OUT / f'14d-home-{th}.png'))
+            # 13.11 (цель «12 × 14»): новичку прямо сказано, что для пробы можно примерные цифры — запись правится и удаляется в «Активности»
+            TRY_RU, TRY_UK = 'Для пробы можно примерные цифры — потом поправишь или удалишь.', 'Для проби можна приблизні цифри — потім виправиш або видалиш.'
+            if TRY_RU in st['txt']: ok('14 дней: карточка 1 — «для пробы можно примерные цифры, потом поправишь или удалишь»')
+            else: fail('14 дней: карточка 1 без фразы про пробу', st['txt'][:200])
+            (OUT / 'review').mkdir(exist_ok=True)
+            pg.evaluate("document.getElementById('d14').scrollIntoView({block:'center'})"); pg.wait_for_timeout(300)
+            for th in ('dark', 'light'):
+                pg.evaluate(f"document.documentElement.setAttribute('data-theme','{th}')"); pg.wait_for_timeout(250)
+                pg.screenshot(path=str(OUT / 'review' / f'd14-day1-{th}.png'))
+            pg.evaluate("localStorage.setItem('ml-lang','uk'); location.reload()"); wait_app(pg); d14_wait(pg, 'card', 1)
+            tu = d14(pg)['txt']
+            if TRY_UK in tu and 'Перший запис' in tu and not re.search('[ыэъё]', tu): ok('14 дней, по-украински: карточка 1 с фразой «Для проби можна приблизні цифри…»')
+            else: fail('14 дней: карточка 1 по-украински', tu[:200])
+            pg.evaluate("document.getElementById('d14').scrollIntoView({block:'center'})"); pg.wait_for_timeout(300)
+            pg.screenshot(path=str(OUT / 'review' / 'd14-day1-uk.png'))
+            pg.evaluate("localStorage.setItem('ml-lang','ru'); location.reload()"); wait_app(pg); d14_wait(pg, 'card', 1)
+            pg.evaluate("window.scrollTo(0,0)")
             pg.evaluate("document.documentElement.setAttribute('data-theme','dark')")
             rows0 = d14_rows(pg)
             # открыл и не нажал — день не засчитан
