@@ -455,6 +455,10 @@ def run_browser():
             const e=document.getElementById('appVer');let p=e,b='rgb(0,0,0)';for(;p;p=p.parentElement){const c=getComputedStyle(p).backgroundColor;if(c&&c!=='transparent'&&!/rgba\\(.*,\\s*0\\)$/.test(c)){b=c;break}}
             const x=lum(getComputedStyle(e).color),y=lum(b),r=e.getBoundingClientRect();
             return {txt:e.textContent.trim(),vis:!e.hidden&&r.height>0,cr:(Math.max(x,y)+.05)/(Math.min(x,y)+.05),fg:getComputedStyle(e).color===getComputedStyle(document.getElementById('setTitle')).color}}"""
+        # 13.11: к номеру дописана читаемая дата сборки из той же метки — «Версия 20261113151000 · 13.11, 15:10» (день.месяц, часы:минуты), не по часам телефона
+        VER_TXT = f'Версия {SW_V} · {SW_V[6:8]}.{SW_V[4:6]}, {SW_V[8:10]}:{SW_V[10:12]}'
+        if re.fullmatch(r'Версия \d{14} · (0[1-9]|[12]\d|3[01])\.(0[1-9]|1[0-2]), ([01]\d|2[0-3]):[0-5]\d', VER_TXT): ok(f'версия: формат даты сборки «{VER_TXT}»')
+        else: fail('версия: формат даты сборки', VER_TXT)
         for th in ('dark', 'light'):
             def s_ver(pg, n, th=th):
                 wait_app(pg)
@@ -462,10 +466,13 @@ def run_browser():
                 pg.click('#setBtn'); pg.wait_for_selector('#setSheet.open', timeout=5000); pg.wait_for_timeout(500)
                 pg.evaluate("document.getElementById('appVer').scrollIntoView({block:'end'})"); pg.wait_for_timeout(300)
                 r = pg.evaluate(VER)
-                if r['vis'] and r['txt'] == f'Версия {SW_V}': ok(f'«Настройки» ({th}): внизу «{r["txt"]}» — та же метка, что в sw.js')
-                else: fail(f'«Настройки» ({th}): строка версии', f'{r} ≠ Версия {SW_V}')
+                if r['vis'] and r['txt'] == VER_TXT: ok(f'«Настройки» ({th}): внизу «{r["txt"]}» — та же метка, что в sw.js, и дата сборки из неё')
+                else: fail(f'«Настройки» ({th}): строка версии', f'{r} ≠ {VER_TXT}')
                 ok(f'«Настройки» ({th}): версия приглушена, контраст {r["cr"]:.2f}:1') if r['cr'] >= 4.5 and not r['fg'] else fail(f'«Настройки» ({th}): цвет версии', str(r))
+                lines = pg.evaluate("(()=>{const e=document.getElementById('appVer');return Math.round(e.getBoundingClientRect().height/parseFloat(getComputedStyle(e).lineHeight))})()")
+                ok(f'«Настройки» ({th}): строка версии с датой — в одну строку на 390 px') if lines == 1 else fail(f'«Настройки» ({th}): строка версии переносится', str(lines))
                 shot(pg, f'fix-version-{th}')
+                (OUT / 'review').mkdir(exist_ok=True); pg.screenshot(path=str(OUT / 'review' / f'ver-date-settings-{th}.png'))
             scenario(f'Версия в настройках ({th})', {'session': True, 'docs': SEED}, s_ver, dsf=1, theme=th)
 
         # --- А3в. полоска жестов внизу телефона (13.11): низ шторок не уходит под неё. Полоску 34 px имитирует Chromium
@@ -1238,6 +1245,11 @@ def run_browser():
             if lang == 'uk' and said == 'Схоже, біткоїн зростає через новини про ETF.': ok('Орион по-украински: «мозг» получает язык uk, ответ звучит без переделки')
             else: fail('Орион по-украински: мозг', f'{lang} | {said}')
             pg.evaluate("openSettings()"); pg.wait_for_timeout(500)
+            vu = pg.evaluate("document.getElementById('appVer').textContent.trim()")
+            if vu == VER_TXT.replace('Версия', 'Версія'): ok(f'украинский: внизу настроек «{vu}» — номер и дата сборки те же')
+            else: fail('украинский: строка версии', f'{vu} ≠ {VER_TXT}')
+            pg.evaluate("document.getElementById('appVer').scrollIntoView({block:'end'})"); pg.wait_for_timeout(300)
+            (OUT / 'review').mkdir(exist_ok=True); pg.screenshot(path=str(OUT / 'review' / 'ver-date-settings-uk.png'))
             pg.click('#langSeg [data-lang="ru"]'); pg.wait_for_timeout(2500)
             tabs = pg.evaluate("[...document.querySelectorAll('[data-tab]')].map(b=>b.textContent.trim()).join('|')")
             if pg.evaluate("document.documentElement.lang") == 'ru' and 'Главная' in tabs and pg.evaluate("window.L('Главная')") == 'Главная': ok('украинский: переключатель «Мова / Язык» возвращает русский')
