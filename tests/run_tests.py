@@ -468,6 +468,33 @@ def run_browser():
                 shot(pg, f'fix-version-{th}')
             scenario(f'Версия в настройках ({th})', {'session': True, 'docs': SEED}, s_ver, dsf=1, theme=th)
 
+        # --- А3в. полоска жестов внизу телефона (13.11): низ шторок не уходит под неё. Полоску 34 px имитирует Chromium
+        #     (Emulation.setSafeAreaInsetsOverride, viewport-fit=cover): «Настройки» — строка версии выше полоски,
+        #     у шторки покупки с закреплённой «Сохранить» отступ под полоску один (у .sh-foot), без лишнего у тела шторки
+        SAFE = 34
+        for th in ('dark', 'light'):
+            def s_safe(pg, n, th=th):
+                wait_app(pg)
+                if pg.evaluate("document.documentElement.dataset.theme") != th: raise AssertionError('тема не включилась: ' + th)
+                pg.context.new_cdp_session(pg).send('Emulation.setSafeAreaInsetsOverride', {'insets': {'top': 0, 'bottom': SAFE, 'left': 0, 'right': 0}})
+                pg.wait_for_timeout(200)
+                pg.click('#setBtn'); pg.wait_for_selector('#setSheet.open', timeout=5000); pg.wait_for_timeout(500)
+                pg.evaluate("(()=>{const b=document.querySelector('#setSheet .sh-body');b.scrollTop=b.scrollHeight})()"); pg.wait_for_timeout(400)
+                r = pg.evaluate("(()=>{const b=document.querySelector('#setSheet .sh-body'),v=document.getElementById('appVer').getBoundingClientRect();return {pb:parseFloat(getComputedStyle(b).paddingBottom),vb:v.bottom,h:innerHeight}})()")
+                if r['pb'] == 18 + SAFE and r['vb'] <= r['h'] - SAFE: ok(f'полоска жестов ({th}): низ «Настроек» с версией выше полоски, отступ {r["pb"]:g} px')
+                else: fail(f'полоска жестов ({th}): «Настройки»', str(r))
+                pg.screenshot(path=str(OUT / f'fix-safe-settings-{th}.png'))
+                pg.keyboard.press('Escape'); pg.wait_for_timeout(500)
+                pg.evaluate("""()=>{const b=[...document.querySelectorAll('button')].find(x=>x.textContent.trim()==='Купить'&&x.offsetParent);b.click()}""")
+                pg.wait_for_timeout(700)
+                pg.click('#buyMode [data-m=one]'); pg.wait_for_timeout(400)
+                r = pg.evaluate("""(()=>{const s=document.getElementById('actSheet'),b=s.querySelector('.sh-body'),f=document.getElementById('actFoot'),k=document.getElementById('saveBtn').getBoundingClientRect();
+                    return {foot:!f.hidden,pb:parseFloat(getComputedStyle(b).paddingBottom),fb:parseFloat(getComputedStyle(f).paddingBottom),kb:k.bottom,h:innerHeight}})()""")
+                if r['foot'] and r['pb'] == 18 and r['fb'] == 12 + SAFE and r['kb'] <= r['h'] - SAFE: ok(f'полоска жестов ({th}): шторка покупки — «Купить» выше полоски, отступ один (у кнопки {r["fb"]:g} px, у тела {r["pb"]:g} px)')
+                else: fail(f'полоска жестов ({th}): шторка покупки', str(r))
+                pg.screenshot(path=str(OUT / f'fix-safe-buy-{th}.png'))
+            scenario(f'Полоска жестов ({th})', {'session': True, 'docs': SEED}, s_safe, dsf=1, theme=th)
+
         # --- А4. смена вкладок (08.11, «анимация вкладок»): содержимое проявляется 160–220 мс только через opacity/transform,
         #     полоска над активной вкладкой; при «уменьшить движение» в системе — без анимаций и переходов
         TABCLICK = """t=>{document.querySelector('nav.tabs [data-tab="'+t+'"]').click();const v=document.getElementById('v-'+t);
