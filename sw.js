@@ -1,5 +1,5 @@
 /* MoneyLife service worker — версия подставляется при сборке */
-const V='ml-20261113031000';
+const V='ml-20261113080000';
 /* KEEP — неизменные файлы (логотипы, голос с хэшем в имени, библиотеки, шрифты): переживают обновления версии и не качаются заново */
 const KEEP='ml-keep-6';
 /* CFGC — настройки сигналов, которые кладёт приложение (plus.js): ступени лестницы, цель BTC, уже показанные события */
@@ -8,7 +8,7 @@ const IMM=['https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/s
 /* картинки монет CoinGecko — с CORS, поэтому кэшируются как обычные файлы */
 const CGIMG='coin-images.coingecko.com';
 const isKeep=u=>(u.origin===location.origin&&(/\/logos\//.test(u.pathname)||/\.bin$/.test(u.pathname)||/three\.min\.js$/.test(u.pathname)||/\/data\/coins-[ab]\.[0-9a-f]+\.json$/.test(u.pathname)))||/supabase-js@[0-9.]+\//.test(u.href)||u.hostname.includes('gstatic')||u.hostname===CGIMG;
-const SHELL=['./','index.html','shim.js','config.js','manifest.webmanifest','icons/icon-192.png','icons/icon-512.png','icons/apple-touch-icon.png','icons/icon-maskable-512.png','icons/badge-96.png','i18n.js?v=20261113031000','plus.js?v=20261113031000','wins.js?v=20261113031000','folds.js?v=20261113031000','mascot.js?v=20261113031000'];
+const SHELL=['./','index.html','shim.js','config.js','manifest.webmanifest','icons/icon-192.png','icons/icon-512.png','icons/apple-touch-icon.png','icons/icon-maskable-512.png','icons/badge-96.png','i18n.js?v=20261113080000','plus.js?v=20261113080000','wins.js?v=20261113080000','folds.js?v=20261113080000','mascot.js?v=20261113080000'];
 self.addEventListener('install',e=>{e.waitUntil(Promise.all([caches.open(V).then(c=>c.addAll(SHELL)).catch(()=>{}),caches.open(KEEP).then(async c=>{for(const x of IMM){if(!(await c.match(x)))await c.add(x).catch(()=>{});}})]));});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(ks=>Promise.all(ks.filter(k=>k!==V&&k!==KEEP&&k!==CFGC).map(k=>caches.delete(k)))).then(()=>self.clients.claim()));});
 self.addEventListener('message',e=>{if(e.data==='skip')self.skipWaiting();});
@@ -38,7 +38,7 @@ self.addEventListener('notificationclick',e=>{e.notification.close();e.waitUntil
 /* сигналы в фоне (10.11.2026): раз в несколько часов, когда разрешит телефон, сверяем цену BTC со ступенями лестницы (ключ 1) и с целью.
    Ключ 2 в фоне не проверяется — его считает приложение по записям человека. Та же логика событий — в plus.js (sigEvents). */
 function mlEvents(cfg,btc,px){const ev=[],seen=cfg.seen||{},U=cfg.lang==='uk';if(!(btc>0))return ev;   /* U — украинский язык приложения (12.11.2026) */
-  for(const l of cfg.levels||[]){if(!(btc<=l.price))continue;const k='lv:'+(cfg.athDate||cfg.ath)+':'+l.n+':k1';if(seen[k]||seen['lv:'+(cfg.athDate||cfg.ath)+':'+l.n+':go'])continue;
+  for(const l of cfg.levels||[]){if(!(btc<=l.price))continue;const b='lv:'+(cfg.athDate||cfg.ath)+':'+l.n+(l.r?':r'+l.r:''),k=b+':k1';if(seen[k]||seen[b+':go'])continue;
     ev.push({k,title:(U?'Сходинка ':'Ступень ')+l.n+(U?' відкрита':' открыта'),body:(U?'BTC дійшов до −':'BTC дошёл до −')+l.drop+(U?'% від максимуму ($':'% от максимума ($')+Math.round(l.price).toLocaleString('ru-RU')+(U?'). Ключ 2 перевірить застосунок.':'). Ключ 2 проверит приложение.')});}
   if(cfg.goal>0&&btc>=cfg.goal){const k='goal:'+cfg.goal;if(!seen[k])ev.push({k,title:U?'BTC дійшов до твоєї цілі':'BTC дошёл до твоей цели',body:(U?'Ціна вище $':'Цена выше $')+Math.round(cfg.goal).toLocaleString('ru-RU')+(U?'. Що робити далі — за твоїм планом.':'. Что делать дальше — по твоему плану.')});}
   /* оповещения о цене монеты (11.11.2026): px — цены монет из Binance */

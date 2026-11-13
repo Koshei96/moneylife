@@ -1819,6 +1819,33 @@ def run_browser():
             shot(pg, 'v3-total')
         scenario('3.0: главная и итог', {'session': True, 'docs': SEED3}, s_v3_home)
 
+        # --- 13.11.2026 (владелец): ступени тратят долю от ВСЕГО резерва цикла (10/15/20/25/30%), а выполненная ступень
+        #     снова открывается после отскока BTC на 10% выше её цены (прошлые траты копятся в spentPrev)
+        def s_ladder_total(pg, n):
+            wait_app(pg); pg.wait_for_timeout(800)
+            pg.evaluate("""db.doc('app/cycle').set({ath:200000,athDate:'2025-10-06',levels:[
+                {n:1,drop:30,pct:20,status:'done',spent:50,doneAt:'2026-10-30T10:00:00Z',amt:50},
+                {n:2,drop:40,pct:25,status:'pending'},{n:3,drop:50,pct:33,status:'pending'},{n:4,drop:60,pct:50,status:'pending'},{n:5,drop:70,pct:100,status:'pending'}]})""")
+            pg.wait_for_timeout(1500)
+            r = pg.evaluate("""()=>{const D=derive(),b=lvBase(D);return {res:+D.reserve.toFixed(2),b:+b.toFixed(2),lv:S.cycle.levels.map(l=>[l.status,lvPct(l),+lvPlan(l,D).amt.toFixed(2)])}}""")
+            b = r['b']; exp = [round(b * p / 100, 2) for p in (15, 20, 25)]
+            if abs(b - (r['res'] + 50)) < 0.01 and [x[1] for x in r['lv']] == [10, 15, 20, 25, 30] and all(abs(r['lv'][i + 1][2] - exp[i]) < 0.02 for i in range(3)) and r['lv'][0][0] == 'done':
+                ok('лестница: суммы ступеней — доля от всего резерва цикла (свободный + уже потраченный), старые доли 20/25/33/50/100 читаются как 10/15/20/25/30')
+            else: fail('лестница: доля от всего резерва', str(r))
+            # BTC в тестах 110000 < 140000·1,1 — ступень 1 ещё не открывается; поднимаем максимум ниже, чтобы цена была «после отскока»
+            pg.evaluate("""db.doc('app/cycle').update({ath:126000})"""); pg.wait_for_timeout(2000)
+            r2 = pg.evaluate("""()=>({l1:S.cycle.levels[0],al:(S.alerts||[]).filter(a=>a.kind==='rearm').length,base:+lvBase(derive()).toFixed(2)})""")
+            l1 = r2['l1']
+            if l1['status'] == 'pending' and l1.get('rounds') == 1 and abs(l1.get('spentPrev', 0) - 50) < 0.01 and r2['al'] == 1 and abs(r2['base'] - b) < 0.02:
+                ok('лестница: после отскока BTC на 10% выше ступени она снова активна, круг 2, прошлые $50 учтены в резерве цикла, запись в событиях')
+            else: fail('лестница: повтор после отскока', str(r2))
+            ev = pg.evaluate("""MLX.sigEvents({ath:126000,athDate:'2025-10-06',levels:[{n:1,drop:30,price:88200,r:1}],seen:{'lv:2025-10-06:1:k1':1}},80000)""")
+            ok('лестница: сигнал второго круга ступени не глушится прошлым') if len(ev) == 1 and ':r1:' in ev[0]['k'] else fail('лестница: сигнал второго круга', str(ev))
+            pg.evaluate("document.querySelector('nav.tabs [data-tab=\"strategy\"]').click()"); pg.wait_for_timeout(600)
+            pg.evaluate("document.getElementById('levels').scrollIntoView({block:'start'})"); pg.wait_for_timeout(300)
+            shot(pg, 'ladder-total')
+        scenario('Лестница: доля и отскок', {'session': True, 'docs': SEED}, s_ladder_total)
+
         def s_v3_plan(pg, n):
             wait_app(pg); pg.wait_for_timeout(800)
             pure = pg.evaluate("""()=>{const r=a=>{const x=MLX.planResult({v:1,a:{inc:a[0],cus:a[1],debt:a[2],save:a[3],hor:a[4],drop:a[5],exp:a[6],dep:a[7]}});return [x.stage,x.prof,x.ceil,x.preset.name]};

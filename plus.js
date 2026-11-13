@@ -397,7 +397,7 @@
   const notifOn = () => !!xGet().notif && typeof Notification !== 'undefined' && Notification.permission === 'granted';
   X.notifOn = notifOn;
   function cfgForSw(D) {
-    const ath = +(S.cycle && S.cycle.ath) || 0, btc = +D.prices.BTC || 0, lv = ladderOn() ? ((S.cycle && S.cycle.levels) || []).filter(l => !['done', 'skipped'].includes(l.status)).map(l => ({ n: l.n, drop: l.drop, price: Math.round(lvPrice(l)) })) : [];
+    const ath = +(S.cycle && S.cycle.ath) || 0, btc = +D.prices.BTC || 0, lv = ladderOn() ? ((S.cycle && S.cycle.levels) || []).filter(l => !['done', 'skipped'].includes(l.status)).map(l => ({ n: l.n, drop: l.drop, price: Math.round(lvPrice(l)), r: +l.rounds || 0 })) : [];
     return { v: 1, lang: window.mlLang ? window.mlLang() : 'ru', on: notifOn(), ath, athDate: (S.cycle && S.cycle.athDate) || '', levels: lv, goal: goalBtc(), alerts: alGet().map(a => ({ id: a.id, sym: a.sym, price: a.price, dir: a.dir })), seen: xGet().seen || {}, btc, at: Date.now() };
   }
   let cfgLast = '';
@@ -411,7 +411,7 @@
   }
   /* чистая функция (та же логика — в sw.js): какие события новые. seen — уже показанные ключи */
   function sigEvents(cfg, btc, states) { const ev = []; if (!(btc > 0)) return ev;
-    for (const l of cfg.levels || []) { const st = states ? states[l.n] : (btc <= l.price ? 'hold' : ''); if (st !== 'go' && st !== 'hold') continue; const k = 'lv:' + (cfg.athDate || cfg.ath) + ':' + l.n + ':' + (st === 'go' ? 'go' : 'k1'); if (cfg.seen[k]) continue;
+    for (const l of cfg.levels || []) { const st = states ? states[l.n] : (btc <= l.price ? 'hold' : ''); if (st !== 'go' && st !== 'hold') continue; const k = 'lv:' + (cfg.athDate || cfg.ath) + ':' + l.n + (l.r ? ':r' + l.r : '') + ':' + (st === 'go' ? 'go' : 'k1');   /* r — круг ступени после отскока: повторный сигнал не глушится прошлым */ if (cfg.seen[k]) continue;
       ev.push({ k, title: st === 'go' ? 'Можно докупить · ступень ' + l.n : 'Ступень ' + l.n + ' открыта', body: st === 'go' ? 'BTC на −' + l.drop + '% от максимума, оба ключа сошлись. Открой MoneyLife — суммы по монетам там.' : 'BTC дошёл до −' + l.drop + '% от максимума ($' + l.price.toLocaleString('ru-RU') + '). Ключ 2 проверит приложение.' }); }
     if (cfg.goal > 0 && btc >= cfg.goal) { const k = 'goal:' + cfg.goal; if (!cfg.seen[k]) ev.push({ k, title: 'BTC дошёл до твоей цели', body: 'Цена выше $' + Math.round(cfg.goal).toLocaleString('ru-RU') + '. Что делать дальше — по твоему плану.' }); }
     return ev; }
