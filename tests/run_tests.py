@@ -1937,6 +1937,86 @@ def run_browser():
             ok('3.0: демо — «Создать аккаунт» открывает регистрацию, пример стёрт') if sub == 'Новый аккаунт' and pg.evaluate("S.tx.length") == 0 else fail('3.0: демо, выход', sub)
         scenario('3.0: демо без регистрации', {'session': False, 'docs': []}, s_v3_demo)
 
+        # --- 14.11 (разбор Льва, «12 × 14»): подсказка «На главный экран» — один раз после знакомства. Android Chrome: событие
+        #     beforeinstallprompt (имитация с фиктивным prompt()), iPhone Safari: строка «Поделиться → На экран „Домой“».
+        #     Закрыл/поставил — флаг ml-inst на телефоне, больше не показываем; в установленном приложении и в демо — нет
+        BIP = """()=>{const e=new Event('beforeinstallprompt',{cancelable:true});e.prompt=()=>{window.__pr=(window.__pr||0)+1;return Promise.resolve({outcome:'accepted'})};
+            e.userChoice=Promise.resolve({outcome:'accepted'});dispatchEvent(e);return e.defaultPrevented}"""
+        INST = """()=>{const el=document.getElementById('inst'),r=el.getBoundingClientRect(),hit=id=>{const x=document.getElementById(id);if(!x||x.hidden)return false;const q=x.getBoundingClientRect();return q.height>0&&q.bottom>r.top+.5&&q.top<r.bottom-.5};
+            return {vis:!el.hidden&&r.height>0,txt:el.innerText.replace(/\\s+/g,' ').trim(),btn:[...el.querySelectorAll('button')].map(b=>[b.textContent.trim(),Math.round(b.getBoundingClientRect().height)]),
+            over:hit('signal')||hit('d14'),below:['signal','d14'].every(id=>{const x=document.getElementById(id);return !x||x.hidden||x.getBoundingClientRect().bottom<=r.top+.5}),flag:localStorage.getItem('ml-inst'),pr:window.__pr||0}}"""
+        for th in ('dark', 'light'):
+            def s_inst(pg, n, th=th):
+                wait_app(pg); pg.wait_for_timeout(500)
+                if pg.evaluate("document.documentElement.dataset.theme") != th: raise AssertionError('тема не включилась: ' + th)
+                r0 = pg.evaluate(INST)
+                prev = pg.evaluate(BIP); pg.wait_for_timeout(300); r = pg.evaluate(INST)
+                if not r0['vis'] and prev and r['vis'] and r['btn'] == [['Установить', r['btn'][0][1]], ['Не сейчас', r['btn'][1][1]]] and min(b[1] for b in r['btn']) >= 48 and 'Поставь на главный экран' in r['txt']:
+                    ok(f'«На главный экран» ({th}): без события браузера не видна; с beforeinstallprompt — карточка «Установить» / «Не сейчас», кнопки ≥ 48 px')
+                else: fail(f'«На главный экран» ({th}): Android', f'{r0} | {prev} | {r}')
+                ok(f'«На главный экран» ({th}): под сигналом и «14 днями», не перекрывает их') if r['below'] and not r['over'] else fail(f'«На главный экран» ({th}): место', str(r))
+                pg.evaluate("document.getElementById('inst').scrollIntoView({block:'center'})"); pg.wait_for_timeout(300); shot(pg, f'inst-android-{th}')
+                pg.click('#inst [data-inst=go]'); pg.wait_for_timeout(300); r = pg.evaluate(INST)
+                ok(f'«На главный экран» ({th}): «Установить» вызывает системное окно, карточка прячется') if r['pr'] == 1 and not r['vis'] and r['flag'] == '1' else fail(f'«На главный экран» ({th}): «Установить»', str(r))
+                pg.evaluate("localStorage.removeItem('ml-inst')"); pg.evaluate(BIP); pg.wait_for_timeout(300)
+                pg.click('#inst [data-inst=no]'); pg.wait_for_timeout(300); r = pg.evaluate(INST)
+                pg.reload(wait_until='load'); wait_app(pg); pg.wait_for_timeout(800); pg.evaluate(BIP); pg.wait_for_timeout(300); r2 = pg.evaluate(INST)
+                if not r['vis'] and r['pr'] == 1 and r['flag'] == '1' and not r2['vis']: ok(f'«На главный экран» ({th}): «Не сейчас» прячет навсегда — после перезапуска не показывается')
+                else: fail(f'«На главный экран» ({th}): «Не сейчас»', f'{r} | {r2}')
+                pg.evaluate("localStorage.removeItem('ml-inst');Object.defineProperty(navigator,'standalone',{value:true,configurable:true})"); pg.evaluate(BIP); pg.wait_for_timeout(300); r = pg.evaluate(INST)
+                pg.evaluate("delete navigator.standalone"); pg.evaluate(BIP); pg.wait_for_timeout(300); r2 = pg.evaluate(INST)
+                pg.evaluate("dispatchEvent(new Event('appinstalled'))"); pg.wait_for_timeout(300); r3 = pg.evaluate(INST)
+                if not r['vis'] and r2['vis'] and not r3['vis'] and r3['flag'] == '1': ok(f'«На главный экран» ({th}): в установленном приложении не показывается; после appinstalled — прячется навсегда')
+                else: fail(f'«На главный экран» ({th}): установлено', f'{r} | {r2} | {r3}')
+            scenario(f'На главный экран — Android ({th})', {'session': True, 'docs': SEED}, s_inst, dsf=1, theme=th)
+
+            def s_inst_ios(pg, n, th=th):
+                pg.add_init_script("Object.defineProperty(navigator,'userAgent',{get:()=>'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1'})")
+                pg.reload(wait_until='load'); wait_app(pg); pg.wait_for_timeout(800)
+                r = pg.evaluate(INST)
+                if r['vis'] and r['btn'] == [['Понятно', r['btn'][0][1]]] and r['btn'][0][1] >= 48 and 'Нажми «Поделиться» → «На экран „Домой“»' in r['txt'] and r['below'] and not r['over']:
+                    ok(f'«На главный экран» ({th}): iPhone — строка «Поделиться → На экран „Домой“» и «Понятно» ≥ 48 px, под карточками')
+                else: fail(f'«На главный экран» ({th}): iPhone', str(r))
+                pg.evaluate("document.getElementById('inst').scrollIntoView({block:'center'})"); pg.wait_for_timeout(300); shot(pg, f'inst-ios-{th}')
+                pg.click('#inst [data-inst=no]'); pg.wait_for_timeout(300); r = pg.evaluate(INST)
+                pg.reload(wait_until='load'); wait_app(pg); pg.wait_for_timeout(800); r2 = pg.evaluate(INST)
+                ok(f'«На главный экран» ({th}): iPhone — «Понятно» прячет навсегда') if not r['vis'] and r['flag'] == '1' and not r2['vis'] else fail(f'«На главный экран» ({th}): iPhone «Понятно»', f'{r} | {r2}')
+            scenario(f'На главный экран — iPhone ({th})', {'session': True, 'docs': SEED}, s_inst_ios, dsf=1, theme=th)
+
+            # «Написать отзыв» в «Настройки» → «Аккаунт»: письмо на публичную почту, тема «Отзыв MoneyLife», внизу версия и экран
+            def s_fb(pg, n, th=th):
+                wait_app(pg)
+                if pg.evaluate("document.documentElement.dataset.theme") != th: raise AssertionError('тема не включилась: ' + th)
+                pg.click('#setBtn'); pg.wait_for_selector('#setSheet.open', timeout=5000); pg.wait_for_timeout(500)
+                pg.evaluate("document.getElementById('fbBtn').scrollIntoView({block:'center'})"); pg.wait_for_timeout(300)
+                r = pg.evaluate("""(()=>{const b=document.getElementById('fbBtn'),l=b.closest('[data-fkey]');return {t:b.textContent.trim(),h:b.getBoundingClientRect().height,fold:l&&l.dataset.fkey,ver:document.getElementById('appVer').textContent.trim(),href:fbHref()}})()""")
+                from urllib.parse import urlsplit, parse_qs
+                u = urlsplit(r['href']); q = parse_qs(u.query); body = q.get('body', [''])[0].split('\n')
+                if r['t'] == 'Написать отзыв' and r['h'] >= 48 and r['fold'] == 'acc': ok(f'«Написать отзыв» ({th}): строка в складке «Аккаунт», {round(r["h"])} px')
+                else: fail(f'«Написать отзыв» ({th}): строка', str(r))
+                if u.scheme == 'mailto' and u.path == 'moneylife.ap@gmail.com' and q.get('subject') == ['Отзыв MoneyLife'] and body[0].startswith('Ваш отзыв') and r['ver'] in body and r['ver'].startswith('Версия') and any(x.startswith('Экран: ') for x in body):
+                    ok(f'«Написать отзыв» ({th}): письмо на moneylife.ap@gmail.com, тема «Отзыв MoneyLife», внизу версия сборки и экран')
+                else: fail(f'«Написать отзыв» ({th}): письмо', r['href'][:300])
+                shot(pg, f'feedback-{th}')
+            scenario(f'Написать отзыв ({th})', {'session': True, 'docs': SEED}, s_fb, dsf=1, theme=th)
+
+        def s_inst_demo(pg, n):
+            pg.wait_for_selector('#mlaDemo', state='visible', timeout=8000)
+            pg.click('#mlaDemo'); wait_app(pg); pg.wait_for_timeout(2500)
+            prev = pg.evaluate(BIP); pg.wait_for_timeout(300); r = pg.evaluate(INST)
+            ok('«На главный экран»: в демо без регистрации не показывается') if prev and not r['vis'] and pg.evaluate("!!window.mlDemo") else fail('«На главный экран»: демо', str(r))
+        scenario('На главный экран — демо', {'session': False, 'docs': []}, s_inst_demo)
+
+        def s_inst_uk(pg, n):
+            pg.evaluate("localStorage.setItem('ml-lang','uk'); location.reload()"); pg.wait_for_timeout(2500); wait_app(pg)
+            pg.evaluate(BIP); pg.wait_for_timeout(300); r = pg.evaluate(INST)
+            pg.evaluate("openSettings()"); pg.wait_for_timeout(500)
+            f = pg.evaluate("[document.getElementById('fbBtn').textContent.trim(),decodeURIComponent(fbHref())]")
+            if 'Додай на головний екран' in r['txt'] and 'іконка на телефоні, перевірка ціни у фоні' in r['txt'] and [b[0] for b in r['btn']] == ['Встановити', 'Не зараз'] and f[0] == 'Написати відгук' and 'subject=Відгук MoneyLife' in f[1] and 'Ваш відгук' in f[1]:
+                ok('украинский: «На головний екран» / «Встановити» / «Не зараз» и «Написати відгук» с темой «Відгук MoneyLife»')
+            else: fail('украинский: установка и отзыв', f'{r} | {f}')
+        scenario('На главный экран и отзыв — украинский', {'session': True, 'docs': SEED}, s_inst_uk)
+
         def s_v3_auth_calm(pg, n):
             pg.wait_for_selector('#mlaPass', state='visible', timeout=8000)
             a = pg.evaluate("""()=>{const c=document.querySelector('.mla-card');document.querySelector('#mlAuth [data-to=up]').click();

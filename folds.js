@@ -41,7 +41,7 @@
     rules: function (b) { var v = b.querySelector('.kv .v, .kv dd, .kv > div > :last-child'); return txt(v) || L('Твоя стратегия'); },
     edit: function () { return L('Доли монет, резерв, лестница, ключ 2'); },
     data: function (b) { var v = txt(b.querySelector('.kv > div > :last-child')); return v && v !== '—' ? v : L('Курс, цены, записи'); },
-    acc: function () { return L('Почта, выход, удаление аккаунта'); }
+    acc: function () { return L('Почта, отзыв, выход, удаление аккаунта'); }
   };
 
   var folds = [];
