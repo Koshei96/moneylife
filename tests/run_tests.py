@@ -1950,7 +1950,7 @@ def run_browser():
                 if pg.evaluate("document.documentElement.dataset.theme") != th: raise AssertionError('тема не включилась: ' + th)
                 r0 = pg.evaluate(INST)
                 prev = pg.evaluate(BIP); pg.wait_for_timeout(300); r = pg.evaluate(INST)
-                if not r0['vis'] and prev and r['vis'] and r['btn'] == [['Установить', r['btn'][0][1]], ['Не сейчас', r['btn'][1][1]]] and min(b[1] for b in r['btn']) >= 48 and 'На главный экран' in r['txt']:
+                if not r0['vis'] and prev and r['vis'] and r['btn'] == [['Установить', r['btn'][0][1]], ['Не сейчас', r['btn'][1][1]]] and min(b[1] for b in r['btn']) >= 48 and 'Поставь на главный экран' in r['txt']:
                     ok(f'«На главный экран» ({th}): без события браузера не видна; с beforeinstallprompt — карточка «Установить» / «Не сейчас», кнопки ≥ 48 px')
                 else: fail(f'«На главный экран» ({th}): Android', f'{r0} | {prev} | {r}')
                 ok(f'«На главный экран» ({th}): под сигналом и «14 днями», не перекрывает их') if r['below'] and not r['over'] else fail(f'«На главный экран» ({th}): место', str(r))
@@ -1973,7 +1973,7 @@ def run_browser():
                 pg.add_init_script("Object.defineProperty(navigator,'userAgent',{get:()=>'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1'})")
                 pg.reload(wait_until='load'); wait_app(pg); pg.wait_for_timeout(800)
                 r = pg.evaluate(INST)
-                if r['vis'] and r['btn'] == [['Понятно', r['btn'][0][1]]] and r['btn'][0][1] >= 48 and 'Нажмите «Поделиться» → «На экран „Домой“»' in r['txt'] and r['below'] and not r['over']:
+                if r['vis'] and r['btn'] == [['Понятно', r['btn'][0][1]]] and r['btn'][0][1] >= 48 and 'Нажми «Поделиться» → «На экран „Домой“»' in r['txt'] and r['below'] and not r['over']:
                     ok(f'«На главный экран» ({th}): iPhone — строка «Поделиться → На экран „Домой“» и «Понятно» ≥ 48 px, под карточками')
                 else: fail(f'«На главный экран» ({th}): iPhone', str(r))
                 pg.evaluate("document.getElementById('inst').scrollIntoView({block:'center'})"); pg.wait_for_timeout(300); shot(pg, f'inst-ios-{th}')
@@ -2011,7 +2011,7 @@ def run_browser():
             pg.evaluate(BIP); pg.wait_for_timeout(300); r = pg.evaluate(INST)
             pg.evaluate("openSettings()"); pg.wait_for_timeout(500)
             f = pg.evaluate("[document.getElementById('fbBtn').textContent.trim(),decodeURIComponent(fbHref())]")
-            if 'На головний екран' in r['txt'] and 'іконка на телефоні, сигнали у фоні' in r['txt'] and [b[0] for b in r['btn']] == ['Встановити', 'Не зараз'] and f[0] == 'Написати відгук' and 'subject=Відгук MoneyLife' in f[1] and 'Ваш відгук' in f[1]:
+            if 'Додай на головний екран' in r['txt'] and 'іконка на телефоні, перевірка ціни у фоні' in r['txt'] and [b[0] for b in r['btn']] == ['Встановити', 'Не зараз'] and f[0] == 'Написати відгук' and 'subject=Відгук MoneyLife' in f[1] and 'Ваш відгук' in f[1]:
                 ok('украинский: «На головний екран» / «Встановити» / «Не зараз» и «Написати відгук» с темой «Відгук MoneyLife»')
             else: fail('украинский: установка и отзыв', f'{r} | {f}')
         scenario('На главный экран и отзыв — украинский', {'session': True, 'docs': SEED}, s_inst_uk)
