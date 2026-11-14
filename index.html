@@ -11,7 +11,7 @@ addEventListener('error',function(e){if(e&&e.message)add(e.message,(e.filename||
 addEventListener('unhandledrejection',function(e){var r=e&&e.reason;add(r&&(r.message||r)||'отклонённое обещание','promise');});
 window.mlErrLog=function(){try{return JSON.parse(localStorage.getItem(K)||'[]');}catch(e){return [];}};window.mlErrAdd=add;})();
 </script>
-<script src="i18n.js?v=20261114050000"></script>
+<script src="i18n.js?v=20261114210000"></script>
 <title>MoneyLife</title>
 <meta name="theme-color" content="#06040e">
 <script>/* тема до отрисовки: «Авто» — как в телефоне, иначе выбор из настроек */
@@ -1141,6 +1141,7 @@ html.lite nav.tabs{background:var(--bg);-webkit-backdrop-filter:none;backdrop-fi
 /* метка сборки внизу «Настроек» — для тестировщиков */
 #fbBtn{min-height:48px}
 .inst-a{flex-wrap:wrap;row-gap:10px;padding:14px 16px}.inst-a .d14-ib{flex:1 1 100%}.inst-a .d14-ib .btn{flex:1}
+.inst-sh{width:14px;height:14px;vertical-align:-2px;margin:0 3px 0 1px}.inst-go{white-space:nowrap}
 #appVer{text-align:center;margin:-4px 0 4px;font-variant-numeric:tabular-nums;letter-spacing:.02em}
 </style>
 <style id="v5">
@@ -1693,13 +1694,15 @@ document.querySelectorAll('nav.tabs .tab').forEach(b=>{const v=b.querySelector('
     <span class="label" data-fold="acc">Аккаунт</span>
     <div class="card" style="display:flex;flex-direction:column;gap:10px">
       <div class="kv" id="accInfo"></div>
-      <button type="button" class="btn block ghost" id="fbBtn">Написать отзыв</button>
       <button type="button" class="btn block ghost" id="expBtn">Скачать мои данные</button>
       <button type="button" class="btn block ghost" onclick="mlSignOut()">Выйти из аккаунта</button>
       <button type="button" class="btn block danger" id="delBtn">Удалить аккаунт</button>
     </div>
     <p class="hint">MoneyLife — дневник и калькулятор для твоей стратегии, а не инвестиционный совет: решения о покупке и продаже принимаешь ты. <a href="privacy.html" target="_blank" rel="noopener">Политика конфиденциальности</a></p>
-    <button type="button" class="btn block ghost" id="bugBtn">Сообщить об ошибке</button>
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <button type="button" class="btn block ghost" id="fbBtn">Написать отзыв</button>
+      <button type="button" class="btn block ghost" id="bugBtn">Сообщить об ошибке</button>
+    </div>
     <p class="hint" id="appVer" hidden></p>
   </div></div>
 </div>
@@ -1726,9 +1729,9 @@ document.querySelectorAll('nav.tabs .tab').forEach(b=>{const v=b.querySelector('
 
 <div class="toast" id="toast" role="status"><span id="toastMsg"></span><button type="button" id="toastBtn" hidden></button></div>
 
-<script src="config.js?v=20261114050000"></script>
+<script src="config.js?v=20261114210000"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="shim.js?v=20261114050000"></script>
+<script src="shim.js?v=20261114210000"></script>
 <script>
 /* ===== основа ===== */
 const $=id=>document.getElementById(id);
@@ -3042,10 +3045,12 @@ setInterval(()=>{if(D14.day&&document.visibilityState==='visible'&&isoDay(new Da
    Android Chrome — системное окно (beforeinstallprompt), iPhone Safari — подсказка; закрыл или поставил — флаг ml-inst на телефоне, в базу не идёт */
 let instEv=null;
 const instDone=()=>{try{return !!localStorage.getItem('ml-inst');}catch(e){return true;}},instSet=()=>{try{localStorage.setItem('ml-inst','1');}catch(e){}};
-const instIos=()=>/iP(hone|ad|od)/.test(navigator.userAgent)&&/Safari/.test(navigator.userAgent)&&!/CriOS|FxiOS|EdgiOS/.test(navigator.userAgent);
+/* iPad на iPadOS 13+ представляется Mac'ом (MacIntel + сенсорный экран); Chrome, Firefox, Edge и Google (GSA) на iOS — без «На экран „Домой“» */
+const instIos=()=>{const u=navigator.userAgent;return (/iP(hone|ad|od)/.test(u)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1))&&/Safari/.test(u)&&!/CriOS|FxiOS|EdgiOS|GSA/.test(u);},
+  INST_SH='<svg class="inst-sh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 3v12M8 7l4-4 4 4"/><path d="M8.5 10H7a1.5 1.5 0 0 0-1.5 1.5v8A1.5 1.5 0 0 0 7 21h10a1.5 1.5 0 0 0 1.5-1.5v-8A1.5 1.5 0 0 0 17 10h-1.5"/></svg>';
 function renderInst(){const el=$('inst');if(!el)return;const ios=!instEv&&instIos(),
   on=d14Can()&&!window.mlDemo&&!(matchMedia('(display-mode: standalone)').matches||navigator.standalone===true)&&!instDone()&&(!!instEv||ios);
-  const h=!on?'':`<div class="card d14 d14-inv${ios?'':' inst-a'}" role="region" aria-label="Поставь на главный экран"><span class="d14-it"><b>Поставь на главный экран</b><small>${ios?'Нажми «Поделиться» → «На экран „Домой“»':'иконка на телефоне, проверка цены в фоне'}</small></span><span class="d14-ib">${ios?'<button type="button" class="btn sm ghost" data-inst="no">Понятно</button>':'<button type="button" class="btn sm soft" data-inst="go">Установить</button><button type="button" class="btn sm ghost" data-inst="no">Не сейчас</button>'}</span></div>`;
+  const h=!on?'':`<div class="card d14 d14-inv${ios?'':' inst-a'}" role="region" aria-label="${L('Поставь на главный экран')}"><span class="d14-it"><b>Поставь на главный экран</b><small>${ios?'Нажми «Поделиться» '+INST_SH+' <span class="inst-go">→ «На экран „Домой“»</span>':'иконка на телефоне, проверка цены в фоне'}</small></span><span class="d14-ib">${ios?'<button type="button" class="btn sm ghost" data-inst="no">Понятно</button>':'<button type="button" class="btn sm soft" data-inst="go">Установить</button><button type="button" class="btn sm ghost" data-inst="no">Не сейчас</button>'}</span></div>`;
   if(el._h!==h){el.innerHTML=h;el._h=h;}el.hidden=!h;}
 addEventListener('beforeinstallprompt',e=>{e.preventDefault();instEv=e;renderInst();});
 addEventListener('appinstalled',()=>{instSet();instEv=null;renderInst();});
@@ -3062,7 +3067,7 @@ function msSync(x){MSC.last=x;if(!msApply())return;if(!S.ready||document.getElem
   if(window.Mascot){try{window.Mascot.sync(msPayload(x));}catch(e){}}else msLoad();}
 function msLoad(){if(MSC.loading||MSC.failed)return;MSC.loading=true;
   const add=(src,ok)=>{try{const s=document.createElement('script');s.src=src;s.async=true;s.onload=ok;s.onerror=()=>{MSC.failed=true;};document.head.appendChild(s);}catch(e){MSC.failed=true;}};
-  const boot=()=>add('mascot.js?v=20261114050000',()=>{try{if(window.Mascot&&window.Mascot.init({host:$('mascot'),app:{buzz,askName:()=>{if(window.MLX&&MLX.askName)MLX.askName();},addAlert:(y,v)=>window.MLX&&MLX.addAlert?MLX.addAlert(y,v):null,voice:(t,x)=>window.mlVoice?window.mlVoice(t,x):null,ask:(q,y,x)=>window.mlAsk?window.mlAsk(q,y,x):null}})&&MSC.last&&$('ob').hidden&&!document.getElementById('mlAuth'))window.Mascot.sync(msPayload(MSC.last));}catch(e){}});
+  const boot=()=>add('mascot.js?v=20261114210000',()=>{try{if(window.Mascot&&window.Mascot.init({host:$('mascot'),app:{buzz,askName:()=>{if(window.MLX&&MLX.askName)MLX.askName();},addAlert:(y,v)=>window.MLX&&MLX.addAlert?MLX.addAlert(y,v):null,voice:(t,x)=>window.mlVoice?window.mlVoice(t,x):null,ask:(q,y,x)=>window.mlAsk?window.mlAsk(q,y,x):null}})&&MSC.last&&$('ob').hidden&&!document.getElementById('mlAuth'))window.Mascot.sync(msPayload(MSC.last));}catch(e){}});
   setTimeout(boot,300);}
 function render(){const D=derive();renderHeader();renderHome(D);renderGrowth();renderCoins(D);renderStrategy(D);renderActivity();renderD14();renderInst();if(window.MLX)try{MLX.render(D);}catch(e){console.error(e);}earnNudge();if(cvSym&&$('coinSheet').classList.contains('open'))renderCoinView();}
 document.body.classList.add('loading');
@@ -3147,9 +3152,9 @@ render();requestAnimationFrame(inkMove);setTimeout(inkMove,600);
     sy=null;swipe=null;pull=0;armed=false;},{passive:true});
 })();
 </script>
-<script src="plus.js?v=20261114050000"></script>
-<script src="wins.js?v=20261114050000"></script>
-<script src="folds.js?v=20261114050000"></script>
+<script src="plus.js?v=20261114210000"></script>
+<script src="wins.js?v=20261114210000"></script>
+<script src="folds.js?v=20261114210000"></script>
 <script>
 /* ===== 12.11.2026: ползунок «Купить», смахнуть запись влево с «рассыпанием» монеты ===== */
 (function(){

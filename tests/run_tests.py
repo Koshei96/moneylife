@@ -1944,6 +1944,10 @@ def run_browser():
             e.userChoice=Promise.resolve({outcome:'accepted'});dispatchEvent(e);return e.defaultPrevented}"""
         INST = """()=>{const el=document.getElementById('inst'),r=el.getBoundingClientRect(),hit=id=>{const x=document.getElementById(id);if(!x||x.hidden)return false;const q=x.getBoundingClientRect();return q.height>0&&q.bottom>r.top+.5&&q.top<r.bottom-.5};
             return {vis:!el.hidden&&r.height>0,txt:el.innerText.replace(/\\s+/g,' ').trim(),btn:[...el.querySelectorAll('button')].map(b=>[b.textContent.trim(),Math.round(b.getBoundingClientRect().height)]),
+            lab:(el.querySelector('[role=region]')||{getAttribute:()=>null}).getAttribute('aria-label'),
+            ic:[...el.querySelectorAll('small svg')].map(s=>{const r=s.getBoundingClientRect(),c=getComputedStyle(s);return {w:Math.round(r.width),h:Math.round(r.height),hid:s.getAttribute('aria-hidden'),fill:s.getAttribute('fill'),
+              paint:[...s.querySelectorAll('*')].some(x=>x.getAttribute('fill')||x.getAttribute('style')||(x.getAttribute('stroke')&&x.getAttribute('stroke')!=='currentColor')),stroke:s.getAttribute('stroke'),col:c.color===getComputedStyle(s.parentElement).color}}),
+            wide:el.scrollWidth>el.clientWidth+.5||[...el.querySelectorAll('*')].some(x=>{const q=x.getBoundingClientRect();return q.width>0&&(q.right>innerWidth+.5||q.left<-.5)}),
             over:hit('signal')||hit('d14'),below:['signal','d14'].every(id=>{const x=document.getElementById(id);return !x||x.hidden||x.getBoundingClientRect().bottom<=r.top+.5}),flag:localStorage.getItem('ml-inst'),pr:window.__pr||0}}"""
         for th in ('dark', 'light'):
             def s_inst(pg, n, th=th):
@@ -1951,7 +1955,7 @@ def run_browser():
                 if pg.evaluate("document.documentElement.dataset.theme") != th: raise AssertionError('тема не включилась: ' + th)
                 r0 = pg.evaluate(INST)
                 prev = pg.evaluate(BIP); pg.wait_for_timeout(300); r = pg.evaluate(INST)
-                if not r0['vis'] and prev and r['vis'] and r['btn'] == [['Установить', r['btn'][0][1]], ['Не сейчас', r['btn'][1][1]]] and min(b[1] for b in r['btn']) >= 48 and 'Поставь на главный экран' in r['txt']:
+                if not r0['vis'] and prev and r['vis'] and r['btn'] == [['Установить', r['btn'][0][1]], ['Не сейчас', r['btn'][1][1]]] and min(b[1] for b in r['btn']) >= 48 and 'Поставь на главный экран' in r['txt'] and r['lab'] == 'Поставь на главный экран' and not r['ic']:
                     ok(f'«На главный экран» ({th}): без события браузера не видна; с beforeinstallprompt — карточка «Установить» / «Не сейчас», кнопки ≥ 48 px')
                 else: fail(f'«На главный экран» ({th}): Android', f'{r0} | {prev} | {r}')
                 ok(f'«На главный экран» ({th}): под сигналом и «14 днями», не перекрывает их') if r['below'] and not r['over'] else fail(f'«На главный экран» ({th}): место', str(r))
@@ -1977,26 +1981,54 @@ def run_browser():
                 if r['vis'] and r['btn'] == [['Понятно', r['btn'][0][1]]] and r['btn'][0][1] >= 48 and 'Нажми «Поделиться» → «На экран „Домой“»' in r['txt'] and r['below'] and not r['over']:
                     ok(f'«На главный экран» ({th}): iPhone — строка «Поделиться → На экран „Домой“» и «Понятно» ≥ 48 px, под карточками')
                 else: fail(f'«На главный экран» ({th}): iPhone', str(r))
+                ic = r['ic']
+                if len(ic) == 1 and ic[0]['w'] == 14 and ic[0]['h'] == 14 and ic[0]['hid'] == 'true' and ic[0]['fill'] == 'none' and ic[0]['stroke'] == 'currentColor' and not ic[0]['paint'] and ic[0]['col'] and not r['wide']:
+                    ok(f'«На главный экран» ({th}): iPhone — значок «Поделиться» 14 px, цвет текста, без заливки, скрыт от чтеца; карточка в 390 px без выхода за край')
+                else: fail(f'«На главный экран» ({th}): значок «Поделиться»', str(r))
                 pg.evaluate("document.getElementById('inst').scrollIntoView({block:'center'})"); pg.wait_for_timeout(300); shot(pg, f'inst-ios-{th}')
                 pg.click('#inst [data-inst=no]'); pg.wait_for_timeout(300); r = pg.evaluate(INST)
                 pg.reload(wait_until='load'); wait_app(pg); pg.wait_for_timeout(800); r2 = pg.evaluate(INST)
                 ok(f'«На главный экран» ({th}): iPhone — «Понятно» прячет навсегда') if not r['vis'] and r['flag'] == '1' and not r2['vis'] else fail(f'«На главный экран» ({th}): iPhone «Понятно»', f'{r} | {r2}')
             scenario(f'На главный экран — iPhone ({th})', {'session': True, 'docs': SEED}, s_inst_ios, dsf=1, theme=th)
 
-            # «Написать отзыв» в «Настройки» → «Аккаунт»: письмо на публичную почту, тема «Отзыв MoneyLife», внизу версия и экран
+            # iPad на iPadOS 13+ выдаёт себя за Mac (MacIntel + сенсорный экран) — подсказка как на iPhone; настоящий Mac (без касаний),
+            # Google (GSA), Chrome, Firefox, Edge на iOS — без подсказки (там нет «На экран „Домой“»)
+            UA_MAC = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Safari/605.1.15'
+            UA_IOS = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) {} Mobile/15E148 Safari/604.1'
+            def s_inst_ua(pg, n, th=th):
+                res = {}
+                for key, ua, plat, tp in (('ipad', UA_MAC, 'MacIntel', 5), ('mac', UA_MAC, 'MacIntel', 0), ('gsa', UA_IOS.format('GSA/330.0.661178421'), 'iPhone', 5),
+                                          ('crios', UA_IOS.format('CriOS/131.0.6778.73'), 'iPhone', 5), ('fxios', UA_IOS.format('FxiOS/133.0'), 'iPhone', 5), ('edgios', UA_IOS.format('EdgiOS/131.0.2903.68'), 'iPhone', 5)):
+                    c = pg.context.new_page()
+                    c.add_init_script(f"Object.defineProperty(navigator,'userAgent',{{get:()=>{ua!r}}});Object.defineProperty(navigator,'platform',{{get:()=>{plat!r}}});Object.defineProperty(navigator,'maxTouchPoints',{{get:()=>{tp}}})")
+                    c.goto(pg.url, wait_until='load', timeout=30000); wait_app(c); c.wait_for_timeout(800)
+                    res[key] = c.evaluate(INST); c.close()
+                ip = res['ipad']
+                if ip['vis'] and 'Нажми «Поделиться» → «На экран „Домой“»' in ip['txt'] and [b[0] for b in ip['btn']] == ['Понятно'] and len(ip['ic']) == 1:
+                    ok(f'«На главный экран» ({th}): iPad, который представляется Mac (MacIntel, касания) — подсказка как на iPhone')
+                else: fail(f'«На главный экран» ({th}): iPad как Mac', str(ip))
+                hid = [k for k in ('mac', 'gsa', 'crios', 'fxios', 'edgios') if not res[k]['vis']]
+                ok(f'«На главный экран» ({th}): Mac без касаний, Google (GSA), Chrome, Firefox, Edge на iOS — подсказки нет') if len(hid) == 5 else fail(f'«На главный экран» ({th}): лишняя подсказка', str({k: res[k]['txt'] for k in res}))
+            scenario(f'На главный экран — iPad и другие браузеры ({th})', {'session': True, 'docs': SEED}, s_inst_ua, dsf=1, theme=th)
+
+            # «Написать отзыв» внизу «Настроек» (над «Сообщить об ошибке», хвосты Веры и Глеба 14.11): письмо на публичную почту, тема «Отзыв MoneyLife», внизу версия и экран
             def s_fb(pg, n, th=th):
                 wait_app(pg)
                 if pg.evaluate("document.documentElement.dataset.theme") != th: raise AssertionError('тема не включилась: ' + th)
                 pg.click('#setBtn'); pg.wait_for_selector('#setSheet.open', timeout=5000); pg.wait_for_timeout(500)
                 pg.evaluate("document.getElementById('fbBtn').scrollIntoView({block:'center'})"); pg.wait_for_timeout(300)
-                r = pg.evaluate("""(()=>{const b=document.getElementById('fbBtn'),l=b.closest('[data-fkey]');return {t:b.textContent.trim(),h:b.getBoundingClientRect().height,fold:l&&l.dataset.fkey,ver:document.getElementById('appVer').textContent.trim(),href:fbHref()}})()""")
+                r = pg.evaluate("""(()=>{const b=document.getElementById('fbBtn'),g=document.getElementById('bugBtn'),l=b.closest('[data-fkey]'),acc=document.getElementById('accInfo').closest('.card'),
+                  rb=b.getBoundingClientRect(),rg=g.getBoundingClientRect();return {t:b.textContent.trim(),h:rb.height,hg:rg.height,gap:rg.top-rb.bottom,next:b.nextElementSibling===g,inAcc:acc.contains(b),
+                  fold:l&&l.dataset.fkey,ver:document.getElementById('appVer').textContent.trim(),href:fbHref()}})()""")
                 from urllib.parse import urlsplit, parse_qs
                 u = urlsplit(r['href']); q = parse_qs(u.query); body = q.get('body', [''])[0].split('\n')
-                if r['t'] == 'Написать отзыв' and r['h'] >= 48 and r['fold'] == 'acc': ok(f'«Написать отзыв» ({th}): строка в складке «Аккаунт», {round(r["h"])} px')
-                else: fail(f'«Написать отзыв» ({th}): строка', str(r))
+                if r['t'] == 'Написать отзыв' and r['h'] >= 48 and r['hg'] >= 48 and r['next'] and abs(r['gap'] - 10) < 0.6 and not r['inAcc'] and not r['fold']:
+                    ok(f'«Написать отзыв» ({th}): внизу «Настроек», над «Сообщить об ошибке» (зазор {r["gap"]:.0f} px), вне складки «Аккаунт», {round(r["h"])} px')
+                else: fail(f'«Написать отзыв» ({th}): место', str(r))
                 if u.scheme == 'mailto' and u.path == 'moneylife.ap@gmail.com' and q.get('subject') == ['Отзыв MoneyLife'] and body[0].startswith('Ваш отзыв') and r['ver'] in body and r['ver'].startswith('Версия') and any(x.startswith('Экран: ') for x in body):
                     ok(f'«Написать отзыв» ({th}): письмо на moneylife.ap@gmail.com, тема «Отзыв MoneyLife», внизу версия сборки и экран')
                 else: fail(f'«Написать отзыв» ({th}): письмо', r['href'][:300])
+                pg.evaluate("document.getElementById('appVer').scrollIntoView({block:'end'})"); pg.wait_for_timeout(300)
                 shot(pg, f'feedback-{th}')
             scenario(f'Написать отзыв ({th})', {'session': True, 'docs': SEED}, s_fb, dsf=1, theme=th)
 
@@ -2012,10 +2044,19 @@ def run_browser():
             pg.evaluate(BIP); pg.wait_for_timeout(300); r = pg.evaluate(INST)
             pg.evaluate("openSettings()"); pg.wait_for_timeout(500)
             f = pg.evaluate("[document.getElementById('fbBtn').textContent.trim(),decodeURIComponent(fbHref())]")
-            if 'Додай на головний екран' in r['txt'] and 'іконка на телефоні, перевірка ціни у фоні' in r['txt'] and [b[0] for b in r['btn']] == ['Встановити', 'Не зараз'] and f[0] == 'Написати відгук' and 'subject=Відгук MoneyLife' in f[1] and 'Ваш відгук' in f[1]:
+            if 'Додай на головний екран' in r['txt'] and 'іконка на телефоні, перевірка ціни у фоні' in r['txt'] and [b[0] for b in r['btn']] == ['Встановити', 'Не зараз'] and f[0] == 'Написати відгук' and 'subject=Відгук MoneyLife' in f[1] and 'Ваш відгук' in f[1] and r['lab'] == 'Додай на головний екран':
                 ok('украинский: «На головний екран» / «Встановити» / «Не зараз» и «Написати відгук» с темой «Відгук MoneyLife»')
             else: fail('украинский: установка и отзыв', f'{r} | {f}')
         scenario('На главный экран и отзыв — украинский', {'session': True, 'docs': SEED}, s_inst_uk)
+
+        def s_inst_ios_uk(pg, n):
+            pg.add_init_script("localStorage.setItem('ml-lang','uk');Object.defineProperty(navigator,'userAgent',{get:()=>'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1'})")
+            pg.reload(wait_until='load'); wait_app(pg); pg.wait_for_timeout(1000); r = pg.evaluate(INST)
+            if r['vis'] and 'Натисни «Поділитися» → «На початковий екран»' in r['txt'] and r['lab'] == 'Додай на головний екран' and [b[0] for b in r['btn']] == ['Зрозуміло'] and len(r['ic']) == 1 and not r['wide']:
+                ok('украинский: iPhone — «Натисни «Поділитися» → «На початковий екран»», значок на месте, подпись области переведена')
+            else: fail('украинский: iPhone', str(r))
+            pg.evaluate("document.getElementById('inst').scrollIntoView({block:'center'})"); pg.wait_for_timeout(300); shot(pg, 'inst-ios-uk')
+        scenario('На главный экран — iPhone, украинский', {'session': True, 'docs': SEED}, s_inst_ios_uk, dsf=1, theme='light')
 
         def s_v3_auth_calm(pg, n):
             pg.wait_for_selector('#mlaPass', state='visible', timeout=8000)
