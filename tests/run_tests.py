@@ -455,9 +455,10 @@ def run_browser():
             const e=document.getElementById('appVer');let p=e,b='rgb(0,0,0)';for(;p;p=p.parentElement){const c=getComputedStyle(p).backgroundColor;if(c&&c!=='transparent'&&!/rgba\\(.*,\\s*0\\)$/.test(c)){b=c;break}}
             const x=lum(getComputedStyle(e).color),y=lum(b),r=e.getBoundingClientRect();
             return {txt:e.textContent.trim(),vis:!e.hidden&&r.height>0,cr:(Math.max(x,y)+.05)/(Math.min(x,y)+.05),fg:getComputedStyle(e).color===getComputedStyle(document.getElementById('setTitle')).color}}"""
-        # 13.11: к номеру дописана читаемая дата сборки из той же метки — «Версия 20261113151000 · 13.11, 15:10» (день.месяц, часы:минуты), не по часам телефона
-        VER_TXT = f'Версия {SW_V} · {SW_V[6:8]}.{SW_V[4:6]}, {SW_V[8:10]}:{SW_V[10:12]}'
-        if re.fullmatch(r'Версия \d{14} · (0[1-9]|[12]\d|3[01])\.(0[1-9]|1[0-2]), ([01]\d|2[0-3]):[0-5]\d', VER_TXT): ok(f'версия: формат даты сборки «{VER_TXT}»')
+        # 13.11: читаемая дата сборки из той же метки (день.месяц, часы:минуты), не по часам телефона;
+        # 14.11 (Вера): новичку понятнее дата первой — «Версия 14.11, 03:00 · сборка 20261114030000»
+        VER_TXT = f'Версия {SW_V[6:8]}.{SW_V[4:6]}, {SW_V[8:10]}:{SW_V[10:12]} · сборка {SW_V}'
+        if re.fullmatch(r'Версия (0[1-9]|[12]\d|3[01])\.(0[1-9]|1[0-2]), ([01]\d|2[0-3]):[0-5]\d · сборка \d{14}', VER_TXT): ok(f'версия: сначала дата, потом номер сборки «{VER_TXT}»')
         else: fail('версия: формат даты сборки', VER_TXT)
         for th in ('dark', 'light'):
             def s_ver(pg, n, th=th):
@@ -1246,7 +1247,7 @@ def run_browser():
             else: fail('Орион по-украински: мозг', f'{lang} | {said}')
             pg.evaluate("openSettings()"); pg.wait_for_timeout(500)
             vu = pg.evaluate("document.getElementById('appVer').textContent.trim()")
-            if vu == VER_TXT.replace('Версия', 'Версія'): ok(f'украинский: внизу настроек «{vu}» — номер и дата сборки те же')
+            if vu == VER_TXT.replace('Версия', 'Версія').replace('сборка', 'збірка'): ok(f'украинский: внизу настроек «{vu}» — дата и номер збірки те же')
             else: fail('украинский: строка версии', f'{vu} ≠ {VER_TXT}')
             pg.evaluate("document.getElementById('appVer').scrollIntoView({block:'end'})"); pg.wait_for_timeout(300)
             (OUT / 'review').mkdir(exist_ok=True); pg.screenshot(path=str(OUT / 'review' / 'ver-date-settings-uk.png'))
@@ -1427,7 +1428,7 @@ def run_browser():
             pg.evaluate("dispatchEvent(new ErrorEvent('error',{message:'проверка журнала',filename:'https://x/app.js',lineno:7}))"); pg.wait_for_timeout(200)
             rep = pg.evaluate("bugReport()"); tot = pg.evaluate("String(Math.round(derive().total))")
             bh = pg.evaluate("document.getElementById('bugBtn').getBoundingClientRect().height") if pg.evaluate("!!document.getElementById('bugBtn')") else 0
-            if 'проверка журнала' in rep and 'Версия' in rep and tot not in rep.replace(' ', '') and bh >= 44: ok('журнал ошибок: сбой попадает в «Сообщить об ошибке», версия есть, сумм портфеля нет, кнопка ≥44 px')
+            if 'проверка журнала' in rep and VER_TXT in rep.split('\n') and tot not in rep.replace(' ', '') and bh >= 44: ok('журнал ошибок: сбой попадает в «Сообщить об ошибке», версия есть, сумм портфеля нет, кнопка ≥44 px')
             else: fail('журнал ошибок', rep[-200:] + f' | сумма {tot} | кнопка {bh}')
         scenario('Интерфейс', {'session': True, 'docs': SEED}, s_ui)
 
