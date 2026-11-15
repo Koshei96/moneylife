@@ -127,6 +127,9 @@
     const b = document.createElement('div'); b.id = 'mlDemoBar'; b.setAttribute('role', 'status');
     b.innerHTML = '<span><b>Демо.</b> Это пример: записи не сохраняются</span><button type="button" class="btn sm" id="mlDemoGo">Создать аккаунт</button>';
     document.body.appendChild(b);
+    // нижний отступ страницы на высоту полосы, чтобы она не закрывала последнюю строку (Вера 15.11, #2)
+    const de = document.documentElement, fit = () => de.style.setProperty('--demo-h', Math.ceil(b.getBoundingClientRect().height) + 'px');
+    de.classList.add('ml-demo'); fit(); try { new ResizeObserver(fit).observe(b); } catch (e) {}
     b.querySelector('#mlDemoGo').addEventListener('click', () => { try { sessionStorage.setItem('ml-auth-mode', 'up'); } catch (e) {} location.reload(); });
     window.__mlAuthed(); emit();
   }

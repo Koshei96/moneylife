@@ -2242,6 +2242,31 @@ def run_browser():
                 shot(pg, f'graphite-rest-ob-{th}')
             scenario(f'Графит — метка «советую» ({th})', {'session': True, 'docs': []}, s_graphite_ob, theme=th)
 
+        # 15.11 (Вера, охота #2): в демо полоса «Демо / Создать аккаунт» не закрывает конец страницы — прокрутить вкладку до конца,
+        #     низ последнего элемента выше верхнего края полосы (Главная — «Отчёт за ноябрь», Стратегия — «Знания», Активность — последняя запись)
+        LOWEST = """()=>{const v=document.querySelector('.view:not([hidden])'),bar=document.getElementById('mlDemoBar').getBoundingClientRect();let lo=null,b=-1e9;
+            for(const e of v.querySelectorAll('*')){const r=e.getBoundingClientRect();if(!r.height||!r.width||e.children.length)continue;
+              let p=e,fx=false;while(p&&p!==v){const c=getComputedStyle(p);if(c.position==='fixed'||c.visibility==='hidden'||c.display==='none'){fx=true;break;}p=p.parentElement;}
+              if(!fx&&r.bottom>b){b=r.bottom;lo=String(e.textContent||e.getAttribute("class")||e.tagName).trim().slice(0,40);}}
+            return {bottom:Math.round(b),barTop:Math.round(bar.top),last:lo,cls:document.documentElement.classList.contains('ml-demo'),y:Math.round(scrollY),max:Math.round(document.documentElement.scrollHeight-innerHeight)}}"""
+        for th in ('dark', 'light'):
+            def s_demo_pad(pg, n, th=th):
+                pg.wait_for_selector('#mlaDemo', state='visible', timeout=8000)
+                pg.click('#mlaDemo'); wait_app(pg); pg.wait_for_timeout(2500)
+                for tab in ('home', 'strategy', 'activity'):
+                    pg.click(f'nav.tabs .tab[data-tab="{tab}"]'); pg.wait_for_timeout(900)
+                    pg.evaluate("scrollTo(0,document.documentElement.scrollHeight)"); pg.wait_for_timeout(700)
+                    r = pg.evaluate(LOWEST)
+                    if r['cls'] and r['bottom'] <= r['barTop'] and r['y'] >= r['max'] - 2: ok(f'демо ({th}): «{tab}» — конец страницы «{r["last"]}» над полосой «Демо» ({r["bottom"]} ≤ {r["barTop"]} px)')
+                    else: fail(f'демо ({th}): «{tab}» — полоса закрывает конец страницы', str(r))
+                    pg.screenshot(path=str(OUT / f'fix-demo-pad-{tab}-{th}.png'))
+            scenario(f'Демо — полоса не закрывает конец страницы ({th})', {'session': False, 'docs': []}, s_demo_pad, dsf=1, theme=th)
+            def s_demo_pad_off(pg, n, th=th):
+                wait_app(pg); pg.wait_for_timeout(500)
+                pad = pg.evaluate("[document.documentElement.classList.contains('ml-demo'),getComputedStyle(document.querySelector('.app')).paddingBottom]")
+                ok(f'обычный вход ({th}): отступ снизу прежний {pad[1]}') if not pad[0] and pad[1] == '112px' else fail(f'обычный вход ({th}): отступ снизу', str(pad))
+            scenario(f'Обычный вход — отступ снизу прежний ({th})', {'session': True, 'docs': SEED}, s_demo_pad_off, dsf=1, theme=th)
+
         def s_v3_auth_calm(pg, n):
             pg.wait_for_selector('#mlaPass', state='visible', timeout=8000)
             a = pg.evaluate("""()=>{const c=document.querySelector('.mla-card');document.querySelector('#mlAuth [data-to=up]').click();
