@@ -1992,6 +1992,31 @@ def run_browser():
             ok('3.0: демо — «Создать аккаунт» открывает регистрацию, пример стёрт') if sub == 'Новый аккаунт' and pg.evaluate("S.tx.length") == 0 else fail('3.0: демо, выход', sub)
         scenario('3.0: демо без регистрации', {'session': False, 'docs': []}, s_v3_demo)
 
+        # 15.11 (Вера, охота #3): в демо аккаунта нет — после открытия «Настроек» «Скачать мои данные», «Выйти» и «Удалить аккаунт» скрыты,
+        #     «Создать аккаунт» на полосе «Демо» на месте; у обычного входа все три кнопки видны, как раньше
+        ACC = """()=>{const v=id=>{const e=document.getElementById(id);return !!e&&!e.hidden&&e.getBoundingClientRect().height>0};
+            return {exp:v('expBtn'),out:v('outBtn'),del:v('delBtn'),go:v('mlDemoGo'),acc:document.getElementById('accInfo').textContent.trim()}}"""
+        for th in ('dark', 'light'):
+            def s_demo_acc(pg, n, th=th):
+                pg.wait_for_selector('#mlaDemo', state='visible', timeout=8000)
+                pg.click('#mlaDemo'); wait_app(pg); pg.wait_for_timeout(2500)
+                pg.click('#setBtn'); pg.wait_for_timeout(900)
+                pg.evaluate("document.getElementById('accInfo').scrollIntoView({block:'center'})"); pg.wait_for_timeout(500)
+                r = pg.evaluate(ACC)
+                if not r['exp'] and not r['out'] and not r['del'] and r['go']: ok(f'демо ({th}): в «Настройках → Аккаунт» нет «Скачать мои данные», «Выйти», «Удалить аккаунт»; «Создать аккаунт» на полосе')
+                else: fail(f'демо ({th}): кнопки аккаунта', str(r))
+                pg.screenshot(path=str(OUT / f'fix-demo-account-{th}.png'))
+            scenario(f'Демо — кнопки аккаунта скрыты ({th})', {'session': False, 'docs': []}, s_demo_acc, dsf=1, theme=th)
+            def s_user_acc(pg, n, th=th):
+                wait_app(pg); pg.wait_for_timeout(500)
+                pg.click('#setBtn'); pg.wait_for_timeout(900)
+                pg.evaluate("document.getElementById('accInfo').scrollIntoView({block:'center'})"); pg.wait_for_timeout(500)
+                r = pg.evaluate(ACC); d = pg.evaluate("!!(window.ML_CONFIG&&ML_CONFIG.accountDelete)")
+                if r['exp'] and r['out'] and r['del'] == d and not r['go']: ok(f'обычный вход ({th}): «Скачать мои данные», «Выйти из аккаунта» видны, «Удалить аккаунт» — по флагу ({d})')
+                else: fail(f'обычный вход ({th}): кнопки аккаунта', str(r))
+                pg.screenshot(path=str(OUT / f'fix-user-account-{th}.png'))
+            scenario(f'Обычный вход — кнопки аккаунта на месте ({th})', {'session': True, 'docs': SEED}, s_user_acc, dsf=1, theme=th)
+
         # --- 14.11 (разбор Льва, «12 × 14»): подсказка «На главный экран» — один раз после знакомства. Android Chrome: событие
         #     beforeinstallprompt (имитация с фиктивным prompt()), iPhone Safari: строка «Поделиться → На экран „Домой“».
         #     Закрыл/поставил — флаг ml-inst на телефоне, больше не показываем; в установленном приложении и в демо — нет
