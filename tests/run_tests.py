@@ -1942,6 +1942,38 @@ def run_browser():
             ok('повторное сохранение с теми же цифрами записывает покупку как есть (выбор человека)') if c == a + 1 else fail('повторное сохранение', f'{a}->{c}')
         scenario('Цена покупки: опечатка в количестве', {'session': True, 'docs': SEED}, s_odd_price)
 
+        # 15.11 (Глеб к 6b02fe6): «повтор сохраняет» живёт только в той же шторке — закрыл и открыл снова, предупреждение опять есть;
+        # та же проверка в «Одна монета» и «Докупке по уровню»; текст предупреждения по-украински
+        def s_odd_reset(pg, n):
+            wait_app(pg); pg.wait_for_timeout(600)
+            txn = "[...window.__mlRows.keys()].filter(k=>k.startsWith('tx/')).length"
+            def save(): pg.evaluate("saveForm()"); pg.wait_for_timeout(700); return norm(pg.inner_text('#fErr')), pg.evaluate(txn)
+            def plan():
+                pg.evaluate("openAct('buy');setBuyMode('dca')"); pg.wait_for_timeout(600)
+                pg.fill('#bq_BTC', '0.0000930'); pg.fill('#bu_BTC', '58.59'); pg.wait_for_timeout(250)
+            a = pg.evaluate(txn); plan(); e1, b1 = save()
+            pg.evaluate("closeSheets()"); pg.wait_for_timeout(500); plan(); e2, b2 = save()
+            ok('закрыл и снова открыл «Купить» с теми же цифрами — предупреждение снова, запись не создана') if b1 == b2 == a and 'сильно выше рынка' in e1 and 'сильно выше рынка' in e2 else fail('сброс «повтор сохраняет» при новом открытии', f'{a}->{b1}->{b2} {e2!r}')
+            pg.evaluate("closeSheets()"); pg.wait_for_timeout(500)
+            pg.evaluate("openAct('buy');setBuyMode('one')"); pg.wait_for_timeout(600)
+            pg.fill('#oSym', 'BTC'); pg.fill('#oQty', '0.0000930'); pg.fill('#oUsd', '58.59'); pg.wait_for_timeout(300)
+            h = norm(pg.inner_text('#oHint')); e3, b3 = save(); e4, b4 = save()
+            ok('«Одна монета»: подсказка, остановка, повтор сохраняет') if 'сильно выше рынка' in h and b3 == a and 'Цена покупки BTC $630 000 — сильно выше рынка' in e3 and b4 == a + 1 else fail('«Одна монета»: предупреждение', f'{h!r} {e3!r} {a}->{b3}->{b4}')
+            pg.evaluate("closeSheets()"); pg.wait_for_timeout(500)
+            pg.evaluate("openAct('dip')"); pg.wait_for_timeout(700)
+            pg.fill('#du_BTC', '58.59'); pg.fill('#dq_BTC', '0.0000930'); pg.fill('#du_ETH', ''); pg.fill('#du_ALT', ''); pg.wait_for_timeout(300)
+            h = norm(pg.inner_text('#dh_BTC')); e5, b5 = save()
+            ok('«Докупка по уровню»: подсказка и остановка при цене $630 000') if 'сильно выше рынка' in h and b5 == b4 and 'Цена покупки BTC $630 000 — сильно выше рынка' in e5 else fail('«Докупка по уровню»: предупреждение', f'{h!r} {e5!r} {b4}->{b5}')
+            for th in ['dark', 'light']:
+                pg.evaluate(f"document.documentElement.setAttribute('data-theme','{th}')"); pg.wait_for_timeout(300)
+                pg.evaluate("document.getElementById('fErr').scrollIntoView({block:'center'})"); shot(pg, f'odd-dip-{th}')
+            pg.evaluate("document.documentElement.setAttribute('data-theme','dark');closeSheets()")
+            pg.evaluate("localStorage.setItem('ml-lang','uk'); location.reload()"); pg.wait_for_timeout(2500); wait_app(pg); pg.wait_for_timeout(600)
+            plan(); h = norm(pg.inner_text('#bh_BTC')); e6, _ = save()
+            ok('по-украински: «значно вище ринку… перевір кількість монет… збережи ще раз»') if 'значно вище ринку' in h and 'перевір кількість монет' in h and 'Ціна покупки BTC' in e6 and 'Перевір кількість монет.' in e6 and 'Якщо все правильно — збережи ще раз.' in e6 and 'рынка' not in e6 else fail('украинский текст предупреждения', f'{h!r} {e6!r}')
+            pg.evaluate("document.getElementById('fErr').scrollIntoView({block:'center'})"); shot(pg, 'odd-uk-dark')
+        scenario('Цена покупки: сброс при новом открытии, «Одна монета», «Докупка»', {'session': True, 'docs': SEED + [{'col': 'app', 'id': 'cycle', 'data': CYC}]}, s_odd_reset)
+
         def s_v3_demo(pg, n):
             pg.wait_for_selector('#mlaDemo', state='visible', timeout=8000)
             pg.click('#mlaDemo'); wait_app(pg); pg.wait_for_timeout(3500)
@@ -2121,6 +2153,49 @@ def run_browser():
                 r0 = pg.evaluate(GRAPH)
                 ok(f'«Графит» ({th}): вверху страницы полоски нет') if not r0['sc'] and r0['op'] < 0.05 else fail(f'«Графит» ({th}): полоска вверху', str(r0))
             scenario(f'Графит — шапка и «14 дней» ({th})', {'session': True, 'docs': SEED}, s_graphite, dsf=1, theme=th)
+
+        # 15.11 «Графит», остатки: шаг «14 дней», полоски и отметки — ровный цвет без градиента (вычисленный background-image);
+        #     метки .chip.acc («твой», «советую») — нейтральный фон, акцент только текстом
+        GRAD_SEL = ['.meter i', '.fchip[aria-pressed="true"]', '.switch[aria-checked="true"]', '.gauge .cur span', '.cd-bar>i', '.rep-row .bar i',
+                    '.d14-bar.full', '.d14-seg i.cur', '.mi.main i', '.xq-prog i.cur', '.xf-r>i>i']
+        PROBE = """()=>{const h=document.createElement('div');h.id='gProbe';h.setAttribute('aria-hidden','true');h.style.cssText='position:fixed;left:-999px;top:0;width:300px';
+            h.innerHTML='<div class="tile"><div class="meter"><i></i></div></div><button class="fchip" aria-pressed="true">a</button><button class="switch" aria-checked="true"></button>'
+              +'<div class="gauge"><div class="cur"><span>x</span></div></div><i class="cd-bar"><i></i></i><div class="rep-row"><span>a</span><span>b</span><div class="bar"><i></i></div></div>'
+              +'<div class="card d14 d14-min"><i class="d14-bar full"></i></div><div class="card d14"><div class="d14-seg"><i class="on"></i><i class="cur"></i></div></div>'
+              +'<div class="mi main"><i></i></div><div class="xq-prog"><i class="cur"></i></div><div class="xf-r"><i><i></i></i></div><span class="chip acc">твой</span>';
+            document.body.appendChild(h);return null}"""
+        GCHK = """(sel)=>{const hue=""" + HUE + """,out=[];
+            for(const s of sel){const el=[...document.querySelectorAll(s)];if(!el.length){out.push([s,'нет элемента']);continue;}
+              for(const e of el){const c=getComputedStyle(e);if(/gradient/.test(c.backgroundImage))out.push([s,c.backgroundImage.slice(0,60)]);}}
+            const chips=[...document.querySelectorAll('.chip.acc')].filter(e=>!e.closest('.d14-h')&&!e.closest('.xp-hero')).map(e=>{const c=getComputedStyle(e);const v=(c.backgroundColor.match(/[\d.]+/g)||[]).slice(0,3).map(Number),k=v.some(x=>x>1)?255:1;return {t:e.textContent.trim(),img:c.backgroundImage,bg:c.backgroundColor,neu:v.length===3&&(Math.max(...v)-Math.min(...v))/k<0.06,fg:hue(c.color)}});
+            return {bad:out,chips}}"""
+        for th in ('dark', 'light'):
+            def s_graphite_rest(pg, n, th=th):
+                wait_app(pg); pg.wait_for_timeout(500)
+                if pg.evaluate("document.documentElement.dataset.theme") != th: raise AssertionError('тема не включилась: ' + th)
+                pg.evaluate("document.getElementById('d14').scrollIntoView({block:'center'})"); pg.wait_for_timeout(600)
+                shot(pg, f'graphite-rest-d14-{th}')
+                cur = pg.evaluate("(()=>{const e=document.querySelector('#d14 .d14-seg i.cur');return e?getComputedStyle(e).backgroundImage:null})()")
+                pg.evaluate(PROBE)
+                r = pg.evaluate(GCHK, GRAD_SEL)
+                if cur == 'none' and not r['bad']: ok(f'«Графит» ({th}): шаг «14 дней», полоски, отметка шкалы, переключатель, фильтры — ровный цвет, без градиента')
+                else: fail(f'«Графит» ({th}): остатки градиента', f'шаг 14 дней: {cur}; ' + str(r['bad']))
+                c = [x for x in r['chips'] if x['t'] == 'твой']
+                if c and c[0]['img'] == 'none' and c[0]['neu'] and violet(c[0]['fg']): ok(f'«Графит» ({th}): метка «твой» — нейтральный фон {c[0]["bg"]}, текст акцентом {c[0]["fg"]["c"]}')
+                else: fail(f'«Графит» ({th}): метка «твой»', str(c))
+                pg.evaluate("document.getElementById('gProbe').remove()")
+                for tab in ('strategy', 'coins'):
+                    pg.click(f'nav.tabs .tab[data-tab="{tab}"]'); pg.wait_for_timeout(900)
+                    shot(pg, f'graphite-rest-{tab}-{th}')
+            scenario(f'Графит — остатки градиента ({th})', {'session': True, 'docs': SEED + [{'col': 'app', 'id': 'cycle', 'data': CYC}]}, s_graphite_rest, theme=th)
+            def s_graphite_ob(pg, n, th=th):
+                pg.wait_for_selector('#ob', state='visible', timeout=10000); pg.wait_for_timeout(500)
+                pg.click('#obNext'); pg.wait_for_timeout(500)
+                c = [x for x in pg.evaluate(GCHK, [])['chips'] if x['t'] == 'советую']
+                if c and c[0]['img'] == 'none' and c[0]['neu'] and violet(c[0]['fg']): ok(f'«Графит» ({th}): метка «советую» в знакомстве — нейтральный фон {c[0]["bg"]}, текст акцентом {c[0]["fg"]["c"]}')
+                else: fail(f'«Графит» ({th}): метка «советую»', str(c))
+                shot(pg, f'graphite-rest-ob-{th}')
+            scenario(f'Графит — метка «советую» ({th})', {'session': True, 'docs': []}, s_graphite_ob, theme=th)
 
         def s_v3_auth_calm(pg, n):
             pg.wait_for_selector('#mlaPass', state='visible', timeout=8000)
