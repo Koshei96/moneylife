@@ -1992,6 +1992,31 @@ def run_browser():
             ok('3.0: демо — «Создать аккаунт» открывает регистрацию, пример стёрт') if sub == 'Новый аккаунт' and pg.evaluate("S.tx.length") == 0 else fail('3.0: демо, выход', sub)
         scenario('3.0: демо без регистрации', {'session': False, 'docs': []}, s_v3_demo)
 
+        # 15.11 (Вера, охота #3): в демо аккаунта нет — после открытия «Настроек» «Скачать мои данные», «Выйти» и «Удалить аккаунт» скрыты,
+        #     «Создать аккаунт» на полосе «Демо» на месте; у обычного входа все три кнопки видны, как раньше
+        ACC = """()=>{const v=id=>{const e=document.getElementById(id);return !!e&&!e.hidden&&e.getBoundingClientRect().height>0};
+            return {exp:v('expBtn'),out:v('outBtn'),del:v('delBtn'),go:v('mlDemoGo'),acc:document.getElementById('accInfo').textContent.trim()}}"""
+        for th in ('dark', 'light'):
+            def s_demo_acc(pg, n, th=th):
+                pg.wait_for_selector('#mlaDemo', state='visible', timeout=8000)
+                pg.click('#mlaDemo'); wait_app(pg); pg.wait_for_timeout(2500)
+                pg.click('#setBtn'); pg.wait_for_timeout(900)
+                pg.evaluate("document.getElementById('accInfo').scrollIntoView({block:'center'})"); pg.wait_for_timeout(500)
+                r = pg.evaluate(ACC)
+                if not r['exp'] and not r['out'] and not r['del'] and r['go']: ok(f'демо ({th}): в «Настройках → Аккаунт» нет «Скачать мои данные», «Выйти», «Удалить аккаунт»; «Создать аккаунт» на полосе')
+                else: fail(f'демо ({th}): кнопки аккаунта', str(r))
+                pg.screenshot(path=str(OUT / f'fix-demo-account-{th}.png'))
+            scenario(f'Демо — кнопки аккаунта скрыты ({th})', {'session': False, 'docs': []}, s_demo_acc, dsf=1, theme=th)
+            def s_user_acc(pg, n, th=th):
+                wait_app(pg); pg.wait_for_timeout(500)
+                pg.click('#setBtn'); pg.wait_for_timeout(900)
+                pg.evaluate("document.getElementById('accInfo').scrollIntoView({block:'center'})"); pg.wait_for_timeout(500)
+                r = pg.evaluate(ACC); d = pg.evaluate("!!(window.ML_CONFIG&&ML_CONFIG.accountDelete)")
+                if r['exp'] and r['out'] and r['del'] == d and not r['go']: ok(f'обычный вход ({th}): «Скачать мои данные», «Выйти из аккаунта» видны, «Удалить аккаунт» — по флагу ({d})')
+                else: fail(f'обычный вход ({th}): кнопки аккаунта', str(r))
+                pg.screenshot(path=str(OUT / f'fix-user-account-{th}.png'))
+            scenario(f'Обычный вход — кнопки аккаунта на месте ({th})', {'session': True, 'docs': SEED}, s_user_acc, dsf=1, theme=th)
+
         # --- 14.11 (разбор Льва, «12 × 14»): подсказка «На главный экран» — один раз после знакомства. Android Chrome: событие
         #     beforeinstallprompt (имитация с фиктивным prompt()), iPhone Safari: строка «Поделиться → На экран „Домой“».
         #     Закрыл/поставил — флаг ml-inst на телефоне, больше не показываем; в установленном приложении и в демо — нет
@@ -2127,6 +2152,51 @@ def run_browser():
                 ok(f'украинский ({th}): iPhone — «Приховати» прячет подсказку') if not r['vis'] and r['flag'] == '1' else fail(f'украинский ({th}): iPhone «Приховати»', str(r))
             scenario(f'На главный экран — iPhone, украинский ({th})', {'session': True, 'docs': SEED}, s_inst_ios_uk, dsf=1, theme=th)
 
+        # 15.11 (Вера, охота #1): пополнение без суммы в гривне (uah пустое) — в «Истории» и «Отчёте за месяц» нет «0 грн»;
+        #     пополнение с гривной показывает её как раньше. Только показ — суммы не меняются.
+        UAH_DOCS = SEED + [{'col': 'tx', 'id': 'u1', 'data': {'ts': '2026-09-10T10:00:00.000Z', 'type': 'deposit', 'usd': 115, 'uah': None, 'dcaUsd': 100, 'reserveUsd': 15}},
+                           {'col': 'tx', 'id': 'u2', 'data': {'ts': '2026-09-12T10:00:00.000Z', 'type': 'deposit', 'usd': 50, 'uah': ''}},
+                           {'col': 'tx', 'id': 'u3', 'data': {'ts': '2026-10-05T10:00:00.000Z', 'type': 'deposit', 'usd': 0, 'uah': 0, 'note': 'ноль'}}]
+        UAH_Q = """()=>{const row=id=>{const e=document.querySelector('#histList [data-tx="'+id+'"] .r');return e?e.textContent.replace(/[\\u202f\\xa0]/g,' '):null};
+            return {u1:row('u1'),u2:row('u2'),u3:row('u3'),t1:row('t1'),hist:document.getElementById('histList').textContent.replace(/[\\u202f\\xa0]/g,' ')}}"""
+        REP_Q = "(m)=>{rep=m;renderReport();return document.getElementById('repTiles').textContent.replace(/[\\u202f\\xa0]/g,' ')}"
+        # отдельные надписи «0 грн» (склейка текста «$115,00» + «0 грн» спрятала бы ноль среди цифр)
+        ZERO_Q = """()=>[...document.querySelectorAll('#histList span,#repTiles div')].filter(e=>!e.children.length&&/^0\\s*грн$/.test(e.textContent.replace(/[\\u202f\\xa0]/g,' ').trim())).map(e=>e.outerHTML.slice(0,80))"""
+        for th in ('dark', 'light'):
+            def s_uah_empty(pg, n, th=th):
+                wait_app(pg); pg.wait_for_timeout(500)
+                if pg.evaluate("document.documentElement.dataset.theme") != th: raise AssertionError('тема не включилась: ' + th)
+                pg.click('nav.tabs .tab[data-tab="activity"]'); pg.wait_for_timeout(800)
+                r = pg.evaluate(UAH_Q)
+                if r['u1'] and r['u2'] and r['u3'] and 'грн' not in r['u1'] + r['u2'] + r['u3'] and '$115' in r['u1'] and r['t1'] and '41 500 грн' in r['t1'] and '0 грн' not in r['hist'].replace('41 500 грн', ''):
+                    ok(f'«0 грн» ({th}): пополнение без гривны в «Истории» — только доллары; с гривной — «41 500 грн» как раньше')
+                else: fail(f'«0 грн» ({th}): «История»', str(r)[:400])
+                pg.evaluate("document.querySelector('#histList [data-tx=\"u1\"]').scrollIntoView({block:'center'})"); pg.wait_for_timeout(300)
+                pg.screenshot(path=str(OUT / f'fix-uah-hist-{th}.png'))
+                pg.click('#actSeg [data-s="rep"]'); pg.wait_for_timeout(500)
+                e = pg.evaluate(REP_Q, [2026, 8]); f = pg.evaluate(REP_Q, [2026, 7])
+                if 'Внесено на биржу' in e and '$165' in e and 'грн' not in e and '41 500 грн' in f:
+                    ok(f'«0 грн» ({th}): «Отчёт за месяц» — без гривны нет «0 грн», с гривной «41 500 грн»')
+                else: fail(f'«0 грн» ({th}): отчёт', f'{e[:200]!r} | {f[:200]!r}')
+                pg.evaluate(REP_Q, [2026, 8]); pg.evaluate("scrollTo(0,0)"); pg.wait_for_timeout(300)
+                pg.screenshot(path=str(OUT / f'fix-uah-report-{th}.png'))
+            scenario(f'Пополнение без гривны — без «0 грн» ({th})', {'session': True, 'docs': UAH_DOCS}, s_uah_empty, dsf=1, theme=th)
+            def s_uah_demo(pg, n, th=th):
+                pg.wait_for_selector('#mlaDemo', state='visible', timeout=8000)
+                pg.click('#mlaDemo'); wait_app(pg); pg.wait_for_timeout(2500)
+                pg.click('nav.tabs .tab[data-tab="activity"]'); pg.wait_for_timeout(800)
+                h = pg.evaluate("document.getElementById('histList').textContent.replace(/[\\u202f\\xa0]/g,' ')")
+                m = pg.evaluate("(()=>{const d=new Date();return [d.getFullYear(),d.getMonth()]})()")
+                pg.screenshot(path=str(OUT / f'fix-uah-demo-hist-{th}.png'))
+                pg.click('#actSeg [data-s="rep"]'); pg.wait_for_timeout(500)
+                e = pg.evaluate(REP_Q, m)
+                z = pg.evaluate(ZERO_Q)
+                if 'Пополнение биржи' in h and 'Внесено на биржу' in e and not z:
+                    ok(f'«0 грн» ({th}): демо — у пополнений нет «0 грн» ни в «Истории», ни в отчёте')
+                else: fail(f'«0 грн» ({th}): демо', f'{z} | {h[:300]!r} | {e[:200]!r}')
+                pg.screenshot(path=str(OUT / f'fix-uah-demo-report-{th}.png'))
+            scenario(f'Демо — пополнения без «0 грн» ({th})', {'session': False, 'docs': []}, s_uah_demo, dsf=1, theme=th)
+
         # 15.11 «Графит» (правило 10): полоска прокрутки под шапкой и метка «День N из 14» — без фиолетово-розового и без градиента;
         #     полоска по-прежнему показывает, сколько прокручено
         HUE = """(c)=>{const m=/rgba?\\(([^)]+)\\)/.exec(c||'');if(!m)return {c,h:0,s:0,a:0};const v=m[1].split(/[ ,\\/]+/).filter(Boolean).map(parseFloat),[r,g,b]=v.map(x=>x/255),a=v.length>3?v[3]:1,
@@ -2196,6 +2266,31 @@ def run_browser():
                 else: fail(f'«Графит» ({th}): метка «советую»', str(c))
                 shot(pg, f'graphite-rest-ob-{th}')
             scenario(f'Графит — метка «советую» ({th})', {'session': True, 'docs': []}, s_graphite_ob, theme=th)
+
+        # 15.11 (Вера, охота #2): в демо полоса «Демо / Создать аккаунт» не закрывает конец страницы — прокрутить вкладку до конца,
+        #     низ последнего элемента выше верхнего края полосы (Главная — «Отчёт за ноябрь», Стратегия — «Знания», Активность — последняя запись)
+        LOWEST = """()=>{const v=document.querySelector('.view:not([hidden])'),bar=document.getElementById('mlDemoBar').getBoundingClientRect();let lo=null,b=-1e9;
+            for(const e of v.querySelectorAll('*')){const r=e.getBoundingClientRect();if(!r.height||!r.width||e.children.length)continue;
+              let p=e,fx=false;while(p&&p!==v){const c=getComputedStyle(p);if(c.position==='fixed'||c.visibility==='hidden'||c.display==='none'){fx=true;break;}p=p.parentElement;}
+              if(!fx&&r.bottom>b){b=r.bottom;lo=String(e.textContent||e.getAttribute("class")||e.tagName).trim().slice(0,40);}}
+            return {bottom:Math.round(b),barTop:Math.round(bar.top),last:lo,cls:document.documentElement.classList.contains('ml-demo'),y:Math.round(scrollY),max:Math.round(document.documentElement.scrollHeight-innerHeight)}}"""
+        for th in ('dark', 'light'):
+            def s_demo_pad(pg, n, th=th):
+                pg.wait_for_selector('#mlaDemo', state='visible', timeout=8000)
+                pg.click('#mlaDemo'); wait_app(pg); pg.wait_for_timeout(2500)
+                for tab in ('home', 'strategy', 'activity'):
+                    pg.click(f'nav.tabs .tab[data-tab="{tab}"]'); pg.wait_for_timeout(900)
+                    pg.evaluate("scrollTo(0,document.documentElement.scrollHeight)"); pg.wait_for_timeout(700)
+                    r = pg.evaluate(LOWEST)
+                    if r['cls'] and r['bottom'] <= r['barTop'] and r['y'] >= r['max'] - 2: ok(f'демо ({th}): «{tab}» — конец страницы «{r["last"]}» над полосой «Демо» ({r["bottom"]} ≤ {r["barTop"]} px)')
+                    else: fail(f'демо ({th}): «{tab}» — полоса закрывает конец страницы', str(r))
+                    pg.screenshot(path=str(OUT / f'fix-demo-pad-{tab}-{th}.png'))
+            scenario(f'Демо — полоса не закрывает конец страницы ({th})', {'session': False, 'docs': []}, s_demo_pad, dsf=1, theme=th)
+            def s_demo_pad_off(pg, n, th=th):
+                wait_app(pg); pg.wait_for_timeout(500)
+                pad = pg.evaluate("[document.documentElement.classList.contains('ml-demo'),getComputedStyle(document.querySelector('.app')).paddingBottom]")
+                ok(f'обычный вход ({th}): отступ снизу прежний {pad[1]}') if not pad[0] and pad[1] == '112px' else fail(f'обычный вход ({th}): отступ снизу', str(pad))
+            scenario(f'Обычный вход — отступ снизу прежний ({th})', {'session': True, 'docs': SEED}, s_demo_pad_off, dsf=1, theme=th)
 
         def s_v3_auth_calm(pg, n):
             pg.wait_for_selector('#mlaPass', state='visible', timeout=8000)
