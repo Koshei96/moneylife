@@ -11,7 +11,7 @@ addEventListener('error',function(e){if(e&&e.message)add(e.message,(e.filename||
 addEventListener('unhandledrejection',function(e){var r=e&&e.reason;add(r&&(r.message||r)||'отклонённое обещание','promise');});
 window.mlErrLog=function(){try{return JSON.parse(localStorage.getItem(K)||'[]');}catch(e){return [];}};window.mlErrAdd=add;})();
 </script>
-<script src="i18n.js?v=20261114210000"></script>
+<script src="i18n.js?v=20261115031000"></script>
 <title>MoneyLife</title>
 <meta name="theme-color" content="#06040e">
 <script>/* тема до отрисовки: «Авто» — как в телефоне, иначе выбор из настроек */
@@ -1012,6 +1012,9 @@ body{letter-spacing:-.005em}
 .hero .chips{margin-top:12px}
 .chip{background:#ffffff0f;font-weight:600}
 [data-theme="light"] .chip{background:#0b0b0f0d}
+/* метка «День N из 14» — нейтральная, как остальные метки (15.11: без фиолетового) */
+.d14-h .chip.acc{background:#ffffff0f;color:var(--fg)}
+[data-theme="light"] .d14-h .chip.acc{background:#0b0b0f0d}
 
 .hero.has-ms .bal,.hero.has-ms .chips{max-width:calc(100% - 96px)}.hero.has-ms .bal-sub{max-width:calc(100% - 76px)}
 /* быстрые действия: круглые, первая — контрастная */
@@ -1150,7 +1153,8 @@ html,body{overflow-x:clip}.app{overflow-x:clip}
 /* ===== «Живой интерфейс» (11.11.2026): прокрутка, вкладки, жесты. Только opacity/transform/filter — без перерисовки макета ===== */
 /* шапка: при прокрутке прилипает и становится стеклянной, тонкая полоска показывает, сколько прокручено */
 .top{position:sticky;top:0;z-index:30;margin-inline:calc(-1 * max(16px,env(safe-area-inset-left,0px)));padding:6px max(16px,env(safe-area-inset-left,0px));transition:background-color .25s var(--ease),box-shadow .25s var(--ease),padding .25s var(--ease)}
-.top::after{content:"";position:absolute;left:0;bottom:0;height:2px;width:100%;transform-origin:0 50%;transform:scaleX(var(--sp,0));background:linear-gradient(90deg,#7a3cf0,#ff4fd8,#ffc24d);opacity:0;transition:opacity .25s}
+/* полоска прокрутки под шапкой: «Графит» (15.11) — ровная серая, без фиолетово-розового градиента */
+.top::after{content:"";position:absolute;left:0;bottom:0;height:2px;width:100%;transform-origin:0 50%;transform:scaleX(var(--sp,0));background:var(--mute);opacity:0;transition:opacity .25s}
 body.scrolled .top{background:color-mix(in srgb,var(--bg) 74%,transparent);-webkit-backdrop-filter:blur(16px) saturate(1.4);backdrop-filter:blur(16px) saturate(1.4);box-shadow:0 10px 30px -18px #000c}
 body.scrolled .top::after{opacity:.85}
 body.scrolled .top .mark{transform:scale(.86)}
@@ -1729,9 +1733,9 @@ document.querySelectorAll('nav.tabs .tab').forEach(b=>{const v=b.querySelector('
 
 <div class="toast" id="toast" role="status"><span id="toastMsg"></span><button type="button" id="toastBtn" hidden></button></div>
 
-<script src="config.js?v=20261114210000"></script>
+<script src="config.js?v=20261115031000"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="shim.js?v=20261114210000"></script>
+<script src="shim.js?v=20261115031000"></script>
 <script>
 /* ===== основа ===== */
 const $=id=>document.getElementById(id);
@@ -3050,7 +3054,7 @@ const instIos=()=>{const u=navigator.userAgent;return (/iP(hone|ad|od)/.test(u)|
   INST_SH='<svg class="inst-sh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 3v12M8 7l4-4 4 4"/><path d="M8.5 10H7a1.5 1.5 0 0 0-1.5 1.5v8A1.5 1.5 0 0 0 7 21h10a1.5 1.5 0 0 0 1.5-1.5v-8A1.5 1.5 0 0 0 17 10h-1.5"/></svg>';
 function renderInst(){const el=$('inst');if(!el)return;const ios=!instEv&&instIos(),
   on=d14Can()&&!window.mlDemo&&!(matchMedia('(display-mode: standalone)').matches||navigator.standalone===true)&&!instDone()&&(!!instEv||ios);
-  const h=!on?'':`<div class="card d14 d14-inv${ios?'':' inst-a'}" role="region" aria-label="${L('Поставь на главный экран')}"><span class="d14-it"><b>Поставь на главный экран</b><small>${ios?'Нажми «Поделиться» '+INST_SH+' <span class="inst-go">→ «На экран „Домой“»</span>':'иконка на телефоне, проверка цены в фоне'}</small></span><span class="d14-ib">${ios?'<button type="button" class="btn sm ghost" data-inst="no">Понятно</button>':'<button type="button" class="btn sm soft" data-inst="go">Установить</button><button type="button" class="btn sm ghost" data-inst="no">Не сейчас</button>'}</span></div>`;
+  const h=!on?'':`<div class="card d14 d14-inv${ios?'':' inst-a'}" role="region" aria-label="${L('Поставь на главный экран')}"><span class="d14-it"><b>Поставь на главный экран</b><small>${ios?'Нажми «Поделиться» '+INST_SH+' <span class="inst-go">→ «На экран „Домой“»</span>':'иконка на телефоне, проверка цены в фоне'}</small></span><span class="d14-ib">${ios?'<button type="button" class="btn sm ghost" data-inst="no">Скрыть</button>':'<button type="button" class="btn sm soft" data-inst="go">Установить</button><button type="button" class="btn sm ghost" data-inst="no">Не сейчас</button>'}</span></div>`;
   if(el._h!==h){el.innerHTML=h;el._h=h;}el.hidden=!h;}
 addEventListener('beforeinstallprompt',e=>{e.preventDefault();instEv=e;renderInst();});
 addEventListener('appinstalled',()=>{instSet();instEv=null;renderInst();});
@@ -3067,7 +3071,7 @@ function msSync(x){MSC.last=x;if(!msApply())return;if(!S.ready||document.getElem
   if(window.Mascot){try{window.Mascot.sync(msPayload(x));}catch(e){}}else msLoad();}
 function msLoad(){if(MSC.loading||MSC.failed)return;MSC.loading=true;
   const add=(src,ok)=>{try{const s=document.createElement('script');s.src=src;s.async=true;s.onload=ok;s.onerror=()=>{MSC.failed=true;};document.head.appendChild(s);}catch(e){MSC.failed=true;}};
-  const boot=()=>add('mascot.js?v=20261114210000',()=>{try{if(window.Mascot&&window.Mascot.init({host:$('mascot'),app:{buzz,askName:()=>{if(window.MLX&&MLX.askName)MLX.askName();},addAlert:(y,v)=>window.MLX&&MLX.addAlert?MLX.addAlert(y,v):null,voice:(t,x)=>window.mlVoice?window.mlVoice(t,x):null,ask:(q,y,x)=>window.mlAsk?window.mlAsk(q,y,x):null}})&&MSC.last&&$('ob').hidden&&!document.getElementById('mlAuth'))window.Mascot.sync(msPayload(MSC.last));}catch(e){}});
+  const boot=()=>add('mascot.js?v=20261115031000',()=>{try{if(window.Mascot&&window.Mascot.init({host:$('mascot'),app:{buzz,askName:()=>{if(window.MLX&&MLX.askName)MLX.askName();},addAlert:(y,v)=>window.MLX&&MLX.addAlert?MLX.addAlert(y,v):null,voice:(t,x)=>window.mlVoice?window.mlVoice(t,x):null,ask:(q,y,x)=>window.mlAsk?window.mlAsk(q,y,x):null}})&&MSC.last&&$('ob').hidden&&!document.getElementById('mlAuth'))window.Mascot.sync(msPayload(MSC.last));}catch(e){}});
   setTimeout(boot,300);}
 function render(){const D=derive();renderHeader();renderHome(D);renderGrowth();renderCoins(D);renderStrategy(D);renderActivity();renderD14();renderInst();if(window.MLX)try{MLX.render(D);}catch(e){console.error(e);}earnNudge();if(cvSym&&$('coinSheet').classList.contains('open'))renderCoinView();}
 document.body.classList.add('loading');
@@ -3152,9 +3156,9 @@ render();requestAnimationFrame(inkMove);setTimeout(inkMove,600);
     sy=null;swipe=null;pull=0;armed=false;},{passive:true});
 })();
 </script>
-<script src="plus.js?v=20261114210000"></script>
-<script src="wins.js?v=20261114210000"></script>
-<script src="folds.js?v=20261114210000"></script>
+<script src="plus.js?v=20261115031000"></script>
+<script src="wins.js?v=20261115031000"></script>
+<script src="folds.js?v=20261115031000"></script>
 <script>
 /* ===== 12.11.2026: ползунок «Купить», смахнуть запись влево с «рассыпанием» монеты ===== */
 (function(){
