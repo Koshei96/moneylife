@@ -1945,6 +1945,8 @@ def run_browser():
         INST = """()=>{const el=document.getElementById('inst'),r=el.getBoundingClientRect(),hit=id=>{const x=document.getElementById(id);if(!x||x.hidden)return false;const q=x.getBoundingClientRect();return q.height>0&&q.bottom>r.top+.5&&q.top<r.bottom-.5};
             return {vis:!el.hidden&&r.height>0,txt:el.innerText.replace(/\\s+/g,' ').trim(),btn:[...el.querySelectorAll('button')].map(b=>[b.textContent.trim(),Math.round(b.getBoundingClientRect().height)]),
             lab:(el.querySelector('[role=region]')||{getAttribute:()=>null}).getAttribute('aria-label'),
+            bp:[...el.querySelectorAll('button')].map(b=>{const c=getComputedStyle(b),q=b.getBoundingClientRect(),g=document.createRange();g.selectNodeContents(b);const t=g.getBoundingClientRect(),ln=g.getClientRects().length;
+              return {pl:parseFloat(c.paddingLeft),pr:parseFloat(c.paddingRight),l:Math.round(t.left-q.left),r:Math.round(q.right-t.right),one:ln===1&&b.scrollWidth<=b.clientWidth+.5}}),
             ic:[...el.querySelectorAll('small svg')].map(s=>{const r=s.getBoundingClientRect(),c=getComputedStyle(s);return {w:Math.round(r.width),h:Math.round(r.height),hid:s.getAttribute('aria-hidden'),fill:s.getAttribute('fill'),
               paint:[...s.querySelectorAll('*')].some(x=>x.getAttribute('fill')||x.getAttribute('style')||(x.getAttribute('stroke')&&x.getAttribute('stroke')!=='currentColor')),stroke:s.getAttribute('stroke'),col:c.color===getComputedStyle(s.parentElement).color}}),
             wide:el.scrollWidth>el.clientWidth+.5||[...el.querySelectorAll('*')].some(x=>{const q=x.getBoundingClientRect();return q.width>0&&(q.right>innerWidth+.5||q.left<-.5)}),
@@ -1978,9 +1980,14 @@ def run_browser():
                 pg.add_init_script("Object.defineProperty(navigator,'userAgent',{get:()=>'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1'})")
                 pg.reload(wait_until='load'); wait_app(pg); pg.wait_for_timeout(800)
                 r = pg.evaluate(INST)
-                if r['vis'] and r['btn'] == [['Понятно', r['btn'][0][1]]] and r['btn'][0][1] >= 48 and 'Нажми «Поделиться» → «На экран „Домой“»' in r['txt'] and r['below'] and not r['over']:
-                    ok(f'«На главный экран» ({th}): iPhone — строка «Поделиться → На экран „Домой“» и «Понятно» ≥ 48 px, под карточками')
+                if r['vis'] and r['btn'] == [['Скрыть', r['btn'][0][1]]] and r['btn'][0][1] >= 48 and 'Нажми «Поделиться» → «На экран „Домой“»' in r['txt'] and r['below'] and not r['over']:
+                    ok(f'«На главный экран» ({th}): iPhone — строка «Поделиться → На экран „Домой“» и «Скрыть» ≥ 48 px, под карточками')
                 else: fail(f'«На главный экран» ({th}): iPhone', str(r))
+                # 15.11 (Вера): кнопка «Скрыть» — не «Понятно», как у соседней карточки «14 дней»; поля по бокам как у .btn.sm (12 px), текст в одну строку
+                bp = r['bp']
+                if len(bp) == 1 and bp[0]['pl'] >= 12 and bp[0]['pr'] >= 12 and min(bp[0]['l'], bp[0]['r']) >= 12 and bp[0]['one']:
+                    ok(f'«На главный экран» ({th}): iPhone — у «Скрыть» поля по бокам {bp[0]["l"]}/{bp[0]["r"]} px (как у .btn.sm), текст в одну строку')
+                else: fail(f'«На главный экран» ({th}): iPhone поля кнопки', str(bp))
                 ic = r['ic']
                 if len(ic) == 1 and ic[0]['w'] == 14 and ic[0]['h'] == 14 and ic[0]['hid'] == 'true' and ic[0]['fill'] == 'none' and ic[0]['stroke'] == 'currentColor' and not ic[0]['paint'] and ic[0]['col'] and not r['wide']:
                     ok(f'«На главный экран» ({th}): iPhone — значок «Поделиться» 14 px, цвет текста, без заливки, скрыт от чтеца; карточка в 390 px без выхода за край')
@@ -1988,7 +1995,7 @@ def run_browser():
                 pg.evaluate("document.getElementById('inst').scrollIntoView({block:'center'})"); pg.wait_for_timeout(300); shot(pg, f'inst-ios-{th}')
                 pg.click('#inst [data-inst=no]'); pg.wait_for_timeout(300); r = pg.evaluate(INST)
                 pg.reload(wait_until='load'); wait_app(pg); pg.wait_for_timeout(800); r2 = pg.evaluate(INST)
-                ok(f'«На главный экран» ({th}): iPhone — «Понятно» прячет навсегда') if not r['vis'] and r['flag'] == '1' and not r2['vis'] else fail(f'«На главный экран» ({th}): iPhone «Понятно»', f'{r} | {r2}')
+                ok(f'«На главный экран» ({th}): iPhone — «Скрыть» прячет навсегда') if not r['vis'] and r['flag'] == '1' and not r2['vis'] else fail(f'«На главный экран» ({th}): iPhone «Скрыть»', f'{r} | {r2}')
             scenario(f'На главный экран — iPhone ({th})', {'session': True, 'docs': SEED}, s_inst_ios, dsf=1, theme=th)
 
             # iPad на iPadOS 13+ выдаёт себя за Mac (MacIntel + сенсорный экран) — подсказка как на iPhone; настоящий Mac (без касаний),
@@ -2004,7 +2011,7 @@ def run_browser():
                     c.goto(pg.url, wait_until='load', timeout=30000); wait_app(c); c.wait_for_timeout(800)
                     res[key] = c.evaluate(INST); c.close()
                 ip = res['ipad']
-                if ip['vis'] and 'Нажми «Поделиться» → «На экран „Домой“»' in ip['txt'] and [b[0] for b in ip['btn']] == ['Понятно'] and len(ip['ic']) == 1:
+                if ip['vis'] and 'Нажми «Поделиться» → «На экран „Домой“»' in ip['txt'] and [b[0] for b in ip['btn']] == ['Скрыть'] and len(ip['ic']) == 1:
                     ok(f'«На главный экран» ({th}): iPad, который представляется Mac (MacIntel, касания) — подсказка как на iPhone')
                 else: fail(f'«На главный экран» ({th}): iPad как Mac', str(ip))
                 hid = [k for k in ('mac', 'gsa', 'crios', 'fxios', 'edgios') if not res[k]['vis']]
@@ -2049,14 +2056,21 @@ def run_browser():
             else: fail('украинский: установка и отзыв', f'{r} | {f}')
         scenario('На главный экран и отзыв — украинский', {'session': True, 'docs': SEED}, s_inst_uk)
 
-        def s_inst_ios_uk(pg, n):
-            pg.add_init_script("localStorage.setItem('ml-lang','uk');Object.defineProperty(navigator,'userAgent',{get:()=>'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1'})")
-            pg.reload(wait_until='load'); wait_app(pg); pg.wait_for_timeout(1000); r = pg.evaluate(INST)
-            if r['vis'] and 'Натисни «Поділитися» → «На початковий екран»' in r['txt'] and r['lab'] == 'Додай на головний екран' and [b[0] for b in r['btn']] == ['Зрозуміло'] and len(r['ic']) == 1 and not r['wide']:
-                ok('украинский: iPhone — «Натисни «Поділитися» → «На початковий екран»», значок на месте, подпись области переведена')
-            else: fail('украинский: iPhone', str(r))
-            pg.evaluate("document.getElementById('inst').scrollIntoView({block:'center'})"); pg.wait_for_timeout(300); shot(pg, 'inst-ios-uk')
-        scenario('На главный экран — iPhone, украинский', {'session': True, 'docs': SEED}, s_inst_ios_uk, dsf=1, theme='light')
+        for th in ('dark', 'light'):
+            def s_inst_ios_uk(pg, n, th=th):
+                pg.add_init_script("localStorage.setItem('ml-lang','uk');Object.defineProperty(navigator,'userAgent',{get:()=>'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1'})")
+                pg.reload(wait_until='load'); wait_app(pg); pg.wait_for_timeout(1000); r = pg.evaluate(INST)
+                if r['vis'] and 'Натисни «Поділитися» → «На початковий екран»' in r['txt'] and r['lab'] == 'Додай на головний екран' and [b[0] for b in r['btn']] == ['Приховати'] and len(r['ic']) == 1 and not r['wide']:
+                    ok(f'украинский ({th}): iPhone — «Натисни «Поділитися» → «На початковий екран»», значок на месте, подпись области переведена, кнопка «Приховати»')
+                else: fail(f'украинский ({th}): iPhone', str(r))
+                bp = r['bp']
+                if len(bp) == 1 and min(bp[0]['l'], bp[0]['r']) >= 12 and bp[0]['one']:
+                    ok(f'украинский ({th}): iPhone — у «Приховати» поля по бокам {bp[0]["l"]}/{bp[0]["r"]} px, текст в одну строку')
+                else: fail(f'украинский ({th}): iPhone поля кнопки', str(bp))
+                pg.evaluate("document.getElementById('inst').scrollIntoView({block:'center'})"); pg.wait_for_timeout(300); shot(pg, f'inst-ios-uk-{th}')
+                pg.click('#inst [data-inst=no]'); pg.wait_for_timeout(300); r = pg.evaluate(INST)
+                ok(f'украинский ({th}): iPhone — «Приховати» прячет подсказку') if not r['vis'] and r['flag'] == '1' else fail(f'украинский ({th}): iPhone «Приховати»', str(r))
+            scenario(f'На главный экран — iPhone, украинский ({th})', {'session': True, 'docs': SEED}, s_inst_ios_uk, dsf=1, theme=th)
 
         def s_v3_auth_calm(pg, n):
             pg.wait_for_selector('#mlaPass', state='visible', timeout=8000)
