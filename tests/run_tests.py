@@ -1919,6 +1919,29 @@ def run_browser():
             shot(pg, 'v3-price')
         scenario('3.0: цена покупки вручную', {'session': True, 'docs': SEED}, s_v3_price)
 
+        # 15.11 (скриншот владельца): «Монет 0.0000930 · $58.59» дало «цена покупки $630 000» — опечатка в количестве;
+        # теперь подсказка предупреждает, а первое сохранение останавливается с объяснением (повтор с теми же цифрами сохраняет)
+        def s_odd_price(pg, n):
+            wait_app(pg); pg.wait_for_timeout(600)
+            txn = "[...window.__mlRows.keys()].filter(k=>k.startsWith('tx/')).length"
+            pg.evaluate("openAct('buy');setBuyMode('dca')"); pg.wait_for_timeout(700)
+            pg.fill('#bq_BTC', '0.00093'); pg.fill('#bu_BTC', '58.59'); pg.wait_for_timeout(250)
+            h0 = norm(pg.inner_text('#bh_BTC'))
+            pg.fill('#bq_BTC', '0.0000930'); pg.wait_for_timeout(250)
+            h1 = norm(pg.inner_text('#bh_BTC'))
+            ok('цена покупки сильно выше рынка → подсказка «проверь количество монет»; обычная цена — без предупреждения') if 'рынка' not in h0 and 'сильно выше рынка ($110 000): проверь количество монет' in h1 and '$630 000' in h1 else fail('подсказка о подозрительной цене', f'{h0!r} / {h1!r}')
+            for th in ['dark', 'light']:
+                pg.evaluate(f"document.documentElement.setAttribute('data-theme','{th}')"); pg.wait_for_timeout(300)
+                pg.evaluate("document.getElementById('bh_BTC').scrollIntoView({block:'center'})"); shot(pg, f'odd-price-{th}')
+            pg.evaluate("document.documentElement.setAttribute('data-theme','dark')")
+            a = pg.evaluate(txn); pg.evaluate("saveForm()"); pg.wait_for_timeout(600)
+            e1, b = norm(pg.inner_text('#fErr')), pg.evaluate(txn)
+            ok('первое сохранение с ценой $630 000 остановлено и объяснено, запись не создана') if b == a and 'Цена покупки BTC $630 000 — сильно выше рынка ($110 000)' in e1 and 'сохрани ещё раз' in e1 else fail('остановка при подозрительной цене', f'{a}->{b} {e1!r}')
+            pg.evaluate("saveForm()"); pg.wait_for_timeout(1200)
+            c = pg.evaluate(txn)
+            ok('повторное сохранение с теми же цифрами записывает покупку как есть (выбор человека)') if c == a + 1 else fail('повторное сохранение', f'{a}->{c}')
+        scenario('Цена покупки: опечатка в количестве', {'session': True, 'docs': SEED}, s_odd_price)
+
         def s_v3_demo(pg, n):
             pg.wait_for_selector('#mlaDemo', state='visible', timeout=8000)
             pg.click('#mlaDemo'); wait_app(pg); pg.wait_for_timeout(3500)
