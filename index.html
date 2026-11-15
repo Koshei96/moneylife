@@ -11,7 +11,7 @@ addEventListener('error',function(e){if(e&&e.message)add(e.message,(e.filename||
 addEventListener('unhandledrejection',function(e){var r=e&&e.reason;add(r&&(r.message||r)||'отклонённое обещание','promise');});
 window.mlErrLog=function(){try{return JSON.parse(localStorage.getItem(K)||'[]');}catch(e){return [];}};window.mlErrAdd=add;})();
 </script>
-<script src="i18n.js?v=20261115031000"></script>
+<script src="i18n.js?v=20261115073800"></script>
 <title>MoneyLife</title>
 <meta name="theme-color" content="#06040e">
 <script>/* тема до отрисовки: «Авто» — как в телефоне, иначе выбор из настроек */
@@ -775,6 +775,7 @@ html.lite .view.enter>*,html.lite .sheet.open .sh-body .sh-in>*{animation:none}
 /* мелкий текст: приглушённый, но читаемый (контраст ≥ 4,5:1) */
 .note,.nw-s,.cv-hint,.cd-r{color:var(--mute)}
 [data-theme="light"] .signal.soft .chip.warn{color:#8a5a0c;background:#d9a1352e}
+.hint .oddp{color:var(--warn)} [data-theme="light"] .hint .oddp{color:#8a5a0c}
 
 /* вход: знак, первое появление, шторка между «Вход» и «Регистрация» */
 #mlAuth{display:flex;overflow:auto}
@@ -1733,9 +1734,9 @@ document.querySelectorAll('nav.tabs .tab').forEach(b=>{const v=b.querySelector('
 
 <div class="toast" id="toast" role="status"><span id="toastMsg"></span><button type="button" id="toastBtn" hidden></button></div>
 
-<script src="config.js?v=20261115031000"></script>
+<script src="config.js?v=20261115073800"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="shim.js?v=20261115031000"></script>
+<script src="shim.js?v=20261115073800"></script>
 <script>
 /* ===== основа ===== */
 const $=id=>document.getElementById(id);
@@ -2539,12 +2540,17 @@ function spreadTotal(pf){const sp=split(),tot=+$(pf==='b'?'bTotal':'dTotal').val
   if(pf==='d'&&dipPlan){const goP=dipPlan.pl.parts.filter(p=>p.st==='go'),use=goP.length?goP:dipPlan.pl.parts.filter(p=>p.st!=='done'),w=use.reduce((a,p)=>a+p.usd,0)||1;
     for(const s of ['BTC','ETH','ALT']){const el=$(pf+'u_'+s);if(!el)continue;const p=use.find(x=>x.k===s);el.value=tot&&p?(tot*p.usd/w).toFixed(2):'';}hints(pf);return;}
   for(const s of ['BTC','ETH','ALT']){const el=$(pf+'u_'+s);if(el)el.value=tot?(tot*sp[s]/100).toFixed(2):'';}hints(pf);}
+/* 15.11 (владелец): цена покупки сильно не та, что на рынке (> ×3 или < ÷3) — почти всегда опечатка в «Монет» (лишний или пропущенный ноль) */
+function oddPrice(sym,u,q){if(!sym||!(u>0)||!(q>0))return null;const p=+derive().prices[sym]||0;if(!p)return null;const pr=u/q,k=pr/p;return k>3||k<1/3?{pr,p,hi:k>3}:null;}
+function oddMsg(rows){const o=rows.find(r=>r.o);return o?`Цена покупки ${o.sym} ${usdp(o.o.pr)} — сильно ${o.o.hi?'выше':'ниже'} рынка (${usdp(o.o.p)}). Проверь количество монет. Если всё верно — сохрани ещё раз.`:'';}
+let oddOk='';
 function hintFor(sym,u,qE,el,qi){const D=derive();if(!sym){el.textContent=el.id==='oHint'?'':'напиши альткоин месяца, например SOL';if(qi)qi.placeholder='';return;}
   const p=+D.prices[sym]||0,est=p&&u?u/p:0,q=qE||est;if(qi)qi.placeholder=est?'≈ '+qtyRaw(+est.toPrecision(4)):'';
   if(!u&&!qE){el.innerHTML=p?'цена сейчас <b>'+usdp(p)+'</b>':'цены этой монеты нет — впиши количество';return;}
   const c=D.h[sym]||{qty:0,usd:0,cq:0},oA=c.cq?c.usd/c.cq:null,nA=(c.cq+q)?(c.usd+u)/(c.cq+q):null,parts=[],one=el.id==='oHint',avgW=one?'средняя цена покупки':'средняя';
   if(!qE&&est)parts.push(`≈ <b>${qtyRaw(+est.toPrecision(4))} ${esc(sym)}</b> по ${usdp(p)}`);
-  if(qE&&u&&!(one&&!oA&&nA))parts.push(`цена покупки <b>${usdp(u/qE)}</b>`);/* первая покупка в «Одна монета»: цена = средней, не повторяем */
+  const od=qE&&u?oddPrice(sym,u,qE):null;
+  if(qE&&u&&(od||!(one&&!oA&&nA)))parts.push(`цена покупки <b>${usdp(u/qE)}</b>`+(od?` <span class="oddp">— сильно ${od.hi?'выше':'ниже'} рынка (${usdp(od.p)}): проверь количество монет — нет ли лишнего нуля</span>`:''));/* первая покупка в «Одна монета»: цена = средней, не повторяем */
   if(q)parts.push(one?`всего будет ${qtyRaw(+(c.qty+q).toPrecision(6))} ${esc(sym)}`:`станет ${qtyRaw(+(c.qty+q).toPrecision(6))}`);
   if(u&&q&&nA)parts.push(oA?`${avgW} ${usdp(oA)} → <b>${usdp(nA)}</b>`:`${avgW} <b>${usdp(nA)}</b>`);
   el.innerHTML=parts.join(' · ');}
@@ -2695,16 +2701,20 @@ function incCalc(){const v=+$('incUah').value||0,r=rate(),row=(k,g)=>`<div><span
 $('incUah').addEventListener('input',incCalc);
 function initStart(){symOptions();$('nsSym').value='';$('nsQty').value='';$('nsUsd').value='';}
 function finish(snd,n,msg){rememberCoins(formCoinInputs());closeSheets();play(snd);buzz([12,40,18]);if(snd!=='cash')coinFly(window.__buyFrom||$('plusBtn'),Math.min(n,4));window.__buyFrom=null;toast(msg);}
+/* первое сохранение с подозрительной ценой — остановка и объяснение; повтор с теми же цифрами — сохраняем как есть */
+function oddStop(items,err){const rows=items.map(i=>({sym:i.symbol,o:i.usd?oddPrice(i.symbol,i.usd,i.qty):null})),key=items.map(i=>i.symbol+':'+i.qty+':'+i.usd).join('|');
+  if(!rows.some(r=>r.o)||oddOk===key){oddOk='';return false;}oddOk=key;err.textContent=oddMsg(rows);return true;}
 async function saveForm(){const err=$('fErr');err.textContent='';if(!db){err.textContent='Нет подключения к данным — попробуй ещё раз чуть позже.';return;}
   const ts=tsFromDate(),btn=$('saveBtn');btn.disabled=true;
   try{
     if(mode==='buy'){
-      if(buyMode==='dca'){const r=collectRows('b','dca',ts);if(r.err){err.textContent=r.err;return;}for(const it of r.items)await db.collection('tx').add(it);const a=altSym('b');if(a&&!planAlt(ymKey(new Date()))&&a!==(S.settings.altOfMonth||'').toUpperCase())await db.doc('app/settings').update({altOfMonth:a});finish(r.items.length>1?'coins':'coin',r.items.length,'В копилке: '+r.items.map(i=>i.symbol).join(', '));}
+      if(buyMode==='dca'){const r=collectRows('b','dca',ts);if(r.err){err.textContent=r.err;return;}if(oddStop(r.items,err))return;for(const it of r.items)await db.collection('tx').add(it);const a=altSym('b');if(a&&!planAlt(ymKey(new Date()))&&a!==(S.settings.altOfMonth||'').toUpperCase())await db.doc('app/settings').update({altOfMonth:a});finish(r.items.length>1?'coins':'coin',r.items.length,'В копилке: '+r.items.map(i=>i.symbol).join(', '));}
       else{const sym=($('oSym').value||'').trim().toUpperCase(),u=+$('oUsd').value||0;let q=+$('oQty').value||0,est=false;if(!sym){err.textContent='Впиши монету.';return;}
         if(!q&&u){const p=+derive().prices[sym]||0;if(p){q=u/p;est=true;}}if(!q){err.textContent='Впиши количество или сумму.';return;}
         const it={ts,type:$('oDca').checked?'dca':'buy',symbol:sym,qty:+q.toPrecision(8),usd:u?+u.toFixed(2):null};if(u&&q)it.price=+(u/q).toPrecision(8);if(est)it.note='количество по оценке — поправь по данным биржи';
+        if(oddStop([it],err))return;
         await db.collection('tx').add(it);finish('coin',1,sym+' в копилке');}}
-    else if(mode==='dip'){const lv=+$('dLevel').value||0;if(!lv){err.textContent='Нет активного уровня.';return;}const r=collectRows('d','dip',ts,lv);if(r.err){err.textContent=r.err;return;}
+    else if(mode==='dip'){const lv=+$('dLevel').value||0;if(!lv){err.textContent='Нет активного уровня.';return;}const r=collectRows('d','dip',ts,lv);if(r.err){err.textContent=r.err;return;}if(oddStop(r.items,err))return;
       for(const it of r.items)await db.collection('tx').add(it);
       const D=derive();let allDone=false;
       const levels=((S.cycle&&S.cycle.levels)||[]).map(l=>{if(l.n!==lv)return Object.assign({},l);
@@ -3071,7 +3081,7 @@ function msSync(x){MSC.last=x;if(!msApply())return;if(!S.ready||document.getElem
   if(window.Mascot){try{window.Mascot.sync(msPayload(x));}catch(e){}}else msLoad();}
 function msLoad(){if(MSC.loading||MSC.failed)return;MSC.loading=true;
   const add=(src,ok)=>{try{const s=document.createElement('script');s.src=src;s.async=true;s.onload=ok;s.onerror=()=>{MSC.failed=true;};document.head.appendChild(s);}catch(e){MSC.failed=true;}};
-  const boot=()=>add('mascot.js?v=20261115031000',()=>{try{if(window.Mascot&&window.Mascot.init({host:$('mascot'),app:{buzz,askName:()=>{if(window.MLX&&MLX.askName)MLX.askName();},addAlert:(y,v)=>window.MLX&&MLX.addAlert?MLX.addAlert(y,v):null,voice:(t,x)=>window.mlVoice?window.mlVoice(t,x):null,ask:(q,y,x)=>window.mlAsk?window.mlAsk(q,y,x):null}})&&MSC.last&&$('ob').hidden&&!document.getElementById('mlAuth'))window.Mascot.sync(msPayload(MSC.last));}catch(e){}});
+  const boot=()=>add('mascot.js?v=20261115073800',()=>{try{if(window.Mascot&&window.Mascot.init({host:$('mascot'),app:{buzz,askName:()=>{if(window.MLX&&MLX.askName)MLX.askName();},addAlert:(y,v)=>window.MLX&&MLX.addAlert?MLX.addAlert(y,v):null,voice:(t,x)=>window.mlVoice?window.mlVoice(t,x):null,ask:(q,y,x)=>window.mlAsk?window.mlAsk(q,y,x):null}})&&MSC.last&&$('ob').hidden&&!document.getElementById('mlAuth'))window.Mascot.sync(msPayload(MSC.last));}catch(e){}});
   setTimeout(boot,300);}
 function render(){const D=derive();renderHeader();renderHome(D);renderGrowth();renderCoins(D);renderStrategy(D);renderActivity();renderD14();renderInst();if(window.MLX)try{MLX.render(D);}catch(e){console.error(e);}earnNudge();if(cvSym&&$('coinSheet').classList.contains('open'))renderCoinView();}
 document.body.classList.add('loading');
@@ -3156,9 +3166,9 @@ render();requestAnimationFrame(inkMove);setTimeout(inkMove,600);
     sy=null;swipe=null;pull=0;armed=false;},{passive:true});
 })();
 </script>
-<script src="plus.js?v=20261115031000"></script>
-<script src="wins.js?v=20261115031000"></script>
-<script src="folds.js?v=20261115031000"></script>
+<script src="plus.js?v=20261115073800"></script>
+<script src="wins.js?v=20261115073800"></script>
+<script src="folds.js?v=20261115073800"></script>
 <script>
 /* ===== 12.11.2026: ползунок «Купить», смахнуть запись влево с «рассыпанием» монеты ===== */
 (function(){
