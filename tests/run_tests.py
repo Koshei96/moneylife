@@ -2072,6 +2072,33 @@ def run_browser():
                 ok(f'украинский ({th}): iPhone — «Приховати» прячет подсказку') if not r['vis'] and r['flag'] == '1' else fail(f'украинский ({th}): iPhone «Приховати»', str(r))
             scenario(f'На главный экран — iPhone, украинский ({th})', {'session': True, 'docs': SEED}, s_inst_ios_uk, dsf=1, theme=th)
 
+        # 15.11 «Графит» (правило 10): полоска прокрутки под шапкой и метка «День N из 14» — без фиолетово-розового и без градиента;
+        #     полоска по-прежнему показывает, сколько прокручено
+        HUE = """(c)=>{const m=/rgba?\\(([^)]+)\\)/.exec(c||'');if(!m)return {c,h:0,s:0,a:0};const v=m[1].split(/[ ,\\/]+/).filter(Boolean).map(parseFloat),[r,g,b]=v.map(x=>x/255),a=v.length>3?v[3]:1,
+            mx=Math.max(r,g,b),mn=Math.min(r,g,b),d=mx-mn,l=(mx+mn)/2,s=d?d/(1-Math.abs(2*l-1)):0;let h=0;if(d){h=mx===r?((g-b)/d)%6:mx===g?(b-r)/d+2:(r-g)/d+4;h=(h*60+360)%360;}
+            return {c,h:Math.round(h),s:+s.toFixed(2),a}}"""
+        GRAPH = """()=>{const hue=""" + HUE + """,t=document.querySelector('.top'),a=getComputedStyle(t,'::after'),ch=document.querySelector('#d14 .d14-h .chip'),cc=ch&&getComputedStyle(ch);
+            return {sc:document.body.classList.contains('scrolled'),sp:parseFloat(t.style.getPropertyValue('--sp')||0),tr:a.transform,op:parseFloat(a.opacity),img:a.backgroundImage,bar:hue(a.backgroundColor),
+              chip:ch&&ch.textContent.trim(),cimg:cc&&cc.backgroundImage,cbg:cc&&hue(cc.backgroundColor),cfg:cc&&hue(cc.color),csh:cc&&cc.boxShadow}}"""
+        def violet(x): return x['a'] > 0 and x['s'] > 0.2 and 235 <= x['h'] <= 345
+        for th in ('dark', 'light'):
+            def s_graphite(pg, n, th=th):
+                wait_app(pg); pg.wait_for_timeout(500)
+                if pg.evaluate("document.documentElement.dataset.theme") != th: raise AssertionError('тема не включилась: ' + th)
+                pg.evaluate("document.getElementById('d14').scrollIntoView({block:'center'})"); pg.wait_for_timeout(700)
+                r = pg.evaluate(GRAPH)
+                if r['sc'] and r['sp'] > 0 and r['tr'] not in ('none', 'matrix(0, 0, 0, 1, 0, 0)') and r['op'] > 0.5 and r['img'] == 'none' and not violet(r['bar']) and r['bar']['s'] <= 0.2:
+                    ok(f'«Графит» ({th}): полоска прокрутки под шапкой — ровная серая {r["bar"]["c"]}, без градиента, по-прежнему показывает прокрутку')
+                else: fail(f'«Графит» ({th}): полоска под шапкой', str(r))
+                if r['chip'] and r['chip'].startswith('День ') and r['cimg'] == 'none' and r['csh'] == 'none' and not violet(r['cbg']) and not violet(r['cfg']) and r['cfg']['s'] <= 0.2:
+                    ok(f'«Графит» ({th}): метка «{r["chip"]}» нейтральная — текст {r["cfg"]["c"]}, фон {r["cbg"]["c"]}')
+                else: fail(f'«Графит» ({th}): метка «День N из 14»', str(r))
+                shot(pg, f'graphite-head-{th}')
+                pg.evaluate("scrollTo(0,0)"); pg.wait_for_timeout(500)
+                r0 = pg.evaluate(GRAPH)
+                ok(f'«Графит» ({th}): вверху страницы полоски нет') if not r0['sc'] and r0['op'] < 0.05 else fail(f'«Графит» ({th}): полоска вверху', str(r0))
+            scenario(f'Графит — шапка и «14 дней» ({th})', {'session': True, 'docs': SEED}, s_graphite, dsf=1, theme=th)
+
         def s_v3_auth_calm(pg, n):
             pg.wait_for_selector('#mlaPass', state='visible', timeout=8000)
             a = pg.evaluate("""()=>{const c=document.querySelector('.mla-card');document.querySelector('#mlAuth [data-to=up]').click();
