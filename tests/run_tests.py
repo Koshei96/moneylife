@@ -2127,6 +2127,51 @@ def run_browser():
                 ok(f'украинский ({th}): iPhone — «Приховати» прячет подсказку') if not r['vis'] and r['flag'] == '1' else fail(f'украинский ({th}): iPhone «Приховати»', str(r))
             scenario(f'На главный экран — iPhone, украинский ({th})', {'session': True, 'docs': SEED}, s_inst_ios_uk, dsf=1, theme=th)
 
+        # 15.11 (Вера, охота #1): пополнение без суммы в гривне (uah пустое) — в «Истории» и «Отчёте за месяц» нет «0 грн»;
+        #     пополнение с гривной показывает её как раньше. Только показ — суммы не меняются.
+        UAH_DOCS = SEED + [{'col': 'tx', 'id': 'u1', 'data': {'ts': '2026-09-10T10:00:00.000Z', 'type': 'deposit', 'usd': 115, 'uah': None, 'dcaUsd': 100, 'reserveUsd': 15}},
+                           {'col': 'tx', 'id': 'u2', 'data': {'ts': '2026-09-12T10:00:00.000Z', 'type': 'deposit', 'usd': 50, 'uah': ''}},
+                           {'col': 'tx', 'id': 'u3', 'data': {'ts': '2026-10-05T10:00:00.000Z', 'type': 'deposit', 'usd': 0, 'uah': 0, 'note': 'ноль'}}]
+        UAH_Q = """()=>{const row=id=>{const e=document.querySelector('#histList [data-tx="'+id+'"] .r');return e?e.textContent.replace(/[\\u202f\\xa0]/g,' '):null};
+            return {u1:row('u1'),u2:row('u2'),u3:row('u3'),t1:row('t1'),hist:document.getElementById('histList').textContent.replace(/[\\u202f\\xa0]/g,' ')}}"""
+        REP_Q = "(m)=>{rep=m;renderReport();return document.getElementById('repTiles').textContent.replace(/[\\u202f\\xa0]/g,' ')}"
+        # отдельные надписи «0 грн» (склейка текста «$115,00» + «0 грн» спрятала бы ноль среди цифр)
+        ZERO_Q = """()=>[...document.querySelectorAll('#histList span,#repTiles div')].filter(e=>!e.children.length&&/^0\\s*грн$/.test(e.textContent.replace(/[\\u202f\\xa0]/g,' ').trim())).map(e=>e.outerHTML.slice(0,80))"""
+        for th in ('dark', 'light'):
+            def s_uah_empty(pg, n, th=th):
+                wait_app(pg); pg.wait_for_timeout(500)
+                if pg.evaluate("document.documentElement.dataset.theme") != th: raise AssertionError('тема не включилась: ' + th)
+                pg.click('nav.tabs .tab[data-tab="activity"]'); pg.wait_for_timeout(800)
+                r = pg.evaluate(UAH_Q)
+                if r['u1'] and r['u2'] and r['u3'] and 'грн' not in r['u1'] + r['u2'] + r['u3'] and '$115' in r['u1'] and r['t1'] and '41 500 грн' in r['t1'] and '0 грн' not in r['hist'].replace('41 500 грн', ''):
+                    ok(f'«0 грн» ({th}): пополнение без гривны в «Истории» — только доллары; с гривной — «41 500 грн» как раньше')
+                else: fail(f'«0 грн» ({th}): «История»', str(r)[:400])
+                pg.evaluate("document.querySelector('#histList [data-tx=\"u1\"]').scrollIntoView({block:'center'})"); pg.wait_for_timeout(300)
+                pg.screenshot(path=str(OUT / f'fix-uah-hist-{th}.png'))
+                pg.click('#actSeg [data-s="rep"]'); pg.wait_for_timeout(500)
+                e = pg.evaluate(REP_Q, [2026, 8]); f = pg.evaluate(REP_Q, [2026, 7])
+                if 'Внесено на биржу' in e and '$165' in e and 'грн' not in e and '41 500 грн' in f:
+                    ok(f'«0 грн» ({th}): «Отчёт за месяц» — без гривны нет «0 грн», с гривной «41 500 грн»')
+                else: fail(f'«0 грн» ({th}): отчёт', f'{e[:200]!r} | {f[:200]!r}')
+                pg.evaluate(REP_Q, [2026, 8]); pg.evaluate("scrollTo(0,0)"); pg.wait_for_timeout(300)
+                pg.screenshot(path=str(OUT / f'fix-uah-report-{th}.png'))
+            scenario(f'Пополнение без гривны — без «0 грн» ({th})', {'session': True, 'docs': UAH_DOCS}, s_uah_empty, dsf=1, theme=th)
+            def s_uah_demo(pg, n, th=th):
+                pg.wait_for_selector('#mlaDemo', state='visible', timeout=8000)
+                pg.click('#mlaDemo'); wait_app(pg); pg.wait_for_timeout(2500)
+                pg.click('nav.tabs .tab[data-tab="activity"]'); pg.wait_for_timeout(800)
+                h = pg.evaluate("document.getElementById('histList').textContent.replace(/[\\u202f\\xa0]/g,' ')")
+                m = pg.evaluate("(()=>{const d=new Date();return [d.getFullYear(),d.getMonth()]})()")
+                pg.screenshot(path=str(OUT / f'fix-uah-demo-hist-{th}.png'))
+                pg.click('#actSeg [data-s="rep"]'); pg.wait_for_timeout(500)
+                e = pg.evaluate(REP_Q, m)
+                z = pg.evaluate(ZERO_Q)
+                if 'Пополнение биржи' in h and 'Внесено на биржу' in e and not z:
+                    ok(f'«0 грн» ({th}): демо — у пополнений нет «0 грн» ни в «Истории», ни в отчёте')
+                else: fail(f'«0 грн» ({th}): демо', f'{z} | {h[:300]!r} | {e[:200]!r}')
+                pg.screenshot(path=str(OUT / f'fix-uah-demo-report-{th}.png'))
+            scenario(f'Демо — пополнения без «0 грн» ({th})', {'session': False, 'docs': []}, s_uah_demo, dsf=1, theme=th)
+
         # 15.11 «Графит» (правило 10): полоска прокрутки под шапкой и метка «День N из 14» — без фиолетово-розового и без градиента;
         #     полоска по-прежнему показывает, сколько прокручено
         HUE = """(c)=>{const m=/rgba?\\(([^)]+)\\)/.exec(c||'');if(!m)return {c,h:0,s:0,a:0};const v=m[1].split(/[ ,\\/]+/).filter(Boolean).map(parseFloat),[r,g,b]=v.map(x=>x/255),a=v.length>3?v[3]:1,
