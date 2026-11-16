@@ -11,7 +11,7 @@ addEventListener('error',function(e){if(e&&e.message)add(e.message,(e.filename||
 addEventListener('unhandledrejection',function(e){var r=e&&e.reason;add(r&&(r.message||r)||'отклонённое обещание','promise');});
 window.mlErrLog=function(){try{return JSON.parse(localStorage.getItem(K)||'[]');}catch(e){return [];}};window.mlErrAdd=add;})();
 </script>
-<script src="i18n.js?v=20261116110000"></script>
+<script src="i18n.js?v=20261116211000"></script>
 <title>MoneyLife</title>
 <meta name="theme-color" content="#06040e">
 <script>/* тема до отрисовки: «Авто» — как в телефоне, иначе выбор из настроек */
@@ -1218,7 +1218,7 @@ html.lite .view.enter{animation:vin .2s var(--ease)}
 /* «истории» на весь экран */
 .story{position:fixed;inset:0;z-index:90;display:flex;flex-direction:column;color:#fff;opacity:0;transform:scale(1.04);transition:opacity .26s var(--ease),transform .32s var(--ease);touch-action:manipulation;user-select:none;-webkit-user-select:none}
 .story.open{opacity:1;transform:none}
-.st-bg{position:absolute;inset:0;background:radial-gradient(120% 80% at 85% 10%,hsl(calc(300 + var(--hue,0)) 90% 55% / .45),transparent 60%),radial-gradient(110% 80% at 10% 95%,hsl(calc(260 + var(--hue,0)) 85% 50% / .55),transparent 60%),#0b0620;transition:background .6s}
+.st-bg{position:absolute;inset:0;background:var(--bg)}
 .st-bars{position:relative;display:flex;gap:5px;padding:calc(env(safe-area-inset-top,0px) + 12px) 14px 0}
 .st-bars i{flex:1;height:3px;border-radius:2px;background:#ffffff33;overflow:hidden}
 .st-bars i b{display:block;height:100%;width:100%;background:#fff;transform-origin:0 50%;transform:scaleX(0)}
@@ -1251,6 +1251,11 @@ html.lite .view.enter{animation:vin .2s var(--ease)}
 .st-note{color:#ffffff88;font-size:12px}
 .story .btn.ghost{color:#fff;border-color:#ffffff45;background:#ffffff10}.story .btn:not(.ghost){background:#fff;color:#14092e}
 .st-big.st-na{font-size:56px;color:#d9c9ff}
+/* 16.11.2026 «Графит»: «Итог месяца» — ровный фон темы без фиолетово-розового свечения, цвета текста — из темы (светлая тоже читается) */
+.story{color:var(--fg)}.st-k,.st-big.st-na{color:var(--mute)}.st-s p{color:var(--fg)}.st-tap,.st-note{color:var(--mute)}
+.st-x{background:var(--surface2);color:var(--fg)}.st-bars i{background:var(--line2)}.st-bars i b{background:var(--fg)}.st-flames i{color:var(--line2)}.st-flames i.on{color:var(--accent);filter:none}
+.st-big.pos{color:var(--pos);text-shadow:none}.st-big.neg{color:var(--neg)}
+.story .btn.ghost{color:var(--fg);border-color:var(--line2);background:var(--surface2)}.story .btn:not(.ghost){background:var(--fg);color:var(--bg)}
 @media (prefers-reduced-motion:reduce){.story,.st-s,.st-s>*,.st-coins>span,.st-flames i,.st-ach .win-b,.st-ach small,.win-cell,.win-inv-g{animation:none;transition:none}}
 </style>
 <style id="v7">
@@ -1741,9 +1746,9 @@ document.querySelectorAll('nav.tabs .tab').forEach(b=>{const v=b.querySelector('
 
 <div class="toast" id="toast" role="status"><span id="toastMsg"></span><button type="button" id="toastBtn" hidden></button></div>
 
-<script src="config.js?v=20261116110000"></script>
+<script src="config.js?v=20261116211000"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="shim.js?v=20261116110000"></script>
+<script src="shim.js?v=20261116211000"></script>
 <script>
 /* ===== основа ===== */
 const $=id=>document.getElementById(id);
@@ -2565,6 +2570,7 @@ function hints(pf){for(const s of ['BTC','ETH','ALT']){const el=$(pf+'h_'+s);if(
 ['b','d'].forEach(pf=>{$(pf==='b'?'bRows':'dRows').addEventListener('input',()=>hints(pf));$(pf==='b'?'bTotal':'dTotal').addEventListener('input',()=>spreadTotal(pf));$(pf==='b'?'bAlt':'dAlt').addEventListener('input',()=>hints(pf));});
 function collectRows(pf,type,ts,level){const items=[];const D=derive();
   for(const s of ['BTC','ETH','ALT']){let q=+$(pf+'q_'+s).value||0;const uv=$(pf+'u_'+s).value,u=uv===''?null:+uv,sym=rowSym(pf,s);let est=false;
+    if(q<0)return {err:NEG_Q};if(u<0)return {err:NEG_U};
     if(!q&&u>0){const p=+D.prices[sym]||0;if(p){q=u/p;est=true;}}
     if(!q)continue;if(!sym)return {err:'Впиши тикер альткоина.'};
     const it={ts,type,symbol:sym,qty:+q.toPrecision(8),usd:u==null?null:+u.toFixed(2)};if(u&&q)it.price=+(u/q).toPrecision(8);if(est)it.note='количество по оценке — поправь по данным биржи';if(level)it.level=level;items.push(it);}
@@ -2708,6 +2714,8 @@ function incCalc(){const v=+$('incUah').value||0,r=rate(),row=(k,g)=>`<div><span
 $('incUah').addEventListener('input',incCalc);
 function initStart(){symOptions();$('nsSym').value='';$('nsQty').value='';$('nsUsd').value='';}
 function finish(snd,n,msg){rememberCoins(formCoinInputs());closeSheets();play(snd);buzz([12,40,18]);if(snd!=='cash')coinFly(window.__buyFrom||$('plusBtn'),Math.min(n,4));window.__buyFrom=null;toast(msg);}
+/* 16.11.2026 (охота, #2): сумма и количество не бывают меньше нуля — запись с минусом портила историю, итог и прибыль */
+const NEG_U='Впиши сумму больше нуля.',NEG_Q='Впиши количество больше нуля.',NEG_OPT='Впиши сумму больше нуля или оставь поле пустым.';
 /* первое сохранение с подозрительной ценой — остановка и объяснение; повтор с теми же цифрами — сохраняем как есть */
 function oddStop(items,err){const rows=items.map(i=>({sym:i.symbol,o:i.usd?oddPrice(i.symbol,i.usd,i.qty):null})),key=items.map(i=>i.symbol+':'+i.qty+':'+i.usd).join('|');
   if(!rows.some(r=>r.o)||oddOk===key){oddOk='';return false;}oddOk=key;err.textContent=oddMsg(rows);return true;}
@@ -2716,7 +2724,7 @@ async function saveForm(){const err=$('fErr');err.textContent='';if(!db){err.tex
   try{
     if(mode==='buy'){
       if(buyMode==='dca'){const r=collectRows('b','dca',ts);if(r.err){err.textContent=r.err;return;}if(oddStop(r.items,err))return;for(const it of r.items)await db.collection('tx').add(it);const a=altSym('b');if(a&&!planAlt(ymKey(new Date()))&&a!==(S.settings.altOfMonth||'').toUpperCase())await db.doc('app/settings').update({altOfMonth:a});finish(r.items.length>1?'coins':'coin',r.items.length,'В копилке: '+r.items.map(i=>i.symbol).join(', '));}
-      else{const sym=($('oSym').value||'').trim().toUpperCase(),u=+$('oUsd').value||0;let q=+$('oQty').value||0,est=false;if(!sym){err.textContent='Впиши монету.';return;}
+      else{const sym=($('oSym').value||'').trim().toUpperCase(),u=+$('oUsd').value||0;let q=+$('oQty').value||0,est=false;if(!sym){err.textContent='Впиши монету.';return;}if(q<0){err.textContent=NEG_Q;return;}if(u<0){err.textContent=NEG_U;return;}
         if(!q&&u){const p=+derive().prices[sym]||0;if(p){q=u/p;est=true;}}if(!q){err.textContent='Впиши количество или сумму.';return;}
         const it={ts,type:$('oDca').checked?'dca':'buy',symbol:sym,qty:+q.toPrecision(8),usd:u?+u.toFixed(2):null};if(u&&q)it.price=+(u/q).toPrecision(8);if(est)it.note='количество по оценке — поправь по данным биржи';
         if(oddStop([it],err))return;
@@ -2737,11 +2745,12 @@ async function saveForm(){const err=$('fErr');err.textContent='';if(!db){err.tex
       const a=altSym('d');if(a&&!planAlt(ymKey(new Date()))&&a!==(S.settings.altOfMonth||'').toUpperCase())await db.doc('app/settings').update({altOfMonth:a});
       finish('coins',r.items.length,allDone?'Уровень '+lv+' выполнен':'Уровень '+lv+': '+r.items.map(i=>i.symbol).join(', ')+' куплено, остальное ждёт цену');}
     else if(mode==='sell'){const sym=$('sSym').value,q=+$('sQty').value||0,u=+$('sUsd').value||0,have=(derive().h[sym]||{}).qty||0;
+      if(q<0){err.textContent=NEG_Q;return;}if(u<0){err.textContent=NEG_U;return;}
       if(!sym||!q){err.textContent='Выбери монету и впиши количество.';return;}if(q>have*1.000001){err.textContent='Столько '+sym+' нет: всего '+qtyRaw(have)+'.';return;}if(!u){err.textContent='Впиши, сколько долларов получил.';return;}
       await db.collection('tx').add({ts,type:'sell',symbol:sym,qty:+q.toPrecision(8),usd:+u.toFixed(2),price:+(u/q).toPrecision(8)});
       if($('sToRes').checked)await db.collection('tx').add({ts,type:'reserve_in',usd:+u.toFixed(2),note:'выручка с продажи '+sym});
       finish('cash',0,'Продано '+qtyRaw(q)+' '+sym+' за '+usd(u));}
-    else if(mode==='deposit'){const g=+$('depUah').value||0,u=+$('depUsd').value||0;if(!u){err.textContent='Впиши сумму пополнения.';return;}const dcaUsd=+(u*depShare()).toFixed(2);
+    else if(mode==='deposit'){const g=+$('depUah').value||0,u=+$('depUsd').value||0;if(u<0){err.textContent=NEG_U;return;}if(!u){err.textContent='Впиши сумму пополнения.';return;}if(g<0){err.textContent=NEG_OPT;return;}const dcaUsd=+(u*depShare()).toFixed(2);
       await db.collection('tx').add({ts,type:'deposit',uah:g||null,usd:+u.toFixed(2),dcaUsd,reserveUsd:+(u-dcaUsd).toFixed(2),rate:g?+(g/u).toFixed(4):null});finish('coins',3,'Биржа +'+usd(u)+': DCA '+usd(dcaUsd)+', резерв '+usd(u-dcaUsd));}
     else if(mode==='earn'){const b=+$('erBal').value;if(!b||b<0){err.textContent='Впиши, сколько сейчас USDT в стейкинге.';return;}
       const D=derive(),d=+(b-D.reserve).toFixed(2),day=+$('erDay').value||null,apr=+$('erApr').value||null,prev=S.settings.earn||{};
@@ -2751,8 +2760,8 @@ async function saveForm(){const err=$('fErr');err.textContent='';if(!db){err.tex
       try{localStorage.setItem('earnAsk',isoDay(new Date()));}catch(x){}
       finish('cash',0,Math.abs(d)>=0.01?'Сверено · проценты '+money(d,{sign:true}):'Сверено · резерв совпадает');}
     else if(mode==='reserve'){const v=+$('resAmt').value;if(!v||(resKind==='reserve_in'&&v<0)){err.textContent='Впиши сумму больше нуля.';return;}const it={ts,type:resKind,usd:+v.toFixed(2)};const n=$('resNote').value.trim();if(n)it.note=n;await db.collection('tx').add(it);finish('cash',0,'Резерв '+(v>0?'+':'')+usd(v));}
-    else if(mode==='income'){const v=+$('incUah').value||0;if(!v){err.textContent='Впиши сумму дохода.';return;}await db.collection('tx').add({ts,type:'income',uah:v});finish('cash',0,'Доход '+uah(v)+' записан');}
-    else if(mode==='start'){const sym=($('nsSym').value||'').trim().toUpperCase(),q=+$('nsQty').value||0,u=$('nsUsd').value;if(!sym||!q){err.textContent='Впиши монету и количество.';return;}await db.collection('tx').add({ts,type:'start',symbol:sym,qty:q,usd:u===''?null:+u});finish('coin',1,sym+' добавлен');}
+    else if(mode==='income'){const v=+$('incUah').value||0;if(v<0){err.textContent=NEG_U;return;}if(!v){err.textContent='Впиши сумму дохода.';return;}await db.collection('tx').add({ts,type:'income',uah:v});finish('cash',0,'Доход '+uah(v)+' записан');}
+    else if(mode==='start'){const sym=($('nsSym').value||'').trim().toUpperCase(),q=+$('nsQty').value||0,u=$('nsUsd').value;if(q<0){err.textContent=NEG_Q;return;}if(!sym||!q){err.textContent='Впиши монету и количество.';return;}if(u!==''&&+u<0){err.textContent=NEG_OPT;return;}await db.collection('tx').add({ts,type:'start',symbol:sym,qty:q,usd:u===''?null:+u});finish('coin',1,sym+' добавлен');}
   }catch(e){err.textContent=failMsg(e,'Не сохранилось');}
   finally{btn.disabled=false;}}
 $('saveBtn').addEventListener('click',saveForm);
@@ -2769,10 +2778,10 @@ function openTx(id){const t=S.tx.find(x=>x.id===id);if(!t)return;eId=id;const co
   $('eErr').textContent='';txReturn=$('coinSheet').classList.contains('open')?'coinSheet':null;openSheet('txSheet');}
 async function saveTx(){const t=S.tx.find(x=>x.id===eId);if(!t||!db){$('eErr').textContent='Нет подключения к данным.';return;}const coinT=[...BUYS,'sell'].includes(t.type),nd=Object.assign({},t);delete nd.id;
   const dv=$('eDate').value;if(dv&&dv!==isoDay(new Date(t.ts))){const o=new Date(t.ts),a=dv.split('-').map(Number);nd.ts=new Date(a[0],a[1]-1,a[2],o.getHours(),o.getMinutes(),o.getSeconds()).toISOString();}
-  if(coinT){const sym=($('eSym').value||'').trim().toUpperCase(),q=+$('eQty').value;if(!sym||!q){$('eErr').textContent='Впиши монету и количество.';return;}nd.symbol=sym;nd.qty=+q.toPrecision(8);}
-  if(!$('eUsdF').hidden){const uv=$('eUsd').value;nd.usd=uv===''?null:+(+uv).toFixed(2);}
+  if(coinT){const sym=($('eSym').value||'').trim().toUpperCase(),q=+$('eQty').value;if(q<0){$('eErr').textContent=NEG_Q;return;}if(!sym||!q){$('eErr').textContent='Впиши монету и количество.';return;}nd.symbol=sym;nd.qty=+q.toPrecision(8);}
+  if(!$('eUsdF').hidden){const uv=$('eUsd').value;if(uv!==''&&+uv<0&&t.type!=='reserve_adj'){$('eErr').textContent=NEG_OPT;return;}nd.usd=uv===''?null:+(+uv).toFixed(2);}
   if(t.type==='deposit'&&nd.usd){const ratio=t.usd?(+t.dcaUsd||0)/t.usd:depShare();nd.dcaUsd=+(nd.usd*ratio).toFixed(2);nd.reserveUsd=+(nd.usd-nd.dcaUsd).toFixed(2);}
-  if(!$('eUahF').hidden){const g=$('eUah').value;nd.uah=g===''?null:+g;}
+  if(!$('eUahF').hidden){const g=$('eUah').value;if(g!==''&&+g<0){$('eErr').textContent=NEG_OPT;return;}nd.uah=g===''?null:+g;}
   if(coinT&&nd.usd&&nd.qty)nd.price=+(nd.usd/nd.qty).toPrecision(8);
   const note=$('eNote').value.trim();if(note)nd.note=note;else delete nd.note;
   try{await db.doc('tx/'+eId).set(nd);if(coinT)rememberCoins(['eSym']);closeSheets();play('coin');buzz(12);toast('Запись обновлена');}catch(e){$('eErr').textContent=failMsg(e,'Не сохранилось');}}
@@ -3088,7 +3097,7 @@ function msSync(x){MSC.last=x;if(!msApply())return;if(!S.ready||document.getElem
   if(window.Mascot){try{window.Mascot.sync(msPayload(x));}catch(e){}}else msLoad();}
 function msLoad(){if(MSC.loading||MSC.failed)return;MSC.loading=true;
   const add=(src,ok)=>{try{const s=document.createElement('script');s.src=src;s.async=true;s.onload=ok;s.onerror=()=>{MSC.failed=true;};document.head.appendChild(s);}catch(e){MSC.failed=true;}};
-  const boot=()=>add('mascot.js?v=20261116110000',()=>{try{if(window.Mascot&&window.Mascot.init({host:$('mascot'),app:{buzz,askName:()=>{if(window.MLX&&MLX.askName)MLX.askName();},addAlert:(y,v)=>window.MLX&&MLX.addAlert?MLX.addAlert(y,v):null,voice:(t,x)=>window.mlVoice?window.mlVoice(t,x):null,ask:(q,y,x)=>window.mlAsk?window.mlAsk(q,y,x):null}})&&MSC.last&&$('ob').hidden&&!document.getElementById('mlAuth'))window.Mascot.sync(msPayload(MSC.last));}catch(e){}});
+  const boot=()=>add('mascot.js?v=20261116211000',()=>{try{if(window.Mascot&&window.Mascot.init({host:$('mascot'),app:{buzz,askName:()=>{if(window.MLX&&MLX.askName)MLX.askName();},addAlert:(y,v)=>window.MLX&&MLX.addAlert?MLX.addAlert(y,v):null,voice:(t,x)=>window.mlVoice?window.mlVoice(t,x):null,ask:(q,y,x)=>window.mlAsk?window.mlAsk(q,y,x):null}})&&MSC.last&&$('ob').hidden&&!document.getElementById('mlAuth'))window.Mascot.sync(msPayload(MSC.last));}catch(e){}});
   setTimeout(boot,300);}
 function render(){const D=derive();renderHeader();renderHome(D);renderGrowth();renderCoins(D);renderStrategy(D);renderActivity();renderD14();renderInst();if(window.MLX)try{MLX.render(D);}catch(e){console.error(e);}earnNudge();if(cvSym&&$('coinSheet').classList.contains('open'))renderCoinView();}
 document.body.classList.add('loading');
@@ -3173,9 +3182,9 @@ render();requestAnimationFrame(inkMove);setTimeout(inkMove,600);
     sy=null;swipe=null;pull=0;armed=false;},{passive:true});
 })();
 </script>
-<script src="plus.js?v=20261116110000"></script>
-<script src="wins.js?v=20261116110000"></script>
-<script src="folds.js?v=20261116110000"></script>
+<script src="plus.js?v=20261116211000"></script>
+<script src="wins.js?v=20261116211000"></script>
+<script src="folds.js?v=20261116211000"></script>
 <script>
 /* ===== 12.11.2026: ползунок «Купить», смахнуть запись влево с «рассыпанием» монеты ===== */
 (function(){

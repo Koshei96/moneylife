@@ -1229,6 +1229,32 @@ def run_browser():
             size = pg.evaluate("(()=>{const r=MLX.monthRecap(new Date().toISOString().slice(0,7));const c=MLX.storyCanvas(r,'Итог',r.ch==null?'—':'+1%');return c.width+'x'+c.height})()")
             if size == '1080x1920': ok('итог месяца: картинка для «историй» 1080×1920')
             else: fail('итог месяца: картинка', size)
+            # «Графит» 16.11: фон слайдов и картинки — ровный, без фиолетово-розового свечения и градиентов
+            bg = pg.evaluate("""(()=>{const s=getComputedStyle(document.querySelector('#mlStory .st-bg')),b=getComputedStyle(document.body);
+                const r=MLX.monthRecap(new Date().toISOString().slice(0,7)),g=MLX.storyCanvas(r,'Итог','—').getContext('2d');
+                const px=[[20,20],[860,260],[160,1500],[1060,1900],[540,1000]].map(([x,y])=>g.getImageData(x,y,1,1).data.slice(0,3).join(','));
+                return {img:s.backgroundImage,col:s.backgroundColor,bodyBg:b.backgroundColor,px}})()""")
+            if bg['img'] == 'none' and bg['col'] == bg['bodyBg'] and len(set(bg['px'])) == 1:
+                ok('итог месяца: «Графит» — фон слайдов и картинки ровный, без свечения')
+            else: fail('итог месяца: фон без свечения', str(bg))
+            # замечания Веры 16.11: подписи «нажмите…» и сноски — контраст не меньше 4,5:1 в обеих темах; огоньки серии — акцент темы без свечения
+            th0 = pg.evaluate("document.documentElement.getAttribute('data-theme')")
+            look = {}
+            for th in ('dark', 'light'):
+                pg.evaluate(f"document.documentElement.setAttribute('data-theme','{th}')"); pg.wait_for_timeout(120)
+                look[th] = pg.evaluate("""(()=>{const st=document.querySelector('#mlStory');const t=document.createElement('div');
+                    t.innerHTML='<span class="st-tap">x</span><span class="st-note">x</span><div class="st-flames"><i class="on"></i></div>';st.appendChild(t);
+                    const rgb=v=>v.match(/[0-9.]+/g).slice(0,3).map(Number),L=c=>{const a=c.map(x=>{x/=255;return x<=.03928?x/12.92:Math.pow((x+.055)/1.055,2.4)});return .2126*a[0]+.7152*a[1]+.0722*a[2]};
+                    const bg=rgb(getComputedStyle(st.querySelector('.st-bg')).backgroundColor),cr=s=>{const a=L(rgb(getComputedStyle(t.querySelector(s)).color)),b=L(bg);return Math.round((Math.max(a,b)+.05)/(Math.min(a,b)+.05)*100)/100};
+                    const f=getComputedStyle(t.querySelector('.st-flames i.on')),acc=getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
+                    const p=document.createElement('i');p.style.color=acc;document.body.appendChild(p);const accRgb=getComputedStyle(p).color;p.remove();
+                    const r={tap:cr('.st-tap'),note:cr('.st-note'),filter:f.filter,flame:f.color,acc:accRgb};t.remove();return r})()""")
+            if th0: pg.evaluate(f"document.documentElement.setAttribute('data-theme','{th0}')")
+            else: pg.evaluate("document.documentElement.removeAttribute('data-theme')")
+            pg.wait_for_timeout(120)
+            if all(v['tap'] >= 4.5 and v['note'] >= 4.5 and v['filter'] == 'none' and v['flame'] == v['acc'] for v in look.values()):
+                ok(f"итог месяца: подписи читаются (контраст {look['dark']['tap']}:1 и {look['light']['tap']}:1), огоньки серии — акцент без свечения")
+            else: fail('итог месяца: подписи и огоньки', str(look))
             pg.click('#mlStory .st-x'); pg.wait_for_timeout(500)
             if pg.locator('#mlStory').count() == 0 and not pg.evaluate("document.body.classList.contains('lock')"): ok('итог месяца: закрывается, страница снова листается')
             else: fail('итог месяца: закрытие', 'осталось')
@@ -1997,6 +2023,50 @@ def run_browser():
             ok('по-украински: «значно вище ринку… перевір кількість монет… збережи ще раз»') if 'значно вище ринку' in h and 'перевір кількість монет' in h and 'Ціна покупки BTC' in e6 and 'Перевір кількість монет.' in e6 and 'Якщо все правильно — збережи ще раз.' in e6 and 'рынка' not in e6 else fail('украинский текст предупреждения', f'{h!r} {e6!r}')
             pg.evaluate("document.getElementById('fErr').scrollIntoView({block:'center'})"); shot(pg, 'odd-uk-dark')
         scenario('Цена покупки: сброс при новом открытии, «Одна монета», «Докупка»', {'session': True, 'docs': SEED + [{'col': 'app', 'id': 'cycle', 'data': CYC}]}, s_odd_reset)
+
+        # №2 охоты 16.11: формы не сохраняют сумму или количество с минусом — понятная подпись над «Сохранить», запись не создаётся;
+        # законные случаи как были: пополнение без гривны, «Остаток» без суммы
+        def s_neg(pg, n):
+            wait_app(pg); pg.wait_for_timeout(600)
+            txn = "[...window.__mlRows.keys()].filter(k=>k.startsWith('tx/')).length"
+            def save(): pg.evaluate("saveForm()"); pg.wait_for_timeout(700); return norm(pg.inner_text('#fErr')), pg.evaluate(txn)
+            def snap(tag):
+                for th in ['dark', 'light']:
+                    pg.evaluate(f"document.documentElement.setAttribute('data-theme','{th}')"); pg.wait_for_timeout(300)
+                    pg.evaluate("document.getElementById('fErr').scrollIntoView({block:'center'})"); shot(pg, f'neg-{tag}-{th}')
+                pg.evaluate("document.documentElement.setAttribute('data-theme','dark')")
+            a = pg.evaluate(txn); bad = []
+            pg.evaluate("openAct('deposit')"); pg.wait_for_timeout(600); pg.fill('#depUah', ''); pg.fill('#depUsd', '-50'); pg.wait_for_timeout(200)
+            e, b = save()
+            if not (b == a and 'Впиши сумму больше нуля' in e): bad.append(f'пополнение: {e} {b}')
+            snap('dep')
+            pg.evaluate("closeSheets()"); pg.wait_for_timeout(500)
+            pg.evaluate("openAct('sell')"); pg.wait_for_timeout(600); pg.select_option('#sSym', 'BTC'); pg.fill('#sQty', '0.001'); pg.fill('#sUsd', '-10'); pg.wait_for_timeout(200)
+            e, b = save()
+            if not (b == a and 'Впиши сумму больше нуля' in e): bad.append(f'продажа: {e} {b}')
+            snap('sell')
+            pg.evaluate("closeSheets()"); pg.wait_for_timeout(500)
+            pg.evaluate("openAct('buy');setBuyMode('one')"); pg.wait_for_timeout(600); pg.fill('#oSym', 'BTC'); pg.fill('#oUsd', '-100'); pg.wait_for_timeout(200)
+            e, b = save()
+            if not (b == a and 'Впиши сумму больше нуля' in e): bad.append(f'«Одна монета»: {e} {b}')
+            pg.evaluate("closeSheets()"); pg.wait_for_timeout(500)
+            pg.evaluate("openAct('start')"); pg.wait_for_timeout(600); pg.fill('#nsSym', 'BTC'); pg.fill('#nsQty', '-1'); pg.wait_for_timeout(200)
+            e, b = save()
+            if not (b == a and 'Впиши количество больше нуля' in e): bad.append(f'«Остаток»: {e} {b}')
+            pg.evaluate("closeSheets()"); pg.wait_for_timeout(500)
+            pg.evaluate("openTx('t2')"); pg.wait_for_timeout(600); pg.fill('#eQty', '-0.001'); pg.evaluate("saveTx()"); pg.wait_for_timeout(700)
+            e, q = norm(pg.inner_text('#eErr')), pg.evaluate("S.tx.find(t=>t.id==='t2').qty")
+            if not (q == 0.005 and 'Впиши количество больше нуля' in e): bad.append(f'правка записи: {e} {q}')
+            pg.evaluate("closeSheets()"); pg.wait_for_timeout(500)
+            if not bad: ok('минус не сохраняется: пополнение, продажа, «Одна монета», «Остаток» и правка записи — подпись «больше нуля», записи нет')
+            else: fail('минус в формах', ' | '.join(bad))
+            pg.evaluate("openAct('deposit')"); pg.wait_for_timeout(600); pg.fill('#depUah', ''); pg.fill('#depUsd', '50'); pg.wait_for_timeout(200)
+            e, b = save()
+            pg.evaluate("openAct('start')"); pg.wait_for_timeout(600); pg.fill('#nsSym', 'SOL'); pg.fill('#nsQty', '2'); pg.fill('#nsUsd', ''); pg.wait_for_timeout(200)
+            e2, c = save()
+            if b == a + 1 and c == a + 2: ok('законные случаи как были: пополнение без гривны и «Остаток» без суммы сохраняются')
+            else: fail('законные случаи', f'{a}->{b}->{c} {e} {e2}')
+        scenario('Формы: сумма с минусом', {'session': True, 'docs': SEED}, s_neg)
 
         def s_v3_demo(pg, n):
             pg.wait_for_selector('#mlaDemo', state='visible', timeout=8000)
