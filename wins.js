@@ -219,7 +219,7 @@
     const pk = pickYm(); let box = $i('winInvite');
     const show = S.ready && pk.done && (S.tx || []).some(t => String(t.ts || '').slice(0, 7) <= pk.ym) && wGet().seenYm !== pk.ym;
     if (!box) { const anchor = $i('xPlan'); if (!anchor || !anchor.parentNode) return; box = document.createElement('div'); box.id = 'winInvite'; anchor.parentNode.insertBefore(box, anchor); }
-    const h = show ? `<button type="button" class="card win-inv" data-win="month"><span class="win-inv-g" aria-hidden="true"></span><span class="col"><b>Итог: ${MON[+pk.ym.slice(5, 7) - 1]}</b><small>Покупки, серия, достижения — за минуту</small></span><span class="chev">›</span></button>` : '';
+    const h = show ? `<button type="button" class="card win-inv" data-win="month"><span class="win-inv-g" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="15.5" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4M8.5 17v-2.5M12 17v-4.5M15.5 17v-3.5"/></svg></span><span class="col"><b>Итог: ${MON[+pk.ym.slice(5, 7) - 1]}</b><small>Покупки, серия, достижения — за минуту</small></span><span class="chev">›</span></button>` : '';
     if (box._h !== h) { box.innerHTML = h; box._h = h; } box.hidden = !show;
   }
 

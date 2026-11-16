@@ -1202,6 +1202,24 @@ def run_browser():
             n = pg.locator('#xSheet.open .win-cell').count(); on = pg.locator('#xSheet.open .win-cell.on').count()
             if n == 17 and on >= 1: ok(f'достижения: шторка — 17 значков, получено {on}')
             else: fail('достижения: шторка', f'{n} {on}')
+            # №5 и №7 (охота 15.11): «Графит» — полоса ровным акцентом, у значков и круга «Итог месяца» нет градиентов и свечения
+            look = pg.evaluate("""(()=>{const c=s=>getComputedStyle(document.querySelector(s));
+                const d=document.createElement('span');d.className='win-inv-g';document.body.appendChild(d);const g=getComputedStyle(d);
+                const r={bar:c('.win-bar i').backgroundImage,b:c('#xSheet.open .win-cell.on .win-b').backgroundImage,sh:c('#xSheet.open .win-cell.on .win-b').boxShadow,
+                    inv:g.backgroundImage,anim:g.animationName};d.remove();return r})()""")
+            if look['bar'] == 'none' and look['b'] == 'none' and look['sh'] == 'none' and look['inv'] == 'none' and look['anim'] == 'none':
+                ok('достижения: «Графит» — полоса без градиента, значки и круг «Итог месяца» без свечения и радуги')
+            else: fail('достижения: вид «Графит»', str(look))
+            # замечание Веры 16.11: круг «Итог месяца» не пустой — контурный значок 40 px на нейтральном фоне с рамкой 1 px
+            ws = (ROOT / 'wins.js').read_text(encoding='utf-8')
+            m = re.search(r'class="win-inv-g"[^>]*>(<svg[^>]*>.*?</svg>)</span>', ws)
+            gi = pg.evaluate("""(svg=>{const d=document.createElement('span');d.className='win-inv-g';d.innerHTML=svg;document.body.appendChild(d);
+                const g=getComputedStyle(d),v=d.querySelector('svg'),r={w:g.width,bw:g.borderTopWidth,img:g.backgroundImage,sh:g.boxShadow,svg:!!v,
+                    sw:v?getComputedStyle(v).strokeWidth:'',fill:v?v.getAttribute('fill'):'',st:v?v.getAttribute('stroke'):''};d.remove();return r})""", m.group(1) if m else '')
+            if m and gi['svg'] and gi['w'] == '40px' and gi['bw'] == '1px' and gi['img'] == 'none' and gi['sh'] == 'none' \
+                    and gi['fill'] == 'none' and gi['st'] == 'currentColor' and 1.6 <= float((gi['sw'] or '0').replace('px', '')) <= 1.8:
+                ok('достижения: круг «Итог месяца» — контурный значок 40 px, нейтральный фон, рамка 1 px')
+            else: fail('достижения: значок «Итог месяца»', f'{bool(m)} {gi}')
             pg.evaluate("closeSheets()"); pg.wait_for_timeout(300)
             pg.evaluate("MLX.openStory()"); pg.wait_for_timeout(700)
             bars = pg.locator('#mlStory .st-bars i').count(); h = pg.inner_text('#mlStory .st-in')
