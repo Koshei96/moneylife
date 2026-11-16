@@ -175,7 +175,6 @@
     i = Math.max(0, i); const fw = i >= story.i; story.i = i;
     const inn = story.o.querySelector('.st-in'); inn.innerHTML = story.slides[i]; inn.firstChild.classList.add(fw ? 'fw' : 'bw');
     story.o.querySelectorAll('.st-bars i').forEach((b, k) => { b.className = k < i || (k === i && i === story.slides.length - 1) ? 'done' : k === i ? 'run' : ''; });
-    story.o.style.setProperty('--hue', String([0, 24, 48, -24, 12, -40][i % 6]));   /* фон плавно меняет оттенок в пределах фирменных фиолетово-розовых */
     inn.querySelectorAll('.st-big[data-n]').forEach(b => { const to = +b.dataset.n; if (reduced || !(to > 1)) return; const t0 = performance.now(); const f = n => { const k = Math.min(1, (n - t0) / 700); b.textContent = Math.round(to * (1 - Math.pow(1 - k, 3))); if (k < 1) requestAnimationFrame(f); }; requestAnimationFrame(f); });
     if (i === 4 && story.r.ach.length) { try { play('done'); X.sparks && X.sparks(inn.querySelector('.st-ach'), 16); } catch (e) {} } else if (i > 0) { try { play('tab', { dir: fw ? 1 : -1 }); } catch (e) {} }
     clearTimeout(story.t); if (i < story.slides.length - 1) story.t = setTimeout(() => go(story.i + 1), reduced ? 9000 : 6000);
@@ -187,16 +186,14 @@
   /* картинка 1080×1920 для «историй» в соцсетях: только проценты и счётчики */
   function storyCanvas(r, title, chTxt) {
     const c = document.createElement('canvas'); c.width = 1080; c.height = 1920; const g = c.getContext('2d');
-    const bg = g.createLinearGradient(0, 0, 1080, 1920); bg.addColorStop(0, '#1d0e4a'); bg.addColorStop(.55, '#0b0620'); bg.addColorStop(1, '#2a0d3a'); g.fillStyle = bg; g.fillRect(0, 0, 1080, 1920);
-    const glow = (x, y, rad, col) => { const rg = g.createRadialGradient(x, y, 0, x, y, rad); rg.addColorStop(0, col); rg.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = rg; g.fillRect(0, 0, 1080, 1920); };
-    glow(860, 260, 620, 'rgba(255,79,216,.28)'); glow(160, 1500, 700, 'rgba(122,60,240,.35)');
+    g.fillStyle = '#09090b'; g.fillRect(0, 0, 1080, 1920);   /* «Графит»: ровный тёмный фон, без свечения */
     g.fillStyle = '#fff'; g.font = '700 54px system-ui,-apple-system,Segoe UI,Roboto,sans-serif'; g.fillText('MoneyLife', 90, 170);
-    g.fillStyle = '#cfbaff'; g.font = '500 40px system-ui,sans-serif'; g.fillText(title, 90, 240);
-    const row = (y, k, v, col) => { g.fillStyle = '#b8a8e8'; g.font = '500 40px system-ui,sans-serif'; g.fillText(k, 90, y); g.fillStyle = col || '#fff'; g.font = '800 150px system-ui,sans-serif'; g.fillText(v, 84, y + 160); };
+    g.fillStyle = '#a3a3ae'; g.font = '500 40px system-ui,sans-serif'; g.fillText(title, 90, 240);
+    const row = (y, k, v, col) => { g.fillStyle = '#a3a3ae'; g.font = '500 40px system-ui,sans-serif'; g.fillText(k, 90, y); g.fillStyle = col || '#fff'; g.font = '800 150px system-ui,sans-serif'; g.fillText(v, 84, y + 160); };
     row(470, 'Портфель за месяц', chTxt, r.ch == null ? '#fff' : r.ch >= 0 ? '#34e0a1' : '#ff5f6d');
     row(830, 'Покупок по плану', String(r.buys));
     row(1190, 'Серия, месяцев подряд', String(r.streak), '#ffc24d');
-    g.fillStyle = '#b8a8e8'; g.font = '500 40px system-ui,sans-serif'; g.fillText('Достижений в этом месяце: ' + r.ach.length, 90, 1560);
+    g.fillStyle = '#a3a3ae'; g.font = '500 40px system-ui,sans-serif'; g.fillText('Достижений в этом месяце: ' + r.ach.length, 90, 1560);
     g.fillStyle = '#ffffffb0'; g.font = 'italic 500 38px system-ui,sans-serif'; wrap(g, '«' + (window.L ? window.L(orionLine(r)) : orionLine(r)) + '»', 90, 1660, 900, 52);   /* перевод — целой фразой, до разбивки на строки */
     g.fillStyle = '#ffffff70'; g.font = '500 30px system-ui,sans-serif'; g.fillText('Дисциплина важнее прогноза · не инвестиционный совет', 90, 1860);
     return c;

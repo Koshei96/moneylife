@@ -1211,6 +1211,14 @@ def run_browser():
             size = pg.evaluate("(()=>{const r=MLX.monthRecap(new Date().toISOString().slice(0,7));const c=MLX.storyCanvas(r,'Итог',r.ch==null?'—':'+1%');return c.width+'x'+c.height})()")
             if size == '1080x1920': ok('итог месяца: картинка для «историй» 1080×1920')
             else: fail('итог месяца: картинка', size)
+            # «Графит» 16.11: фон слайдов и картинки — ровный, без фиолетово-розового свечения и градиентов
+            bg = pg.evaluate("""(()=>{const s=getComputedStyle(document.querySelector('#mlStory .st-bg')),b=getComputedStyle(document.body);
+                const r=MLX.monthRecap(new Date().toISOString().slice(0,7)),g=MLX.storyCanvas(r,'Итог','—').getContext('2d');
+                const px=[[20,20],[860,260],[160,1500],[1060,1900],[540,1000]].map(([x,y])=>g.getImageData(x,y,1,1).data.slice(0,3).join(','));
+                return {img:s.backgroundImage,col:s.backgroundColor,bodyBg:b.backgroundColor,px}})()""")
+            if bg['img'] == 'none' and bg['col'] == bg['bodyBg'] and len(set(bg['px'])) == 1:
+                ok('итог месяца: «Графит» — фон слайдов и картинки ровный, без свечения')
+            else: fail('итог месяца: фон без свечения', str(bg))
             pg.click('#mlStory .st-x'); pg.wait_for_timeout(500)
             if pg.locator('#mlStory').count() == 0 and not pg.evaluate("document.body.classList.contains('lock')"): ok('итог месяца: закрывается, страница снова листается')
             else: fail('итог месяца: закрытие', 'осталось')
