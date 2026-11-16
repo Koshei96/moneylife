@@ -1998,6 +1998,50 @@ def run_browser():
             pg.evaluate("document.getElementById('fErr').scrollIntoView({block:'center'})"); shot(pg, 'odd-uk-dark')
         scenario('Цена покупки: сброс при новом открытии, «Одна монета», «Докупка»', {'session': True, 'docs': SEED + [{'col': 'app', 'id': 'cycle', 'data': CYC}]}, s_odd_reset)
 
+        # №2 охоты 16.11: формы не сохраняют сумму или количество с минусом — понятная подпись над «Сохранить», запись не создаётся;
+        # законные случаи как были: пополнение без гривны, «Остаток» без суммы
+        def s_neg(pg, n):
+            wait_app(pg); pg.wait_for_timeout(600)
+            txn = "[...window.__mlRows.keys()].filter(k=>k.startsWith('tx/')).length"
+            def save(): pg.evaluate("saveForm()"); pg.wait_for_timeout(700); return norm(pg.inner_text('#fErr')), pg.evaluate(txn)
+            def snap(tag):
+                for th in ['dark', 'light']:
+                    pg.evaluate(f"document.documentElement.setAttribute('data-theme','{th}')"); pg.wait_for_timeout(300)
+                    pg.evaluate("document.getElementById('fErr').scrollIntoView({block:'center'})"); shot(pg, f'neg-{tag}-{th}')
+                pg.evaluate("document.documentElement.setAttribute('data-theme','dark')")
+            a = pg.evaluate(txn); bad = []
+            pg.evaluate("openAct('deposit')"); pg.wait_for_timeout(600); pg.fill('#depUah', ''); pg.fill('#depUsd', '-50'); pg.wait_for_timeout(200)
+            e, b = save()
+            if not (b == a and 'Впиши сумму больше нуля' in e): bad.append(f'пополнение: {e} {b}')
+            snap('dep')
+            pg.evaluate("closeSheets()"); pg.wait_for_timeout(500)
+            pg.evaluate("openAct('sell')"); pg.wait_for_timeout(600); pg.select_option('#sSym', 'BTC'); pg.fill('#sQty', '0.001'); pg.fill('#sUsd', '-10'); pg.wait_for_timeout(200)
+            e, b = save()
+            if not (b == a and 'Впиши сумму больше нуля' in e): bad.append(f'продажа: {e} {b}')
+            snap('sell')
+            pg.evaluate("closeSheets()"); pg.wait_for_timeout(500)
+            pg.evaluate("openAct('buy');setBuyMode('one')"); pg.wait_for_timeout(600); pg.fill('#oSym', 'BTC'); pg.fill('#oUsd', '-100'); pg.wait_for_timeout(200)
+            e, b = save()
+            if not (b == a and 'Впиши сумму больше нуля' in e): bad.append(f'«Одна монета»: {e} {b}')
+            pg.evaluate("closeSheets()"); pg.wait_for_timeout(500)
+            pg.evaluate("openAct('start')"); pg.wait_for_timeout(600); pg.fill('#nsSym', 'BTC'); pg.fill('#nsQty', '-1'); pg.wait_for_timeout(200)
+            e, b = save()
+            if not (b == a and 'Впиши количество больше нуля' in e): bad.append(f'«Остаток»: {e} {b}')
+            pg.evaluate("closeSheets()"); pg.wait_for_timeout(500)
+            pg.evaluate("openTx('t2')"); pg.wait_for_timeout(600); pg.fill('#eQty', '-0.001'); pg.evaluate("saveTx()"); pg.wait_for_timeout(700)
+            e, q = norm(pg.inner_text('#eErr')), pg.evaluate("S.tx.find(t=>t.id==='t2').qty")
+            if not (q == 0.005 and 'Впиши количество больше нуля' in e): bad.append(f'правка записи: {e} {q}')
+            pg.evaluate("closeSheets()"); pg.wait_for_timeout(500)
+            if not bad: ok('минус не сохраняется: пополнение, продажа, «Одна монета», «Остаток» и правка записи — подпись «больше нуля», записи нет')
+            else: fail('минус в формах', ' | '.join(bad))
+            pg.evaluate("openAct('deposit')"); pg.wait_for_timeout(600); pg.fill('#depUah', ''); pg.fill('#depUsd', '50'); pg.wait_for_timeout(200)
+            e, b = save()
+            pg.evaluate("openAct('start')"); pg.wait_for_timeout(600); pg.fill('#nsSym', 'SOL'); pg.fill('#nsQty', '2'); pg.fill('#nsUsd', ''); pg.wait_for_timeout(200)
+            e2, c = save()
+            if b == a + 1 and c == a + 2: ok('законные случаи как были: пополнение без гривны и «Остаток» без суммы сохраняются')
+            else: fail('законные случаи', f'{a}->{b}->{c} {e} {e2}')
+        scenario('Формы: сумма с минусом', {'session': True, 'docs': SEED}, s_neg)
+
         def s_v3_demo(pg, n):
             pg.wait_for_selector('#mlaDemo', state='visible', timeout=8000)
             pg.click('#mlaDemo'); wait_app(pg); pg.wait_for_timeout(3500)
