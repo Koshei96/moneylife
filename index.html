@@ -11,7 +11,7 @@ addEventListener('error',function(e){if(e&&e.message)add(e.message,(e.filename||
 addEventListener('unhandledrejection',function(e){var r=e&&e.reason;add(r&&(r.message||r)||'отклонённое обещание','promise');});
 window.mlErrLog=function(){try{return JSON.parse(localStorage.getItem(K)||'[]');}catch(e){return [];}};window.mlErrAdd=add;})();
 </script>
-<script src="i18n.js?v=20261115205200"></script>
+<script src="i18n.js?v=20261116031000"></script>
 <title>MoneyLife</title>
 <meta name="theme-color" content="#06040e">
 <script>/* тема до отрисовки: «Авто» — как в телефоне, иначе выбор из настроек */
@@ -1202,9 +1202,9 @@ html.lite .view.enter{animation:vin .2s var(--ease)}
 .win-row{display:flex;gap:10px}
 .win-b{width:44px;height:44px;border-radius:14px;display:grid;place-items:center;flex:none;color:var(--dim);background:var(--surface2);border:1px solid var(--line2)}
 .win-b svg{width:22px;height:22px}
-.win-b.on{color:var(--c);border-color:color-mix(in srgb,var(--c) 45%,transparent);background:radial-gradient(circle at 30% 25%,color-mix(in srgb,var(--c) 28%,transparent),color-mix(in srgb,var(--c) 6%,var(--surface2)) 70%);box-shadow:0 8px 22px -12px var(--c),inset 0 1px 0 #ffffff1f}
+.win-b.on{color:var(--c);border-color:color-mix(in srgb,var(--c) 45%,transparent);background:color-mix(in srgb,var(--c) 12%,var(--surface2))}
 .win-bar{height:6px;border-radius:3px;background:var(--line);overflow:hidden}
-.win-bar i{display:block;height:100%;width:100%;transform-origin:0 50%;transform:scaleX(var(--p,0));background:linear-gradient(90deg,#7a3cf0,#ff4fd8,#ffc24d);border-radius:3px;transition:transform .8s cubic-bezier(.2,.9,.25,1)}
+.win-bar i{display:block;height:100%;width:100%;transform-origin:0 50%;transform:scaleX(var(--p,0));background:var(--accent);border-radius:3px;transition:transform .8s cubic-bezier(.2,.9,.25,1)}
 .win-sub{font-size:13px;color:var(--mute)}
 .win-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px}
 .win-cell{display:flex;flex-direction:column;gap:6px;padding:14px;border-radius:16px;background:var(--surface2);border:1px solid var(--line);animation:wcell .45s var(--ease) backwards;animation-delay:calc(var(--i) * 30ms)}
@@ -1213,8 +1213,7 @@ html.lite .view.enter{animation:vin .2s var(--ease)}
 @keyframes wcell{from{opacity:0;transform:translateY(10px) scale(.96)}}
 .win-inv{display:flex;align-items:center;gap:14px;width:100%;text-align:left;cursor:pointer;color:inherit;font:inherit;position:relative;overflow:hidden}
 .win-inv b{font-size:16px}.win-inv small{display:block;color:var(--mute);font-size:13px;margin-top:2px}.win-inv .col{flex:1}
-.win-inv-g{width:46px;height:46px;border-radius:50%;flex:none;background:conic-gradient(from 0deg,#7a3cf0,#ff4fd8,#ffc24d,#34e0a1,#7a3cf0);animation:wspin 6s linear infinite;box-shadow:0 0 0 3px var(--surface) inset}
-@keyframes wspin{to{transform:rotate(1turn)}}
+.win-inv-g{width:46px;height:46px;border-radius:50%;flex:none;background:var(--accent-soft);border:1px solid color-mix(in srgb,var(--accent) 45%,transparent)}
 /* «истории» на весь экран */
 .story{position:fixed;inset:0;z-index:90;display:flex;flex-direction:column;color:#fff;opacity:0;transform:scale(1.04);transition:opacity .26s var(--ease),transform .32s var(--ease);touch-action:manipulation;user-select:none;-webkit-user-select:none}
 .story.open{opacity:1;transform:none}
@@ -1741,9 +1740,9 @@ document.querySelectorAll('nav.tabs .tab').forEach(b=>{const v=b.querySelector('
 
 <div class="toast" id="toast" role="status"><span id="toastMsg"></span><button type="button" id="toastBtn" hidden></button></div>
 
-<script src="config.js?v=20261115205200"></script>
+<script src="config.js?v=20261116031000"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="shim.js?v=20261115205200"></script>
+<script src="shim.js?v=20261116031000"></script>
 <script>
 /* ===== основа ===== */
 const $=id=>document.getElementById(id);
@@ -3088,7 +3087,7 @@ function msSync(x){MSC.last=x;if(!msApply())return;if(!S.ready||document.getElem
   if(window.Mascot){try{window.Mascot.sync(msPayload(x));}catch(e){}}else msLoad();}
 function msLoad(){if(MSC.loading||MSC.failed)return;MSC.loading=true;
   const add=(src,ok)=>{try{const s=document.createElement('script');s.src=src;s.async=true;s.onload=ok;s.onerror=()=>{MSC.failed=true;};document.head.appendChild(s);}catch(e){MSC.failed=true;}};
-  const boot=()=>add('mascot.js?v=20261115205200',()=>{try{if(window.Mascot&&window.Mascot.init({host:$('mascot'),app:{buzz,askName:()=>{if(window.MLX&&MLX.askName)MLX.askName();},addAlert:(y,v)=>window.MLX&&MLX.addAlert?MLX.addAlert(y,v):null,voice:(t,x)=>window.mlVoice?window.mlVoice(t,x):null,ask:(q,y,x)=>window.mlAsk?window.mlAsk(q,y,x):null}})&&MSC.last&&$('ob').hidden&&!document.getElementById('mlAuth'))window.Mascot.sync(msPayload(MSC.last));}catch(e){}});
+  const boot=()=>add('mascot.js?v=20261116031000',()=>{try{if(window.Mascot&&window.Mascot.init({host:$('mascot'),app:{buzz,askName:()=>{if(window.MLX&&MLX.askName)MLX.askName();},addAlert:(y,v)=>window.MLX&&MLX.addAlert?MLX.addAlert(y,v):null,voice:(t,x)=>window.mlVoice?window.mlVoice(t,x):null,ask:(q,y,x)=>window.mlAsk?window.mlAsk(q,y,x):null}})&&MSC.last&&$('ob').hidden&&!document.getElementById('mlAuth'))window.Mascot.sync(msPayload(MSC.last));}catch(e){}});
   setTimeout(boot,300);}
 function render(){const D=derive();renderHeader();renderHome(D);renderGrowth();renderCoins(D);renderStrategy(D);renderActivity();renderD14();renderInst();if(window.MLX)try{MLX.render(D);}catch(e){console.error(e);}earnNudge();if(cvSym&&$('coinSheet').classList.contains('open'))renderCoinView();}
 document.body.classList.add('loading');
@@ -3173,9 +3172,9 @@ render();requestAnimationFrame(inkMove);setTimeout(inkMove,600);
     sy=null;swipe=null;pull=0;armed=false;},{passive:true});
 })();
 </script>
-<script src="plus.js?v=20261115205200"></script>
-<script src="wins.js?v=20261115205200"></script>
-<script src="folds.js?v=20261115205200"></script>
+<script src="plus.js?v=20261116031000"></script>
+<script src="wins.js?v=20261116031000"></script>
+<script src="folds.js?v=20261116031000"></script>
 <script>
 /* ===== 12.11.2026: ползунок «Купить», смахнуть запись влево с «рассыпанием» монеты ===== */
 (function(){
