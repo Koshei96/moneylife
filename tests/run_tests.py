@@ -2156,6 +2156,36 @@ def run_browser():
             else: fail('ноль без минуса', f'{bad} {fmt} {t[:300]!r}')
         scenario('Карточка монеты: ноль без минуса', {'session': True, 'docs': SEED + [{'col': 'tx', 'id': 't5', 'data': {'ts': '2026-08-04T10:00:00.000Z', 'type': 'buy', 'symbol': 'ETH', 'qty': 0.123456789, 'usd': 500, 'price': 4050}}]}, s_minus_zero, dsf=1)
 
+        # 17.11 (охота 17.11, P1 #2): ступень открыта, у альткоина месяца нет цены — раньше в «Ступенях лестницы» зелёное «$0,000000»
+        #     (зелёный = «можно сейчас»), на Главной в «Можно докупить» — зелёный чип. Теперь — серое «нет цены» (--mute);
+        #     правило ключа 2 не менялось: статус «можно» и сумма те же. Монета ZZQX — без цены
+        LADNP = [dict(SEED[0], data=dict(SEED[0]['data'], altOfMonth='ZZQX'))] + SEED[1:] + [{'col': 'app', 'id': 'cycle', 'data': dict(CYC, ath=200000)}]
+        STEP_NP = """()=>{const mute=(()=>{const e=document.createElement('i');e.style.color='var(--mute)';document.body.appendChild(e);const c=getComputedStyle(e).color;e.remove();return c})();
+            const r=[...document.querySelectorAll('#levels .lvc-r')].find(x=>(x.querySelector('b')||{}).textContent==='ZZQX'),px=r&&r.querySelector('.px'),
+              ch=[...document.querySelectorAll('#signal .chip')].find(x=>/^ZZQX/.test(x.textContent)),btc=[...document.querySelectorAll('#signal .chip')].find(x=>/^BTC/.test(x.textContent));
+            return {mute,st:r&&r.className,px:px&&px.textContent.trim(),pxc:px&&getComputedStyle(px.querySelector('.np')||px).color,
+              ch:ch&&ch.textContent.trim(),chc:ch&&getComputedStyle(ch).color,chPos:!!ch&&ch.classList.contains('pos'),btcPos:!!btc&&btc.classList.contains('pos'),
+              lv:document.getElementById('levels').innerText,sig:document.getElementById('signal').innerText}}"""
+        def s_step_noprice(pg, n):
+            wait_app(pg); pg.wait_for_timeout(1200)
+            if pg.evaluate("+derive().prices.ZZQX||0"): raise AssertionError('у ZZQX есть цена — сценарий не воспроизводит находку')
+            for th in ['dark', 'light']:
+                pg.evaluate(f"document.documentElement.setAttribute('data-theme','{th}')"); pg.wait_for_timeout(300)
+                pg.evaluate("document.getElementById('signal').scrollIntoView({block:'center'})"); pg.wait_for_timeout(300); shot(pg, f'step-noprice-home-{th}')
+            pg.evaluate("document.querySelector('nav.tabs [data-tab=\"strategy\"]').click()"); pg.wait_for_timeout(900)
+            for th in ['dark', 'light']:
+                pg.evaluate(f"document.documentElement.setAttribute('data-theme','{th}')"); pg.wait_for_timeout(300)
+                pg.evaluate("document.getElementById('levels').scrollIntoView({block:'start'})"); pg.wait_for_timeout(300); shot(pg, f'step-noprice-strategy-{th}')
+                r = pg.evaluate(STEP_NP); bad = []
+                if not r['st'] or 'go' not in r['st']: bad.append(f"ступень ZZQX не «можно» ({r['st']}) — правило ключа 2 должно остаться как было")
+                if r['px'] != 'нет цены' or r['pxc'] != r['mute']: bad.append(f"ступень: {r['px']!r} цветом {r['pxc']} (нужно --mute {r['mute']})")
+                if not r['ch'] or 'нет цены' not in r['ch'] or r['chPos'] or r['chc'] != r['mute'] or not r['btcPos']: bad.append(f"«Можно докупить»: {r['ch']!r} pos={r['chPos']} {r['chc']} BTC pos={r['btcPos']}")
+                if re.search(r'\$0,0{4}', r['lv'] + r['sig']): bad.append('где-то осталось «$0,0000…»')
+                if not bad: ok(f'монета без цены на ступени ({th}): «нет цены» серым вместо зелёного «$0,000000»; в «Можно докупить» чип ZZQX серый, BTC — зелёный; статус «можно» как был')
+                else: fail(f'монета без цены на ступени ({th})', ' | '.join(bad))
+            pg.evaluate("document.documentElement.setAttribute('data-theme','dark')")
+        scenario('Ступень: монета без цены', {'session': True, 'docs': LADNP}, s_step_noprice)
+
         # хвост #2 (после 3113f81): подсказки расчёта под полями не считают по минусу — «Зафиксируешь −$110», «Резерв станет $175» были бредом;
         # с минусом — прежняя подсказка «Впиши…» или «—», с обычной суммой — расчёт как был
         def s_neg_hints(pg, n):
@@ -2202,6 +2232,52 @@ def run_browser():
             if not bad: ok('подсказки с минусом: «Продать», «Пополнить биржу», «Доход», «Купить», «Докупка», «Стейкинг» — без расчёта и без «−$»; с обычной суммой расчёт как был')
             else: fail('подсказки с минусом', ' | '.join(bad))
         scenario('Формы: подсказки при минусе', {'session': True, 'docs': SEED + [{'col': 'app', 'id': 'cycle', 'data': CYC}]}, s_neg_hints)
+
+        # 17.11 (охота 17.11, P1 #1): монета без цены и в строке только сумма в $ — раньше эта часть молча не записывалась
+        #     (из $100 записалось ETH $60, SOL $40 пропал). Теперь: сохранение останавливается целиком, в строке и внизу — «нет цены»;
+        #     вписал количество — записываются все строки, как раньше. Монета ZZQX — без цены (нет в справочнике и на биржах)
+        CYC_OPEN = dict(CYC, ath=200000)   # BTC $110 000 — −45% от максимума: уровни 1 и 2 открыты
+        NOP = SEED + [{'col': 'app', 'id': 'cycle', 'data': CYC_OPEN}]
+        NOP[0] = dict(NOP[0], data=dict(NOP[0]['data'], altOfMonth='ZZQX'))
+        def s_topup_noprice(pg, n):
+            wait_app(pg); pg.wait_for_timeout(800)
+            T = lambda sel: norm(pg.inner_text(sel)); bad = []
+            ntx = lambda: pg.evaluate("S.tx.length")
+            def save(): pg.evaluate("saveForm()"); pg.wait_for_timeout(900)
+            def snap(tag, sel):
+                for th in ['dark', 'light']:
+                    pg.evaluate(f"document.documentElement.setAttribute('data-theme','{th}')"); pg.wait_for_timeout(300)
+                    pg.evaluate(f"document.querySelector('{sel}').scrollIntoView({{block:'center'}})"); pg.wait_for_timeout(200); shot(pg, f'topup-noprice-{tag}-{th}')
+                pg.evaluate("document.documentElement.setAttribute('data-theme','dark')")
+            # «Купить → По плану»
+            pg.evaluate("openAct('buy');setBuyMode('dca')"); pg.wait_for_timeout(600)
+            pg.fill('#bAlt', 'ZZQX'); pg.fill('#bTotal', '100'); pg.wait_for_timeout(300)
+            if pg.evaluate("+derive().prices.ZZQX||0"): raise AssertionError('у ZZQX есть цена — сценарий не воспроизводит находку')
+            u = [pg.input_value(f'#bu_{k}') for k in ['BTC', 'ETH', 'ALT']]; h = T('#bh_ALT'); t0 = ntx()
+            if 'нет цены' not in h: bad.append(f'«По плану»: подсказка в строке ZZQX {h!r}')
+            save(); e = T('#fErr')
+            if ntx() != t0 or 'Нет цены ZZQX' not in e: bad.append(f'«По плану», без количества: записей {ntx() - t0}, ошибка {e!r}, суммы {u}')
+            snap('buy', '#bh_ALT')
+            pg.fill('#bq_ALT', '5'); pg.wait_for_timeout(200); save()
+            new = pg.evaluate(f"S.tx.slice().sort((a,b)=>String(a.ts).localeCompare(String(b.ts))).filter(x=>x.type==='dca').map(x=>[x.symbol,x.qty,x.usd])")
+            z = [x for x in new if x[0] == 'ZZQX']
+            if ntx() != t0 + 3 or not z or z[0][1] != 5 or z[0][2] != 20: bad.append(f'«По плану», с количеством: записей {ntx() - t0}, {new}')
+            # «Докупка по уровню»
+            pg.evaluate("openAct('dip')"); pg.wait_for_timeout(700)
+            if not pg.input_value('#du_ALT'): pg.fill('#du_ALT', '8')
+            if not pg.input_value('#du_BTC'): pg.fill('#du_BTC', '10')   # BTC с ценой — раньше записывался один, ZZQX пропадал
+            pg.fill('#dq_ALT', ''); pg.wait_for_timeout(200)
+            t1 = ntx(); cyc0 = pg.evaluate("JSON.stringify(S.cycle.levels)"); save(); e = T('#fErr')
+            if ntx() != t1 or pg.evaluate("JSON.stringify(S.cycle.levels)") != cyc0 or 'Нет цены ZZQX' not in e or 'нет цены' not in T('#dh_ALT'):
+                bad.append(f'«Докупка», без количества: записей {ntx() - t1}, ошибка {e!r}')
+            snap('dip', '#dh_ALT')
+            pg.fill('#dq_ALT', '2'); pg.wait_for_timeout(200); save()
+            if ntx() == t1 and 'Резерв' in T('#fErr'): save()   # предупреждение о резерве — повтор сохраняет, как раньше
+            d = pg.evaluate("S.tx.filter(x=>x.type==='dip').map(x=>[x.symbol,x.qty,x.level])")
+            if not any(x[0] == 'ZZQX' and x[1] == 2 for x in d) or not any(x[0] == 'BTC' for x in d): bad.append(f'«Докупка», с количеством: {d} {T("#fErr")!r}')
+            if not bad: ok('монета без цены и только сумма: «По плану» и «Докупка» не сохраняют ничего, в строке и внизу «Нет цены ZZQX — впиши количество»; с количеством записываются все строки')
+            else: fail('монета без цены и только сумма', ' | '.join(bad))
+        scenario('Формы: монета без цены, только сумма', {'session': True, 'docs': NOP}, s_topup_noprice)
 
         def s_v3_demo(pg, n):
             pg.wait_for_selector('#mlaDemo', state='visible', timeout=8000)
