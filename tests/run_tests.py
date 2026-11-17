@@ -2203,6 +2203,52 @@ def run_browser():
             else: fail('подсказки с минусом', ' | '.join(bad))
         scenario('Формы: подсказки при минусе', {'session': True, 'docs': SEED + [{'col': 'app', 'id': 'cycle', 'data': CYC}]}, s_neg_hints)
 
+        # 17.11 (охота 17.11, P1 #1): монета без цены и в строке только сумма в $ — раньше эта часть молча не записывалась
+        #     (из $100 записалось ETH $60, SOL $40 пропал). Теперь: сохранение останавливается целиком, в строке и внизу — «нет цены»;
+        #     вписал количество — записываются все строки, как раньше. Монета ZZQX — без цены (нет в справочнике и на биржах)
+        CYC_OPEN = dict(CYC, ath=200000)   # BTC $110 000 — −45% от максимума: уровни 1 и 2 открыты
+        NOP = SEED + [{'col': 'app', 'id': 'cycle', 'data': CYC_OPEN}]
+        NOP[0] = dict(NOP[0], data=dict(NOP[0]['data'], altOfMonth='ZZQX'))
+        def s_topup_noprice(pg, n):
+            wait_app(pg); pg.wait_for_timeout(800)
+            T = lambda sel: norm(pg.inner_text(sel)); bad = []
+            ntx = lambda: pg.evaluate("S.tx.length")
+            def save(): pg.evaluate("saveForm()"); pg.wait_for_timeout(900)
+            def snap(tag, sel):
+                for th in ['dark', 'light']:
+                    pg.evaluate(f"document.documentElement.setAttribute('data-theme','{th}')"); pg.wait_for_timeout(300)
+                    pg.evaluate(f"document.querySelector('{sel}').scrollIntoView({{block:'center'}})"); pg.wait_for_timeout(200); shot(pg, f'topup-noprice-{tag}-{th}')
+                pg.evaluate("document.documentElement.setAttribute('data-theme','dark')")
+            # «Купить → По плану»
+            pg.evaluate("openAct('buy');setBuyMode('dca')"); pg.wait_for_timeout(600)
+            pg.fill('#bAlt', 'ZZQX'); pg.fill('#bTotal', '100'); pg.wait_for_timeout(300)
+            if pg.evaluate("+derive().prices.ZZQX||0"): raise AssertionError('у ZZQX есть цена — сценарий не воспроизводит находку')
+            u = [pg.input_value(f'#bu_{k}') for k in ['BTC', 'ETH', 'ALT']]; h = T('#bh_ALT'); t0 = ntx()
+            if 'нет цены' not in h: bad.append(f'«По плану»: подсказка в строке ZZQX {h!r}')
+            save(); e = T('#fErr')
+            if ntx() != t0 or 'Нет цены ZZQX' not in e: bad.append(f'«По плану», без количества: записей {ntx() - t0}, ошибка {e!r}, суммы {u}')
+            snap('buy', '#bh_ALT')
+            pg.fill('#bq_ALT', '5'); pg.wait_for_timeout(200); save()
+            new = pg.evaluate(f"S.tx.slice().sort((a,b)=>String(a.ts).localeCompare(String(b.ts))).filter(x=>x.type==='dca').map(x=>[x.symbol,x.qty,x.usd])")
+            z = [x for x in new if x[0] == 'ZZQX']
+            if ntx() != t0 + 3 or not z or z[0][1] != 5 or z[0][2] != 20: bad.append(f'«По плану», с количеством: записей {ntx() - t0}, {new}')
+            # «Докупка по уровню»
+            pg.evaluate("openAct('dip')"); pg.wait_for_timeout(700)
+            if not pg.input_value('#du_ALT'): pg.fill('#du_ALT', '8')
+            if not pg.input_value('#du_BTC'): pg.fill('#du_BTC', '10')   # BTC с ценой — раньше записывался один, ZZQX пропадал
+            pg.fill('#dq_ALT', ''); pg.wait_for_timeout(200)
+            t1 = ntx(); cyc0 = pg.evaluate("JSON.stringify(S.cycle.levels)"); save(); e = T('#fErr')
+            if ntx() != t1 or pg.evaluate("JSON.stringify(S.cycle.levels)") != cyc0 or 'Нет цены ZZQX' not in e or 'нет цены' not in T('#dh_ALT'):
+                bad.append(f'«Докупка», без количества: записей {ntx() - t1}, ошибка {e!r}')
+            snap('dip', '#dh_ALT')
+            pg.fill('#dq_ALT', '2'); pg.wait_for_timeout(200); save()
+            if ntx() == t1 and 'Резерв' in T('#fErr'): save()   # предупреждение о резерве — повтор сохраняет, как раньше
+            d = pg.evaluate("S.tx.filter(x=>x.type==='dip').map(x=>[x.symbol,x.qty,x.level])")
+            if not any(x[0] == 'ZZQX' and x[1] == 2 for x in d) or not any(x[0] == 'BTC' for x in d): bad.append(f'«Докупка», с количеством: {d} {T("#fErr")!r}')
+            if not bad: ok('монета без цены и только сумма: «По плану» и «Докупка» не сохраняют ничего, в строке и внизу «Нет цены ZZQX — впиши количество»; с количеством записываются все строки')
+            else: fail('монета без цены и только сумма', ' | '.join(bad))
+        scenario('Формы: монета без цены, только сумма', {'session': True, 'docs': NOP}, s_topup_noprice)
+
         def s_v3_demo(pg, n):
             pg.wait_for_selector('#mlaDemo', state='visible', timeout=8000)
             pg.click('#mlaDemo'); wait_app(pg); pg.wait_for_timeout(3500)
