@@ -313,7 +313,7 @@
     if (exp > 0) { out = '<div class="xf-t">' + FI_SC.map(([nm, mult, r]) => { const target = exp * 12 * mult, m = fiMonths(target, sav, add, r), prog = target ? Math.min(100, sav / target * 100) : 0;
       return `<div class="xf-r"><span><b>${nm}</b><small>расходы за год × ${mult} · рост ${r}% сверх инфляции</small></span><span class="rt"><b>${fm(target)}</b><small>${sav > 0 || add > 0 ? yrs(m) + ' · пройдено ' + nf(prog, prog < 10 ? 1 : 0) + '%' : 'впиши накопления и взнос'}</small></span><i><i style="width:${prog}%"></i></i></div>`; }).join('') + '</div>'
       + '<p class="hint">Формула: число свободы = расходы в месяц × 12 × множитель. Срок — по взносу в месяц и росту капитала сверх инфляции; рост — допущение, а не прогноз. Множители: Мэлкил ×25–28,6, Бернстайн ×33–50 (свод, спор «сколько капитала для свободы»). Правило выведено на данных США — для Украины с её инфляцией и валютными рисками осторожный вариант надёжнее.</p>'; }
-    return `<div><div class="sec-h"><span class="label">Число свободы</span><span class="small mute">в ${cur === '₴' ? 'гривнах' : 'долларах'}</span></div><div class="card xf"><div class="f3"><label class="field"><span>Расходы в месяц</span><input type="number" inputmode="decimal" min="0" step="any" id="fiExp" value="${exp || ''}"></label><label class="field"><span>Уже накоплено</span><input type="number" inputmode="decimal" min="0" step="any" id="fiSav" value="${sav || ''}"></label><label class="field"><span>Взнос в месяц</span><input type="number" inputmode="decimal" min="0" step="any" id="fiAdd" value="${add || ''}"></label></div><div id="fiOut">${out}</div></div></div>`;
+    return `<div><div class="sec-h"><span class="label">Число свободы</span><span class="small mute">в ${cur === '₴' ? 'гривнах' : 'долларах'}</span></div><div class="card xf"><div class="f3"><label class="field"><span>Расходы в месяц</span><input type="text" autocomplete="off" inputmode="decimal" min="0" step="any" id="fiExp" value="${exp || ''}"></label><label class="field"><span>Уже накоплено</span><input type="text" autocomplete="off" inputmode="decimal" min="0" step="any" id="fiSav" value="${sav || ''}"></label><label class="field"><span>Взнос в месяц</span><input type="text" autocomplete="off" inputmode="decimal" min="0" step="any" id="fiAdd" value="${add || ''}"></label></div><div id="fiOut">${out}</div></div></div>`;
   }
   let fiT = 0;
   function fiInput() { clearTimeout(fiT); fiT = setTimeout(() => { const p = planGet(); if (!p) return; p.fi = { exp: +el('fiExp').value || 0, sav: +el('fiSav').value || 0, add: +el('fiAdd').value || 0 }; planSave(p);
@@ -383,7 +383,7 @@
       <p class="hint">Источник числа: alternative.me, обновляется раз в сутки.</p>`, '<button type="button" class="btn block ghost" data-les="emo">Урок «Эмоции — главный враг»</button>'); lesBack = () => openFng(); }
   function openGoal() { const g = goalBtc(), btc = +derive().prices.BTC || 0;
     xOpen('goal', 'Цель BTC', `<p>Цена биткоина, при которой ты хочешь получить напоминание. Приложение ничего не продаёт и не советует — оно только сообщит, что цена дошла до твоей отметки.</p>
-      <label class="field"><span>Цель, $ за 1 BTC</span><input type="number" inputmode="decimal" min="0" step="any" id="goalIn" placeholder="например, 150000" value="${g || ''}"></label>
+      <label class="field"><span>Цель, $ за 1 BTC</span><input type="text" autocomplete="off" inputmode="decimal" min="0" step="any" id="goalIn" placeholder="например, 150000" value="${g || ''}"></label>
       <p class="hint" id="goalHint">${btc ? 'Сейчас BTC ' + money(btc, { d: 0, show: true }) + (g ? ' · до цели ' + pct((g / btc - 1) * 100) : '') + '.' : ''} Отметка появится на шкале «Сегодня». Чтобы убрать цель, оставь поле пустым.</p><p class="err" id="goalErr" role="alert"></p>`,
       '<button type="button" class="btn block" data-x="goalsave">Сохранить</button>'); }
   async function saveGoal() { const v = el('goalIn').value.trim(), n = +v;
@@ -477,7 +477,7 @@
     sym = String(sym || 'BTC').toUpperCase();
     const p = pxOf(sym, derive()), mine = alGet().filter(a => a.sym === sym);
     xOpen('alert', 'Оповещение · ' + sym, `<p>Сообщу, когда цена ${esc(sym)} дойдёт до вашей отметки: сигнал на телефон, и Орион скажет голосом. Сработает один раз.</p>
-      <label class="field"><span>Цена, $ за 1 ${esc(sym)}</span><input type="number" inputmode="decimal" min="0" step="any" id="alIn" placeholder="${p ? (p >= 100 ? Math.round(p * 1.1) : +(p * 1.1).toPrecision(3)) : ''}"></label>
+      <label class="field"><span>Цена, $ за 1 ${esc(sym)}</span><input type="text" autocomplete="off" inputmode="decimal" min="0" step="any" id="alIn" placeholder="${p ? (p >= 100 ? Math.round(p * 1.1) : +(p * 1.1).toPrecision(3)) : ''}"></label>
       <p class="hint">${p ? 'Сейчас ' + esc(sym) + ' ' + alUsd(p) + '.' : 'Цены этой монеты пока нет — оповещение проверится, когда она появится.'}${notifOn() ? '' : ' Сигналы на телефоне выключены: пока приложение закрыто, оповещение не придёт — включите их в «Настройках».'}</p>
       <p class="err" id="alErr" role="alert"></p>
       ${mine.length ? '<div class="sec-h"><span class="label">Уже ждут</span></div><div class="list">' + mine.map(alRow).join('') + '</div>' : ''}`,

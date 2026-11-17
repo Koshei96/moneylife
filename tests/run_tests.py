@@ -2105,6 +2105,36 @@ def run_browser():
             else: fail('законные случаи', f'{a}->{b}->{c} {e} {e2}')
         scenario('Формы: сумма с минусом', {'session': True, 'docs': SEED}, s_neg)
 
+        # №4 охоты 16.11: «1,5» с запятой в поле суммы молча становилось 15 (ошибка в 10 раз). Теперь запятая — десятичный разделитель
+        # во всех полях денег и количеств; набираем с клавиатуры, как человек; минус в «Поправке резерва» вводится как раньше
+        def s_comma(pg, n):
+            wait_app(pg); pg.wait_for_timeout(600); bad = []
+            def typ(sel, text): pg.click(sel); pg.keyboard.type(text, delay=30); pg.wait_for_timeout(250)
+            pg.evaluate("openAct('deposit')"); pg.wait_for_timeout(600); pg.fill('#depUah', '')
+            typ('#depUsd', '1,5'); v = pg.input_value('#depUsd')
+            exp = pg.evaluate("[usd(1.5*depShare()),usd(1.5*(1-depShare()))]"); calc = pg.inner_text('#depCalc')
+            if v != '1.5': bad.append(f'«Пришло, USDT»: {v!r}')
+            if not all(x in calc for x in exp): bad.append(f'подсказка пополнения: {calc!r}, ждали {exp}')
+            for th in ['dark', 'light']:
+                pg.evaluate(f"document.documentElement.setAttribute('data-theme','{th}')"); pg.wait_for_timeout(300); shot(pg, f'comma-dep-{th}')
+            pg.evaluate("document.documentElement.setAttribute('data-theme','dark')")
+            pg.evaluate("closeSheets()"); pg.wait_for_timeout(500)
+            pg.evaluate("openAct('buy');setBuyMode('one')"); pg.wait_for_timeout(600); pg.fill('#oSym', 'BTC'); pg.fill('#oUsd', '150')
+            typ('#oQty', '1,5'); v = pg.input_value('#oQty'); h = pg.inner_text('#oHint')
+            if v != '1.5': bad.append(f'«Получил монет»: {v!r}')
+            if pg.evaluate("usd(100)") not in h: bad.append(f'подсказка «Одна монета» не от 1,5: {h!r}')
+            pg.fill('#oQty', ''); typ('#oQty', '15'); pg.keyboard.press('ArrowLeft'); pg.keyboard.type(','); pg.keyboard.type('2'); pg.wait_for_timeout(200)
+            v = pg.input_value('#oQty')
+            if v != '1.25': bad.append(f'запятая посреди числа: {v!r} (курсор должен остаться на месте)')
+            pg.evaluate("closeSheets()"); pg.wait_for_timeout(500)
+            pg.evaluate("openAct('reserve',{kind:'reserve_adj'})"); pg.wait_for_timeout(600)
+            typ('#resAmt', '-12,5'); v = pg.input_value('#resAmt')
+            if v != '-12.5': bad.append(f'поправка резерва с минусом: {v!r}')
+            pg.evaluate("closeSheets()"); pg.wait_for_timeout(500)
+            if not bad: ok('запятая в дробях: «1,5» = 1.5 в «Пришло, USDT» и «Получил монет», подсказки от 1,5; курсор на месте; минус в поправке резерва вводится')
+            else: fail('запятая в дробях', ' | '.join(bad))
+        scenario('Формы: запятая в дробях', {'session': True, 'docs': SEED}, s_comma, dsf=1)
+
         # хвост #2 (после 3113f81): подсказки расчёта под полями не считают по минусу — «Зафиксируешь −$110», «Резерв станет $175» были бредом;
         # с минусом — прежняя подсказка «Впиши…» или «—», с обычной суммой — расчёт как был
         def s_neg_hints(pg, n):
