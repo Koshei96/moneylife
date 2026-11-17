@@ -207,7 +207,7 @@
       return false;
     }
     stopVoice();
-    const cur = { text, pri: o.pri || 0, follow: !!o.follow }; TTS.cur = cur; ST.lastSay = text; ST.sayLog = (ST.sayLog || []).concat(text).slice(-6); ST.lastEvent = now(); TTS.beat = now();
+    const cur = { text, pri: o.pri || 0, follow: !!o.follow, live: !!o.live }; TTS.cur = cur; ST.lastSay = text; ST.sayLog = (ST.sayLog || []).concat(text).slice(-6); ST.lastEvent = now(); TTS.beat = now();
     pulse(0.6);
     if (premiumOK()) {   /* субтитры появляются вместе со звуком, а не раньше (не дольше 4 секунд ожидания) */
       cur.wait = true; cur.cap = () => { if (!cur.capOn && TTS.cur === cur) { cur.capOn = true; capShow(text); } }; setTimeout(cur.cap, 4000);
@@ -283,29 +283,44 @@
     });
   }
   const premiumOK = () => !!(ST.sound && A.voice && !document.hidden && navigator.onLine !== false && now() > VO.off && (ST.forcePremium || !navigator.webdriver));
-  /* фраза → части (18.11.2026): до 350 знаков — целиком одним запросом, чтобы интонация не «перезапускалась» на каждом предложении;
-     длиннее — две половины по границе предложения (вторая готовится, пока звучит первая) */
-  function splitParts(t) {
-    t = String(t || '').trim(); if (t.length <= 350) return [t];
+  /* фраза → части (18.11.2026). Обычно до 350 знаков — целиком одним запросом, чтобы интонация не «перезапускалась»; длиннее — две половины.
+     live — ответ в разговоре: по предложениям (первое отдельно), чтобы первый звук пришёл быстро — Eleven v4 озвучивает фразу 3–5 с, длинную дольше */
+  function splitParts(t, live) {
+    t = String(t || '').trim();
     const ss = (t.match(/[^.!?…]+[.!?…]+["»]?|[^.!?…]+$/g) || [t]).map(z => z.trim()).filter(Boolean);
+    if (live) { const out = []; for (const x of ss) { if (out.length > 1 && (out[out.length - 1].length < 40 || out.length >= 4)) out[out.length - 1] += ' ' + x; else out.push(x); } return out.length ? out : [t]; }
+    if (t.length <= 350) return [t];
     let a = '', i = 0; while (i < ss.length - 1 && (a + ' ' + ss[i]).length <= t.length / 2 + 40) a = (a ? a + ' ' : '') + ss[i++];
     if (!a) a = ss[i++];
     const b = ss.slice(i).join(' ');
     return b ? [a, b] : [a];
   }
-  async function voGet(text, ctx) {
+  const VO_PEND = new Map();   /* запросы голоса «в пути»: заранее заказанное продолжение ответа не заказывается второй раз */
+  function voGet(text, ctx) {
     const k = text + '|' + (ctx.prev || '') + '|' + (ctx.next || '');
-    if (VO.buf.has(k)) return { audio: VO.buf.get(k) };
-    if (!ctx.prev && !ctx.next && VO.buf.has(text)) return { audio: VO.buf.get(text) };
-    let r = await voFetch(text, ctx);
-    if (!r || !r.audio) r = await voFetch(text, ctx);   /* сеть моргнула — вторая попытка */
-    if (r && r.audio) { VO.buf.set(k, r.audio); if (VO.buf.size > 60) VO.buf.delete(VO.buf.keys().next().value); }
-    return r;
+    if (VO.buf.has(k)) return Promise.resolve({ audio: VO.buf.get(k) });
+    if (!ctx.prev && !ctx.next && VO.buf.has(text)) return Promise.resolve({ audio: VO.buf.get(text) });
+    if (VO_PEND.has(k)) return VO_PEND.get(k);
+    const p = (async () => {
+      const t0 = now();
+      let r = await voFetch(text, ctx);
+      if ((!r || !r.audio) && now() - t0 < 3 && !/limit|quota|auth|not_configured/.test((r && r.error) || '')) r = await voFetch(text, ctx);   /* сеть моргнула сразу — вторая попытка; долгий отказ не повторяем (18.11.2026: два ожидания подряд давали 12 с тишины) */
+      if (r && r.audio) { VO.buf.set(k, r.audio); if (VO.buf.size > 60) VO.buf.delete(VO.buf.keys().next().value); }
+      return r;
+    })();
+    VO_PEND.set(k, p); p.finally(() => VO_PEND.delete(k));
+    return p;
+  }
+  /* заранее заказать озвучку текста — тем же разбиением и с теми же соседями, что и premium() */
+  function voPrefetch(text, live) {
+    if (!premiumOK()) return;
+    const parts = splitParts(spoken(text), live);
+    parts.forEach((p, i) => voGet(p, parts.length > 1 ? { prev: parts[i - 1] || '', next: parts[i + 1] || '' } : {}));
   }
   async function premium(cur) {
     const c = voCtx(); if (!c) return false;
     if (c.state === 'suspended') { try { await c.resume(); } catch (e) {} if (c.state !== 'running') return false; }
-    const parts = splitParts(spoken(cur.text));
+    const parts = splitParts(spoken(cur.text), cur.live);
     const reqs = parts.map((p, i) => voGet(p, parts.length > 1 ? { prev: parts[i - 1] || '', next: parts[i + 1] || '' } : {}));   /* все части сразу, параллельно */
     let at = 0, played = 0, lastSrc = null;
     for (let i = 0; i < parts.length; i++) {
@@ -881,7 +896,7 @@
     const onPart = t => {
       acc += t; if (first || gen !== ST.askGen) return;
       const m = sq(acc).match(/^.*?[.!?…](?=\s)/g), all = sq(acc), cut = (() => { let c = ''; const re = /[^.!?…]+[.!?…]+(?=\s)/g; let x; while ((x = re.exec(all))) { c = all.slice(0, x.index + x[0].length); if (c.length >= 60) break; } return c.length >= 60 || (c && all.length > c.length + 80) ? c : ''; })();
-      if (m && cut) { first = cut.trim(); ST.lastBrain = now(); speak(first, { pri: 2, raw: true }); }
+      if (m && cut) { first = cut.trim(); ST.lastBrain = now(); speak(first, { pri: 2, raw: true, live: true }); }
     };
     let r = null; try { r = await A.ask(q, sym, { hist, ctx: brainCtx(), lang: UK ? 'uk' : 'ru' }, onPart); } catch (e) { r = null; }
     ST.lastAsk = r;
@@ -889,8 +904,8 @@
     if (r && r.text) {
       ST.lastBrain = now(); remember(q, r.text);
       const full = sq(r.text);
-      if (first && full.indexOf(first) === 0) { const rest = full.slice(first.length).trim(); if (rest) speak(rest, { pri: 2, follow: byVoice, raw: true, append: true }); else if (byVoice && TTS.cur && TTS.cur.text === first) TTS.cur.follow = true; return; }
-      if (!first) speak(r.text, { pri: 2, follow: byVoice, raw: true });
+      if (first && full.indexOf(first) === 0) { const rest = full.slice(first.length).trim(); if (rest) { voPrefetch(rest, true); speak(rest, { pri: 2, follow: byVoice, raw: true, append: true, live: true }); } else if (byVoice && TTS.cur && TTS.cur.text === first) TTS.cur.follow = true; return; }
+      if (!first) speak(r.text, { pri: 2, follow: byVoice, raw: true, live: true });
       return;
     }
     if (first) return;   /* начало ответа уже прозвучало — обрыв связи не озвучиваем */
@@ -1169,7 +1184,7 @@
       lx: t => Lx(t),
       ask: q => answer(q), lastAsk: () => ST.lastAsk || null, ctx: () => brainCtx(), hist: () => ST.hist || [],
       mood: m => { if (ST.forceHour == null) ST.forceHour = 12; ST.pct = { calm: 0, up: 3, rocket: 9, down: -3, crash: -9 }[m]; ST.go = m === 'hunter'; if (m === 'offline') { ST.offline = true; ST.offSince = now() - 120; } else ST.offline = false; ST.lastInput = now(); wake(); },
-      say: t => speak(t, { pri: 2 }), sayLog: () => ST.sayLog || [],
+      say: t => speak(t, { pri: 2 }), sayLog: () => ST.sayLog || [], split: (t, live) => splitParts(t, live),
       tap: () => tapped(),
       brief: () => brief(),
       reply: q => reply(q),

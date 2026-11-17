@@ -620,7 +620,7 @@
     const c = client(); if (!c || demo || !uid || navigator.onLine === false) return null;
     let ses = null; try { ses = (await c.auth.getSession()).data.session; } catch (e) {}
     if (!ses) return null;
-    const ctl = typeof AbortController !== 'undefined' ? new AbortController() : null, t = setTimeout(() => { try { ctl && ctl.abort(); } catch (e) {} }, 6000);
+    const ctl = typeof AbortController !== 'undefined' ? new AbortController() : null, t = setTimeout(() => { try { ctl && ctl.abort(); } catch (e) {} }, 10000);   /* Eleven v4 озвучивает дольше прежней модели (3–5 с) — ждём до 10 с */
     try {
       const r = await fetch(CFG.supabaseUrl.replace(/\/$/, '') + '/functions/v1/orion-voice', { method: 'POST', signal: ctl ? ctl.signal : undefined,
         headers: { Authorization: 'Bearer ' + ses.access_token, apikey: CFG.supabaseKey, 'content-type': 'application/json' }, body: JSON.stringify({ text, prev: (ctx && ctx.prev) || '', next: (ctx && ctx.next) || '' }) });
