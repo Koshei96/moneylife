@@ -2156,6 +2156,36 @@ def run_browser():
             else: fail('ноль без минуса', f'{bad} {fmt} {t[:300]!r}')
         scenario('Карточка монеты: ноль без минуса', {'session': True, 'docs': SEED + [{'col': 'tx', 'id': 't5', 'data': {'ts': '2026-08-04T10:00:00.000Z', 'type': 'buy', 'symbol': 'ETH', 'qty': 0.123456789, 'usd': 500, 'price': 4050}}]}, s_minus_zero, dsf=1)
 
+        # 17.11 (охота 17.11, P1 #2): ступень открыта, у альткоина месяца нет цены — раньше в «Ступенях лестницы» зелёное «$0,000000»
+        #     (зелёный = «можно сейчас»), на Главной в «Можно докупить» — зелёный чип. Теперь — серое «нет цены» (--mute);
+        #     правило ключа 2 не менялось: статус «можно» и сумма те же. Монета ZZQX — без цены
+        LADNP = [dict(SEED[0], data=dict(SEED[0]['data'], altOfMonth='ZZQX'))] + SEED[1:] + [{'col': 'app', 'id': 'cycle', 'data': dict(CYC, ath=200000)}]
+        STEP_NP = """()=>{const mute=(()=>{const e=document.createElement('i');e.style.color='var(--mute)';document.body.appendChild(e);const c=getComputedStyle(e).color;e.remove();return c})();
+            const r=[...document.querySelectorAll('#levels .lvc-r')].find(x=>(x.querySelector('b')||{}).textContent==='ZZQX'),px=r&&r.querySelector('.px'),
+              ch=[...document.querySelectorAll('#signal .chip')].find(x=>/^ZZQX/.test(x.textContent)),btc=[...document.querySelectorAll('#signal .chip')].find(x=>/^BTC/.test(x.textContent));
+            return {mute,st:r&&r.className,px:px&&px.textContent.trim(),pxc:px&&getComputedStyle(px.querySelector('.np')||px).color,
+              ch:ch&&ch.textContent.trim(),chc:ch&&getComputedStyle(ch).color,chPos:!!ch&&ch.classList.contains('pos'),btcPos:!!btc&&btc.classList.contains('pos'),
+              lv:document.getElementById('levels').innerText,sig:document.getElementById('signal').innerText}}"""
+        def s_step_noprice(pg, n):
+            wait_app(pg); pg.wait_for_timeout(1200)
+            if pg.evaluate("+derive().prices.ZZQX||0"): raise AssertionError('у ZZQX есть цена — сценарий не воспроизводит находку')
+            for th in ['dark', 'light']:
+                pg.evaluate(f"document.documentElement.setAttribute('data-theme','{th}')"); pg.wait_for_timeout(300)
+                pg.evaluate("document.getElementById('signal').scrollIntoView({block:'center'})"); pg.wait_for_timeout(300); shot(pg, f'step-noprice-home-{th}')
+            pg.evaluate("document.querySelector('nav.tabs [data-tab=\"strategy\"]').click()"); pg.wait_for_timeout(900)
+            for th in ['dark', 'light']:
+                pg.evaluate(f"document.documentElement.setAttribute('data-theme','{th}')"); pg.wait_for_timeout(300)
+                pg.evaluate("document.getElementById('levels').scrollIntoView({block:'start'})"); pg.wait_for_timeout(300); shot(pg, f'step-noprice-strategy-{th}')
+                r = pg.evaluate(STEP_NP); bad = []
+                if not r['st'] or 'go' not in r['st']: bad.append(f"ступень ZZQX не «можно» ({r['st']}) — правило ключа 2 должно остаться как было")
+                if r['px'] != 'нет цены' or r['pxc'] != r['mute']: bad.append(f"ступень: {r['px']!r} цветом {r['pxc']} (нужно --mute {r['mute']})")
+                if not r['ch'] or 'нет цены' not in r['ch'] or r['chPos'] or r['chc'] != r['mute'] or not r['btcPos']: bad.append(f"«Можно докупить»: {r['ch']!r} pos={r['chPos']} {r['chc']} BTC pos={r['btcPos']}")
+                if re.search(r'\$0,0{4}', r['lv'] + r['sig']): bad.append('где-то осталось «$0,0000…»')
+                if not bad: ok(f'монета без цены на ступени ({th}): «нет цены» серым вместо зелёного «$0,000000»; в «Можно докупить» чип ZZQX серый, BTC — зелёный; статус «можно» как был')
+                else: fail(f'монета без цены на ступени ({th})', ' | '.join(bad))
+            pg.evaluate("document.documentElement.setAttribute('data-theme','dark')")
+        scenario('Ступень: монета без цены', {'session': True, 'docs': LADNP}, s_step_noprice)
+
         # хвост #2 (после 3113f81): подсказки расчёта под полями не считают по минусу — «Зафиксируешь −$110», «Резерв станет $175» были бредом;
         # с минусом — прежняя подсказка «Впиши…» или «—», с обычной суммой — расчёт как был
         def s_neg_hints(pg, n):
