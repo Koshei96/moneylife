@@ -498,8 +498,8 @@
   }
   function openAlerts() {
     const list = alGet();
-    xOpen('alerts', 'Оповещения о цене', list.length ? '<div class="list">' + list.map(alRow).join('') + '</div><p class="hint">Новое оповещение — в карточке монеты, кнопка «Оповещение о цене». Или зажмите Ориона и скажите: «сообщи, когда солана будет 150».</p>'
-      : '<p>Оповещений пока нет. Откройте монету во вкладке «Монеты» и нажмите «Оповещение о цене» — или зажмите Ориона и скажите: «сообщи, когда биткоин будет 120 тысяч».</p>');
+    xOpen('alerts', 'Оповещения о цене', list.length ? '<div class="list">' + list.map(alRow).join('') + '</div><p class="hint">Новое оповещение — в карточке монеты, кнопка «Оповещение о цене». Или нажмите на Ориона и скажите: «сообщи, когда солана будет 150».</p>'
+      : '<p>Оповещений пока нет. Откройте монету во вкладке «Монеты» и нажмите «Оповещение о цене» — или нажмите на Ориона и скажите: «сообщи, когда биткоин будет 120 тысяч».</p>');
   }
   function alDel(btn) { const id = btn.dataset.id, a = alGet().find(x => x.id === id); alSave(alGet().filter(x => x.id !== id)); play('tick'); if (sheetKind === 'alert' && a) openAlert(a.sym); else openAlerts(); }
   function renderAlCount() { const c = el('alCnt'); if (c) { const n = alGet().length; c.textContent = n ? n + ' ' + (n % 10 === 1 && n % 100 !== 11 ? 'ждёт' : 'ждут') + ' срабатывания' : 'Скажу, когда монета дойдёт до вашей цены'; } }

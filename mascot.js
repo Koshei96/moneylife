@@ -225,7 +225,7 @@
     if (!ST.sound || !TTS.ok || !v || document.hidden) { silent(cur); return; }
     try {
       speechSynthesis.cancel();
-      const u = new SpeechSynthesisUtterance(text.replace(/[«»]/g, '').replace(/—/g, ','));
+      const u = new SpeechSynthesisUtterance(spoken(text).replace(/[«»]/g, '').replace(/—/g, ','));   /* голос телефона тоже получает подготовленный текст: числа, даты и тикеры словами (18.11.2026) */
       u.voice = v; u.lang = v.lang || LOC; u.rate = 1.0; u.pitch = 0.9; u.volume = 1;
       u.onstart = () => { TTS.beat = now(); };
       u.onboundary = () => { if (TTS.cur === cur) TTS.beat = now(); };
@@ -352,7 +352,7 @@
   function intW(n, fem, gen) {
     n = Math.floor(Math.abs(n)); if (!n) return gen === 'd' ? 'нулю' : gen ? 'нуля' : 'ноль';
     const parts = [];
-    for (const [d, sc] of [[1e9, SCALE.B], [1e6, SCALE.M], [1e3, SCALE.K]]) { const k = Math.floor(n / d) % 1000; if (k) parts.push(tri(k, sc[5], gen) + ' ' + scaleW(k, sc, gen)); }
+    for (const [d, sc] of [[1e9, SCALE.B], [1e6, SCALE.M], [1e3, SCALE.K]]) { const k = Math.floor(n / d) % 1000; if (k) parts.push((k === 1 && !parts.length ? '' : tri(k, sc[5], gen) + ' ') + scaleW(k, sc, gen)); }   /* «тысяча двести», а не «одна тысяча двести» */
     const r = n % 1000; if (r) parts.push(tri(r, fem, gen));
     return parts.join(' ');
   }
@@ -368,18 +368,16 @@
   }
   const PREP_GEN = /(?:^|\s)(до|от|около|более|менее|свыше|после|из|без|для|против|кроме|у|ниже|выше|порядка|с|со|вместо|дороже|дешевле|больше|меньше)\s*$/i;
   const PREP_DAT = /(?:^|\s)(к|ко|благодаря|согласно|вопреки)\s*$/i;
-  const UNITS = { '$': ['доллар', 'доллара', 'долларов', 'доллару', 'долларам'], '₴': ['гривна', 'гривны', 'гривен', 'гривне', 'гривнам'], '%': ['процент', 'процента', 'процентов', 'проценту', 'процентам'] };
-  /* произношение: бренды, биржи и аббревиатуры — как их говорят по-русски («OKX» — «о-кей-икс», «ETF» — «и-ти-эф») */
+  const UNITS = { '$': ['доллар', 'доллара', 'долларов', 'доллару', 'долларам'], '₴': ['гривна', 'гривны', 'гривен', 'гривне', 'гривнам'], '%': ['процент', 'процента', 'процентов', 'проценту', 'процентам'], '€': ['евро', 'евро', 'евро', 'евро', 'евро'], c: ['цент', 'цента', 'центов', 'центу', 'центам'] };
+  /* произношение: бренды, биржи и аббревиатуры — как их говорят по-русски («OKX» — «о-кей-икс», «ETF» — «и-ти-эф»). Тикеры монет — ниже, в COIN (с падежом) */
   const SAY = [
-    [/\bBTC\b/g, 'биткоина'], [/\bETH\b/g, 'эфира'], [/\bUSDT\b/g, 'тезер'], [/\bUSDC\b/g, 'ю-эс-ди-си'],
-    [/\bOKX\b/g, 'о-кей-икс'], [/(^|[^А-ЯЁа-яёA-Za-z])(ОКХ|ОКX|OКХ)(?![А-ЯЁа-яёA-Za-z])/g, '$1о-кей-икс'], [/\bETFs?\b/g, 'и-ти-эф'], [/(^|[^А-ЯЁа-яё])ЕТФ(?![А-ЯЁа-яё])/g, '$1и-ти-эф'], [/\bSEC\b/g, 'эс-и-си'], [/\bNFT\b/g, 'эн-эф-ти'], [/\bDeFi\b/gi, 'дефай'], [/\bAI\b/g, 'эй-ай'],
-    [/\bCEO\b/g, 'си-и-оу'], [/\bIPO\b/g, 'ай-пи-оу'], [/\bUSA\b/g, 'ю-эс-эй'], [/\bS&P\s?500\b/g, 'эс-энд-пи пятьсот'], [/\bFed\b/g, 'ФРС'], [/\bFOMC\b/g, 'эф-оу-эм-си'],
+    [/\bOKX\b/g, 'о-кей-икс'], [/(^|[^А-ЯЁа-яёA-Za-z])(ОКХ|ОКX|OКХ)(?![А-ЯЁа-яёA-Za-z])/g, '$1о-кей-икс'], [/\b[Ss]pot\s+ETFs?\b/g, 'спотовые и-ти-эф'], [/\bETFs?\b/g, 'и-ти-эф'], [/(^|[^А-ЯЁа-яё])ЕТФ(?![А-ЯЁа-яё])/g, '$1и-ти-эф'], [/\bSEC\b/g, 'эс-и-си'], [/\bNFTs?\b/g, 'эн-эф-ти'], [/\bDeFi\b/gi, 'дефай'], [/\bAI\b/g, 'эй-ай'],
+    [/\bCEO\b/g, 'си-и-оу'], [/\bIPO\b/g, 'ай-пи-оу'], [/\bUSA\b/g, 'ю-эс-эй'], [/\bS&P\s?500\b/g, 'эс-энд-пи пятьсот'], [/\bFed\b/g, 'ФРС'], [/\bFOMC\b/g, 'эф-оу-эм-си'], [/\bAP[YR]\b/g, 'годовых'], [/\bATH\b/g, 'исторический максимум'],
     [/\bBinance\b/gi, 'Бинанс'], [/\bCoinbase\b/gi, 'Койнбейс'], [/\bBybit\b/gi, 'Байбит'], [/\bKraken\b/gi, 'Кракен'], [/\bBlackRock\b/gi, 'Блэкрок'], [/\bFidelity\b/gi, 'Фиделити'],
     [/\bGrayscale\b/gi, 'Грейскейл'], [/\b(Micro)?Strategy\b/g, 'Майкростратеджи'], [/\bTether\b/gi, 'Тезер'], [/\bCircle\b/g, 'Сёркл'], [/\bRipple\b/gi, 'Рипл'], [/\bSolana\b/gi, 'Солана'],
     [/\bEthereum\b/gi, 'Эфириум'], [/\bBitcoin\b/gi, 'биткоин'], [/\bCointelegraph\b/gi, 'Коинтелеграф'], [/\bCoinDesk\b/gi, 'Коиндеск'], [/\bForkLog\b/gi, 'Форклог'], [/\bDecrypt\b/g, 'Декрипт'],
     [/\bIncrypted\b/gi, 'Инкриптед'], [/\bNasdaq\b/gi, 'Насдак'], [/\bTrump\b/g, 'Трамп'], [/\bPowell\b/g, 'Пауэлл'], [/\bSaylor\b/g, 'Сейлор'], [/\bMetaMask\b/gi, 'Метамаск'], [/\bLedger\b/g, 'Леджер'],
-    [/\bTrezor\b/g, 'Трезор'], [/\bBNB\b/g, 'би-эн-би'], [/\bXRP\b/g, 'икс-ар-пи'], [/\bSOL\b/g, 'солана'], [/\bTON\b/g, 'тон'], [/\bDOGE\b/g, 'доги'], [/\bADA\b/g, 'кардано'], [/\bTRX\b/g, 'трон'],
-    [/\bLTC\b/g, 'лайткоин'], [/\bLINK\b/g, 'чейнлинк'], [/\bAVAX\b/g, 'аваланч'], [/\bDCA\b/g, 'ди-си-эй'],
+    [/\bTrezor\b/g, 'Трезор'], [/\bDCA\b/g, 'ди-си-эй'], [/\b[Hh]alving\b/g, 'халвинг'], [/\b[Ss]taking\b/g, 'стейкинг'], [/\b[Aa]irdrop\b/g, 'аирдроп'],
     [/(^|[^А-ЯЁа-яё])ФРС(?![А-ЯЁа-яё])/g, '$1эф-эр-эс'], [/(^|[^А-ЯЁа-яё])США(?![А-ЯЁа-яё])/g, '$1сэ-шэ-а'], [/(^|[^А-ЯЁа-яё])ЕС(?![А-ЯЁа-яё])/g, '$1е-эс'],
     [/(^|[^А-ЯЁа-яё])МВФ(?![А-ЯЁа-яё])/g, '$1эм-вэ-эф'], [/(^|[^А-ЯЁа-яё])НБУ(?![А-ЯЁа-яё])/g, '$1эн-бэ-у'], [/(^|[^А-ЯЁа-яё])ВВП(?![А-ЯЁа-яё])/g, '$1вэ-вэ-пэ'], [/(^|[^А-ЯЁа-яё])ЦБ(?![А-ЯЁа-яё])/g, '$1цэ-бэ']
   ];
@@ -388,26 +386,133 @@
     for (const [re, to] of SAY) s = s.replace(re, to);
     return s.replace(/\b[A-Z]{2,5}\b/g, w => w.split('').map(ch => EN[ch]).join('-'));   /* прочие латинские аббревиатуры — по буквам */
   }
+  /* монеты (18.11.2026): тикер → слово в нужном падеже. [именительный, родительный, мн. родительный]; одно слово — не склоняется.
+     «BTC растёт» → «биткоин растёт», «цена BTC» → «цена биткоина», «2 BTC» → «два биткоина», «5 BTC» → «пять биткоинов» */
+  const COIN = { BTC: ['биткоин', 'биткоина', 'биткоинов'], ETH: ['эфир', 'эфира', 'эфиров'], USDT: ['тезер', 'тезера', 'тезеров'], USDC: ['ю-эс-ди-си'],
+    SOL: ['солана', 'соланы', 'соланы', 1], TON: ['тон', 'тона', 'тонов'], DOGE: ['доги'], ADA: ['кардано'], XRP: ['икс-ар-пи'], BNB: ['би-эн-би'], TRX: ['трон', 'трона', 'тронов'],
+    LTC: ['лайткоин', 'лайткоина', 'лайткоинов'], LINK: ['чейнлинк', 'чейнлинка', 'чейнлинков'], AVAX: ['аваланч', 'аваланча', 'аваланчей'], DOT: ['полкадот', 'полкадота', 'полкадотов'],
+    NEAR: ['нир'], SUI: ['суи'], PEPE: ['пепе'], SHIB: ['шиба-ину'], ONDO: ['ондо'], TAO: ['тао'], HYPE: ['хайп', 'хайпа', 'хайпов'], APT: ['аптос', 'аптоса', 'аптосов'],
+    ARB: ['арбитрум', 'арбитрума', 'арбитрумов'], ENA: ['этена'], WLD: ['ворлдкоин', 'ворлдкоина', 'ворлдкоинов'], FET: ['фетч'], RENDER: ['рендер', 'рендера', 'рендеров'],
+    POL: ['пол'], MNT: ['мэнтл'], UNI: ['юнисвоп', 'юнисвопа', 'юнисвопов'], AAVE: ['аве'], XLM: ['стеллар', 'стеллара', 'стелларов'], ATOM: ['атом', 'атома', 'атомов'],
+    INJ: ['инджектив'], SEI: ['сэй'], JUP: ['юпитер', 'юпитера', 'юпитеров'], ZAMA: ['зама'], KAS: ['каспа', 'каспы', 'каспы', 1], XMR: ['монеро'], FIL: ['файлкоин', 'файлкоина', 'файлкоинов'],
+    TIA: ['селестия', 'селестии', 'селестии', 1], BCH: ['биткоин-кэш'], ETC: ['эфириум-классик'], WIF: ['виф'], BONK: ['бонк', 'бонка', 'бонков'] };
+  const COIN_GEN = /(?:^|[^А-Яа-яЁё])(цена|цены|цене|курс|курса|доля|доли|долю|стоимость|рост|роста|падение|падения|покупка|покупки|покупку|продажа|продажи|продажу|объём|объем|капитализация|капитализации|доминация|халвинг|дно|максимум|минимум|график|у|для|без|из|от|до|около|после|кроме|выше|ниже|вместо|против)\s*$/i;
+  function coinsRu(s) {
+    return s.replace(/(^|[^A-Za-z0-9])([A-Z]{2,6})(?![A-Za-z0-9])/g, (m, pre, tk, off, all) => {
+      const c = COIN[tk]; if (!c) return m;
+      if (c.length === 1) return pre + c[0];
+      const before = all.slice(0, off) + pre, num = before.match(/(\d+)(?:[.,](\d+))?\s*$/);
+      if (num) {   /* после числа: «2 BTC», «0,5 ETH», «около 3 BTC» */
+        if (num[2] && +num[2]) return pre + c[1];
+        const n = +num[1], bb = before.slice(0, before.length - num[0].length), g = PREP_GEN.test(bb);
+        if (c[3]) return pre + (g ? (one(n) ? 'монеты ' : 'монет ') : plural(n, 'монета ', 'монеты ', 'монет ')) + c[1];   /* «5 SOL» → «пять монет соланы» */
+        return pre + (g ? (one(n) ? c[1] : c[2]) : plural(n, c[0], c[1], c[2]));
+      }
+      return pre + (COIN_GEN.test(before) ? c[1] : c[0]);
+    });
+  }
+  /* чистка текста перед голосом: разметка, эмодзи, ссылки, списки, скобки */
+  function cleanSpeech(t) {
+    let s = String(t || '').replace(/https?:\/\/\S+|www\.\S+/g, '').replace(/\*\*|__|`+/g, '').replace(/(^|\s)[*_]([^*_\n]+)[*_](?=\s|[.,!?]|$)/g, '$1$2')
+      .replace(/[\p{Extended_Pictographic}\u{1F1E6}-\u{1F1FF}️‍]/gu, '');
+    s = s.split(/\n+/).map(l => l.replace(/^\s*(?:#+|[-•*]|\d+[.)])\s+/, '').trim()).filter(Boolean).map((l, i, a) => (a.length > 1 ? l.charAt(0).toUpperCase() + l.slice(1) : l) + (i < a.length - 1 && !/[.!?…:;,]$/.test(l) ? '.' : '')).join(' ');
+    s = s.replace(/\s*\(([^()]{1,80})\)/g, ' — $1 —').replace(/—\s*([.,!?;:])/g, '$1').replace(/—\s*—/g, '—').replace(/\s*:\s*$/, '.');
+    return s.replace(/\s+/g, ' ').trim();
+  }
+  /* порядковые числительные: «3-й ступени» → «третьей ступени», «в 2024 году» → «в две тысячи двадцать четвёртом году», «17 декабря» → «семнадцатого декабря» */
+  const ORD1 = { ноль: 'нулевой', один: 'первый', одна: 'первый', два: 'второй', две: 'второй', три: 'третий', четыре: 'четвёртый', пять: 'пятый', шесть: 'шестой', семь: 'седьмой', восемь: 'восьмой', девять: 'девятый',
+    сорок: 'сороковой', пятьдесят: 'пятидесятый', шестьдесят: 'шестидесятый', семьдесят: 'семидесятый', восемьдесят: 'восьмидесятый', девяносто: 'девяностый', сто: 'сотый', двести: 'двухсотый', триста: 'трёхсотый',
+    четыреста: 'четырёхсотый', пятьсот: 'пятисотый', шестьсот: 'шестисотый', семьсот: 'семисотый', восемьсот: 'восьмисотый', девятьсот: 'девятисотый', тысяча: 'тысячный', миллион: 'миллионный' };
+  const ORDE = { 'ый': { m: 'ый', mg: 'ого', md: 'ому', mp: 'ом', f: 'ая', fo: 'ой', fa: 'ую', n: 'ое', pl: 'ых' }, 'ой': { m: 'ой', mg: 'ого', md: 'ому', mp: 'ом', f: 'ая', fo: 'ой', fa: 'ую', n: 'ое', pl: 'ых' },
+    'ий': { m: 'ий', mg: 'ьего', md: 'ьему', mp: 'ьем', f: 'ья', fo: 'ьей', fa: 'ью', n: 'ье', pl: 'ьих' } };
+  function ordW(n, form) {
+    n = Math.floor(Math.abs(n)); let pre = '', last;
+    if (n >= 1000 && n % 1000 === 0 && n < 1e6) { const k = n / 1000; last = (k === 1 ? '' : tri(k, false, true).replace(/\s+/g, '')) + 'тысячный'; }
+    else { const w = intW(n).split(' '); const l = w.pop(); pre = w.length ? w.join(' ') + ' ' : ''; last = ORD1[l] || l.replace(/ь$/, '') + 'ый'; }
+    const end = last.slice(-2), E = ORDE[end] || ORDE['ый'], stem = end === 'ий' ? last.slice(0, -2) : last.slice(0, -2);
+    return pre + stem + E[form || 'm'];
+  }
+  const MONTHS = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
+  const FEM_O = /^(ступен|недел|част|позици|покупк|сделк|монет|строк|волн|попытк|минут|секунд|лини|цел|сери|стади|фаз|очеред|запис|ночь|ночи)/i;
+  function datesRu(s) {
+    /* время: «9:30» → «девять тридцать», «10:00» → «десять ноль-ноль» */
+    s = s.replace(/(^|[^\d:])([01]?\d|2[0-3]):([0-5]\d)(?![\d:])/g, (m, pre, h, mm) => pre + intW(+h) + ' ' + (mm === '00' ? 'ноль-ноль' : mm[0] === '0' ? 'ноль ' + intW(+mm[1]) : intW(+mm)));
+    /* дата цифрами: «15.12» / «15.12.2026» */
+    s = s.replace(/(^|[^\d$€.,])(\d{1,2})\.(\d{2})(?:\.(\d{4}))?(?![\d%]|[.,]\d|\s?(?:%|\$|₴|€|долл|грн|гривн|евро|процент|тыс|млн|млрд|трлн|[KkMB]\b))/g, (m, pre, d, mo, y, off, all) => {
+      if (+d < 1 || +d > 31 || +mo < 1 || +mo > 12) return m;
+      const dat = PREP_DAT.test(all.slice(0, off) + pre);
+      return pre + ordW(+d, dat ? 'md' : 'mg') + ' ' + MONTHS[+mo - 1] + (y ? ' ' + ordW(+y, 'mg') + ' года' : '');
+    });
+    /* «17 декабря», «с 1 января», «к 5 марта» */
+    s = s.replace(new RegExp('(^|[^\\d.,])(\\d{1,2})\\s+(' + MONTHS.join('|') + ')(?![А-Яа-яЁё])', 'g'), (m, pre, d, mo, off, all) => {
+      const before = all.slice(0, off) + pre;
+      return pre + ordW(+d, PREP_DAT.test(before) ? 'md' : /(?:^|\s)на\s*$/i.test(before) ? 'n' : 'mg') + ' ' + mo;
+    });
+    /* год: «в 2024 году», «2025 года», «2024 г.» */
+    s = s.replace(/(^|[^\d.,])(\d{4})\s?г\.(?=\s|$|[,;])/g, (m, pre, y, off, all) => pre + y + (/(?:^|\s)в\s*$/i.test(all.slice(0, off) + pre) ? ' году' : ' года'));
+    s = s.replace(/(^|[^\d.,])(\d{3,4})\s+(году|года|год)(?![А-Яа-яЁё])/g, (m, pre, y, g, off, all) => pre + ordW(+y, g === 'году' ? (PREP_DAT.test(all.slice(0, off) + pre) ? 'md' : 'mp') : g === 'года' ? 'mg' : 'm') + ' ' + g);
+    /* «3-й», «2-м», «5-го», «1-я» */
+    s = s.replace(/(^|[^\d.,])(\d{1,4})\s?-\s?(ый|ий|ой|ая|ья|ое|ье|ого|его|ому|ему|ом|ем|ых|их|ую|ью|й|я|е|го|му|м|х|ю)(?![А-Яа-яЁё])(?=(\s*)([А-Яа-яЁё]*))/g, (m, pre, d, sf, _s, next) => {
+      const fem = FEM_O.test(next || '');
+      const form = /^(ая|ья|я)$/.test(sf) ? 'f' : /^(ое|ье|е)$/.test(sf) ? 'n' : /^(ого|его|го)$/.test(sf) ? 'mg' : /^(ому|ему|му)$/.test(sf) ? 'md' : /^(ом|ем|м)$/.test(sf) ? 'mp'
+        : /^(ых|их|х)$/.test(sf) ? 'pl' : /^(ую|ью|ю)$/.test(sf) ? 'fa' : fem ? 'fo' : 'm';
+      return pre + ordW(+d, form);
+    });
+    return s;
+  }
+  /* «5–10%» → «от 5 до 10%», «x3» → «в 3 раза», «3 ч» → «3 часа», «ещё», «всё упало» */
+  function orW(pre, a, b, before, rest) {   /* «2–3 недели» → «две или три недели» (род и падеж — по слову после) */
+    if (!/^\d+$/.test(a) || !/^\d+$/.test(b)) return pre + a + ' или ' + b;
+    const fem = FEM.test((rest.match(/^\s+([А-Яа-яЁё]+)/) || [])[1] || ''), gen = PREP_DAT.test(before) ? 'd' : PREP_GEN.test(before);
+    return pre + intW(+a, fem, gen) + ' или ' + intW(+b, fem, gen);
+  }
+  function phrasesRu(s) {
+    s = s.replace(/(^|[^\d.,А-Яа-яЁёA-Za-z\-−+])(\d+(?:[.,]\d+)?)\s?[–—-]\s?(\d+(?:[.,]\d+)?)(?=\s?(?:%|₴|\$|€|тыс|млн|млрд)|\s+(?!год)[А-Яа-яЁё])/g, (m, pre, a, b, off, all) => (/(?:^|\s)от\s*$/i.test(all.slice(0, off) + pre) ? m : /^\s+(?!тыс|млн|млрд|трлн|доллар|гривен|гривн|евро|процент)[А-Яа-яЁё]/.test(all.slice(off + m.length)) ? orW(pre, a, b, all.slice(0, off) + pre, all.slice(off + m.length)) : pre + 'от ' + a + ' до ' + b));   /* «2–3 дня» → «два или три дня» */
+    s = s.replace(/(^|[\s(])[xх×]\s?(\d+)(?![\d.,]\d)/g, (m, pre, n) => pre + 'в ' + n + ' ' + plural(+n, 'раз', 'раза', 'раз')).replace(/(^|[\s(])(\d+)\s?[xх×](?=[\s.,!?;:]|$)/g, (m, pre, n) => pre + 'в ' + n + ' ' + plural(+n, 'раз', 'раза', 'раз'));
+    const AB = { 'ч': ['час', 'часа', 'часов'], 'мин': ['минута', 'минуты', 'минут'], 'сек': ['секунда', 'секунды', 'секунд'], 'дн': ['день', 'дня', 'дней'], 'мес': ['месяц', 'месяца', 'месяцев'], 'шт': ['штука', 'штуки', 'штук'] };
+    s = s.replace(/(\d+)\s?(ч|мин|сек|дн|мес|шт)\.?(?![А-Яа-яЁё])/g, (m, n, a) => n + ' ' + plural(+n, ...AB[a]));
+    s = s.replace(/(^|[^А-Яа-яЁё])([Ее])ще(?![А-Яа-яЁё])/g, (m, pre, e) => pre + (e === 'Е' ? 'Ещё' : 'ещё'))
+      .replace(/(^|[^А-Яа-яЁё])([Вв])се(?=\s+(?:[а-яё]+ло|равно|ещё|в порядке|по плану|хорошо|спокойно|верно|правильно|просто|понятно|готово|штатно|идёт|идет|получилось|сделано|сказано)(?![А-Яа-яЁё]))/g, '$1$2сё')
+      .replace(/(^|[^А-Яа-яЁё])(это|вот и|на этом|на сегодня) все(?=[.!?]|$)/gi, '$1$2 всё');
+    return s;
+  }
+  /* очень маленькая цена в долларах: «$0.0000123» — это «доли цента», «$0,15» — «пятнадцать центов» */
+  function centsW(fp, gen) {
+    const v = +('0.' + fp);
+    if (v < 0.001) return 'доли цента';
+    if (v < 0.01) return 'меньше цента';
+    const c = Math.round(v * 100), U = UNITS.c;
+    return intW(c, false, gen) + ' ' + (gen === 'd' ? (one(c) ? U[3] : U[4]) : gen ? (one(c) ? U[1] : U[2]) : plural(c, U[0], U[1], U[2]));
+  }
   function spokenRu(t) {
-    let s = pronounce(String(t || '')).replace(/[   ]/g, ' ').replace(/[«»]/g, '').replace(/\s*—\s*/g, ' — ');   /* тире оставляем: живой голос сам делает естественную паузу */
+    let s = cleanSpeech(t);
+    s = coinsRu(s);
+    s = pronounce(s).replace(/[   ]/g, ' ').replace(/[«»"“”]/g, '').replace(/\s*—\s*/g, ' — ');   /* тире оставляем: живой голос сам делает естественную паузу */
     s = s.replace(/(\d)\s(?=\d{3}(?!\d))/g, '$1');   /* «110 000» → «110000» */
-    s = s.replace(/\bBTC\b/g, 'биткоина').replace(/\bETH\b/g, 'эфира').replace(/\bUSDT\b/g, 'тезер');
-    s = s.replace(/×\s?(\d)/g, 'в $1').replace(/(\d)\s?×/g, '$1 раз');
-    const RE = /(^|[\s(:])([−\-+]?)(\$)?(\d+)(?:[.,](\d+))?(?:\s?(тыс\.?|тысяч[аи]?|млн\.?|миллион(?:а|ов)?|млрд\.?|миллиард(?:а|ов)?|трлн\.?|триллион(?:а|ов)?)(?![А-Яа-яЁё]))?(\s?(%|₴|\$|долл\.|доллар(?:а|ов)?|грн\.?|гривн[аы]?|гривен)(?![А-Яа-яЁё]))?(?=(\s*)([А-Яа-яЁё]*))/g;
+    s = s.replace(/(\d)[Kk](?![A-Za-zА-Яа-яЁё])/g, '$1 тыс').replace(/(\d)M(?![A-Za-zА-Яа-яЁё])/g, '$1 млн').replace(/(\d)B(?![A-Za-zА-Яа-яЁё])/g, '$1 млрд');   /* «$110K» */
+    s = datesRu(s);
+    s = phrasesRu(s);
+    const RE = /(^|[\s(:])([−\-+]?)([$€])?(\d+)(?:[.,](\d+))?(?:\s?(тыс\.?|тысяч[аи]?|млн\.?|миллион(?:а|ов)?|млрд\.?|миллиард(?:а|ов)?|трлн\.?|триллион(?:а|ов)?)(?![А-Яа-яЁё]))?(\s?(%|₴|\$|€|долл\.|доллар(?:а|ов)?|грн\.?|гривн[аы]?|гривен|евро)(?![А-Яа-яЁё]))?(?=(\s*)([А-Яа-яЁё]*))/g;
     s = s.replace(RE, (m, pre, sg, d1, ip, fp, mult, _u, u, _sp, next, off, all) => {
       const before = all.slice(0, off) + pre, gen = PREP_DAT.test(before) ? 'd' : PREP_GEN.test(before);
-      let unit = u ? (/^(\$|долл)/.test(u) ? '$' : /^(₴|грн|грив)/.test(u) ? '₴' : '%') : (d1 ? '$' : '');
+      let unit = u ? (/^(\$|долл)/.test(u) ? '$' : /^(₴|грн|грив)/.test(u) ? '₴' : /^(€|евро)/.test(u) ? '€' : '%') : (d1 || '');
       const sc = mult ? (/^тыс/.test(mult) ? SCALE.K : /^(млн|миллион)/.test(mult) ? SCALE.M : /^(трлн|триллион)/.test(mult) ? SCALE.T : SCALE.B) : null;
-      const n = +ip, frac = !!(fp && +fp.slice(0, 3));
+      const n = +ip, frac = !!(fp && +fp.slice(0, 3)), sign = sg === '+' ? 'плюс ' : sg ? 'минус ' : '';
+      const ate = /\.$/.test(mult && !u ? mult : u || ''), rest = all.slice(off + m.length);   /* «тыс.», «грн.» в конце предложения — точку возвращаем */
+      const dot = ate && (!rest.trim() || /^\s+[А-ЯЁA-Z]/.test(rest)) ? '.' : '';
       const fem = sc ? sc[5] : unit ? unit === '₴' : FEM.test(next || '');
+      if (unit === '$' && !sc && n === 0 && fp) return pre + sign + centsW(fp, gen) + dot;   /* центы и доли цента */
+      const U = unit ? UNITS[unit] : null;
+      if (fp && fp.replace(/0+$/, '') === '5') {   /* «3,5%» → «три с половиной процента», «0,5%» → «полпроцента» */
+        if (!n && U && !sc) return pre + sign + (unit === '€' ? 'пол-евро' : 'пол' + U[1]) + dot;
+        if (n) { let w = n === 1 ? (gen ? 'полутора' : fem ? 'полторы' : 'полтора') : intW(n, fem, gen) + ' с половиной'; if (sc) w += ' ' + (gen === 'd' ? sc[7] : gen ? sc[4] : sc[1]); if (U) w += ' ' + (sc ? U[2] : gen === 'd' ? U[4] : gen ? U[2] : U[1]); return pre + sign + w + dot; }
+      }
       let w = numW(ip, fp, fem, gen);
       if (sc) w += ' ' + (frac ? (gen ? sc[3] : sc[1]) : scaleW(n, sc, gen));
-      if (unit) { const U = UNITS[unit]; w += ' ' + (sc || (n >= 1000 && n % 1000 === 0) ? U[2] : frac ? U[1] : gen === 'd' ? (one(n) ? U[3] : U[4]) : gen ? (one(n) ? U[1] : U[2]) : plural(n, U[0], U[1], U[2])); }
-      const sign = sg === '+' ? 'плюс ' : sg ? 'минус ' : '';
-      const ate = /\.$/.test(mult && !u ? mult : u || ''), rest = all.slice(off + m.length);   /* «тыс.», «грн.» в конце предложения — точку возвращаем */
-      return pre + sign + w + (ate && (!rest.trim() || /^\s+[А-ЯЁA-Z]/.test(rest)) ? '.' : '');
+      if (U) w += ' ' + (sc || (n >= 1000 && n % 1000 === 0) ? U[2] : frac ? U[1] : gen === 'd' ? (one(n) ? U[3] : U[4]) : gen ? (one(n) ? U[1] : U[2]) : plural(n, U[0], U[1], U[2]));
+      return pre + sign + w + dot;
     });
-    return s.replace(/\s+/g, ' ').replace(/\s+([,.!?])/g, '$1').trim();
+    return s.replace(/\s+/g, ' ').replace(/\s+([,.!?])/g, '$1').replace(/^[—,.\s]+/, '').trim();
   }
   /* ---------- то же для украинского: числа словами по-украински, с падежами ----------
      «$950» → «дев'ятсот п'ятдесят доларів», «до 74 тисяч» → «до сімдесяти чотирьох тисяч», «2,5%» → «дві цілих п'ять десятих відсотка» */
@@ -461,6 +566,7 @@
   ];
   const EN_UK = { A: 'ей', B: 'бі', C: 'сі', D: 'ді', E: 'і', F: 'еф', G: 'джі', H: 'ейч', I: 'ай', J: 'джей', K: 'кей', L: 'ел', M: 'ем', N: 'ен', O: 'оу', P: 'пі', Q: "к'ю", R: 'ар', S: 'ес', T: 'ті', U: 'ю', V: 'ві', W: 'дабл-ю', X: 'ікс', Y: 'уай', Z: 'зед' };
   function spokenUk(t) {
+    t = cleanSpeech(t);   /* разметка, эмодзи, ссылки, списки — как в русском */
     for (const [re, to] of SAY_UK) t = String(t || '').replace(re, to);
     let s = t.replace(/\b[A-Z]{2,5}\b/g, w => w.split('').map(ch => EN_UK[ch]).join('-'))
       .replace(/[   ]/g, ' ').replace(/[«»]/g, '').replace(/\s*—\s*/g, ' — ').replace(/(\d)\s(?=\d{3}(?!\d))/g, '$1')
@@ -582,7 +688,7 @@
   }
 
 
-  /* ---------- вопросы голосом: зажать сферу и спросить ---------- */
+  /* ---------- вопросы голосом: нажать на сферу и спросить (18.11.2026, владелец: «зажимать неудобно — просто нажать и говорить») ---------- */
   const SRC = window.SpeechRecognition || window.webkitSpeechRecognition || null;
   /* как люди называют монеты вслух — для распознавания (дальше ищем и сам тикер латиницей) */
   const ALIAS = {
@@ -660,7 +766,7 @@
   function reply(q) {
     const t = norm(q), S = ST.S || {}, D = ST.D || {}, M = window.MLX || {};
     const has = (...k) => k.some(x => t.indexOf(x) >= 0);
-    if (!t.trim()) return 'Не расслышал. Зажмите меня и спросите ещё раз.';
+    if (!t.trim()) return 'Не расслышал. Нажмите на меня и спросите ещё раз.';
     let sym = coinIn(t); const num = numIn(t, sym || (alertQ(t) ? 'BTC' : ''));
     /* оповещение: «сообщи, когда солана будет 150» */
     if (alertQ(t) && (has('когда', 'если') || num)) {
@@ -774,21 +880,27 @@
   function listen(lo) {
     lo = lo || {};
     stopVoice(); voUnlock(); preloadFill();
-    if (!SRC) { speak('Голосовые вопросы на этом телефоне недоступны. Нажмите на меня — расскажу главное за сегодня.', { pri: 2 }); return; }
+    /* lo.tap — нажали на сферу: тишина или нет микрофона — Орион рассказывает главное; lo.barge — перебили Ориона нажатием: тишина — просто замолкает */
+    if (!SRC || (lo.tap && ST.micDenied)) { if (lo.tap) { tell(false); return; } speak('Голосовые вопросы на этом телефоне недоступны. Нажмите на меня — расскажу главное за сегодня.', { pri: 2 }); return; }
     if (ST.rec) { try { ST.rec.abort(); } catch (e) {} ST.rec = null; }
     let rec; try { rec = new SRC(); } catch (e) { speak('Микрофон сейчас недоступен.', { pri: 2 }); return; }
     rec.lang = LOC; rec.interimResults = true; rec.maxAlternatives = 1; rec.continuous = false;
     ST.rec = rec; let heard = '', done = false;
-    if (ui.cap) { ui.capT.textContent = Lx('Слушаю…'); ui.cap.classList.add('on', 'talk', 'listen'); clearTimeout(ui.capOff); }
+    if (ui.cap) { ui.capT.textContent = Lx(lo.tap ? 'Слушаю… Спросите или помолчите — расскажу главное.' : 'Слушаю…'); ui.cap.classList.add('on', 'talk', 'listen'); clearTimeout(ui.capOff); }
     pulse(1); buzz(12);
     let idle = 0;
     const quiet = () => { if (done) return; done = true; ST.rec = null; clearTimeout(idle); try { rec.abort(); } catch (e) {} if (ui.cap) ui.cap.classList.remove('listen', 'on', 'talk'); };   /* тишина — молча заканчиваем разговор */
-    idle = setTimeout(() => { if (!heard) quiet(); }, lo.follow ? 2500 : 6000);   /* в разговоре 2,5 секунды тишины — Орион перестаёт слушать сам */
-    const end = () => { if (done) return; clearTimeout(idle); done = true; ST.rec = null; if (ui.cap) ui.cap.classList.remove('listen'); try { rec.stop(); } catch (e) {} if (!heard && lo.follow) { if (ui.cap) ui.cap.classList.remove('on', 'talk'); return; } answer(heard, true); };
+    ST.recQuiet = quiet;
+    const hush = lo.follow || lo.barge;   /* в разговоре или после перебивания тишина — просто перестаём слушать */
+    idle = setTimeout(() => { if (heard) return; quiet(); if (lo.tap) tell(false); }, lo.tap ? 3500 : hush ? 2500 : 6000);   /* нажали и молчат 3,5 с — сводка; в разговоре 2,5 с тишины — Орион перестаёт слушать сам */
+    const end = () => { if (done) return; clearTimeout(idle); done = true; ST.rec = null; if (ui.cap) ui.cap.classList.remove('listen'); try { rec.stop(); } catch (e) {}
+      if (!heard && (hush || lo.tap)) { if (ui.cap) ui.cap.classList.remove('on', 'talk'); if (lo.tap) tell(false); return; } answer(heard, true); };
     rec.onresult = e => { heard = Array.from(e.results).map(r => r[0].transcript).join(' ').trim(); if (ui.capT && heard) ui.capT.textContent = '«' + heard + '»'; ST.lastHeard = heard; if (e.results[e.results.length - 1].isFinal) end(); else { clearTimeout(idle); idle = setTimeout(end, 1300); } };   /* договорили и замолчали — не ждём телефон, отвечаем через 1,3 секунды */
     rec.onerror = e => { if (done) return; clearTimeout(idle); done = true; ST.rec = null; if (ui.cap) ui.cap.classList.remove('listen');
-      if (lo.follow && e.error !== 'not-allowed') { if (ui.cap) ui.cap.classList.remove('on', 'talk'); return; }   /* в разговоре тишина — просто заканчиваем */
-      speak(e.error === 'not-allowed' || e.error === 'service-not-allowed' ? 'Нет доступа к микрофону. Разрешите его этому приложению в настройках телефона.' : e.error === 'network' ? 'Для распознавания речи нужен интернет.' : 'Не расслышал. Зажмите меня и спросите ещё раз.', { pri: 2 }); };
+      const denied = e.error === 'not-allowed' || e.error === 'service-not-allowed';
+      if (lo.tap && !heard) { if (denied) ST.micDenied = true; if (ui.cap) ui.cap.classList.remove('on', 'talk'); tell(false); return; }   /* нажатие без вопроса (или микрофон не разрешён) — сводка, как раньше */
+      if (hush && !denied) { if (ui.cap) ui.cap.classList.remove('on', 'talk'); return; }   /* в разговоре тишина — просто заканчиваем */
+      speak(e.error === 'not-allowed' || e.error === 'service-not-allowed' ? 'Нет доступа к микрофону. Разрешите его этому приложению в настройках телефона.' : e.error === 'network' ? 'Для распознавания речи нужен интернет.' : 'Не расслышал. Нажмите на меня и спросите ещё раз.', { pri: 2 }); };
     rec.onend = () => { if (!done) end(); };
     try { rec.start(); } catch (e) { done = true; ST.rec = null; if (ui.cap) ui.cap.classList.remove('listen'); speak('Микрофон сейчас занят.', { pri: 2 }); }
   }
@@ -796,14 +908,14 @@
   /* ---------- нажатие на сферу ---------- */
   function tapped() {
     ST.lastInput = now(); pulse(0.8); buzz(8); voUnlock(); preloadFill();
-    if (ST.rec) { try { ST.rec.abort(); } catch (e) {} ST.rec = null; if (ui.cap) ui.cap.classList.remove('listen', 'on'); return; }
-    if (speaking()) { stopVoice(); return; }
+    if (ST.rec) { if (ST.recQuiet) ST.recQuiet(); else { try { ST.rec.abort(); } catch (e) {} ST.rec = null; } if (ui.cap) ui.cap.classList.remove('listen', 'on', 'talk'); return; }   /* слушал — нажатие отменяет, без сводки и без «не расслышал» */
+    if (speaking()) { listen({ barge: true }); return; }   /* говорил — замолкает и сразу слушает (перебивание) */
     if (!ST.name && !ST.asked && A.askName) { ST.asked = true; lsSet('or-asked', 1); A.askName(); return; }
-    tell(false);
+    listen({ tap: true });   /* нажали — слушает вопрос; промолчали — расскажет главное */
   }
   function greet(name) {
     if (name != null) ST.name = String(name).trim().slice(0, 24);
-    speak((ST.name ? 'Приятно познакомиться, ' + ST.name + '. ' : 'Хорошо. ') + 'Я Орион. Слежу за портфелем и рынком и скажу, когда будет важное. Нажмите на меня — расскажу главное за сегодня. А если зажать — можно спросить голосом.', { pri: 2 });
+    speak((ST.name ? 'Приятно познакомиться, ' + ST.name + '. ' : 'Хорошо. ') + 'Я Орион. Слежу за портфелем и рынком и скажу, когда будет важное. Нажмите на меня и спросите голосом. А если промолчать — расскажу главное за сегодня.', { pri: 2 });
   }
 
   /* покупка (12.11.2026): что именно пополнено и на сколько, в конце — сколько теперь стоит портфель.
@@ -1000,7 +1112,7 @@
     cv.addEventListener('contextrestored', () => { fit(); wake(); });
     document.addEventListener('visibilitychange', () => { if (!document.hidden) { fit(); wake(); } });
     ui.hit = document.createElement('button'); ui.hit.type = 'button'; ui.hit.className = 'ms-hit';
-    ui.hit.setAttribute('aria-label', 'Орион, голосовой помощник: нажмите — сводка, зажмите — вопрос голосом'); host.appendChild(ui.hit);
+    ui.hit.setAttribute('aria-label', 'Орион, голосовой помощник: нажмите и спросите голосом, промолчите — расскажу главное'); host.appendChild(ui.hit);
     let lpT = 0, lp = false;
     ui.hit.addEventListener('pointerdown', () => { lp = false; clearTimeout(lpT); lpT = setTimeout(() => { lp = true; ST.lastInput = now(); listen(); }, 450); });
     ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => ui.hit.addEventListener(ev, () => clearTimeout(lpT)));
