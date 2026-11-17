@@ -2024,6 +2024,36 @@ def run_browser():
             pg.evaluate("document.getElementById('fErr').scrollIntoView({block:'center'})"); shot(pg, 'odd-uk-dark')
         scenario('Цена покупки: сброс при новом открытии, «Одна монета», «Докупка»', {'session': True, 'docs': SEED + [{'col': 'app', 'id': 'cycle', 'data': CYC}]}, s_odd_reset)
 
+        # P1 #3 охоты 16.11: «Докупка по уровню» больше резерва USDT — первое сохранение останавливается и объясняет, повтор сохраняет;
+        # докупка в пределах резерва — сразу; вместе со «странной ценой» — сначала одно предупреждение, потом другое, третье нажатие сохраняет
+        def s_dip_reserve(pg, n):
+            wait_app(pg); pg.wait_for_timeout(600)
+            txn = "[...window.__mlRows.keys()].filter(k=>k.startsWith('tx/')).length"
+            def save(): pg.evaluate("saveForm()"); pg.wait_for_timeout(900); return norm(pg.inner_text('#fErr')), pg.evaluate(txn)
+            def dip(u, q):
+                pg.evaluate("closeSheets()"); pg.wait_for_timeout(500); pg.evaluate("openAct('dip')"); pg.wait_for_timeout(700)
+                pg.fill('#du_BTC', u); pg.fill('#dq_BTC', q); pg.fill('#du_ETH', ''); pg.fill('#du_ALT', ''); pg.wait_for_timeout(300)
+            a = pg.evaluate(txn); dip('100', '0.000909'); e0, b0 = save()
+            ok('докупка $100 при резерве $200 — сохраняется сразу, без предупреждения') if b0 == a + 1 and 'Резерв сейчас' not in e0 else fail('докупка в пределах резерва', f'{a}->{b0} {e0!r}')
+            dip('5000', '0.04545'); e1, b1 = save()
+            ok('докупка $5 000 при резерве $100 — первое сохранение остановлено, понятный текст') if b1 == b0 and 'Резерв сейчас $100,00 — докупка на $5 000 уведёт его в минус.' in e1 and '(докупал с другого счёта) — сохрани ещё раз.' in e1 else fail('остановка: докупка больше резерва', f'{b0}->{b1} {e1!r}')
+            for th in ['dark', 'light']:
+                pg.evaluate(f"document.documentElement.setAttribute('data-theme','{th}')"); pg.wait_for_timeout(300)
+                pg.evaluate("document.getElementById('fErr').scrollIntoView({block:'center'})"); shot(pg, f'dip-reserve-{th}')
+            pg.evaluate("document.documentElement.setAttribute('data-theme','dark')")
+            e2, b2 = save()
+            ok('повтор с теми же цифрами — докупка записана как раньше') if b2 == b1 + 1 and not e2 else fail('повтор: докупка больше резерва', f'{b1}->{b2} {e2!r}')
+            dip('58.59', '0.0000930'); e3, b3 = save(); e4, b4 = save(); e5, b5 = save()
+            ok('странная цена и нехватка резерва вместе: сначала про цену, потом про резерв, третье нажатие сохраняет') if b3 == b4 == b2 and 'сильно выше рынка' in e3 and 'Резерв сейчас' not in e3 and 'Резерв сейчас -$4 900' in e4 and 'рынка' not in e4 and b5 == b2 + 1 else fail('два предупреждения подряд', f'{b2}->{b3}->{b4}->{b5} {e3!r} {e4!r} {e5!r}')
+            dip('', '0.0001'); eq, bq = save()
+            ok('резерв уже в минусе, докупка только количеством (без суммы) — сохраняется сразу, без «докупка на $0»') if bq == b5 + 1 and 'Резерв сейчас' not in eq else fail('докупка без суммы при минусовом резерве', f'{b5}->{bq} {eq!r}')
+            dip('5000', '0.04545'); e6, b6 = save(); pg.evaluate("closeSheets()")
+            pg.evaluate("localStorage.setItem('ml-lang','uk'); location.reload()"); pg.wait_for_timeout(2500); wait_app(pg); pg.wait_for_timeout(600)
+            a7 = pg.evaluate(txn); dip('5000', '0.04545'); e7, b7 = save()
+            ok('закрыл и открыл шторку — предупреждение снова; по-украински «Резерв зараз… виведе його в мінус… збережи ще раз»') if b6 == bq and 'Резерв сейчас' in e6 and b7 == a7 and 'Резерв зараз' in e7 and 'виведе його в мінус.' in e7 and '(докупав з іншого рахунку) — збережи ще раз.' in e7 and not re.search('[ыэъё]', e7) else fail('сброс и украинский текст', f'{b5}->{b6} {a7}->{b7} {e7!r}')
+            pg.evaluate("document.getElementById('fErr').scrollIntoView({block:'center'})"); shot(pg, 'dip-reserve-uk-dark')
+        scenario('Докупка больше резерва USDT: предупреждение', {'session': True, 'docs': SEED + [{'col': 'app', 'id': 'cycle', 'data': CYC}]}, s_dip_reserve)
+
         # №2 охоты 16.11: формы не сохраняют сумму или количество с минусом — понятная подпись над «Сохранить», запись не создаётся;
         # законные случаи как были: пополнение без гривны, «Остаток» без суммы
         def s_neg(pg, n):

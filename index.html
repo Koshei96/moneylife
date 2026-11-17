@@ -11,7 +11,7 @@ addEventListener('error',function(e){if(e&&e.message)add(e.message,(e.filename||
 addEventListener('unhandledrejection',function(e){var r=e&&e.reason;add(r&&(r.message||r)||'отклонённое обещание','promise');});
 window.mlErrLog=function(){try{return JSON.parse(localStorage.getItem(K)||'[]');}catch(e){return [];}};window.mlErrAdd=add;})();
 </script>
-<script src="i18n.js?v=20261117031000"></script>
+<script src="i18n.js?v=20261117032000"></script>
 <title>MoneyLife</title>
 <meta name="theme-color" content="#06040e">
 <script>/* тема до отрисовки: «Авто» — как в телефоне, иначе выбор из настроек */
@@ -1746,9 +1746,9 @@ document.querySelectorAll('nav.tabs .tab').forEach(b=>{const v=b.querySelector('
 
 <div class="toast" id="toast" role="status"><span id="toastMsg"></span><button type="button" id="toastBtn" hidden></button></div>
 
-<script src="config.js?v=20261117031000"></script>
+<script src="config.js?v=20261117032000"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="shim.js?v=20261117031000"></script>
+<script src="shim.js?v=20261117032000"></script>
 <script>
 /* ===== основа ===== */
 const $=id=>document.getElementById(id);
@@ -2538,7 +2538,7 @@ const FORMS=['buy','dip','sell','deposit','reserve','earn','income','start'];
 let mode='menu',buyMode='dca',resKind='reserve_in';
 function openAct(m,opt){openSheet('actSheet');showForm(m||'menu',opt);}
 function showForm(m,opt){opt=opt||{};mode=m;$('f-menu').hidden=m!=='menu';FORMS.forEach(k=>{$('f-'+k).hidden=k!==m;});
-  $('actBack').hidden=m==='menu';$('actTitle').textContent=TITLES[m]||'';$('actFoot').hidden=m==='menu';$('dateField').hidden=m==='menu'||m==='income';$('fErr').textContent='';oddOk='';$('fDate').value=isoDay(new Date());
+  $('actBack').hidden=m==='menu';$('actTitle').textContent=TITLES[m]||'';$('actFoot').hidden=m==='menu';$('dateField').hidden=m==='menu'||m==='income';$('fErr').textContent='';oddOk='';resOk='';$('fDate').value=isoDay(new Date());
   const b=$('actSheet').querySelector('.sh-body');if(b)b.scrollTop=0;
   const init={buy:initBuy,dip:initDip,sell:initSell,deposit:initDep,reserve:initRes,earn:initEarn,income:initInc,start:initStart}[m];if(init)init(opt);}
 $('actBack').addEventListener('click',()=>{play('tick');showForm('menu');});
@@ -2555,7 +2555,7 @@ function spreadTotal(pf){const sp=split(),tot=Math.max(0,+$(pf==='b'?'bTotal':'d
 /* 15.11 (владелец): цена покупки сильно не та, что на рынке (> ×3 или < ÷3) — почти всегда опечатка в «Монет» (лишний или пропущенный ноль) */
 function oddPrice(sym,u,q){if(!sym||!(u>0)||!(q>0))return null;const p=+derive().prices[sym]||0;if(!p)return null;const pr=u/q,k=pr/p;return k>3||k<1/3?{pr,p,hi:k>3}:null;}
 function oddMsg(rows){const o=rows.find(r=>r.o);return o?`Цена покупки ${o.sym} ${usdp(o.o.pr)} — сильно ${o.o.hi?'выше':'ниже'} рынка (${usdp(o.o.p)}). Проверь количество монет. Если всё верно — сохрани ещё раз.`:'';}
-let oddOk='';   /* «повтор сохраняет» — только в той же шторке: showForm сбрасывает */
+let oddOk='',resOk='';   /* «повтор сохраняет» — только в той же шторке: showForm сбрасывает */
 function hintFor(sym,u,qE,el,qi){const D=derive();if(!sym){el.textContent=el.id==='oHint'?'':'напиши альткоин месяца, например SOL';if(qi)qi.placeholder='';return;}
   if(u<0||qE<0){el.textContent='—';if(qi)qi.placeholder='';return;}   /* 17.11: минус не сохраняется — и не считаем по нему */
   const p=+D.prices[sym]||0,est=p&&u?u/p:0,q=qE||est;if(qi)qi.placeholder=est?'≈ '+qtyRaw(+est.toPrecision(4)):'';
@@ -2720,6 +2720,11 @@ const NEG_U='Впиши сумму больше нуля.',NEG_Q='Впиши к�
 /* первое сохранение с подозрительной ценой — остановка и объяснение; повтор с теми же цифрами — сохраняем как есть */
 function oddStop(items,err){const rows=items.map(i=>({sym:i.symbol,o:i.usd?oddPrice(i.symbol,i.usd,i.qty):null})),key=items.map(i=>i.symbol+':'+i.qty+':'+i.usd).join('|');
   if(!rows.some(r=>r.o)||oddOk===key){oddOk='';return false;}oddOk=key;err.textContent=oddMsg(rows);return true;}
+/* 17.11.2026 (охота 16.11, P1 #3): докупка больше резерва USDT — первое сохранение останавливается и объясняет, повтор с теми же цифрами
+   сохраняет как раньше (докупал с другого счёта). Свой флаг: при одновременной «странной цене» сначала одно предупреждение, потом другое */
+function resStop(items,err){const sum=items.reduce((a,i)=>a+(+i.usd||0),0),R=derive().reserve,key=sum.toFixed(2)+'/'+R.toFixed(2);
+  if(!(sum>0)||sum<=R+0.005||resOk===key){resOk='';return false;}resOk=key;
+  err.textContent='Резерв сейчас '+money(R,{show:true})+' — докупка на '+money(sum,{show:true})+' уведёт его в минус. Если так и есть (докупал с другого счёта) — сохрани ещё раз.';return true;}
 async function saveForm(){const err=$('fErr');err.textContent='';if(!db){err.textContent='Нет подключения к данным — попробуй ещё раз чуть позже.';return;}
   const ts=tsFromDate(),btn=$('saveBtn');btn.disabled=true;
   try{
@@ -2730,7 +2735,7 @@ async function saveForm(){const err=$('fErr');err.textContent='';if(!db){err.tex
         const it={ts,type:$('oDca').checked?'dca':'buy',symbol:sym,qty:+q.toPrecision(8),usd:u?+u.toFixed(2):null};if(u&&q)it.price=+(u/q).toPrecision(8);if(est)it.note='количество по оценке — поправь по данным биржи';
         if(oddStop([it],err))return;
         await db.collection('tx').add(it);finish('coin',1,sym+' в копилке');}}
-    else if(mode==='dip'){const lv=+$('dLevel').value||0;if(!lv){err.textContent='Нет активного уровня.';return;}const r=collectRows('d','dip',ts,lv);if(r.err){err.textContent=r.err;return;}if(oddStop(r.items,err))return;
+    else if(mode==='dip'){const lv=+$('dLevel').value||0;if(!lv){err.textContent='Нет активного уровня.';return;}const r=collectRows('d','dip',ts,lv);if(r.err){err.textContent=r.err;return;}const o0=oddOk;if(oddStop(r.items,err))return;if(resStop(r.items,err)){oddOk=o0;return;}
       for(const it of r.items)await db.collection('tx').add(it);
       const D=derive();let allDone=false;
       const levels=((S.cycle&&S.cycle.levels)||[]).map(l=>{if(l.n!==lv)return Object.assign({},l);
@@ -3098,7 +3103,7 @@ function msSync(x){MSC.last=x;if(!msApply())return;if(!S.ready||document.getElem
   if(window.Mascot){try{window.Mascot.sync(msPayload(x));}catch(e){}}else msLoad();}
 function msLoad(){if(MSC.loading||MSC.failed)return;MSC.loading=true;
   const add=(src,ok)=>{try{const s=document.createElement('script');s.src=src;s.async=true;s.onload=ok;s.onerror=()=>{MSC.failed=true;};document.head.appendChild(s);}catch(e){MSC.failed=true;}};
-  const boot=()=>add('mascot.js?v=20261117031000',()=>{try{if(window.Mascot&&window.Mascot.init({host:$('mascot'),app:{buzz,askName:()=>{if(window.MLX&&MLX.askName)MLX.askName();},addAlert:(y,v)=>window.MLX&&MLX.addAlert?MLX.addAlert(y,v):null,voice:(t,x)=>window.mlVoice?window.mlVoice(t,x):null,ask:(q,y,x)=>window.mlAsk?window.mlAsk(q,y,x):null}})&&MSC.last&&$('ob').hidden&&!document.getElementById('mlAuth'))window.Mascot.sync(msPayload(MSC.last));}catch(e){}});
+  const boot=()=>add('mascot.js?v=20261117032000',()=>{try{if(window.Mascot&&window.Mascot.init({host:$('mascot'),app:{buzz,askName:()=>{if(window.MLX&&MLX.askName)MLX.askName();},addAlert:(y,v)=>window.MLX&&MLX.addAlert?MLX.addAlert(y,v):null,voice:(t,x)=>window.mlVoice?window.mlVoice(t,x):null,ask:(q,y,x)=>window.mlAsk?window.mlAsk(q,y,x):null}})&&MSC.last&&$('ob').hidden&&!document.getElementById('mlAuth'))window.Mascot.sync(msPayload(MSC.last));}catch(e){}});
   setTimeout(boot,300);}
 function render(){const D=derive();renderHeader();renderHome(D);renderGrowth();renderCoins(D);renderStrategy(D);renderActivity();renderD14();renderInst();if(window.MLX)try{MLX.render(D);}catch(e){console.error(e);}earnNudge();if(cvSym&&$('coinSheet').classList.contains('open'))renderCoinView();}
 document.body.classList.add('loading');
@@ -3183,9 +3188,9 @@ render();requestAnimationFrame(inkMove);setTimeout(inkMove,600);
     sy=null;swipe=null;pull=0;armed=false;},{passive:true});
 })();
 </script>
-<script src="plus.js?v=20261117031000"></script>
-<script src="wins.js?v=20261117031000"></script>
-<script src="folds.js?v=20261117031000"></script>
+<script src="plus.js?v=20261117032000"></script>
+<script src="wins.js?v=20261117032000"></script>
+<script src="folds.js?v=20261117032000"></script>
 <script>
 /* ===== 12.11.2026: ползунок «Купить», смахнуть запись влево с «рассыпанием» монеты ===== */
 (function(){
