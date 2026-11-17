@@ -1278,6 +1278,9 @@ def run_browser():
                 pg.evaluate("closeSheets()"); pg.wait_for_timeout(250); pg.evaluate(js); pg.wait_for_timeout(600); left += pg.evaluate(RU_ONLY)
             pg.evaluate("closeSheets()"); pg.wait_for_timeout(300)
             left = list(dict.fromkeys(left))
+            pg.evaluate("closeSheets(); show('home')"); pg.wait_for_timeout(400)
+            r24 = pg.evaluate(r"document.body.innerText.match(/24\s?рік/g)")
+            ok('украинский: «24ч» на главной — «24год», без «24рік»') if not r24 else fail('украинский: 24рік', str(r24))
             if not left: ok('украинский: на вкладках, в настройках, формах, уроках и достижениях нет русских букв ы/э/ъ/ё')
             else: fail('украинский: остался русский текст', ' | '.join(left[:12]))
             shot(pg, 'uk-home')
@@ -1391,13 +1394,13 @@ def run_browser():
                 if (a['i'], b['i'], c['i']) == (1, 2, 1) and a['sub'] == sc[1]['s'] and b['sub'] == sc[2]['s'] and b['prog'][:3] == [1, 1, 0.5] and not c['playing']:
                     ok(f'видео-инструкция ({th}): вперёд и назад по сценам, субтитры и прогресс меняются')
                 else: fail(f'видео-инструкция ({th}): листание', f"{a['i']},{b['i']},{c['i']} {b['prog'][:4]}")
-                for k in ([0, 2, 4, 6, 8, 11] if th == 'dark' else [3, 5, 7, 9, 12]):
+                for k in ([0, 2, 4, 6, 7, 8, 11] if th == 'dark' else [3, 5, 6, 7, 9, 12]):
                     pg.evaluate(f"mlTour.debug.go({k})"); pg.wait_for_timeout(950); pg.evaluate("mlTour.debug.steps()"); pg.wait_for_timeout(1300)
                     pg.screenshot(path=str(TOUR_SHOTS / f'scene{k+1:02d}-{th}.png'))
                 # всё подряд по таймеру (ускорено): дошло до последней сцены, на ней «Начать» и «Посмотреть ещё раз»
                 pg.evaluate("mlTour.debug.speed(0.03); mlTour.debug.go(0)"); pg.click('#tour [data-tr="play"]')
                 pg.wait_for_function("(()=>{const s=mlTour.debug.state();return s.i===s.n-1&&!s.playing&&s.fill===1})()", polling=200, timeout=15000)
-                e = pg.evaluate("(()=>{const e=document.getElementById('trEnd');return !e.hidden&&e.getBoundingClientRect().height>0?e.textContent.trim():''})()")
+                e = pg.evaluate("(()=>{const e=document.getElementById('trEnd');return !e.hidden&&e.getBoundingClientRect().height>0?e.textContent.trim()+'|'+[...e.querySelectorAll('[aria-label]')].map(b=>b.getAttribute('aria-label')).join('|'):''})()")
                 if 'Начать' in e and 'Посмотреть ещё раз' in e: ok(f'видео-инструкция ({th}): по таймеру сама дошла до конца, на последней сцене «Начать» и «Посмотреть ещё раз»')
                 else: fail(f'видео-инструкция ({th}): конец', e)
                 pg.click('#trEnd [data-tr="again"]'); pg.wait_for_timeout(300); s2 = pg.evaluate(TS)
@@ -1460,13 +1463,16 @@ def run_browser():
             pg.evaluate("MLX.openLearn()"); pg.wait_for_timeout(600)
             lt = pg.evaluate("document.getElementById('tourLearn').textContent")
             pg.click('#tourLearn'); pg.wait_for_timeout(800); pg.click('#tour [data-tr="play"]')
-            left, subs = [], []
+            left, subs, rik = [], [], []
             for k in range(pg.evaluate(TS)['n']):
                 pg.evaluate(f"mlTour.debug.go({k}); mlTour.debug.steps()"); pg.wait_for_timeout(250)
                 left += pg.evaluate(RU_TOUR); subs.append(pg.evaluate(TS)['sub'])
-            pg.evaluate("mlTour.debug.go(3); mlTour.debug.steps()"); pg.wait_for_timeout(400)
-            pg.screenshot(path=str(TOUR_SHOTS / 'scene04-uk-dark.png'))
+                if k in (2, 3, 4, 5): rik += pg.evaluate(r"[...document.querySelectorAll('#tour .tm-chip')].map(e=>e.textContent).filter(t=>/24\s?рік/.test(t))")
+            for k in (2, 3):
+                pg.evaluate(f"mlTour.debug.go({k}); mlTour.debug.steps()"); pg.wait_for_timeout(400)
+                pg.screenshot(path=str(TOUR_SHOTS / f'scene{k+1:02d}-uk-dark.png'))
             left = list(dict.fromkeys(left))
+            ok('видео-инструкция по-украински: «24ч» как в приложении — «24год», без «24рік»') if not rik else fail('видео-инструкция: 24рік', str(rik[:3]))
             uk = all(re.search('[іїєґ]', s) for s in subs)
             if not left and uk and 'Відеоінструкція · 2 хв' in lt: ok('видео-инструкция по-украински: строка во «Знаннях», все 13 сцен и подписи без русских остатков')
             else: fail('видео-инструкция по-украински', ' | '.join(left[:10]) + f' | uk={uk} | {lt[:60]}')

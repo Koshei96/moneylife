@@ -51,17 +51,20 @@
   const tabs = act => `<div class="tm-tabs">${[['home', 'Главная', IC.home], ['coins', 'Монеты', IC.coins], ['strategy', 'Стратегия', IC.strat], ['activity', 'Активность', IC.list]]
     .map(([k, t, i]) => `<span class="tm-tab${k === act ? ' on' : ''}"${k === act ? ' data-f="tab"' : ''}>${i}<small>${L(t)}</small></span>`).join('')}</div>`;
   const hero = orb => `<div class="tm-hero${A(1)} data-f="hero"><div class="tm-l">${L('Стоимость портфеля')}</div><div class="tm-bal">$12 480</div>
-    <div class="tm-sub"><span class="tm-pos">+$1 920 · +18,2%</span> ${L('прибыль сейчас')}</div><span class="tm-chip tm-pos">${L('24ч')} +$140 · +1,1%</span>
+    <div class="tm-sub"><span class="tm-pos">+$1 920 · +18,2%</span> ${L('прибыль сейчас')}</div><span class="tm-chip tm-pos">${L('24ч +$140 · +1,1%')}</span>
     ${orb !== false ? '<span class="tm-orb" data-f="orb"><i></i></span>' : ''}</div>`;
   const qa = () => `<div class="tm-qa${A(2)} data-f="qa">${[['buy', 'Купить', IC.plus], ['sell', 'Продать', IC.up], ['dep', 'Пополнить', IC.down], ['more', 'Ещё', IC.dots]]
     .map(([k, t, i]) => `<span class="tm-q" data-f="${k}"><i>${i}</i>${L(t)}</span>`).join('')}</div>`;
   const tiles = () => `<div class="tm-tiles${A(3)} data-f="tiles">${[['Вложено', '$10 560'], ['Резерв USDT', '$1 200'], ['BTC сейчас', '$96 400'], ['DCA в месяц', '$300']]
     .map(([k, v]) => `<span class="tm-tile"><small>${L(k)}</small><b>${v}</b></span>`).join('')}</div>`;
+  const alloc = () => `<div class="tm-card tm-alloc${A(4)} data-f="alloc"><div class="tm-h">${L('Распределение')}<small>${L('цель')} 50 / 30 / 20</small></div>
+    <div class="tm-abar"><i style="--w:50%;--c:#f7931a"></i><i style="--w:30%;--c:#8c8cf0"></i><i style="--w:20%;--c:#33c3a5"></i></div></div>`;
   const field = (k, v, f, cur) => `<span class="tm-fld"${f ? ` data-f="${f}"` : ''}><small>${L(k)}</small><b${cur ? ' class="tm-cur"' : ''}>${v}</b></span>`;
   const seg = (a, b, on) => `<span class="tm-seg"><i${on === 0 ? ' class="on"' : ''}>${L(a)}</i><i${on === 1 ? ' class="on"' : ''}>${L(b)}</i></span>`;
   const sheet = (title, body, f) => `<div class="tm-sheet"${f ? ` data-f="${f}"` : ''}><span class="tm-grab"></span><div class="tm-sh-h"><b>${L(title)}</b><i class="tm-ib"></i></div>${body}</div>`;
-  const coin = (s, c, q, avg, pr, f, i) => `<div class="tm-coin${A(i)}${f ? ` data-f="${f}"` : ''}><span class="tm-cb" style="--c:${c}">${s.slice(0, 1)}</span><span class="tm-cc"><b>${s}</b><small>${q}</small></span>
-    <span class="tm-cr"><b>${avg}</b><small class="${pr[0] === '−' ? 'tm-neg' : 'tm-pos'}">${pr}</small></span></div>`;
+  const pc = v => v[0] === '−' ? 'tm-neg' : v[0] === '+' ? 'tm-pos' : 'tm-mut';
+  const coin = (s, c, q, px, ch, v, pf, f) => `<div class="tm-coin"${f ? ` data-f="${f}"` : ''}><span class="tm-cb" style="--c:${c}">${s.slice(0, 1)}</span><span class="tm-cc"><b>${s}</b><small>${q}</small></span>
+    <span class="tm-cr"><b>${px}</b><small class="${pc(ch)}">${ch}</small></span><span class="tm-cr"><b>${v}</b><small class="${pc(pf)}">${pf}</small></span></div>`;
   const row = (ico, t, s, f, i, right) => `<div class="tm-row${A(i)}${f ? ` data-f="${f}"` : ''}><span class="tm-ri">${ico}</span><span class="tm-rc"><b>${L(t)}</b>${s ? `<small>${L(s)}</small>` : ''}</span>${right == null ? '<span class="tm-chev">›</span>' : right}</div>`;
   const sw = on => `<span class="tm-sw${on ? ' on' : ''}"><i></i></span>`;
 
@@ -81,7 +84,7 @@
         <div class="tm-list">${row(IC.cal, 'Откладываете регулярно', 'Часть дохода — в крипту, по плану (DCA)', 'w1', 2, '')}${row(IC.chart, 'Хотите видеть настоящую прибыль', 'По вашим покупкам, а не на глаз', 'w2', 3, '')}${row(IC.stair, 'Докупаете при падениях спокойно', 'По заранее заданным ступеням, без паники', 'w3', 4, '')}</div></div>` },
     { t: 'Главная', s: 'На главной — стоимость портфеля, прибыль и изменение за сутки. Ниже плитки: сколько вложено, резерв в долларах, цена биткоина и бюджет DCA на месяц.',
       st: [{ f: 'hero' }, { f: 'tiles', at: 0.42 }],
-      v: () => `${top()}${hero()}${qa()}${tiles()}${tabs('home')}` },
+      v: () => `${top()}${hero()}${qa()}${tiles()}${alloc()}${tabs('home')}` },
     { t: 'Орион', s: 'Сфера рядом с суммой — Орион, голосовой помощник. Нажмите на неё, и он расскажет сводку за день. Зажмите — и спросите голосом, например: «сколько у меня биткоина». Советов он не даёт.',
       st: [{ f: 'orb', tap: true }, { f: 'cap', at: 0.3, cls: 'cap' }, { f: 'ask', at: 0.6, cls: 'cap ask' }],
       v: () => `${top()}${hero()}${qa()}${tiles()}
@@ -100,27 +103,31 @@
           <div class="tm-split" data-f="split"><div class="tm-sbar"><i style="--w:70%"></i><i style="--w:30%"></i></div>
             <div class="tm-sl"><span><b>${L('В бюджет DCA')}</b><small>70% · $168</small></span><span><b>${L('В резерв USDT')}</b><small>30% · $72</small></span></div></div>
           <span class="tm-btn">${L('Сохранить')}</span>`)}` },
-    { t: 'Монеты', s: 'Во вкладке «Монеты» — карточка каждой монеты: сколько у вас, средняя цена покупки и прибыль или убыток сейчас. Нажмите на карточку — на обороте все ваши цифры.',
-      st: [{ f: 'tab' }, { f: 'c1', at: 0.22 }, { f: 'back', at: 0.68, cls: 'flip', tap: true }],
-      v: () => `${top()}<div class="tm-pad"><div class="tm-search${A(0)}>${L('Поиск монеты')}</div><div class="tm-h${A(1)}>${L('Активы')}</div>
-        <div class="tm-flip" data-f="c1">${coin('BTC', '#f7931a', '0,0821 BTC', '$7 915', '+23,4%', '', 2)}
-          <div class="tm-back" data-f="back"><b>BTC</b><span><small>${L('Средняя цена покупки')}</small><b>$78 100</b></span><span><small>${L('Вложено')}</small><b>$6 410</b></span><span><small>${L('Стоит сейчас')}</small><b>$7 915</b></span></div></div>
-        ${coin('ETH', '#8c8cf0', '1,12 ETH', '$3 870', '+9,8%', '', 3)}${coin('SOL', '#33c3a5', '4,6 SOL', '$690', '−6,1%', '', 4)}${coin('USDT', '#26a17b', L('резерв'), '$1 200', '0,0%', '', 5)}</div>${tabs('coins')}` },
-    { t: 'Стратегия', s: 'Во вкладке «Стратегия» — ваши правила: доли BTC, ETH и альткоинов и лестница докупок. Когда биткоин падает от максимума на 30, 40, 50 процентов и ниже, открывается следующая ступень.',
-      st: [{ f: 'alloc' }, { f: 'gauge', at: 0.42, cls: 'go' }],
-      v: () => `${top()}<div class="tm-pad"><div class="tm-card${A(1)} data-f="alloc"><div class="tm-h">${L('Распределение')}</div>
-          <div class="tm-abar"><i style="--w:50%;--c:#f7931a"></i><i style="--w:30%;--c:#8c8cf0"></i><i style="--w:20%;--c:#33c3a5"></i></div>
-          <div class="tm-al"><span><i style="--c:#f7931a"></i>BTC 50%</span><span><i style="--c:#8c8cf0"></i>ETH 30%</span><span><i style="--c:#33c3a5"></i>${L('Альты')} 20%</span></div></div>
-        <div class="tm-card${A(2)} data-f="gauge"><div class="tm-h">${L('Лестница докупок')}<small>${L('макс')} $126 000</small></div>
+    { t: 'Монеты', s: 'Во вкладке «Монеты» — список ваших монет: сколько у вас, цена сейчас, стоимость и прибыль или убыток. Нажмите на монету, потом на её карточку — на обороте средняя цена покупки, сколько вложено и сколько стоит сейчас.',
+      st: [{ f: 'tab' }, { f: 'list', at: 0.12 }, { f: 'c1', at: 0.42, tap: true }, { f: 'card', at: 0.55, cls: 'up', tap: true }, { f: 'back', at: 0.68, cls: 'up flip' }],
+      v: () => `${top()}<div class="tm-pad"><div class="tm-search${A(0)}>${L('Поиск монеты')}</div>
+        <div class="tm-cl${A(1)} data-f="list"><div class="tm-ch"><span>${L('Актив')}</span><span>${L('Цена')}</span><span>${L('Стоимость')}</span></div>
+        ${coin('BTC', '#f7931a', '0,0821', '$96 400', '+1,6%', '$7 915', '+$1 505', 'c1')}${coin('ETH', '#8c8cf0', '0,8', '$3 350', '+0,9%', '$2 680', '+$460')}
+        ${coin('SOL', '#33c3a5', '4,6', '$148,90', '−1,3%', '$685', '−$45')}${coin('USDT', '#26a17b', '1 200', '$1,00', '0,0%', '$1 200', '$0')}</div>
+        <p class="tm-note${A(2)}>${L('Итого')} $12 480</p></div>${tabs('coins')}
+        ${sheet('BTC', `<div class="tm-flip" data-f="card"><div class="tm-front"><small>${L('Цена сейчас')}</small><b class="tm-big">$96 400</b><small class="tm-pos">+1,6% ${L('за сутки')}</small>
+            <svg class="tm-spark" viewBox="0 0 240 50" preserveAspectRatio="none" aria-hidden="true"><path d="M0 38 L30 30 L60 34 L90 22 L120 26 L150 14 L180 20 L210 10 L240 12"/><path class="avg" d="M0 32 H240"/></svg></div>
+          <div class="tm-back" data-f="back"><span><small>${L('Средняя цена покупки')}</small><b>$78 080</b></span><span><small>${L('Вложено')}</small><b>$6 410</b></span><span><small>${L('Стоит сейчас')}</small><b>$7 915</b></span><span><small>${L('Прибыль')}</small><b class="tm-pos">+$1 505 · +23,5%</b></span></div></div>
+          <p class="tm-note">${L('Нажми на карточку — на обороте твои цифры по монете')}</p>`)}` },
+    { t: 'Стратегия', s: 'Во вкладке «Стратегия» — лестница докупок: когда биткоин падает от максимума на 30, 40, 50 процентов и ниже, открывается следующая ступень. Ваши доли BTC, ETH и альткоинов видны в «Распределении» на главной, а меняются в настройках.',
+      st: [{ f: 'gauge' }, { f: 'gauge', at: 0.1, cls: 'go' }, { f: 'steps', at: 0.4, cls: 'go' }, { f: 'plan', at: 0.68, cls: 'go' }],
+      v: () => `${top()}<div class="tm-pad"><div class="tm-card${A(1)} data-f="gauge"><div class="tm-h">${L('Лестница докупок')}<small>${L('макс')} $126 000</small></div>
           <div class="tm-gauge"><div class="tm-gt"><i class="tm-gm"></i></div><div class="tm-gs">${[30, 40, 50, 60, 70].map((d, i) => `<span style="--x:${(d / 75 * 100).toFixed(1)}%"><i></i><small>−${d}%</small></span>`).join('')}</div></div>
           <p class="tm-note">${L('BTC сейчас −24% от максимума')}</p></div>
-        <div class="tm-card${A(3)} data-f="res"><div class="tm-h">${L('Резерв USDT')}<small>$1 200</small></div><div class="tm-meter"><i style="--w:62%"></i></div>
-          <p class="tm-note">${L('Ждёт ступеней лестницы · потолок 20% от монет')}</p></div></div>${tabs('strategy')}` },
-    { t: 'Резерв и докупка', s: 'На каждой ступени в дело идёт часть резерва. Нужны два ключа: биткоин дошёл до ступени, и цена ниже средней цены ваших покупок. Тогда на главной появится «Можно докупить» с суммами.',
+        <div class="tm-h${A(2)}>${L('Ступени лестницы')}</div>
+        <div class="tm-list" data-f="steps">${row('<b class="tm-n">1</b>', L('Ступень') + ' 1 · −30%', '$88 200 · 10% ' + L('резерва'), '', 3, '')}${row('<b class="tm-n">2</b>', L('Ступень') + ' 2 · −40%', '$75 600 · 15% ' + L('резерва'), '', 4, '')}</div>
+        <div class="tm-card${A(5)} data-f="plan"><div class="tm-h">${L('План альткоинов')}<small>2026</small></div><div class="tm-mos">
+          <span class="tm-mo"><small>${L('окт')}</small><b>SOL</b><small class="tm-pos">✓ $50</small></span><span class="tm-mo cur"><small>${L('ноя')}</small><b>SOL</b><small>${L('в этом месяце')}</small></span><span class="tm-mo"><small>${L('дек')}</small><b>—</b><small>&nbsp;</small></span></div></div></div>${tabs('strategy')}` },
+    { t: 'Резерв и докупка', s: 'На каждой ступени в дело идёт часть резерва. Нужны два ключа: биткоин дошёл до ступени, и цена монеты ниже средней цены ваших покупок за последние 60 дней — по умолчанию на 5%. Тогда на главной появится «Можно докупить» с суммами.',
       st: [{ f: 'steps' }, { f: 'keys', at: 0.3, cls: 'k' }, { f: 'sig', at: 0.7, cls: 'k sig' }],
       v: () => `${top()}<div class="tm-pad"><div class="tm-h${A(0)}>${L('Ступени лестницы')}</div>
         <div class="tm-list" data-f="steps">${[[1, 30, '$88 200', 10], [2, 40, '$75 600', 15], [3, 50, '$63 000', 20]].map(([n, d, p, r], i) => row(`<b class="tm-n">${n}</b>`, L('Ступень') + ' ' + n + ' · −' + d + '%', p + ' · ' + r + '% ' + L('резерва'), '', i + 1, '')).join('')}</div>
-        <div class="tm-keys"><div class="tm-kin" data-f="keys"><span>${IC.ok}<b>${L('Ключ 1')}</b><small>${L('BTC на ступени')}</small></span><span>${IC.ok}<b>${L('Ключ 2')}</b><small>${L('ниже средней цены')}</small></span></div></div>
+        <div class="tm-keys"><div class="tm-kin" data-f="keys"><span>${IC.ok}<b>${L('Ключ 1')}</b><small>${L('BTC на ступени')}</small></span><span>${IC.ok}<b>${L('Ключ 2')}</b><small>${L('на 5% ниже средней за 60 дней')}</small></span></div></div>
         <div class="tm-sig"><div class="tm-si" data-f="sig"><b>${L('Можно докупить')}</b><small>BTC $120 · ETH $60 · ${L('по вашим правилам')}</small></div></div></div>${tabs('strategy')}` },
     { t: 'Активность', s: 'Во вкладке «Активность» — история всех записей и отчёт за месяц. Ошиблись — нажмите на запись: дату, сумму и заметку можно поправить или удалить, итоги пересчитаются.',
       st: [{ f: 'tab' }, { f: 'r1', at: 0.4, tap: true }, { f: 'edit', at: 0.55, cls: 'up' }],
@@ -136,7 +143,7 @@
     { t: 'Настройки', s: 'В настройках — сигналы на телефоне о ступенях лестницы и цели BTC, тёмная или светлая тема, украинский язык и валюта. Свои данные можно скачать файлом в любой момент.',
       st: [{ f: 'n1' }, { f: 'n2', at: 0.36 }, { f: 'n3', at: 0.48 }, { f: 'n5', at: 0.58 }, { f: 'n4', at: 0.74 }],
       v: () => `<div class="tm-pad"><div class="tm-sh-h tm-big${A(0)}><b>${L('Настройки')}</b><i class="tm-ib"></i></div><div class="tm-list">
-        ${row(IC.bell, 'Сигналы на телефоне', 'Ступени лестницы и цель BTC', 'n1', 1, sw(true))}${row(IC.sun, 'Тема', 'Тёмная или светлая', 'n2', 2, sw(false))}
+        ${row(IC.bell, 'Сигналы на телефоне', 'Ступени лестницы и цель BTC', 'n1', 1, sw(false))}${row(IC.sun, 'Тема', 'Тёмная или светлая', 'n2', 2, sw(false))}
         <div class="tm-row a" style="--i:3" data-f="n3" translate="no"><span class="tm-ri">${sv('<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>', 2)}</span><span class="tm-rc"><b>Мова / Язык</b><small>Українська · Русский</small></span><span class="tm-seg sm"><i class="on">UA</i><i>RU</i></span></div>
         ${row(sv('<rect x="3" y="6" width="18" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/>', 2), 'Валюта', 'Суммы в долларах или гривне', 'n5', 4, '<span class="tm-seg sm"><i class="on">$</i><i>₴</i></span>')}
         ${row(IC.dl, 'Скачать мои данные', 'Все записи одним файлом', 'n4', 5)}</div></div>` },
@@ -178,7 +185,7 @@
       <div class="tr-stage" id="trStage"><div class="tr-fit" id="trFit"></div></div>
       <p class="tr-sub" id="trSub" aria-live="polite"></p>
       <p class="tr-nov" id="trNoV" hidden>${L('Голоса на этом телефоне нет — идут субтитры')}</p>
-      <div class="tr-end" id="trEnd" hidden><button type="button" class="btn ghost" data-tr="again"><span>${L('Посмотреть ещё раз')}</span></button><button type="button" class="btn" data-tr="close">${L('Начать')}</button></div>
+      <div class="tr-end" id="trEnd" hidden><button type="button" class="btn ghost" data-tr="again" aria-label="${L('Посмотреть ещё раз')}">${IC.again}<span>${L('Ещё раз')}</span></button><button type="button" class="btn" data-tr="close">${L('Начать')}</button></div>
       <div class="tr-ctl"><button type="button" class="tr-b" data-tr="snd" id="trSnd"></button><button type="button" class="tr-b" data-tr="prev" aria-label="${L('Предыдущая сцена')}">${IC.prev}</button>
         <button type="button" class="tr-b tr-main" data-tr="play" id="trPlay"></button><button type="button" class="tr-b" data-tr="next" aria-label="${L('Следующая сцена')}">${IC.next}</button><span class="tr-b tr-sp" aria-hidden="true"></span></div>`;
     document.body.appendChild(o); document.body.classList.add('tr-lock');
@@ -464,8 +471,8 @@ body.tr-lock{overflow:hidden}
 .tm-fld small{color:var(--mute);font-size:10px}.tm-fld b{font-size:13.5px;font-weight:600}
 .tm-cur::after{content:"";display:inline-block;width:1.5px;height:13px;background:var(--accent);margin-left:2px;vertical-align:-2px;animation:trBlink 1s steps(1) infinite}
 @keyframes trBlink{50%{opacity:0}}
-.tm-slide{display:flex;align-items:center;gap:10px;height:44px;border-radius:999px;background:var(--tc);border:1px solid var(--line2);padding:0 5px;color:var(--mute);font-weight:600}
-.tm-slide i{width:34px;height:34px;border-radius:50%;background:var(--btn-bg);color:var(--btn-fg);display:grid;place-items:center}.tm-slide i svg{width:16px;height:16px}
+.tm-slide{display:flex;align-items:center;gap:10px;height:44px;border-radius:999px;background:var(--btn-bg);padding:0 5px;color:var(--btn-fg);font-weight:650}
+.tm-slide i{width:34px;height:34px;border-radius:50%;background:var(--btn-fg);color:var(--btn-bg);display:grid;place-items:center}.tm-slide i svg{width:16px;height:16px}
 .tm-slide b{flex:1;text-align:center;margin-right:40px}
 .tm-btn{display:block;text-align:center;padding:12px;border-radius:13px;background:var(--btn-bg);color:var(--btn-fg);font-weight:650}
 .tm-btn.ghost{background:none;border:1px solid var(--line2);color:var(--fg)}
@@ -482,16 +489,23 @@ body.tr-lock{overflow:hidden}
 .tm-h{font-size:14px;font-weight:650;display:flex;justify-content:space-between;align-items:baseline;margin-top:4px}
 .tm-h small{font-weight:500;color:var(--mute);font-size:11px}
 .tm-search{background:var(--tc);border-radius:12px;padding:9px 12px;color:var(--dim)}
-.tm-coin{display:flex;align-items:center;gap:10px;background:var(--tc);border-radius:14px;padding:10px 12px}
+.tm-coin{display:flex;align-items:center;gap:9px;padding:9px 8px;border-radius:12px}
+.tm-cl{background:var(--tc);border-radius:16px;padding:4px}
+.tm-ch{display:flex;justify-content:space-between;padding:8px 10px 2px;color:var(--mute);font-size:10.5px}.tm-ch span:first-child{flex:1}.tm-ch span+span{width:74px;text-align:right}
+.tm-cr{width:74px}.tm-mut{color:var(--mute)}
+.tm-front{display:flex;flex-direction:column;gap:3px;background:var(--tc);border-radius:16px;padding:12px;backface-visibility:hidden;transition:transform .6s cubic-bezier(.3,.7,.2,1)}
+.tm-front small{color:var(--mute);font-size:10.5px}.tm-front .tm-pos{color:var(--pos)}.tm-front .tm-big{font-size:24px;letter-spacing:-.03em}
+.tm-spark{width:100%;height:50px;margin-top:4px}.tm-spark path{fill:none;stroke:var(--fg);stroke-width:1.6;vector-effect:non-scaling-stroke}.tm-spark path.avg{stroke:var(--mute);stroke-dasharray:4 4}
+.tm-mos{display:flex;gap:6px}.tm-mo{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;border:1px solid var(--line2);border-radius:12px;padding:7px 4px}.tm-mo small{color:var(--mute);font-size:10px}.tm-mo .tm-pos{color:var(--pos)}.tm-mo.cur{border-color:var(--fg)}
+.tm-alloc{margin:8px 12px 0;padding:10px 12px;gap:7px}
 .tm-cb{width:30px;height:30px;border-radius:50%;background:var(--c);color:#fff;display:grid;place-items:center;font-weight:700;font-size:13px}
 .tm-cc,.tm-cr{display:flex;flex-direction:column;gap:2px}.tm-cc{flex:1}.tm-cr{text-align:right}
 .tm-cc b,.tm-cr b{font-size:13px}.tm-cc small{color:var(--mute)}
 .tm-flip{position:relative;perspective:700px}
-.tm-flip .tm-coin{backface-visibility:hidden;transition:transform .6s cubic-bezier(.3,.7,.2,1)}
-.tm-back{position:absolute;inset:0;display:flex;align-items:center;justify-content:space-between;gap:6px;background:var(--tc2);border-radius:14px;padding:8px 12px;
+.tm-back{position:absolute;inset:0;display:grid;grid-template-columns:1fr 1fr;align-content:center;gap:12px 10px;background:var(--tc2);border-radius:16px;padding:12px 14px;
   backface-visibility:hidden;transform:rotateY(180deg);transition:transform .6s cubic-bezier(.3,.7,.2,1)}
-.tm-back span{display:flex;flex-direction:column;gap:2px}.tm-back small{color:var(--mute);font-size:9.5px}.tm-back b{font-size:12px}
-.tr-scr.is-flip .tm-flip .tm-coin{transform:rotateY(-180deg)}
+.tm-back span{display:flex;flex-direction:column;gap:2px}.tm-back small{color:var(--mute);font-size:10px}.tm-back b{font-size:14px}
+.tr-scr.is-flip .tm-flip .tm-front{transform:rotateY(-180deg)}
 .tr-scr.is-flip .tm-back{transform:none}
 .tr-still .tm-back{transform:none;opacity:0}.tr-still .is-flip .tm-back{opacity:1}
 .tm-card{background:var(--tc);border-radius:16px;padding:12px;display:flex;flex-direction:column;gap:9px}
@@ -534,7 +548,7 @@ body.tr-lock{overflow:hidden}
 .tm-ask{bottom:146px}
 .tr-scr.is-ask .tm-ask{opacity:1;transform:none}
 .tm-mic{width:26px;height:26px;border-radius:50%;background:var(--btn-bg);color:var(--btn-fg);display:grid;place-items:center;flex:none}.tm-mic svg{width:14px;height:14px}
-.tm-intro{padding:40px 16px 0;display:flex;flex-direction:column;gap:22px}
+.tm-intro{height:100%;box-sizing:border-box;padding:24px 18px 40px;display:flex;flex-direction:column;justify-content:center;gap:26px}
 .tm-brand p{margin:8px 0 0;color:var(--mute);font-size:13px;max-width:240px}
 .tm-dca{background:var(--tc);border-radius:16px;padding:12px;position:relative;display:flex;flex-direction:column;gap:8px}
 .tm-bars{display:flex;align-items:flex-end;gap:8px;height:56px}
