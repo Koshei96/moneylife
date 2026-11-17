@@ -320,7 +320,7 @@ def run_browser():
     with sync_playwright() as p:
         browser = p.chromium.launch(args=['--no-proxy-server'])
 
-        def page_for(name, test_cfg, prices=True, dsf=2, theme=None, extra=None, tz='Europe/Kyiv', motion=None):
+        def page_for(name, test_cfg, prices=True, dsf=2, theme=None, extra=None, tz='Europe/Kyiv', motion=None, intro=False):
             ctx = browser.new_context(viewport={'width': 390, 'height': 844}, device_scale_factor=dsf, service_workers='block',
                                       locale='ru-RU', timezone_id=tz, is_mobile=True, has_touch=True,
                                       reduced_motion=motion or 'no-preference')
@@ -338,6 +338,8 @@ def run_browser():
                 return r.abort('internetdisconnected')
             ctx.route('**/*', route)
             ctx.add_init_script('window.__ML_TEST=' + json.dumps(test_cfg) + ';' + MOCK)
+            # обучающий ролик (17.11): во всех сценариях, кроме своих, считается уже показанным — иначе он закрыл бы знакомство
+            if not intro: ctx.add_init_script("try{if(!localStorage.getItem('ml-intro'))localStorage.setItem('ml-intro','{\"seen\":\"test\"}')}catch(e){}")
             if theme: ctx.add_init_script("try{localStorage.setItem('cp-prefs2',JSON.stringify(Object.assign(JSON.parse(localStorage.getItem('cp-prefs2')||'{}'),{theme:%s})))}catch(e){}" % json.dumps(theme))
             pg = ctx.new_page()
             errs = []
@@ -363,9 +365,9 @@ def run_browser():
             pg.mouse.move(b[0] + 30, y); pg.mouse.down()
             for k in range(1, 11): pg.mouse.move(b[0] + 30 + (b[2] - 50) * k / 10, y); pg.wait_for_timeout(16)
             pg.mouse.up()
-        def scenario(name, cfg, body, prices=True, path='index.html', dsf=2, theme=None, extra=None, tz='Europe/Kyiv', clock=None, motion=None):
+        def scenario(name, cfg, body, prices=True, path='index.html', dsf=2, theme=None, extra=None, tz='Europe/Kyiv', clock=None, motion=None, intro=False):
             if os.environ.get('ML_ONLY') and os.environ['ML_ONLY'] not in name: return
-            ctx, pg, errs = page_for(name, cfg, prices, dsf, theme, extra, tz, motion)
+            ctx, pg, errs = page_for(name, cfg, prices, dsf, theme, extra, tz, motion, intro)
             try:
                 if clock: pg.clock.install(time=clock)   # подменённые часы телефона (идут дальше сами)
                 pg.goto(base + path, wait_until='load', timeout=30000)
@@ -670,6 +672,149 @@ def run_browser():
                 pg.evaluate("document.getElementById('alloc').scrollIntoView({block:'center'})"); pg.wait_for_timeout(300); shot(pg, f'first-record-alloc-{th}')
             pg.evaluate("document.documentElement.setAttribute('data-theme','dark')")
         scenario('Путь новичка', {'session': True, 'docs': []}, s_newbie)
+
+        # --- Б3. обучающий ролик «MoneyLife за минуту» (17.11.2026): один раз для нового пользователя, поверх знакомства;
+        #     7 слайдов, субтитры, «Пропустить» всегда видна, кнопки ≥ 48 px, «Назад»/«Далее», смахивание, пауза при сворачивании,
+        #     «Уменьшить движение», украинский, пересмотр из «Настроек», события ml-intro-log
+        IST = "(()=>window.MLIntro&&MLIntro.debug.state())()"
+        ILOG = "(()=>{try{return JSON.parse(localStorage.getItem('ml-intro-log')||'[]').map(e=>e.e+(e.n!=null?':'+e.n:''))}catch(e){return []}})()"
+        def intro_sizes(pg):
+            return pg.evaluate("""()=>[...document.querySelectorAll('#mlIntro button')].filter(b=>b.offsetParent&&getComputedStyle(b).visibility!=='hidden').map(b=>{const r=b.getBoundingClientRect();return [b.id||b.className,Math.round(r.width),Math.round(r.height),b.getAttribute('aria-label')||b.textContent.trim()]})""")
+        def s_intro_first(pg, n):
+            pg.wait_for_selector('#mlIntro', state='visible', timeout=10000); pg.wait_for_timeout(600)
+            pg.evaluate("document.documentElement.setAttribute('data-theme','dark')")
+            if pg.evaluate("!document.getElementById('ob').hidden"): ok('ролик: открыт поверх знакомства (знакомство ждёт под ним)')
+            else: fail('ролик: знакомство под роликом', 'знакомство скрыто')
+            small = [x for x in intro_sizes(pg) if min(x[1], x[2]) < 48 or not x[3]]
+            ok('ролик, обложка: кнопки ≥ 48 px и с названием') if not small else fail('ролик, обложка: кнопки', str(small))
+            shot(pg, 'intro-0-cover-dark')
+            pg.click('#miWatch'); pg.wait_for_timeout(900)
+            st = pg.evaluate(IST)
+            if st['i'] == 0 and not st['paused']: ok(f"ролик: «Смотреть» запускает слайд 1 (голос: {st['kind']})")
+            else: fail('ролик: старт', str(st))
+            pg.wait_for_timeout(1200)
+            cap = pg.evaluate(IST)['cap']
+            ok(f'ролик: субтитры идут — «{cap[:40]}…»') if cap.startswith('Привет, я Орион') else fail('ролик: субтитры', repr(cap))
+            # автоматический переход после длительности слайда (8 с)
+            pg.wait_for_function("()=>MLIntro.debug.state().i===1", polling=250, timeout=12000); ok('ролик: слайд 1 сам сменился слайдом 2')
+            pg.wait_for_timeout(5200); shot(pg, 'intro-2-home-dark')
+            for i in range(2, 7):
+                pg.click('#miNext'); pg.wait_for_timeout(300)
+                st = pg.evaluate(IST)
+                if st['i'] != i: raise AssertionError(f'«Далее» не перешёл на слайд {i+1}: {st}')
+                pg.wait_for_timeout(5000 if i in (2, 3, 4) else 1600); shot(pg, f'intro-{i+1}-dark')
+            ok('ролик: «Далее» проходит все 7 слайдов')
+            bad = pg.evaluate("""()=>{const r=document.querySelector('#mlIntro .mi-sl.cur');const out=[];r.querySelectorAll('*').forEach(e=>{const b=e.getBoundingClientRect();if(b.width&&(b.right>innerWidth+1||b.left<-1))out.push(e.className||e.tagName)});return out.slice(0,5)}""")
+            ok('ролик: последний слайд не вылезает за экран 390 px') if not bad else fail('ролик: вылезает за экран', str(bad))
+            if pg.locator('#miCta').inner_text().strip() == 'Настроить мой план' and pg.locator('#miNext').count() == 0: ok('ролик: на последнем слайде — «Настроить мой план»')
+            else: fail('ролик: последний слайд', pg.inner_text('#miNav'))
+            pg.click('#miBack'); pg.wait_for_timeout(400)
+            ok('ролик: «Назад» возвращает на слайд 6') if pg.evaluate(IST)['i'] == 5 else fail('ролик: «Назад»', str(pg.evaluate(IST)))
+            # смахивание влево — вперёд
+            b = pg.evaluate("(()=>{const r=document.getElementById('miBody').getBoundingClientRect();return [r.left,r.top,r.width,r.height]})()")
+            y = b[1] + b[3] / 2; pg.mouse.move(b[0] + b[2] - 40, y); pg.mouse.down()
+            for k in range(1, 8): pg.mouse.move(b[0] + b[2] - 40 - 30 * k, y); pg.wait_for_timeout(16)
+            pg.mouse.up(); pg.wait_for_timeout(400)
+            ok('ролик: смахивание влево — следующий слайд') if pg.evaluate(IST)['i'] == 6 else fail('ролик: смахивание', str(pg.evaluate(IST)))
+            # светлая тема
+            pg.evaluate("document.documentElement.setAttribute('data-theme','light')"); pg.wait_for_timeout(500); shot(pg, 'intro-7-light')
+            pg.evaluate("MLIntro.debug.go(4)"); pg.wait_for_timeout(5600); shot(pg, 'intro-5-light')
+            pg.evaluate("MLIntro.debug.go(1)"); pg.wait_for_timeout(3600); shot(pg, 'intro-2-light')
+            pg.evaluate("document.documentElement.setAttribute('data-theme','dark')")
+            pg.evaluate("MLIntro.debug.go(6)"); pg.wait_for_timeout(500)
+            pg.click('#miCta'); pg.wait_for_selector('#mlIntro', state='detached', timeout=5000)
+            if pg.evaluate("!document.getElementById('ob').hidden") and pg.evaluate("!!localStorage.getItem('ml-intro')"): ok('ролик: «Настроить мой план» — открыто знакомство, ролик отмечен показанным')
+            else: fail('ролик: после «Настроить мой план»', 'знакомство скрыто или нет отметки ml-intro')
+            log = pg.evaluate(ILOG)
+            need = ['open', 'start', 'slide:1', 'slide:2', 'slide:7', 'complete:7', 'cta']
+            miss = [x for x in need if x not in log]
+            ok('ролик: события старт / слайды / завершение / нажатие кнопки записаны') if not miss else fail('ролик: события', f'нет {miss}: {log}')
+            pg.reload(wait_until='load'); pg.wait_for_selector('#ob:not([hidden])', timeout=10000); pg.wait_for_timeout(1500)
+            ok('ролик: при повторном запуске не показывается') if pg.locator('#mlIntro').count() == 0 else fail('ролик: повторный запуск', 'ролик показан снова')
+        scenario('Ролик: первый запуск', {'session': True, 'docs': []}, s_intro_first, intro=True)
+
+        def s_intro_skip(pg, n):
+            pg.wait_for_selector('#mlIntro', state='visible', timeout=10000)
+            pg.click('#miWatch'); pg.wait_for_timeout(500)
+            pg.click('#miNext'); pg.wait_for_timeout(200); pg.click('#miNext'); pg.wait_for_timeout(300)
+            # сворачивание приложения — пауза, «Продолжить» по центру
+            pg.evaluate("Object.defineProperty(document,'visibilityState',{configurable:true,get:()=>'hidden'});document.dispatchEvent(new Event('visibilitychange'))")
+            pg.wait_for_timeout(300); t1 = pg.evaluate(IST)
+            pg.evaluate("Object.defineProperty(document,'visibilityState',{configurable:true,get:()=>'visible'});document.dispatchEvent(new Event('visibilitychange'))")
+            pg.wait_for_timeout(1200); t2 = pg.evaluate(IST)
+            if t1['paused'] and t2['paused'] and abs(t2['t'] - t1['t']) < 0.05 and pg.locator('#miResume').is_visible(): ok('ролик: свернули приложение — пауза, время стоит, видна «Продолжить»')
+            else: fail('ролик: пауза при сворачивании', f'{t1} → {t2}')
+            shot(pg, 'intro-paused-dark')
+            pg.click('#miResume'); pg.wait_for_timeout(800)
+            t3 = pg.evaluate(IST)
+            ok('ролик: «Продолжить» — показ идёт дальше') if not t3['paused'] and t3['t'] > t2['t'] else fail('ролик: продолжить', str(t3))
+            # звук: кнопка переключает и подписана
+            lab0 = pg.get_attribute('#miSnd', 'aria-label'); pg.click('#miSnd'); pg.wait_for_timeout(150)
+            lab1 = pg.get_attribute('#miSnd', 'aria-label')
+            ok(f'ролик: кнопка звука «{lab0}» → «{lab1}»') if pg.evaluate(IST)['muted'] and lab0 != lab1 else fail('ролик: кнопка звука', f'{lab0} / {lab1}')
+            v0 = pg.is_visible('#miCap'); pg.click('#miCc'); pg.wait_for_timeout(150)
+            v1 = pg.evaluate("getComputedStyle(document.getElementById('miCap')).visibility"); pr = pg.get_attribute('#miCc', 'aria-pressed')
+            ok('ролик: субтитры включены сразу, кнопка «CC» их скрывает') if v0 and v1 == 'hidden' and pr == 'false' else fail('ролик: субтитры вкл/выкл', f'{v0} {v1} {pr}')
+            pg.click('#miCc'); pg.wait_for_timeout(100)
+            pg.click('#miSkip'); pg.wait_for_selector('#mlIntro', state='detached', timeout=5000)
+            log = pg.evaluate(ILOG)
+            ok('ролик: «Пропустить» на 3-м слайде — открыто знакомство, событие skip:3') if 'skip:3' in log and pg.evaluate("!document.getElementById('ob').hidden") else fail('ролик: пропуск', str(log))
+            pg.click('#obSkip'); pg.wait_for_selector('#ob[hidden]', state='attached', timeout=6000)
+            ok('ролик → знакомство → «Пропустить»: приложение открылось') if pg.evaluate("!!localStorage.getItem('ml-intro')") else fail('ролик: отметка', 'нет ml-intro')
+        scenario('Ролик: пропуск и сворачивание', {'session': True, 'docs': []}, s_intro_skip, intro=True)
+
+        def s_intro_calm(pg, n):
+            pg.wait_for_selector('#mlIntro', state='visible', timeout=10000)
+            pg.click('#miWatch'); pg.wait_for_timeout(400)
+            moves = []
+            for i in range(1, 7):
+                pg.evaluate(f"MLIntro.debug.go({i})"); pg.wait_for_timeout(2500 if i in (1, 2, 4) else 900)
+                moves += pg.evaluate("""()=>document.getAnimations().filter(a=>a.effect&&a.effect.target&&a.effect.target.closest&&a.effect.target.closest('#mlIntro .mi-sl.cur')).map(a=>a.effect.getKeyframes().filter(k=>k.transform&&k.transform!=='none').length).filter(x=>x>0)""")
+                if pg.evaluate("[...document.querySelectorAll('#mlIntro .mi-sl.cur .mi-fg')].some(f=>getComputedStyle(f).opacity!=='0')"): moves.append('палец')
+                if i == 4: shot(pg, 'intro-5-reduced')
+            st = pg.evaluate(IST)
+            ok('ролик, «Уменьшить движение»: без сдвигов и «пальца», только плавное появление') if st['rm'] and not moves else fail('ролик: уменьшить движение', f"rm={st['rm']} {moves[:5]}")
+        scenario('Ролик: уменьшить движение', {'session': True, 'docs': []}, s_intro_calm, intro=True, motion='reduce')
+
+        def s_intro_uk(pg, n):
+            pg.wait_for_selector('#mlIntro', state='visible', timeout=10000)
+            t0 = pg.inner_text('#mlIntro')
+            pg.click('#miWatch'); pg.wait_for_timeout(1500)
+            t1 = pg.inner_text('#mlIntro')
+            pg.evaluate("MLIntro.debug.go(6)"); pg.wait_for_timeout(600); t2 = pg.inner_text('#mlIntro')
+            ru = [w for w in ['Пропустить', 'Смотреть', 'Далее', 'Настроить', 'Привет', 'Выключить'] if w in t0 + t1 + t2]
+            if not ru and 'Пропустити' in t0 and 'Налаштувати мій план' in t2 and 'Привіт, я Оріон' in pg.evaluate("MLIntro.debug.text.uk.slides[0].vo"): ok('ролик по-украински: обложка, слайды и кнопки без русских слов')
+            else: fail('ролик по-украински', f'русское: {ru}')
+            shot(pg, 'intro-7-uk')
+        scenario('Ролик: украинский', {'session': True, 'docs': []}, lambda pg, n: (pg.evaluate("localStorage.setItem('ml-lang','uk')"), pg.reload(wait_until='load'), pg.wait_for_timeout(1500), s_intro_uk(pg, n)), intro=True)
+
+        def s_intro_replay(pg, n):
+            wait_app(pg)
+            if pg.locator('#mlIntro').count(): raise AssertionError('у давнего пользователя ролик показался сам')
+            ok('ролик: давнему пользователю сам не показывается')
+            pg.evaluate("openSheet('setSheet');fillSettings()"); pg.wait_for_timeout(500)
+            r = pg.evaluate("(()=>{const b=document.getElementById('introBtn');const r=b.getBoundingClientRect();return [b.textContent.trim(),Math.round(r.height)]})()")
+            ok(f'«Настройки»: строка «Как пользоваться MoneyLife», {r[1]} px') if r[0].startswith('Как пользоваться MoneyLife') and r[1] >= 48 else fail('«Настройки»: строка ролика', str(r))
+            pg.evaluate("P.msVoice=false")   # «Голос Ориона» выключен → ролик без звука, только субтитры
+            pg.evaluate("document.getElementById('introBtn').click()")
+            pg.wait_for_selector('#mlIntro', state='visible', timeout=8000); pg.wait_for_timeout(400)
+            st = pg.evaluate(IST)
+            ok('ролик из «Настроек»: открыт в режиме пересмотра, без звука при выключенном «Голосе Ориона»') if st['mode'] == 'replay' and st['muted'] else fail('ролик из настроек', str(st))
+            ok('ролик: остальное приложение недоступно скринридеру, пока идёт ролик') if pg.evaluate("!!document.querySelector('nav.tabs').closest('[inert]')") else fail('ролик: inert', 'нижнее меню доступно')
+            pg.click('#miWatch'); pg.wait_for_timeout(300); pg.evaluate("MLIntro.debug.go(6)"); pg.wait_for_timeout(1300)
+            cta = pg.inner_text('#miCta').strip(); cap = pg.evaluate(IST)['cap']
+            ok('пересмотр: в конце «Готово» и подсказка, где найти ролик') if cta == 'Готово' and 'Настройках' in cap else fail('пересмотр: конец', f'{cta} / {cap}')
+            pg.click('#miCta'); pg.wait_for_selector('#mlIntro', state='detached', timeout=5000)
+            ok('пересмотр: «Готово» закрывает ролик, знакомство не открывается') if pg.evaluate("document.getElementById('ob').hidden") else fail('пересмотр: закрытие', 'открылось знакомство')
+            pg.wait_for_timeout(500)
+            ok('после ролика приложение снова доступно (inert снят)') if pg.evaluate("!document.querySelector('[inert]')") else fail('после ролика: inert', 'остался')
+            # пауза → «Далее»: звук не остаётся выключенным (AudioContext возобновлён)
+            pg.evaluate("document.getElementById('introBtn').click()"); pg.wait_for_selector('#mlIntro', state='visible', timeout=8000); pg.wait_for_timeout(300)
+            pg.click('#miWatch'); pg.wait_for_timeout(400); pg.click('#miPause'); pg.wait_for_timeout(200); pg.click('#miNext'); pg.wait_for_timeout(500)
+            st = pg.evaluate(IST)
+            ok('пауза → «Далее»: показ продолжается со следующего слайда') if st['i'] == 1 and not st['paused'] else fail('пауза → «Далее»', str(st))
+            pg.click('#miSkip'); pg.wait_for_selector('#mlIntro', state='detached', timeout=5000)
+        scenario('Ролик: пересмотр из настроек', {'session': True, 'docs': SEED}, s_intro_replay, intro=True)
 
         # --- В. пользователь с данными: вкладки и шторки
         def s_user(pg, n):
