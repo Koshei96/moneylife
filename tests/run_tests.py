@@ -1385,6 +1385,25 @@ def run_browser():
             if sb and sb[0].get('stream') is True and S1 in log and S2 in log and log.index(S1) < log.index(S2) and la == S1 + ' ' + S2 and hh and hh[-1]['a'] == S1 + ' ' + S2:
                 ok('Орион: ответ «мозга» потоком — первое предложение звучит сразу, остальное следом; в памяти разговора ответ целиком')
             else: fail('Орион: поток ответа', f'{sb[:1]} | {log} | {la}')
+            # 18.11.2026: переспросы к ответу телефона — «а биткоин?», «а в гривнах?» — считаются на телефоне, без сервера; имя подставляется вместо метки
+            pg.evaluate("document.querySelector('.or-cap') && document.querySelector('.or-cap').click()")
+            n0 = len(sb)
+            pg.evaluate("S.settings.usdUah=41.5"); pg.evaluate("Mascot.debug.ask('сколько у меня эфира')"); pg.wait_for_timeout(400)
+            e1 = pg.evaluate("Mascot.debug.state().said").replace('\u00a0', ' ')
+            pg.evaluate("Mascot.debug.ask('а биткоин?')"); pg.wait_for_timeout(400)
+            e2 = pg.evaluate("Mascot.debug.state().said").replace('\u00a0', ' ')
+            pg.evaluate("Mascot.debug.ask('а в гривнах?')"); pg.wait_for_timeout(400)
+            e3 = pg.evaluate("Mascot.debug.state().said").replace('\u00a0', ' ')
+            if 'эфир' in e1 and 'У вас' in e2 and 'биткоин' in e2 and 'У вас' in e3 and ('гривн' in e3 or 'гривен' in e3) and len(sb) == n0: ok('Орион: переспросы «а биткоин?» и «а в гривнах?» — понимает по прошлому ответу, считает на телефоне')
+            else: fail('Орион: переспросы', f'{e1} | {e2} | {e3} | {len(sb) - n0}')
+            pg.evaluate("Mascot.debug.ask('Почему рынок растёт?')"); pg.wait_for_timeout(1500)
+            hs = (sb[-1].get('hist') if sb else None) or []
+            mine = [x['a'] for x in hs if 'У вас' in x['a']]
+            if mine and all(not any(c.isdigit() for c in a) for a in mine): ok('Орион: ответы про ваши деньги уходят «мозгу» без чисел — суммы и количества остаются на телефоне')
+            else: fail('Орион: приватность истории', str(hs))
+            nf = pg.evaluate("[Mascot.debug.nameFill('Смотрите, {ИМЯ}, рынок спокоен.'), Mascot.debug.nameFill('{ИМЯ}, всё по плану.')]")
+            if nf[0] == 'Смотрите, Андрей, рынок спокоен.' and nf[1] == 'Андрей, всё по плану.': ok('Орион: имя подставляется в телефоне вместо метки {ИМЯ} — на сервер не уходит')
+            else: fail('Орион: имя вместо метки', str(nf))
             pg.evaluate("document.querySelector('.or-cap') && document.querySelector('.or-cap').click()"); pg.unroute('**/functions/v1/orion-ask')
         scenario('Орион', {'session': True, 'docs': SEED}, s_mascot)
 

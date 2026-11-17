@@ -667,7 +667,10 @@
   const signW = p => (p >= 0 ? 'плюс' : 'минус');
   /* сумма словами в валюте приложения: «950 долларов», «110 тысяч долларов», «39 тысяч гривен» */
   function moneyW(usdV) {
-    let s = ''; try { if (ST.money) s = ST.money(Math.abs(usdV), { d: 0, show: true }) || ''; } catch (e) {}
+    let s = ''; const rt = (() => { try { return +(ST.rate && ST.rate()) || 0; } catch (e) { return 0; } })();
+    if (ST.curForce === 'UAH' && rt > 0) s = Math.round(Math.abs(usdV) * rt) + ' ₴';   /* переспрос «а в гривнах?» */
+    else if (ST.curForce === 'USD') s = '$' + Math.round(Math.abs(usdV));
+    else try { if (ST.money) s = ST.money(Math.abs(usdV), { d: 0, show: true }) || ''; } catch (e) {}
     const uah = /₴|грн/i.test(s), n = +(s.replace(/[^\d]/g, '')) || Math.round(Math.abs(usdV));
     const cur = k => (uah ? plural(k, 'гривна', 'гривны', 'гривен') : plural(k, 'доллар', 'доллара', 'долларов'));
     const gen = uah ? 'гривен' : 'долларов';
@@ -725,6 +728,8 @@
     const t = brief(); if (!t) return;
     lsSet('ms-news', Date.now()); lsSet('ms-newsDay', dayKey());
     speak(t, { pri: auto ? 1 : 2 });
+    ST.lastLocal = { at: now(), q: '', sym: '', money: true, redo: () => brief() };   /* «а в гривнах?» после сводки */
+    remember('Расскажи главное', t, true);
   }
   function newsDue() {
     if (!AUTO || isNight() || ST.hide || !ST.sound || !ST.S) return false;
@@ -757,6 +762,7 @@
   const UKQ_RE = new RegExp(UKQ.slice().sort((a, b) => b[0].length - a[0].length).map(x => x[0].replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|'), 'g'), UKQ_M = new Map(UKQ);
   const norm = q => { let t = String(q || '').toLowerCase().replace(/ё/g, 'е').replace(/[’ʼ']/g, ''); if (UK) t = t.replace(UKQ_RE, m => UKQ_M.get(m)).replace(/[ії]/g, 'и').replace(/є/g, 'е').replace(/ґ/g, 'г'); return t; };
   function coinIn(q) {
+    if (ST.symForce) return ST.symForce;   /* переспрос «то же для эфира» — монета подменяется */
     const w = norm(q).split(/[^a-zа-я0-9]+/).filter(Boolean), D = ST.D || {};
     const syms = Object.keys(ALIAS).concat((D.syms || []).filter(s => !ALIAS[s]));
     for (const s of syms) {
@@ -901,6 +907,8 @@
       const pl = M.planGet ? M.planGet() : null, R = pl && M.planResult ? M.planResult(pl) : null;
       if (R) { c.stage = R.stage + 1; c.cryptoCeil = R.ceil; }
       const f = M.fng ? M.fng() : null; if (f) c.fng = f.v;
+      const ch = S.live && S.live.change ? +S.live.change.BTC : NaN; if (isFinite(ch)) c.btc24 = Math.round(ch * 10) / 10;   /* для правила «без шуток, когда рынок падает» */
+      if (pl && pl.a && Number.isInteger(pl.a.exp)) c.exp = pl.a.exp;   /* опыт из «Личного плана»: 0 — начинаю … 3 — больше 3 лет */
     } catch (e) {}
     return c;
   }
@@ -908,19 +916,26 @@
   async function answer(q, byVoice) {
     const t = norm(q), local = t.trim() ? reply(q) : reply('');
     const sure = local && local.indexOf(UNK) !== 0 && !/^Не расслышал/.test(local);
-    const follow = ST.lastBrain && now() - ST.lastBrain < 120 && (/^\s*(а|и|ну|тогда|а\s+если)\b/.test(t) || t.trim().split(/\s+/).length <= 3) && !/(у меня|мои |мой |сколько у)/.test(t);   /* переспрос: «а эфир?», «а почему?» */
+    const follow = ST.lastBrain && now() - ST.lastBrain < 120 && (/^\s*(а|и|ну|тогда|а\s+если)(?=[\s,?!.]|$)/.test(t) || t.trim().split(/\s+/).length <= 3) && !/(у меня|мои |мой |сколько у)/.test(t);   /* переспрос: «а эфир?», «а почему?» */
     const toBrain = A.ask && t.trim() && !(alertQ(t) && sure) && (marketQ(t) || !sure || follow);
-    if (!toBrain) { remember(q, local); speak(local, { pri: 2, follow: byVoice }); return; }
+    const fu = localFollow(t);
+    if (fu) { remember(q, fu, PRIV.test(fu)); speak(fu, { pri: 2, follow: byVoice }); return; }
+    if (!toBrain) {
+      remember(q, local, PRIV.test(local)); speak(local, { pri: 2, follow: byVoice });
+      if (sure) ST.lastLocal = { at: now(), q, sym: coinIn(t) || '', money: /доллар|гривн|гривен|[$₴]/.test(local), redo: () => reply(q) };
+      return;
+    }
+    ST.lastLocal = null;
     const sym = coinIn(t) || '';
     speak(sym || marketQ(t) ? FILL.news : FILL.think, { pri: 2 });
-    const hist = (ST.hist || []).filter(x => now() - x.at < 900).slice(-6).map(x => ({ q: x.q, a: x.a }));
+    const hist = (ST.hist || []).filter(x => now() - x.at < 900).slice(-6).map(x => ({ q: x.q, a: x.priv ? maskNums(x.a) : x.a }));
     /* поток (18.11.2026): как только готовы первые целые предложения (от ~60 знаков) — говорим их, остальное — следом без паузы */
     const gen = ST.askGen = (ST.askGen || 0) + 1, sq = t => String(t).replace(/[*_#`]/g, '').replace(/\s+/g, ' ').trim();
     let acc = '', first = '';
     const onPart = t => {
       acc += t; if (first || gen !== ST.askGen) return;
       const m = sq(acc).match(/^.*?[.!?…](?=\s)/g), all = sq(acc), cut = (() => { let c = ''; const re = /[^.!?…]+[.!?…]+(?=\s)/g; let x; while ((x = re.exec(all))) { c = all.slice(0, x.index + x[0].length); if (c.length >= 60) break; } return c.length >= 60 || (c && all.length > c.length + 80) ? c : ''; })();
-      if (m && cut) { first = cut.trim(); ST.lastBrain = now(); speak(first, { pri: 2, raw: true, live: true }); }
+      if (m && cut) { first = cut.trim(); ST.lastBrain = now(); speak(nameFill(first), { pri: 2, raw: true, live: true }); }
     };
     let r = null; try { r = await A.ask(q, sym, { hist, ctx: brainCtx(), lang: UK ? 'uk' : 'ru' }, onPart); } catch (e) { r = null; }
     ST.lastAsk = r;
@@ -928,15 +943,42 @@
     if (r && r.text) {
       ST.lastBrain = now(); remember(q, r.text);
       const full = sq(r.text);
-      if (first && full.indexOf(first) === 0) { const rest = full.slice(first.length).trim(); if (rest) { voPrefetch(rest, true); speak(rest, { pri: 2, follow: byVoice, raw: true, append: true, live: true }); } else if (byVoice && TTS.cur && TTS.cur.text === first) TTS.cur.follow = true; return; }
-      if (!first) speak(r.text, { pri: 2, follow: byVoice, raw: true, live: true });
+      if (first && full.indexOf(first) === 0) { const rest = full.slice(first.length).trim(); if (rest) { const rf = nameFill(rest); voPrefetch(rf, true); speak(rf, { pri: 2, follow: byVoice, raw: true, append: true, live: true }); } else if (byVoice && TTS.cur && TTS.cur.text === nameFill(first)) TTS.cur.follow = true; return; }
+      if (!first) speak(nameFill(r.text), { pri: 2, follow: byVoice, raw: true, live: true });
       return;
     }
     if (first) return;   /* начало ответа уже прозвучало — обрыв связи не озвучиваем */
     const msg = (r && ASK_ERR[r.error]) || (sure ? local : (sym && coinPrice(sym) ? reply(NAME_N[sym] || sym) + ' ' : '') + 'Сейчас не могу связаться с сервером — попробуйте чуть позже.');
     speak(msg, { pri: 2 });
   }
-  function remember(q, a) { ST.hist = (ST.hist || []).filter(x => now() - x.at < 900).concat([{ q: String(q).slice(0, 200), a: String(a).slice(0, 400), at: now() }]).slice(-6); }
+  function remember(q, a, priv) { ST.hist = (ST.hist || []).filter(x => now() - x.at < 900).concat([{ q: String(q).slice(0, 200), a: String(a).slice(0, 400), at: now(), priv: !!priv }]).slice(-6); }
+  /* ответы телефона про ваши деньги (портфель, монеты, резерв, план) уходят «мозгу» без чисел: суммы остаются на телефоне (18.11.2026) */
+  const PRIV = /(У вас|Портфель|Резерв|куплено|покупок|по плану|План месяца|Серия|За неделю|Суммы скрыты)/i;
+  const maskNums = a => String(a).replace(/\d[\d\s.,]*\d|\d/g, '…');
+  /* имя: «мозг» пишет метку {ИМЯ}, само имя на сервер не уходит — подставляем здесь */
+  function nameFill(t) {
+    t = String(t || '');
+    if (ST.name) return t.replace(/\{ИМЯ\}/g, ST.name);
+    t = t.replace(/,\s*\{ИМЯ\}\s*(?=[,.!?—]|$)/g, '').replace(/\{ИМЯ\}\s*[,—]?\s*/g, '').replace(/\s+([,.!?])/g, '$1').trim();
+    return t.charAt(0).toUpperCase() + t.slice(1);
+  }
+  /* переспрос к ответу телефона: «а в гривнах?», «сколько это в долларах», «а эфир?», «то же самое для соланы» */
+  function localFollow(t) {
+    const L = ST.lastLocal; if (!L || now() - L.at > 180) return '';
+    const words = t.trim().split(/\s+/).length; if (words > 7 || /(купи|продай|сообщи|напомни|почему|новост)/.test(t)) return '';
+    const cur = /(^|\s)в\s+(гривн|грн|гривен|гривень)/.test(t) ? 'UAH' : /(^|\s)в\s+(доллар|бакс|usd)/.test(t) ? 'USD' : /(^|\s)в\s+евро/.test(t) ? 'EUR' : '';
+    if (cur) {
+      if (!L.money) return '';
+      if (cur === 'EUR') return 'В евро пока не считаю — могу в гривнах или в долларах.';
+      if (cur === 'UAH' && !(() => { try { return +(ST.rate && ST.rate()) > 0; } catch (e) { return false; } })()) return 'Курс гривны ещё не загружен — спросите чуть позже.';
+      ST.curForce = cur; try { return L.redo(); } finally { ST.curForce = ''; }
+    }
+    const sym = coinIn(t);
+    if (sym && L.sym && sym !== L.sym && L.q && /^\s*(а|и|ну|давай|теперь|тоже|то же|так же)(?=[\s,?!.]|$)|то же самое|тоже самое|так же|для\s/.test(t)) {
+      ST.symForce = sym; try { const r = reply(L.q); ST.lastLocal = { at: now(), q: L.q, sym, money: L.money, redo: () => { ST.symForce = sym; try { return reply(L.q); } finally { ST.symForce = ''; } } }; return r; } finally { ST.symForce = ''; }
+    }
+    return '';
+  }
   function listen(lo) {
     lo = lo || {};
     stopVoice(); voUnlock(); preloadFill();
@@ -1136,7 +1178,7 @@
   function sync(info) {
     if (!info || !info.S || !info.D) return;
     const S = info.S, D = info.D, P = info.P || {};
-    ST.hide = !!P.hide; ST.sound = P.msVoice !== false; if (ST.fx !== !!P.msFx) { ST.fx = !!P.msFx; voFx(); } ST.go = !!info.go; ST.fresh = info.fresh || 0; ST.money = info.money || ST.money;
+    ST.hide = !!P.hide; ST.sound = P.msVoice !== false; if (ST.fx !== !!P.msFx) { ST.fx = !!P.msFx; voFx(); } ST.go = !!info.go; ST.fresh = info.fresh || 0; ST.money = info.money || ST.money; if (typeof info.rate === 'function') ST.rate = info.rate;
     ST.name = String(P.name || '').trim().slice(0, 24);
     prefetchBrief();
     if (!ST.sound && TTS.ok && TTS.cur) try { speechSynthesis.cancel(); } catch (e) {}
@@ -1208,7 +1250,7 @@
       lx: t => Lx(t),
       ask: q => answer(q), lastAsk: () => ST.lastAsk || null, ctx: () => brainCtx(), hist: () => ST.hist || [],
       mood: m => { if (ST.forceHour == null) ST.forceHour = 12; ST.pct = { calm: 0, up: 3, rocket: 9, down: -3, crash: -9 }[m]; ST.go = m === 'hunter'; if (m === 'offline') { ST.offline = true; ST.offSince = now() - 120; } else ST.offline = false; ST.lastInput = now(); wake(); },
-      say: t => speak(t, { pri: 2 }), sayLog: () => ST.sayLog || [], split: (t, live) => splitParts(t, live), stress: t => stressRu(t),
+      say: t => speak(t, { pri: 2 }), sayLog: () => ST.sayLog || [], nameFill: t => nameFill(t), split: (t, live) => splitParts(t, live), stress: t => stressRu(t),
       tap: () => tapped(),
       brief: () => brief(),
       reply: q => reply(q),
