@@ -1287,6 +1287,13 @@ def run_browser():
             bad = [(a, pg.evaluate(f"{M}.spokenUk({json.dumps(a)})")) for a, b in cases if b not in pg.evaluate(f"{M}.spokenUk({json.dumps(a)})")]
             if not bad: ok('Орион по-украински: числа словами в нужном падеже, аббревиатуры по буквам')
             else: fail('Орион по-украински: числа', str(bad))
+            # 17.11.2026 (владелец): «страх и жадность 12», а следом «рынок спокоен» — нелогично. При страхе/жадности «спокоен» не говорим
+            fg = pg.evaluate(f"""(()=>{{const o=MLX.fng,lv=S.live.change,r={{}};S.live.change=Object.assign({{}},lv,{{BTC:0.2}});
+              for(const v of [12,50,85]){{MLX.fng=()=>({{v,w:'x'}});r[v]={M}.lx({M}.brief());}}MLX.fng=o;S.live.change=lv;return r}})()""")
+            calm = lambda t: 'спокійний' in t or 'спокоен' in t
+            if not calm(fg['12']) and 'страх' in fg['12'] and calm(fg['50']) and not calm(fg['85']) and 'жадібн' in fg['85']:
+                ok('Орион: при страхе (12) и жадности (85) не говорит «рынок спокоен», при 50 и тихой цене — говорит')
+            else: fail('Орион: страх и «спокоен»', str(fg)[:300])
             br = pg.evaluate(f"{M}.lx({M}.brief())"); r1 = pg.evaluate(f"{M}.lx({M}.reply('скільки в мене біткоїна'))")
             if br and not re.search('[ыэъё]', br + r1) and 'біткоїна' in r1: ok('Орион по-украински: сводка и ответ на украинский вопрос')
             else: fail('Орион по-украински: сводка', br[:120] + ' | ' + r1[:120])
