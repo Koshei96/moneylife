@@ -314,13 +314,13 @@
   /* заранее заказать озвучку текста — тем же разбиением и с теми же соседями, что и premium() */
   function voPrefetch(text, live) {
     if (!premiumOK()) return;
-    const parts = splitParts(spoken(text), live);
+    const parts = splitParts(stressRu(spoken(text)), live);
     parts.forEach((p, i) => voGet(p, parts.length > 1 ? { prev: parts[i - 1] || '', next: parts[i + 1] || '' } : {}));
   }
   async function premium(cur) {
     const c = voCtx(); if (!c) return false;
     if (c.state === 'suspended') { try { await c.resume(); } catch (e) {} if (c.state !== 'running') return false; }
-    const parts = splitParts(spoken(cur.text), cur.live);
+    const parts = splitParts(stressRu(spoken(cur.text)), cur.live);
     const reqs = parts.map((p, i) => voGet(p, parts.length > 1 ? { prev: parts[i - 1] || '', next: parts[i + 1] || '' } : {}));   /* все части сразу, параллельно */
     let at = 0, played = 0, lastSrc = null;
     for (let i = 0; i < parts.length; i++) {
@@ -609,6 +609,30 @@
     return s.replace(/\s+/g, ' ').replace(/\s+([,.!?])/g, '$1').trim();
   }
   const spoken = t => (UK ? spokenUk(t) : spokenRu(t));
+  /* ударения для живого голоса (18.11.2026): Eleven v4 понимает знак ударения над гласной (проверка владельца: «ха́лвинг» — вариант 2).
+     Только для живого голоса и только по-русски: голос телефона знак не понимает. Пополнять: [основа со знаком, основа без знака, окончания] */
+  const STRESS_SRC = [
+    ['ха́лвинг', 'халвинг', ['', 'а', 'у', 'ом', 'е', 'и', 'ов', 'ам', 'ами', 'ах']], ['сре́дств', 'средств', ['а', '', 'ам', 'ами', 'ах', 'о', 'е', 'у', 'ом']],
+    ['догово́р', 'договор', ['', 'а', 'у', 'ом', 'е', 'ы', 'ов', 'ам', 'ами', 'ах']], ['кварта́л', 'квартал', ['', 'а', 'у', 'ом', 'е', 'ы', 'ов', 'ам', 'ами', 'ах']],
+    ['волати́льност', 'волатильност', ['ь', 'и', 'ью']], ['волати́льн', 'волатильн', ['ый', 'ая', 'ое', 'ые', 'ого', 'ой', 'ых', 'ому', 'ым', 'ую']],
+    ['ма́йнинг', 'майнинг', ['', 'а', 'у', 'ом', 'е']], ['то́кен', 'токен', ['', 'а', 'у', 'ом', 'е', 'ы', 'ов', 'ам', 'ами', 'ах']],
+    ['блокче́йн', 'блокчейн', ['', 'а', 'у', 'ом', 'е', 'ы', 'ов']], ['сте́йкинг', 'стейкинг', ['', 'а', 'у', 'ом', 'е']],
+    ['хо́лдер', 'холдер', ['', 'а', 'у', 'ом', 'е', 'ы', 'ов', 'ам', 'ами', 'ах']], ['тре́йдинг', 'трейдинг', ['', 'а', 'у', 'ом', 'е']],
+    ['опто́в', 'оптов', ['ый', 'ая', 'ое', 'ые', 'ого', 'ой', 'ых', 'ому', 'ым', 'ую']], ['обеспе́чени', 'обеспечени', ['е', 'я', 'ю', 'ем', 'и']],
+    ['экспе́рт', 'эксперт', ['', 'а', 'у', 'ом', 'е', 'ы', 'ов', 'ам', 'ами', 'ах']], ['ма́ркетинг', 'маркетинг', ['', 'а', 'у', 'ом', 'е']],
+    ['ликви́дност', 'ликвидност', ['ь', 'и', 'ью']], ['дивиде́нд', 'дивиденд', ['', 'а', 'у', 'ом', 'е', 'ы', 'ов', 'ам', 'ами', 'ах']],
+    ['дефо́лт', 'дефолт', ['', 'а', 'у', 'ом', 'е', 'ы', 'ов']], ['альтко́ин', 'альткоин', ['', 'а', 'у', 'ом', 'е', 'ы', 'ов', 'ам', 'ами', 'ах']],
+    ['стейблко́ин', 'стейблкоин', ['', 'а', 'у', 'ом', 'е', 'ы', 'ов', 'ам', 'ами', 'ах']], ['мемко́ин', 'мемкоин', ['', 'а', 'у', 'ом', 'е', 'ы', 'ов', 'ам', 'ами', 'ах']],
+    ['те́зер', 'тезер', ['', 'а', 'у', 'ом', 'е', 'ов']], ['карда́но', 'кардано', ['']], ['Сола́н', 'солан', ['а', 'ы', 'е', 'у', 'ой']],
+    ['ипоте́к', 'ипотек', ['а', 'и', 'е', 'у', 'ой']], ['включи́', 'включи', ['т', 'шь', 'м', 'те']], ['включа́т', 'включат', ['']], ['звони́', 'звони', ['т', 'шь', 'м', 'те']],
+    ['облегчи́', 'облегчи', ['т', 'шь', 'м', 'те']], ['углуби́', 'углуби', ['т', 'ть']]
+  ];
+  const STRESS = new Map();
+  STRESS_SRC.forEach(([st, base, ends]) => ends.forEach(e => STRESS.set(base.toLowerCase() + e, st.toLowerCase() + e)));
+  function stressRu(t) {
+    if (UK) return t;
+    return String(t).replace(/[А-Яа-яЁё]+/g, w => { const x = STRESS.get(w.toLowerCase()); return x ? (w[0] !== w[0].toLowerCase() ? x[0].toUpperCase() + x.slice(1) : x) : w; });
+  }
   /* не больше двух запросов голоса одновременно: ElevenLabs отказывает, если их больше (12.11.2026 — из-за этого Орион переходил на голос телефона) */
   const VQ = { n: 0, q: [] };
   const vqTake = () => new Promise(res => { if (VQ.n < 2) { VQ.n++; res(); } else VQ.q.push(res); });
@@ -693,7 +717,7 @@
       if (navigator.webdriver || !premiumOK() || !ST.S || !ST.D || ST.hide) return;
       const t = brief(); if (!t || (t === preText && now() - preAt < 1800) || now() - preAt < 300) return;
       preText = t; preAt = now();
-      const parts = splitParts(spoken(Lx(t)));
+      const parts = splitParts(stressRu(spoken(Lx(t))));
       parts.forEach((p, i) => voGet(p, parts.length > 1 ? { prev: parts[i - 1] || '', next: parts[i + 1] || '' } : {}));
     }, delay == null ? 4000 : delay);
   }
@@ -1184,7 +1208,7 @@
       lx: t => Lx(t),
       ask: q => answer(q), lastAsk: () => ST.lastAsk || null, ctx: () => brainCtx(), hist: () => ST.hist || [],
       mood: m => { if (ST.forceHour == null) ST.forceHour = 12; ST.pct = { calm: 0, up: 3, rocket: 9, down: -3, crash: -9 }[m]; ST.go = m === 'hunter'; if (m === 'offline') { ST.offline = true; ST.offSince = now() - 120; } else ST.offline = false; ST.lastInput = now(); wake(); },
-      say: t => speak(t, { pri: 2 }), sayLog: () => ST.sayLog || [], split: (t, live) => splitParts(t, live),
+      say: t => speak(t, { pri: 2 }), sayLog: () => ST.sayLog || [], split: (t, live) => splitParts(t, live), stress: t => stressRu(t),
       tap: () => tapped(),
       brief: () => brief(),
       reply: q => reply(q),
