@@ -1300,7 +1300,7 @@ def run_browser():
             # живой голос: не больше двух запросов одновременно (ElevenLabs отказывает при большем числе — Орион уходил на голос телефона, 12.11)
             pg.evaluate("""(()=>{window.__vq={n:0,max:0,calls:0};const o=window.mlVoice;window.__mlVoiceOrig=o;window.mlVoice=async(t,c)=>{const q=window.__vq;q.n++;q.calls++;q.max=Math.max(q.max,q.n);await new Promise(r=>setTimeout(r,250));q.n--;return {error:'net'};};})()""")
             pg.evaluate("Mascot.debug.premium(true)")
-            pg.evaluate("Mascot.debug.say('Первая фраза для проверки. Вторая фраза подлиннее для проверки. Третья фраза тоже длинная для проверки. Четвёртая фраза в конце для проверки.')"); pg.wait_for_timeout(2500)
+            pg.evaluate("Mascot.debug.say('Первая фраза для проверки очереди живого голоса, она нарочно длинная. Вторая фраза подлиннее для проверки, чтобы весь текст был больше трёхсот пятидесяти знаков. Третья фраза тоже длинная для проверки и тоже про очередь запросов. Четвёртая фраза в конце для проверки. Пятая фраза добавлена, чтобы ответ точно разделился на две части. Шестая и последняя фраза.')"); pg.wait_for_timeout(2500)
             vq = pg.evaluate("window.__vq")
             if vq['max'] <= 2 and vq['calls'] >= 3: ok(f"Орион: запросы живого голоса — не больше двух одновременно ({vq['calls']} запросов)")
             else: fail('Орион: одновременные запросы голоса', str(vq))
@@ -1341,7 +1341,7 @@ def run_browser():
             b1 = asks[0] if asks else {}
             ctx = b1.get('ctx') or {}
             flat = json.dumps(ctx)
-            no_sums = set(b1) <= {'q', 'sym', 'hist', 'ctx', 'lang'} and b1.get('lang') == 'ru' and all(0 < v <= 100 for v in (ctx.get('shares') or {}).values()) and 'total' not in flat and '@' not in flat
+            no_sums = set(b1) <= {'q', 'sym', 'hist', 'ctx', 'lang', 'stream'} and b1.get('lang') == 'ru' and all(0 < v <= 100 for v in (ctx.get('shares') or {}).values()) and 'total' not in flat and '@' not in flat
             if b1.get('sym') == 'BTC' and 'растёт' in b1.get('q', '') and ctx.get('shares') and no_sums and 'Cointelegraph' in cap: ok('Орион: «почему биткоин растёт» — ответ «мозга»; портфель уходит только долями в %, без сумм')
             else: fail('Орион: вопрос «мозгу»', str(b1) + ' | ' + cap)
             pg.evaluate("document.querySelector('.or-cap') && document.querySelector('.or-cap').click()")
@@ -1359,6 +1359,23 @@ def run_browser():
             cap = pg.evaluate("(document.querySelector('.or-cap')||{}).textContent||''")
             if len(asks) == 3 and 'У вас' in cap: ok('Орион: вопросы о своём портфеле отвечаются на телефоне, без сервера')
             else: fail('Орион: портфель без сервера', str(len(asks)) + ' ' + cap)
+            pg.evaluate("document.querySelector('.or-cap') && document.querySelector('.or-cap').click()"); pg.unroute('**/functions/v1/orion-ask')
+            # 18.11.2026: ответ «мозга» потоком — первое предложение звучит сразу, остальное следом; в истории — ответ целиком
+            S1 = 'Если коротко — по новостям, рынок растёт на притоке денег в биржевые фонды.'
+            S2 = 'Пишет Cointelegraph. Рассказать про эфир?'
+            sb = []
+            def fs(route):
+                sb.append(json.loads(route.request.post_data or '{}'))
+                lines = [{'t': S1[:30]}, {'t': S1[30:] + ' '}, {'t': 'Пишет '}, {'t': 'Cointelegraph. Рассказать про эфир?'}, {'done': True, 'text': S1 + ' ' + S2, 'sources': ['Cointelegraph']}]
+                route.fulfill(status=200, headers={'content-type': 'application/x-ndjson; charset=utf-8', 'access-control-allow-origin': '*'}, body='\n'.join(json.dumps(x, ensure_ascii=False) for x in lines) + '\n')
+            pg.route('**/functions/v1/orion-ask', fs)
+            pg.evaluate("Mascot.debug.ask('Почему растёт рынок?')")
+            try: pg.wait_for_function("t=>Mascot.debug.sayLog().includes(t)", arg=S2, polling=200, timeout=15000)
+            except Exception: pass
+            log = pg.evaluate("Mascot.debug.sayLog()"); la = pg.evaluate("(Mascot.debug.lastAsk()||{}).text||''"); hh = pg.evaluate("Mascot.debug.hist()")
+            if sb and sb[0].get('stream') is True and S1 in log and S2 in log and log.index(S1) < log.index(S2) and la == S1 + ' ' + S2 and hh and hh[-1]['a'] == S1 + ' ' + S2:
+                ok('Орион: ответ «мозга» потоком — первое предложение звучит сразу, остальное следом; в памяти разговора ответ целиком')
+            else: fail('Орион: поток ответа', f'{sb[:1]} | {log} | {la}')
             pg.evaluate("document.querySelector('.or-cap') && document.querySelector('.or-cap').click()"); pg.unroute('**/functions/v1/orion-ask')
         scenario('Орион', {'session': True, 'docs': SEED}, s_mascot)
 

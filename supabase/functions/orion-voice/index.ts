@@ -1,4 +1,4 @@
-/* MoneyLife — голос Ориона (11.11.2026; 17.11.2026 — вечная память фраз). Серверная функция Supabase: текст → озвучка ElevenLabs (mp3).
+/* MoneyLife — голос Ориона (11.11.2026; 17.11.2026 — вечная память фраз; 18.11.2026 — модель Eleven v4). Серверная функция Supabase: текст → озвучка ElevenLabs (mp3).
    Ключ и голос — только в секретах Supabase (ELEVENLABS_API_KEY, ORION_VOICE_ID); в приложение не попадают.
    - пускает только вошедших пользователей (JWT из приложения);
    - готовые фразы хранит в закрытом хранилище orion-voice: каждая фраза озвучивается ОДИН РАЗ навсегда (папка keep/, общая
@@ -6,14 +6,14 @@
    - фразы с личными деньгами (доллары, гривны, евро, проценты) живут в папке месяца не дольше двух месяцев — как раньше;
    - лимиты: на человека в сутки (ORION_DAY_LIMIT фраз, по умолчанию 80) и на всё приложение в месяц
      (ORION_MONTH_CHARS знаков, по умолчанию 120 000) — дальше приложение говорит голосом телефона;
-   - модель — ORION_MODEL (по умолчанию eleven_multilingual_v2).
+   - модель — ORION_TTS_MODEL (по умолчанию eleven_v4, выбор владельца 18.11.2026).
    Ответ: 200 audio/mpeg; 4xx/5xx JSON {error: 'auth'|'bad_text'|'day_limit'|'month_limit'|'not_configured'|'tts'} —
    приложение в этих случаях молча переходит на голос телефона. */
 import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
 
 const KEY = Deno.env.get('ELEVENLABS_API_KEY') || '';
 const VOICE = Deno.env.get('ORION_VOICE_ID') || '';
-const MODEL = Deno.env.get('ORION_MODEL') || 'eleven_multilingual_v2';
+const MODEL = Deno.env.get('ORION_TTS_MODEL') || 'eleven_v4';   /* 18.11.2026: владелец выбрал Eleven v4 на слух (было Multilingual v2; старый секрет ORION_MODEL больше не читается) */
 const DAY_LIMIT = +(Deno.env.get('ORION_DAY_LIMIT') || 80);
 const MONTH_CHARS = +(Deno.env.get('ORION_MONTH_CHARS') || 120000);
 /* настройки голоса — как по умолчанию на сайте ElevenLabs (стабильность 0.5, сходство 0.75, стиль 0, скорость 1); меняются секретами без выпуска */
@@ -89,14 +89,15 @@ Deno.serve(async (req) => {
 
   /* 3. озвучка ElevenLabs */
   /* ElevenLabs отвечает 429, когда одновременно идёт больше запросов, чем позволяет тариф, — ждём и пробуем ещё (до 4 раз) */
-  let r: Response | null = null;
-  for (let i = 0; i < 4; i++) {
+  let r: Response | null = null, plain = false;   /* plain — без настроек голоса и соседних фраз: если модель их не приняла (400) */
+  for (let i = 0; i < 5; i++) {
     r = await fetch('https://api.elevenlabs.io/v1/text-to-speech/' + encodeURIComponent(VOICE) + '?output_format=mp3_44100_64', {
       method: 'POST',
       headers: { 'xi-api-key': KEY, 'content-type': 'application/json', accept: 'audio/mpeg' },
-      body: JSON.stringify({ text, model_id: MODEL, voice_settings: VS, ...(prev ? { previous_text: prev } : {}), ...(next ? { next_text: next } : {}) })
+      body: JSON.stringify(plain ? { text, model_id: MODEL } : { text, model_id: MODEL, voice_settings: VS, ...(prev ? { previous_text: prev } : {}), ...(next ? { next_text: next } : {}) })
     });
-    if (r.status !== 429 || i === 3) break;
+    if (r.status === 400 && !plain) { plain = true; await r.body?.cancel().catch(() => null); continue; }
+    if (r.status !== 429 || i === 4) break;
     await r.body?.cancel().catch(() => null);
     await new Promise(res => setTimeout(res, 400 + i * 500 + Math.random() * 300));
   }

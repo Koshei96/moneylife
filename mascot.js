@@ -179,7 +179,7 @@
     if (TTS.cur !== cur) return; TTS.cur = null; clearInterval(TTS.sim); clearTimeout(TTS.guard); TTS.sim = 0; capDone(cur, quick); wake();
     if (quick) { TTS.q = []; return; }   /* остановили рукой — очередь не договариваем */
     if (cur.follow && AUTO && SRC && !document.hidden) { setTimeout(() => { if (!TTS.cur && !ST.rec) listen({ follow: true }); }, 450); return; }   /* разговор: после ответа слушаем следующий вопрос */
-    setTimeout(() => { if (TTS.cur) return; let x; while ((x = TTS.q.shift()) && now() - x.at > 40) {} if (x) speak(x.text, Object.assign({}, x.o, { queue: false })); }, 700);
+    setTimeout(() => { if (TTS.cur) return; let x; while ((x = TTS.q.shift()) && now() - x.at > 40) {} if (x) speak(x.text, Object.assign({}, x.o, { queue: false })); }, TTS.q[0] && TTS.q[0].fast ? 90 : 700);   /* продолжение ответа — без паузы */
   }
   function stopVoice() {
     const c = TTS.cur; if (!c) return;
@@ -201,12 +201,13 @@
     if (UK && !o.raw) text = Lx(text);   /* ответ «мозга» уже по-украински — его не переводим */
     if (!text) return false;
     if (document.getElementById('mlIntro')) return false;   /* идёт обучающий ролик (intro.js) — Орион молчит, чтобы не перебить его голос */
+    if (o.append && TTS.cur) { TTS.q.unshift({ text, o: Object.assign({}, o, { append: false, queue: false }), at: now(), fast: true }); return true; }   /* продолжение ответа «мозга» — сразу после текущей фразы */
     if (TTS.cur && (TTS.cur.pri || 0) > (o.pri || 0)) {   /* занят важным — скажет следом (не больше двух в очереди) */
       if (o.queue !== false && TTS.q.length < 2 && !TTS.q.some(x => x.text === text)) TTS.q.push({ text, o, at: now() });
       return false;
     }
     stopVoice();
-    const cur = { text, pri: o.pri || 0, follow: !!o.follow }; TTS.cur = cur; ST.lastSay = text; ST.lastEvent = now(); TTS.beat = now();
+    const cur = { text, pri: o.pri || 0, follow: !!o.follow }; TTS.cur = cur; ST.lastSay = text; ST.sayLog = (ST.sayLog || []).concat(text).slice(-6); ST.lastEvent = now(); TTS.beat = now();
     pulse(0.6);
     if (premiumOK()) {   /* субтитры появляются вместе со звуком, а не раньше (не дольше 4 секунд ожидания) */
       cur.wait = true; cur.cap = () => { if (!cur.capOn && TTS.cur === cur) { cur.capOn = true; capShow(text); } }; setTimeout(cur.cap, 4000);
@@ -282,11 +283,15 @@
     });
   }
   const premiumOK = () => !!(ST.sound && A.voice && !document.hidden && navigator.onLine !== false && now() > VO.off && (ST.forcePremium || !navigator.webdriver));
-  /* фраза → части по предложениям: первая короткая озвучивается быстро и звучит, пока готовятся остальные */
+  /* фраза → части (18.11.2026): до 350 знаков — целиком одним запросом, чтобы интонация не «перезапускалась» на каждом предложении;
+     длиннее — две половины по границе предложения (вторая готовится, пока звучит первая) */
   function splitParts(t) {
-    const ss = t.match(/[^.!?…]+[.!?…]+["»]?|[^.!?…]+$/g) || [t], out = [];
-    for (const x of ss.map(z => z.trim()).filter(Boolean)) { if (out.length > 1 && (out[out.length - 1].length < 28 || out.length >= 4)) out[out.length - 1] += ' ' + x; else out.push(x); }   /* первая фраза всегда отдельно: короткая, часто из памяти — звучит сразу */
-    return out;
+    t = String(t || '').trim(); if (t.length <= 350) return [t];
+    const ss = (t.match(/[^.!?…]+[.!?…]+["»]?|[^.!?…]+$/g) || [t]).map(z => z.trim()).filter(Boolean);
+    let a = '', i = 0; while (i < ss.length - 1 && (a + ' ' + ss[i]).length <= t.length / 2 + 40) a = (a ? a + ' ' : '') + ss[i++];
+    if (!a) a = ss[i++];
+    const b = ss.slice(i).join(' ');
+    return b ? [a, b] : [a];
   }
   async function voGet(text, ctx) {
     const k = text + '|' + (ctx.prev || '') + '|' + (ctx.next || '');
@@ -870,9 +875,25 @@
     const sym = coinIn(t) || '';
     speak(sym || marketQ(t) ? FILL.news : FILL.think, { pri: 2 });
     const hist = (ST.hist || []).filter(x => now() - x.at < 900).slice(-6).map(x => ({ q: x.q, a: x.a }));
-    let r = null; try { r = await A.ask(q, sym, { hist, ctx: brainCtx(), lang: UK ? 'uk' : 'ru' }); } catch (e) { r = null; }
+    /* поток (18.11.2026): как только готовы первые целые предложения (от ~60 знаков) — говорим их, остальное — следом без паузы */
+    const gen = ST.askGen = (ST.askGen || 0) + 1, sq = t => String(t).replace(/[*_#`]/g, '').replace(/\s+/g, ' ').trim();
+    let acc = '', first = '';
+    const onPart = t => {
+      acc += t; if (first || gen !== ST.askGen) return;
+      const m = sq(acc).match(/^.*?[.!?…](?=\s)/g), all = sq(acc), cut = (() => { let c = ''; const re = /[^.!?…]+[.!?…]+(?=\s)/g; let x; while ((x = re.exec(all))) { c = all.slice(0, x.index + x[0].length); if (c.length >= 60) break; } return c.length >= 60 || (c && all.length > c.length + 80) ? c : ''; })();
+      if (m && cut) { first = cut.trim(); ST.lastBrain = now(); speak(first, { pri: 2, raw: true }); }
+    };
+    let r = null; try { r = await A.ask(q, sym, { hist, ctx: brainCtx(), lang: UK ? 'uk' : 'ru' }, onPart); } catch (e) { r = null; }
     ST.lastAsk = r;
-    if (r && r.text) { ST.lastBrain = now(); remember(q, r.text); speak(r.text, { pri: 2, follow: byVoice, raw: true }); return; }
+    if (gen !== ST.askGen) return;   /* пока ждали — человек перебил или задал новый вопрос */
+    if (r && r.text) {
+      ST.lastBrain = now(); remember(q, r.text);
+      const full = sq(r.text);
+      if (first && full.indexOf(first) === 0) { const rest = full.slice(first.length).trim(); if (rest) speak(rest, { pri: 2, follow: byVoice, raw: true, append: true }); else if (byVoice && TTS.cur && TTS.cur.text === first) TTS.cur.follow = true; return; }
+      if (!first) speak(r.text, { pri: 2, follow: byVoice, raw: true });
+      return;
+    }
+    if (first) return;   /* начало ответа уже прозвучало — обрыв связи не озвучиваем */
     const msg = (r && ASK_ERR[r.error]) || (sure ? local : (sym && coinPrice(sym) ? reply(NAME_N[sym] || sym) + ' ' : '') + 'Сейчас не могу связаться с сервером — попробуйте чуть позже.');
     speak(msg, { pri: 2 });
   }
@@ -890,7 +911,7 @@
     pulse(1); buzz(12);
     let idle = 0;
     const quiet = () => { if (done) return; done = true; ST.rec = null; clearTimeout(idle); try { rec.abort(); } catch (e) {} if (ui.cap) ui.cap.classList.remove('listen', 'on', 'talk'); };   /* тишина — молча заканчиваем разговор */
-    ST.recQuiet = quiet;
+    ST.recQuiet = quiet; ST.askGen = (ST.askGen || 0) + 1;   /* новый вопрос — прошлый ответ «мозга», если он ещё в пути, не озвучиваем */
     const hush = lo.follow || lo.barge;   /* в разговоре или после перебивания тишина — просто перестаём слушать */
     idle = setTimeout(() => { if (heard) return; quiet(); if (lo.tap) tell(false); }, lo.tap ? 3500 : hush ? 2500 : 6000);   /* нажали и молчат 3,5 с — сводка; в разговоре 2,5 с тишины — Орион перестаёт слушать сам */
     const end = () => { if (done) return; clearTimeout(idle); done = true; ST.rec = null; if (ui.cap) ui.cap.classList.remove('listen'); try { rec.stop(); } catch (e) {}
@@ -1148,7 +1169,7 @@
       lx: t => Lx(t),
       ask: q => answer(q), lastAsk: () => ST.lastAsk || null, ctx: () => brainCtx(), hist: () => ST.hist || [],
       mood: m => { if (ST.forceHour == null) ST.forceHour = 12; ST.pct = { calm: 0, up: 3, rocket: 9, down: -3, crash: -9 }[m]; ST.go = m === 'hunter'; if (m === 'offline') { ST.offline = true; ST.offSince = now() - 120; } else ST.offline = false; ST.lastInput = now(); wake(); },
-      say: t => speak(t, { pri: 2 }),
+      say: t => speak(t, { pri: 2 }), sayLog: () => ST.sayLog || [],
       tap: () => tapped(),
       brief: () => brief(),
       reply: q => reply(q),

@@ -1,4 +1,4 @@
-/* MoneyLife — «мозг» Ориона: вопросы про рынок, крипту, финансы и приложение (11.11.2026). Серверная функция Supabase.
+/* MoneyLife — «мозг» Ориона: вопросы про рынок, крипту, финансы и приложение (11.11.2026; 18.11.2026 — ответ потоком, данные параллельно). Серверная функция Supabase.
    Вопрос («почему биткоин растёт?») + монета → свежие цены (Binance), индекс страха и жадности, заголовки крипто-новостей (RSS)
    → Claude коротко объясняет 2–4 фразами для озвучки.
    - ключ Anthropic только в секретах Supabase (ANTHROPIC_API_KEY); в приложение не попадает;
@@ -6,7 +6,7 @@
    - лимиты: ORION_ASK_DAY вопросов на человека в сутки (по умолчанию 30), ORION_ASK_MONTH на всё приложение (3000);
    - одинаковый вопрос про ту же монету в течение 20 минут отвечается из памяти без затрат;
    - модель — ORION_ASK_MODEL (по умолчанию claude-haiku-5-5).
-   Ответ: 200 {text, sources[]}; ошибки {error: 'auth'|'bad_q'|'day_limit'|'month_limit'|'not_configured'|'llm'}. */
+   Ответ: 200 {text, sources[]}; с {stream:true} — поток строк JSON: {t} … {done,text,sources} или {error}; ошибки {error: 'auth'|'bad_q'|'day_limit'|'month_limit'|'not_configured'|'llm'}. */
 import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
 
 const KEY = (Deno.env.get('ANTHROPIC_API_KEY') || '').trim();
@@ -69,15 +69,18 @@ async function news() {
 }
 async function market(syms: string[]) {
   const list = syms.filter(s => s !== 'USDT').map(s => s + 'USDT');
-  const t = await getJSON('https://api.binance.com/api/v3/ticker/24hr?symbols=' + encodeURIComponent(JSON.stringify(list)));
+  /* 18.11.2026: цены, свечи и индекс — одновременно, а не по очереди (раньше до 3 × 5 с) */
+  const [t, k, f] = await Promise.all([
+    getJSON('https://api.binance.com/api/v3/ticker/24hr?symbols=' + encodeURIComponent(JSON.stringify(list))),
+    getJSON('https://api.binance.com/api/v3/klines?symbol=' + (list[0] || 'BTCUSDT') + '&interval=1d&limit=8'),
+    getJSON('https://api.alternative.me/fng/?limit=1')
+  ]);
   const rows: string[] = [];
   if (Array.isArray(t)) for (const r of t) {
     const s = String(r.symbol).replace(/USDT$/, '');
     rows.push(`${s}: цена $${(+r.lastPrice).toLocaleString('en-US', { maximumFractionDigits: +r.lastPrice < 10 ? 4 : 0 })}, за 24 ч ${(+r.priceChangePercent).toFixed(1)}%, оборот за 24 ч $${Math.round(+r.quoteVolume / 1e6)} млн`);
   }
-  const k = await getJSON('https://api.binance.com/api/v3/klines?symbol=' + (list[0] || 'BTCUSDT') + '&interval=1d&limit=8');
   if (Array.isArray(k) && k.length >= 8) { const a = +k[0][4], b = +k[k.length - 1][4]; if (a > 0) rows.push(`${(list[0] || 'BTCUSDT').replace(/USDT$/, '')} за 7 дней: ${((b / a - 1) * 100).toFixed(1)}%`); }
-  const f = await getJSON('https://api.alternative.me/fng/?limit=1');
   if (f && f.data && f.data[0]) rows.push(`Индекс страха и жадности: ${f.data[0].value} из 100 (${f.data[0].value_classification})`);
   return rows;
 }
@@ -113,9 +116,10 @@ Deno.serve(async (req) => {
   const user = u && u.user;
   if (!user) return json({ error: 'auth' }, 401);
 
-  let q = '', sym = '', lang = 'ru', hist: { q: string; a: string }[] = [], ctx: Record<string, unknown> = {};
+  let wantStream = false, q = '', sym = '', lang = 'ru', hist: { q: string; a: string }[] = [], ctx: Record<string, unknown> = {};
   try {
     const b = await req.json();
+    wantStream = !!(b && b.stream);   /* 18.11.2026: ответ потоком — приложение начинает говорить первое предложение, пока пишется остальное */
     lang = b && b.lang === 'uk' ? 'uk' : 'ru';   /* украинский интерфейс — Орион отвечает по-украински */
     q = String((b && b.q) || ''); sym = String((b && b.sym) || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10);
     if (Array.isArray(b && b.hist)) hist = b.hist.slice(-6).map((x: { q?: unknown; a?: unknown }) => ({ q: String((x && x.q) || '').slice(0, 200), a: String((x && x.a) || '').slice(0, 400) })).filter((x: { q: string; a: string }) => x.q && x.a);
@@ -127,14 +131,12 @@ Deno.serve(async (req) => {
   const store = sb.storage.from(BUCKET);
   const slot = Math.floor(Date.now() / (20 * 60e3));
   const ck = 'ask/' + (await sha256('v6|' + lang + '|' + q.toLowerCase() + '|' + sym + '|' + JSON.stringify(hist) + '|' + JSON.stringify(ctx) + '|' + slot)) + '.json';
-  const hit = await store.download(ck);
-  if (hit.data) { try { return json(JSON.parse(await hit.data.text())); } catch (_) { /* дальше */ } }
-
   const day = new Date().toISOString().slice(0, 10), month = day.slice(0, 7);
   const readNum = async (p: string) => { const r = await store.download(p); if (!r.data) return 0; try { return +(await r.data.text()) || 0; } catch (_) { return 0; } };
   const writeNum = (p: string, n: number) => store.upload(p, new Blob([String(n)], { type: 'text/plain' }), { upsert: true });
   const dk = 'usage/ask-day/' + day + '/' + user.id + '.txt', mk = 'usage/ask-month/' + month + '.txt';
-  const [dn, mn] = await Promise.all([readNum(dk), readNum(mk)]);
+  const [hit, dn, mn] = await Promise.all([store.download(ck), readNum(dk), readNum(mk)]);   /* память ответов и счётчики — одновременно */
+  if (hit.data) { try { return json(JSON.parse(await hit.data.text())); } catch (_) { /* дальше */ } }
   if (dn >= DAY) return json({ error: 'day_limit' }, 429);
   if (mn >= MONTH) return json({ error: 'month_limit' }, 429);
 
@@ -159,7 +161,7 @@ Deno.serve(async (req) => {
   const call = (model: string) => fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: { 'x-api-key': KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-    body: JSON.stringify({ model, max_tokens: 2000, system: lang === 'uk' ? SYSTEM + UK : SYSTEM, messages })
+    body: JSON.stringify({ model, max_tokens: 2000, system: lang === 'uk' ? SYSTEM + UK : SYSTEM, messages, ...(wantStream ? { stream: true } : {}) })
   });
   let r = await call(MODEL);
   if (!r.ok && (r.status === 404 || r.status === 400)) {   /* модель недоступна этому ключу — запасная */
@@ -171,6 +173,43 @@ Deno.serve(async (req) => {
     const tag = (r.status + '_' + detail.replace(/sk-[A-Za-z0-9_-]+/g, 'KEY').replace(/[^A-Za-z0-9]+/g, '-')).slice(0, 160);
     await store.upload('diag/' + new Date().toISOString().replace(/[:.]/g, '-') + '_' + tag + '.txt', new Blob(['1'], { type: 'text/plain' }), { upsert: true }).catch(() => null);
     return json({ error: 'llm', status: r.status, detail }, 502); }
+  const sources = Array.from(new Set(pickN.slice(0, 8).map((n: { src: string }) => n.src)));
+  const save = (res: unknown) => Promise.allSettled([
+    store.upload(ck, new Blob([JSON.stringify(res)], { type: 'application/json' }), { upsert: true }),
+    writeNum(dk, dn + 1), writeNum(mk, mn + 1),
+    Math.random() < 0.25 ? cleanAsk(store) : Promise.resolve()
+  ]);
+  if (wantStream && r.body) {   /* поток: строки JSON — {t:"кусок"} … {done:true,text,sources} или {error} */
+    const enc = new TextEncoder(), rd = r.body.getReader(), dec = new TextDecoder();
+    const body = new ReadableStream({
+      async start(ctl) {
+        const put = (o: unknown) => { try { ctl.enqueue(enc.encode(JSON.stringify(o) + '\n')); } catch (_) { /* клиент ушёл */ } };
+        let full = '', buf = '', why = '';
+        try {
+          for (;;) {
+            const { done, value } = await rd.read(); if (done) break;
+            buf += dec.decode(value, { stream: true });
+            let i; while ((i = buf.indexOf('\n')) >= 0) {
+              const line = buf.slice(0, i).trim(); buf = buf.slice(i + 1);
+              if (!line.startsWith('data:')) continue;
+              let ev: { type?: string; delta?: { type?: string; text?: string; stop_reason?: string } }; try { ev = JSON.parse(line.slice(5)); } catch (_) { continue; }
+              if (ev.type === 'content_block_delta' && ev.delta && ev.delta.type === 'text_delta') { const t = String(ev.delta.text || '').replace(/[*_#`]/g, ''); if (t && full.length < 600) { full += t; put({ t }); } }
+              else if (ev.type === 'message_delta' && ev.delta && ev.delta.stop_reason) why = ev.delta.stop_reason;
+            }
+          }
+        } catch (_) { /* обрыв — отдаём, что успели */ }
+        const text = full.replace(/\s+/g, ' ').trim().slice(0, 600);
+        if (!text) {
+          await store.upload('diag/' + new Date().toISOString().replace(/[:.]/g, '-') + '_empty-stream_' + why.replace(/[^A-Za-z0-9_-]+/g, '-') + '.txt', new Blob(['1'], { type: 'text/plain' }), { upsert: true }).catch(() => null);
+          put({ error: 'llm' }); ctl.close(); return;
+        }
+        const res = { text, sources };
+        await save(res);
+        put({ done: true, ...res }); ctl.close();
+      }
+    });
+    return new Response(body, { headers: { ...CORS, 'content-type': 'application/x-ndjson; charset=utf-8', 'cache-control': 'no-store' } });
+  }
   const out = await r.json();
   const text = String((out.content || []).filter((c: { type: string }) => c.type === 'text').map((c: { text: string }) => c.text).join(' ')).replace(/[*_#`]/g, '').replace(/\s+/g, ' ').trim().slice(0, 600);
   if (!text) {   /* модель ответила без текста (например, всё ушло в размышления) — записываем почему */
@@ -178,12 +217,8 @@ Deno.serve(async (req) => {
     await store.upload('diag/' + new Date().toISOString().replace(/[:.]/g, '-') + '_' + tag + '.txt', new Blob(['1'], { type: 'text/plain' }), { upsert: true }).catch(() => null);
     return json({ error: 'llm' }, 502);
   }
-  const res = { text, sources: Array.from(new Set(pickN.slice(0, 8).map((n: { src: string }) => n.src))) };
-  await Promise.allSettled([
-    store.upload(ck, new Blob([JSON.stringify(res)], { type: 'application/json' }), { upsert: true }),
-    writeNum(dk, dn + 1), writeNum(mk, mn + 1),
-    Math.random() < 0.25 ? cleanAsk(store) : Promise.resolve()
-  ]);
+  const res = { text, sources };
+  await save(res);
   return json(res);
 });
 
