@@ -11,7 +11,7 @@ addEventListener('error',function(e){if(e&&e.message)add(e.message,(e.filename||
 addEventListener('unhandledrejection',function(e){var r=e&&e.reason;add(r&&(r.message||r)||'отклонённое обещание','promise');});
 window.mlErrLog=function(){try{return JSON.parse(localStorage.getItem(K)||'[]');}catch(e){return [];}};window.mlErrAdd=add;})();
 </script>
-<script src="i18n.js?v=20261117110000"></script>
+<script src="i18n.js?v=20261117111000"></script>
 <title>MoneyLife</title>
 <meta name="theme-color" content="#06040e">
 <script>/* тема до отрисовки: «Авто» — как в телефоне, иначе выбор из настроек */
@@ -1746,9 +1746,9 @@ document.querySelectorAll('nav.tabs .tab').forEach(b=>{const v=b.querySelector('
 
 <div class="toast" id="toast" role="status"><span id="toastMsg"></span><button type="button" id="toastBtn" hidden></button></div>
 
-<script src="config.js?v=20261117110000"></script>
+<script src="config.js?v=20261117111000"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="shim.js?v=20261117110000"></script>
+<script src="shim.js?v=20261117111000"></script>
 <script>
 /* ===== основа ===== */
 const $=id=>document.getElementById(id);
@@ -1808,7 +1808,9 @@ function savePrefs(){try{localStorage.setItem('cp-prefs2',JSON.stringify(P));}ca
 let db=null,mcp=null;
 
 /* ===== форматирование ===== */
-const nf=(v,d)=>Number(v).toLocaleString('ru-RU',{minimumFractionDigits:d,maximumFractionDigits:d});
+/* ноль при показе — без знака: −0 и величины, которые после округления до d знаков дают 0 (остаток −2e-11 после «Продать всё»), показываем как 0; расчёты не меняются */
+const rz=(v,d)=>+Math.abs(v).toFixed(d)===0?0:v;
+const nf=(v,d)=>rz(Number(v),d==null?3:d).toLocaleString('ru-RU',{minimumFractionDigits:d,maximumFractionDigits:d});
 /* курс гривны: из настроек (у владельца его пишет задача) или официальный курс НБУ — раз в день, хранится на телефоне */
 let NBU=null;try{NBU=JSON.parse(localStorage.getItem('ml-nbu')||'null');}catch(e){}
 const rate=()=>Number(S.settings.usdUah)||(NBU&&+NBU.rate)||0;
@@ -1818,15 +1820,15 @@ async function nbuLoad(){const today=new Date().toISOString().slice(0,10);if(Num
 function money(v,o){o=o||{};if(v==null||!isFinite(v))return '—';if(P.hide&&!o.show)return '••••';
   const toU=P.cur==='UAH'&&rate()>0;const x=toU?v*rate():v,a=Math.abs(x);
   let d=o.d;if(d==null)d=o.price?(a>=1000?0:a>=1?2:a>=0.01?4:6):(a>=1000?0:2);
-  const sg=x<0?'−':(o.sign&&x>0?'+':'');return toU?sg+nf(a,d)+NB+'₴':sg+'$'+nf(a,d);}
-const usd=(v,d)=>{if(v==null||!isFinite(v))return '—';d=d==null?2:d;return (v<0?'−':'')+'$'+nf(Math.abs(v),d);};
+  const sg=!(+a.toFixed(d))?'':x<0?'−':(o.sign&&x>0?'+':'');return toU?sg+nf(a,d)+NB+'₴':sg+'$'+nf(a,d);}
+const usd=(v,d)=>{if(v==null||!isFinite(v))return '—';d=d==null?2:d;v=rz(v,d);return (v<0?'−':'')+'$'+nf(Math.abs(v),d);};
 // Бюджет DCA для показа: перерасход меньше $0,50 — копейки округления (тот же порог, что у «всё куплено ✓») — показываем как $0; расчёт не меняется
 const dcaShow=v=>v<0&&v>-0.5?0:v;
 const usdp=v=>{const a=Math.abs(v);return usd(v,a>=1000?0:a>=1?2:a>=0.01?4:6);};
-const pct=(v,d)=>v==null||!isFinite(v)?'—':(v>0?'+':v<0?'−':'')+nf(Math.abs(v),d==null?1:d)+'%';
-const qtyRaw=v=>Number(v).toLocaleString('ru-RU',{maximumFractionDigits:8});
+const pct=(v,d)=>{if(v==null||!isFinite(v))return '—';d=d==null?1:d;v=rz(v,d);return (v>0?'+':v<0?'−':'')+nf(Math.abs(v),d)+'%';};
+const qtyRaw=v=>rz(Number(v),8).toLocaleString('ru-RU',{maximumFractionDigits:8});
 const qty=v=>P.hide?'••••':qtyRaw(v);
-const qtyS=v=>{if(P.hide)return '••••';const a=Math.abs(v);return Number(v).toLocaleString('ru-RU',a>=1000?{maximumFractionDigits:0}:a>=1?{maximumFractionDigits:2}:{maximumSignificantDigits:4});};
+const qtyS=v=>{if(P.hide)return '••••';v=rz(Number(v),8);const a=Math.abs(v);return v.toLocaleString('ru-RU',a>=1000?{maximumFractionDigits:0}:a>=1?{maximumFractionDigits:2}:{maximumSignificantDigits:4});};
 const plural=(n,a,b,c)=>{const m10=n%10,m100=n%100;return m10===1&&m100!==11?a:(m10>=2&&m10<=4&&(m100<12||m100>14))?b:c;};
 const pl=(n,a,b,c)=>n+NB+plural(n,a,b,c);
 const cap=s=>s.charAt(0).toUpperCase()+s.slice(1);
@@ -3109,7 +3111,7 @@ function msSync(x){MSC.last=x;if(!msApply())return;if(!S.ready||document.getElem
   if(window.Mascot){try{window.Mascot.sync(msPayload(x));}catch(e){}}else msLoad();}
 function msLoad(){if(MSC.loading||MSC.failed)return;MSC.loading=true;
   const add=(src,ok)=>{try{const s=document.createElement('script');s.src=src;s.async=true;s.onload=ok;s.onerror=()=>{MSC.failed=true;};document.head.appendChild(s);}catch(e){MSC.failed=true;}};
-  const boot=()=>add('mascot.js?v=20261117110000',()=>{try{if(window.Mascot&&window.Mascot.init({host:$('mascot'),app:{buzz,askName:()=>{if(window.MLX&&MLX.askName)MLX.askName();},addAlert:(y,v)=>window.MLX&&MLX.addAlert?MLX.addAlert(y,v):null,voice:(t,x)=>window.mlVoice?window.mlVoice(t,x):null,ask:(q,y,x)=>window.mlAsk?window.mlAsk(q,y,x):null}})&&MSC.last&&$('ob').hidden&&!document.getElementById('mlAuth'))window.Mascot.sync(msPayload(MSC.last));}catch(e){}});
+  const boot=()=>add('mascot.js?v=20261117111000',()=>{try{if(window.Mascot&&window.Mascot.init({host:$('mascot'),app:{buzz,askName:()=>{if(window.MLX&&MLX.askName)MLX.askName();},addAlert:(y,v)=>window.MLX&&MLX.addAlert?MLX.addAlert(y,v):null,voice:(t,x)=>window.mlVoice?window.mlVoice(t,x):null,ask:(q,y,x)=>window.mlAsk?window.mlAsk(q,y,x):null}})&&MSC.last&&$('ob').hidden&&!document.getElementById('mlAuth'))window.Mascot.sync(msPayload(MSC.last));}catch(e){}});
   setTimeout(boot,300);}
 function render(){const D=derive();renderHeader();renderHome(D);renderGrowth();renderCoins(D);renderStrategy(D);renderActivity();renderD14();renderInst();if(window.MLX)try{MLX.render(D);}catch(e){console.error(e);}earnNudge();if(cvSym&&$('coinSheet').classList.contains('open'))renderCoinView();}
 document.body.classList.add('loading');
@@ -3194,9 +3196,9 @@ render();requestAnimationFrame(inkMove);setTimeout(inkMove,600);
     sy=null;swipe=null;pull=0;armed=false;},{passive:true});
 })();
 </script>
-<script src="plus.js?v=20261117110000"></script>
-<script src="wins.js?v=20261117110000"></script>
-<script src="folds.js?v=20261117110000"></script>
+<script src="plus.js?v=20261117111000"></script>
+<script src="wins.js?v=20261117111000"></script>
+<script src="folds.js?v=20261117111000"></script>
 <script>
 /* ===== 12.11.2026: ползунок «Купить», смахнуть запись влево с «рассыпанием» монеты ===== */
 (function(){
