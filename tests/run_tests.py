@@ -809,7 +809,7 @@ def run_browser():
                     else: fail('«Монеты»: запоминание сортировки', pg.evaluate("localStorage.getItem('cp-prefs2')"))
                     # суммы в таблице от $1 000 — без копеек (и при округлении 999,996 → 1 000); мелкое — как было; money() не тронут
                     tm = [cnorm(x) for x in pg.evaluate("[tmoney(1234.56),tmoney(999.996),tmoney(950.5),tmoney(-1500.4,{sign:true}),tmoney(12.34,{sign:true}),tmoney(0.2,{price:true,show:true}),tmoney(110000,{price:true,show:true}),money(999.996),money(1234.56),tmoney(200),tmoney(199.996),tmoney(-8,{sign:true}),tmoney(0.001,{sign:true}),tmoney(0),tmoney(200,{price:true,show:true}),money(200)]")]
-                    if tm == ['$1 235', '$1 000', '$950,50', '-$1 500', '+$12,34', '$0,2000', '$110 000', '$1 000,00', '$1 235', '$200', '$200', '-$8', '+$0,00', '$0', '$200', '$200,00']:
+                    if tm == ['$1 235', '$1 000', '$950,50', '-$1 500', '+$12,34', '$0,2000', '$110 000', '$1 000,00', '$1 235', '$200', '$200', '-$8', '$0,00', '$0', '$200', '$200,00']:   # 0,001 со знаком → «$0,00» без «+» (№5 охоты 16.11: ноль без знака)
                         ok('«Монеты»: один формат сумм — от $1 000 и целые без копеек ($1 235, $200, 199,996 → $200), нецелые — с копейками ($950,50), DOGE $0,2000; общий money() не изменён')
                     else: fail('«Монеты»: суммы без копеек', str(tm))
                     # нет графика за неделю (цены с биржи) — «—», а не ошибка
@@ -2104,6 +2104,57 @@ def run_browser():
             if b == a + 1 and c == a + 2: ok('законные случаи как были: пополнение без гривны и «Остаток» без суммы сохраняются')
             else: fail('законные случаи', f'{a}->{b}->{c} {e} {e2}')
         scenario('Формы: сумма с минусом', {'session': True, 'docs': SEED}, s_neg)
+
+        # №4 охоты 16.11: «1,5» с запятой в поле суммы молча становилось 15 (ошибка в 10 раз). Теперь запятая — десятичный разделитель
+        # во всех полях денег и количеств; набираем с клавиатуры, как человек; минус в «Поправке резерва» вводится как раньше
+        def s_comma(pg, n):
+            wait_app(pg); pg.wait_for_timeout(600); bad = []
+            def typ(sel, text): pg.click(sel); pg.keyboard.type(text, delay=30); pg.wait_for_timeout(250)
+            pg.evaluate("openAct('deposit')"); pg.wait_for_timeout(600); pg.fill('#depUah', '')
+            typ('#depUsd', '1,5'); v = pg.input_value('#depUsd')
+            exp = pg.evaluate("[usd(1.5*depShare()),usd(1.5*(1-depShare()))]"); calc = pg.inner_text('#depCalc')
+            if v != '1.5': bad.append(f'«Пришло, USDT»: {v!r}')
+            if not all(x in calc for x in exp): bad.append(f'подсказка пополнения: {calc!r}, ждали {exp}')
+            for th in ['dark', 'light']:
+                pg.evaluate(f"document.documentElement.setAttribute('data-theme','{th}')"); pg.wait_for_timeout(300); shot(pg, f'comma-dep-{th}')
+            pg.evaluate("document.documentElement.setAttribute('data-theme','dark')")
+            pg.evaluate("closeSheets()"); pg.wait_for_timeout(500)
+            pg.evaluate("openAct('buy');setBuyMode('one')"); pg.wait_for_timeout(600); pg.fill('#oSym', 'BTC'); pg.fill('#oUsd', '150')
+            typ('#oQty', '1,5'); v = pg.input_value('#oQty'); h = pg.inner_text('#oHint')
+            if v != '1.5': bad.append(f'«Получил монет»: {v!r}')
+            if pg.evaluate("usd(100)") not in h: bad.append(f'подсказка «Одна монета» не от 1,5: {h!r}')
+            pg.fill('#oQty', ''); typ('#oQty', '15'); pg.keyboard.press('ArrowLeft'); pg.keyboard.type(','); pg.keyboard.type('2'); pg.wait_for_timeout(200)
+            v = pg.input_value('#oQty')
+            if v != '1.25': bad.append(f'запятая посреди числа: {v!r} (курсор должен остаться на месте)')
+            pg.evaluate("closeSheets()"); pg.wait_for_timeout(500)
+            pg.evaluate("openAct('reserve',{kind:'reserve_adj'})"); pg.wait_for_timeout(600)
+            typ('#resAmt', '-12,5'); v = pg.input_value('#resAmt')
+            if v != '-12.5': bad.append(f'поправка резерва с минусом: {v!r}')
+            pg.evaluate("closeSheets()"); pg.wait_for_timeout(500)
+            if not bad: ok('запятая в дробях: «1,5» = 1.5 в «Пришло, USDT» и «Получил монет», подсказки от 1,5; курсор на месте; минус в поправке резерва вводится')
+            else: fail('запятая в дробях', ' | '.join(bad))
+        scenario('Формы: запятая в дробях', {'session': True, 'docs': SEED}, s_comma, dsf=1)
+        # №5 охоты 16.11: после «Продать → всё» остаток монеты — копейка округления (0,1 + 0,123456789 − «всё» 0,22345679 ≈ −1e-9), и карточка показывала
+        # «−0 ETH», «−$0,00», «−0,0% портфеля». Ноль при показе — без минуса и без знака; расчёты не меняются
+        def s_minus_zero(pg, n):
+            wait_app(pg); pg.wait_for_timeout(600)
+            pg.evaluate("openAct('sell')"); pg.wait_for_timeout(600); pg.select_option('#sSym', 'ETH'); pg.click('#sAll'); pg.fill('#sUsd', '1200')
+            pg.evaluate("saveForm()"); pg.wait_for_timeout(900)
+            left = pg.evaluate("derive().h.ETH.qty")
+            pg.evaluate("closeSheets()"); pg.wait_for_timeout(400); pg.evaluate("openCoin('ETH')"); pg.wait_for_timeout(900)
+            txt = pg.evaluate("[document.getElementById('cvStats').innerText,document.getElementById('cvMeta').innerText,document.getElementById('cvSub').innerText].join(' | ')")
+            fmt = pg.evaluate("[qty(-2e-11),qtyS(-2e-11),usd(-0.004),money(-0.001,{sign:true}),money(0.001,{sign:true}),pct(-0.04),pct(0.04),nf(-1e-9,1),usd(-0.5),pct(-1.26),qty(-0.5)]")
+            for th in ['dark', 'light']:
+                pg.evaluate(f"document.documentElement.setAttribute('data-theme','{th}')"); pg.wait_for_timeout(300); shot(pg, f'minus-zero-coin-{th}')
+                pg.evaluate("setFlip(true)"); pg.wait_for_timeout(700); shot(pg, f'minus-zero-coin-back-{th}')
+                txt += ' | ' + pg.evaluate("document.getElementById('cvStats').innerText"); pg.evaluate("setFlip(false)"); pg.wait_for_timeout(500)
+            pg.evaluate("document.documentElement.setAttribute('data-theme','dark')")
+            t = norm(txt); bad = [s for s in ['-0 ', '-0,0', '-$0,00', '+0,0%', '+$0,00'] if s in t]
+            want = ['0', '0', '$0,00', '$0,00', '$0,00', '0,0%', '0,0%', '0,0', '-$0,50', '-1,3%', '-0,5']
+            if not left < 0: bad.append(f'остаток не отрицательный ({left}) — сценарий не воспроизводит находку')
+            if not bad and [norm(x) for x in fmt] == want: ok(f'ноль без минуса: после «Продать всё» (остаток {left:.1e}) в карточке нет «−0», «−$0,00», «−0,0%»; минус у настоящих сумм на месте')
+            else: fail('ноль без минуса', f'{bad} {fmt} {t[:300]!r}')
+        scenario('Карточка монеты: ноль без минуса', {'session': True, 'docs': SEED + [{'col': 'tx', 'id': 't5', 'data': {'ts': '2026-08-04T10:00:00.000Z', 'type': 'buy', 'symbol': 'ETH', 'qty': 0.123456789, 'usd': 500, 'price': 4050}}]}, s_minus_zero, dsf=1)
 
         # хвост #2 (после 3113f81): подсказки расчёта под полями не считают по минусу — «Зафиксируешь −$110», «Резерв станет $175» были бредом;
         # с минусом — прежняя подсказка «Впиши…» или «—», с обычной суммой — расчёт как был
