@@ -197,6 +197,7 @@
   }
   function speak(text, o) {
     o = o || {};
+    if (window.mlTourOn) return false;   /* идёт видео-инструкция (tour.js) — Орион не перебивает её голос */
     text = String(text || '').replace(/\s+/g, ' ').trim();
     if (UK && !o.raw) text = Lx(text);   /* ответ «мозга» уже по-украински — его не переводим */
     if (!text) return false;
@@ -571,6 +572,7 @@
     }, delay == null ? 4000 : delay);
   }
   function tell(auto) {
+    if (window.mlTourOn) return;   /* во время видео-инструкции сводку не говорим и не отмечаем сказанной */
     const t = brief(); if (!t) return;
     lsSet('ms-news', Date.now()); lsSet('ms-newsDay', dayKey());
     speak(t, { pri: auto ? 1 : 2 });

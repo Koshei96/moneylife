@@ -1352,6 +1352,131 @@ def run_browser():
             else: fail('складки: запоминание', str(st2))
         scenario('Складки', {'session': True, 'docs': SEED}, s_folds)
 
+        # --- видео-инструкция (17.11.2026, просьба владельца): живой ролик «Как устроен MoneyLife» — 13 сцен с субтитрами и голосом телефона.
+        #     Открывается из «Знаний» и из настроек; сцены листаются, есть прогресс; ✕ и Escape закрывают; без speechSynthesis идёт по таймеру.
+        TOUR_SHOTS = OUT / 'tour'; TOUR_SHOTS.mkdir(exist_ok=True)
+        TS = "mlTour.debug.state()"
+        BTN48 = """()=>[...document.querySelectorAll('#tour button')].filter(b=>b.offsetParent).map(b=>{const r=b.getBoundingClientRect();
+            return {w:Math.round(r.width),h:Math.round(r.height),l:(b.getAttribute('aria-label')||b.textContent).trim()}})"""
+        for th in ('dark', 'light'):
+            def s_tour(pg, n, th=th):
+                wait_app(pg)
+                if th == 'dark':   # телефон без синтеза речи — плеер идёт только на субтитрах, по таймеру
+                    pg.evaluate("Object.defineProperty(window,'speechSynthesis',{value:undefined,configurable:true});Object.defineProperty(window,'SpeechSynthesisUtterance',{value:undefined,configurable:true})")
+                if pg.evaluate("!!document.querySelector('#xSheet.open')"): raise AssertionError('в автотестах предложение посмотреть не должно всплывать само')
+                pg.evaluate("MLX.openLearn()"); pg.wait_for_timeout(700)
+                r = pg.evaluate("(()=>{const b=document.getElementById('tourLearn');if(!b)return null;const r=b.getBoundingClientRect(),f=document.querySelector('#xBody .row');return {t:b.textContent.trim(),h:r.height,first:f===b}})()")
+                if r and 'Видео-инструкция · 2 мин' in r['t'] and r['h'] >= 48 and r['first']: ok(f'видео-инструкция ({th}): первая строка во «Знаниях» «Видео-инструкция · 2 мин», {round(r["h"])} px')
+                else: fail(f'видео-инструкция ({th}): строка во «Знаниях»', str(r))
+                pg.screenshot(path=str(TOUR_SHOTS / f'learn-{th}.png'))
+                pg.click('#tourLearn'); pg.wait_for_timeout(900)
+                st = pg.evaluate(TS); sc = pg.evaluate("mlTour.debug.scenes()")
+                if st['open'] and st['i'] == 0 and st['n'] == len(sc) and 10 <= st['n'] <= 14 and st['sub'] == sc[0]['s'] and len(st['prog']) == st['n'] and not pg.evaluate("document.getElementById('xSheet').classList.contains('open')"):
+                    ok(f'видео-инструкция ({th}): из «Знаний» открывается плеер, {st["n"]} сцен, субтитры первой сцены, полоса прогресса')
+                else: fail(f'видео-инструкция ({th}): открытие из «Знаний»', str(st)[:300])
+                tot = pg.evaluate("mlTour.debug.total()")
+                ok(f'видео-инструкция: длина по субтитрам {tot/60:.1f} мин') if 120 <= tot <= 190 else fail('видео-инструкция: длина', f'{tot:.0f} с')
+                bs = pg.evaluate(BTN48)
+                bad = [b for b in bs if b['w'] < 48 or b['h'] < 48 or not b['l']]
+                ok(f'видео-инструкция ({th}): {len(bs)} кнопок ≥ 48 px, у всех подписи') if bs and not bad else fail(f'видео-инструкция ({th}): кнопки', str(bad))
+                if th == 'dark':
+                    if not pg.evaluate(TS)['voice']: ok('видео-инструкция: без speechSynthesis голоса нет — идут субтитры')
+                    else: fail('видео-инструкция: без голоса', str(pg.evaluate(TS)))
+                pg.click('#tour [data-tr="play"]'); pg.wait_for_timeout(200)
+                if not pg.evaluate(TS)['playing']: ok(f'видео-инструкция ({th}): пауза')
+                else: fail(f'видео-инструкция ({th}): пауза', 'играет')
+                pg.click('#tour [data-tr="next"]'); pg.wait_for_timeout(400); a = pg.evaluate(TS)
+                pg.click('#tour [data-tr="next"]'); pg.wait_for_timeout(400); b = pg.evaluate(TS)
+                pg.click('#tour [data-tr="prev"]'); pg.wait_for_timeout(400); c = pg.evaluate(TS)
+                if (a['i'], b['i'], c['i']) == (1, 2, 1) and a['sub'] == sc[1]['s'] and b['sub'] == sc[2]['s'] and b['prog'][:3] == [1, 1, 0.5] and not c['playing']:
+                    ok(f'видео-инструкция ({th}): вперёд и назад по сценам, субтитры и прогресс меняются')
+                else: fail(f'видео-инструкция ({th}): листание', f"{a['i']},{b['i']},{c['i']} {b['prog'][:4]}")
+                for k in ([0, 2, 4, 6, 8, 11] if th == 'dark' else [3, 5, 7, 9, 12]):
+                    pg.evaluate(f"mlTour.debug.go({k})"); pg.wait_for_timeout(950); pg.evaluate("mlTour.debug.steps()"); pg.wait_for_timeout(1300)
+                    pg.screenshot(path=str(TOUR_SHOTS / f'scene{k+1:02d}-{th}.png'))
+                # всё подряд по таймеру (ускорено): дошло до последней сцены, на ней «Начать» и «Посмотреть ещё раз»
+                pg.evaluate("mlTour.debug.speed(0.03); mlTour.debug.go(0)"); pg.click('#tour [data-tr="play"]')
+                pg.wait_for_function("(()=>{const s=mlTour.debug.state();return s.i===s.n-1&&!s.playing&&s.fill===1})()", polling=200, timeout=15000)
+                e = pg.evaluate("(()=>{const e=document.getElementById('trEnd');return !e.hidden&&e.getBoundingClientRect().height>0?e.textContent.trim():''})()")
+                if 'Начать' in e and 'Посмотреть ещё раз' in e: ok(f'видео-инструкция ({th}): по таймеру сама дошла до конца, на последней сцене «Начать» и «Посмотреть ещё раз»')
+                else: fail(f'видео-инструкция ({th}): конец', e)
+                pg.click('#trEnd [data-tr="again"]'); pg.wait_for_timeout(300); s2 = pg.evaluate(TS)
+                ok(f'видео-инструкция ({th}): «Посмотреть ещё раз» — с первой сцены') if s2['i'] in (0, 1) and s2['playing'] else fail(f'видео-инструкция ({th}): ещё раз', str(s2)[:200])
+                pg.evaluate("mlTour.debug.speed(1)")
+                pg.click('#tour [data-tr="close"]'); pg.wait_for_timeout(500)
+                if not pg.evaluate(TS)['open'] and pg.evaluate("!document.getElementById('tour')") and not pg.evaluate("window.mlTourOn"): ok(f'видео-инструкция ({th}): ✕ закрывает')
+                else: fail(f'видео-инструкция ({th}): ✕', str(pg.evaluate(TS)))
+                pg.evaluate("openSettings()"); pg.wait_for_timeout(700)
+                pg.evaluate("document.getElementById('tourSet').scrollIntoView({block:'center'})"); pg.wait_for_timeout(400)
+                pg.screenshot(path=str(TOUR_SHOTS / f'settings-{th}.png'))
+                h = pg.evaluate("document.getElementById('tourSet').getBoundingClientRect().height")
+                pg.click('#tourSet'); pg.wait_for_timeout(800)
+                if pg.evaluate(TS)['open'] and h >= 48 and not pg.evaluate("document.getElementById('setSheet').classList.contains('open')"): ok(f'видео-инструкция ({th}): из настроек («План и сигналы») открывается, строка {round(h)} px')
+                else: fail(f'видео-инструкция ({th}): из настроек', str(pg.evaluate(TS))[:200])
+                pg.keyboard.press('Escape'); pg.wait_for_timeout(400)
+                ok(f'видео-инструкция ({th}): Escape закрывает') if not pg.evaluate(TS)['open'] else fail(f'видео-инструкция ({th}): Escape', 'открыта')
+            scenario(f'Видео-инструкция ({th})', {'session': True, 'docs': SEED}, s_tour, dsf=1, theme=th)
+
+        # --- предложение после входа: один раз, «Позже» убирает навсегда; «Смотреть» открывает плеер; не поверх знакомства
+        for th in ('dark', 'light'):
+            def s_tour_offer(pg, n, th=th):
+                wait_app(pg)
+                pg.evaluate("Object.keys(localStorage).filter(k=>k.startsWith('ml-tour:')).forEach(k=>localStorage.removeItem(k)); localStorage.setItem('ml-tour-real','1'); location.reload()")
+                wait_app(pg)
+                pg.wait_for_selector('#xSheet.open [data-tour="offer"]', timeout=15000); pg.wait_for_timeout(700)
+                t = pg.evaluate("document.getElementById('xSheet').textContent")
+                if 'Посмотреть, как устроен MoneyLife' in t and '2 мин' in t and pg.locator('#xSheet [data-tour-later]').is_visible(): ok(f'предложение ({th}): после входа «Посмотреть, как устроен MoneyLife · 2 мин» с «Смотреть» и «Позже»')
+                else: fail(f'предложение ({th}): текст', t[:200])
+                pg.screenshot(path=str(TOUR_SHOTS / f'offer-{th}.png'))
+                if th == 'dark':
+                    pg.click('#xSheet [data-tour-later]'); pg.wait_for_timeout(900)
+                    k = pg.evaluate("Object.keys(localStorage).filter(k=>k.startsWith('ml-tour:')).map(k=>JSON.parse(localStorage.getItem(k)).offer)")
+                    if not pg.evaluate("document.getElementById('xSheet').classList.contains('open')") and k == ['later'] and 'Знаниях' in pg.evaluate("document.getElementById('toastMsg').textContent"):
+                        ok('предложение: «Позже» закрывает, подсказка «во «Знаниях»», выбор запомнен на телефоне')
+                    else: fail('предложение: «Позже»', str(k))
+                    pg.evaluate("location.reload()"); wait_app(pg); pg.wait_for_timeout(7000)
+                    if not pg.evaluate("!!document.querySelector('#xSheet.open [data-tour=\"offer\"]')"): ok('предложение: после «Позже» больше не появляется')
+                    else: fail('предложение: повтор', 'появилось снова')
+                    pg.evaluate("Object.keys(localStorage).filter(k=>k.startsWith('ml-tour:')).forEach(k=>localStorage.removeItem(k))")
+                    c = pg.evaluate("(()=>{const o=document.getElementById('ob');o.hidden=false;const a=mlTour.debug.canOffer();o.hidden=true;const b=mlTour.debug.canOffer();openSettings();const c=mlTour.debug.canOffer();closeSheets();return [a,b,c]})()")
+                    ok('предложение: не поверх знакомства и не поверх открытой шторки') if c == [False, True, False] else fail('предложение: когда показывать', str(c))
+                else:
+                    pg.click('#xSheet [data-tour="offer"]'); pg.wait_for_timeout(900)
+                    k = pg.evaluate("Object.keys(localStorage).filter(k=>k.startsWith('ml-tour:')).map(k=>JSON.parse(localStorage.getItem(k)).offer)")
+                    if pg.evaluate(TS)['open'] and k == ['watch']: ok('предложение: «Смотреть» открывает видео-инструкцию')
+                    else: fail('предложение: «Смотреть»', str(k))
+                    pg.click('#tour [data-tr="close"]'); pg.wait_for_timeout(400)
+                    pg.evaluate("location.reload()"); wait_app(pg); pg.wait_for_timeout(6000)
+                    ok('предложение: после просмотра не повторяется') if not pg.evaluate("!!document.querySelector('#xSheet.open [data-tour=\"offer\"]')") else fail('предложение: повтор после просмотра', 'появилось')
+            scenario(f'Видео-инструкция: предложение ({th})', {'session': True, 'docs': SEED}, s_tour_offer, dsf=1, theme=th)
+
+        # --- видео-инструкция по-украински (и «уменьшить движение»): ни одного русского остатка во всех сценах
+        RU_TOUR = r"""() => { const out = [], root = document.getElementById('tour'); const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT); let n;
+          while ((n = w.nextNode())) { const p = n.parentElement; if (!p || p.closest('[translate="no"],[hidden]')) continue; const t = n.nodeValue.trim(); if (/[ыэъё]/i.test(t)) out.push(t.slice(0, 80)); }
+          root.querySelectorAll('[aria-label],[aria-valuetext]').forEach(e => { for (const a of ['aria-label', 'aria-valuetext']) { const v = e.getAttribute(a) || ''; if (/[ыэъё]/i.test(v)) out.push('@' + v.slice(0, 60)); } });
+          return out; }"""
+        def s_tour_uk(pg, n):
+            pg.evaluate("localStorage.setItem('ml-lang','uk'); location.reload()"); wait_app(pg); pg.wait_for_timeout(1200)
+            pg.evaluate("MLX.openLearn()"); pg.wait_for_timeout(600)
+            lt = pg.evaluate("document.getElementById('tourLearn').textContent")
+            pg.click('#tourLearn'); pg.wait_for_timeout(800); pg.click('#tour [data-tr="play"]')
+            left, subs = [], []
+            for k in range(pg.evaluate(TS)['n']):
+                pg.evaluate(f"mlTour.debug.go({k}); mlTour.debug.steps()"); pg.wait_for_timeout(250)
+                left += pg.evaluate(RU_TOUR); subs.append(pg.evaluate(TS)['sub'])
+            pg.evaluate("mlTour.debug.go(3); mlTour.debug.steps()"); pg.wait_for_timeout(400)
+            pg.screenshot(path=str(TOUR_SHOTS / 'scene04-uk-dark.png'))
+            left = list(dict.fromkeys(left))
+            uk = all(re.search('[іїєґ]', s) for s in subs)
+            if not left and uk and 'Відеоінструкція · 2 хв' in lt: ok('видео-инструкция по-украински: строка во «Знаннях», все 13 сцен и подписи без русских остатков')
+            else: fail('видео-инструкция по-украински', ' | '.join(left[:10]) + f' | uk={uk} | {lt[:60]}')
+            sv = pg.evaluate("mlTour.debug.say('Це DCA, резерв USDT і BTC')")
+            ok('видео-инструкция по-украински: голос читает DCA, USDT, BTC по-украински') if 'ді-сі-ей' in sv and 'біткоїна' in sv else fail('видео-инструкция: голос uk', sv)
+            r = pg.evaluate("(()=>{const t=document.getElementById('tour'),a=t.querySelector('.tr-scr .a');return [t.classList.contains('tr-still'),a?getComputedStyle(a).animationName:'']})()")
+            ok('видео-инструкция: «уменьшить движение» — без анимации, только смена кадров') if r[0] and r[1] == 'none' else fail('видео-инструкция: уменьшить движение', str(r))
+            pg.click('#tour [data-tr="close"]'); pg.wait_for_timeout(300)
+        scenario('Видео-инструкция по-украински', {'session': True, 'docs': SEED}, s_tour_uk, dsf=1, theme='dark', motion='reduce')
+
         # --- панель вкладок (12.11.2026): у активной вкладки значок поднимается в круге, подпись видна только у неё
         def s_orb(pg, n):
             pg.click('[data-tab="coins"]'); pg.wait_for_timeout(1000)

@@ -345,7 +345,9 @@
   const readGet = () => { const r = xGet().read; return r && typeof r === 'object' ? r : {}; };
   function openLearn(fromPlan) {
     const rd = readGet(), groups = [...new Set(LESSONS.map(l => l.g))], n = LESSONS.filter(l => rd[l.id]).length;
-    const h = `<p class="hint">Главные мысли из 14 книг о деньгах — по минуте на каждую. Прочитано ${n} из ${LESSONS.length}.</p>` + groups.map(g => `<div><div class="sec-h"><span class="label">${g}</span></div><div class="list">${LESSONS.filter(l => l.g === g).map(l => `<button type="button" class="row r3" data-les="${l.id}"><span class="xl-ck${rd[l.id] ? ' on' : ''}" aria-hidden="true">${rd[l.id] ? tick : ''}</span><span class="col"><span class="nm">${esc(l.t)}</span><span class="sub">${esc(l.src.split(';')[0])}</span></span><span class="chev">›</span></button>`).join('')}</div></div>`).join('') + `<p class="hint">${DISCLAIMER}</p>`;
+    /* видео-инструкция (tour.js, 17.11.2026) — первой строкой */
+    const tour = window.mlTour ? `<div class="list"><button type="button" class="row r3" data-tour="learn" id="tourLearn"><span class="badge ico" style="color:var(--fg)">${window.mlTour.badge}</span><span class="col"><span class="nm">Видео-инструкция · 2 мин</span><span class="sub">Как устроен MoneyLife</span></span><span class="chev">›</span></button></div>` : '';
+    const h = tour + `<p class="hint">Главные мысли из 14 книг о деньгах — по минуте на каждую. Прочитано ${n} из ${LESSONS.length}.</p>` + groups.map(g => `<div><div class="sec-h"><span class="label">${g}</span></div><div class="list">${LESSONS.filter(l => l.g === g).map(l => `<button type="button" class="row r3" data-les="${l.id}"><span class="xl-ck${rd[l.id] ? ' on' : ''}" aria-hidden="true">${rd[l.id] ? tick : ''}</span><span class="col"><span class="nm">${esc(l.t)}</span><span class="sub">${esc(l.src.split(';')[0])}</span></span><span class="chev">›</span></button>`).join('')}</div></div>`).join('') + `<p class="hint">${DISCLAIMER}</p>`;
     learnFromPlan = fromPlan != null ? !!fromPlan : learnFromPlan;
     xOpen('learn', 'Знания', h, null, learnFromPlan && planGet() ? () => showPlan(planGet()) : null);
   }
