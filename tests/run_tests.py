@@ -2068,6 +2068,53 @@ def run_browser():
             else: fail('законные случаи', f'{a}->{b}->{c} {e} {e2}')
         scenario('Формы: сумма с минусом', {'session': True, 'docs': SEED}, s_neg)
 
+        # хвост #2 (после 3113f81): подсказки расчёта под полями не считают по минусу — «Зафиксируешь −$110», «Резерв станет $175» были бредом;
+        # с минусом — прежняя подсказка «Впиши…» или «—», с обычной суммой — расчёт как был
+        def s_neg_hints(pg, n):
+            wait_app(pg); pg.wait_for_timeout(600)
+            T = lambda sel: norm(pg.inner_text(sel))
+            def snap(tag, sel):
+                for th in ['dark', 'light']:
+                    pg.evaluate(f"document.documentElement.setAttribute('data-theme','{th}')"); pg.wait_for_timeout(300)
+                    pg.evaluate(f"document.querySelector('{sel}').scrollIntoView({{block:'center'}})"); shot(pg, f'neg-hint-{tag}-{th}')
+                pg.evaluate("document.documentElement.setAttribute('data-theme','dark')")
+            bad = []
+            pg.evaluate("openAct('sell')"); pg.wait_for_timeout(600); pg.select_option('#sSym', 'BTC'); pg.fill('#sQty', '0.001'); pg.fill('#sUsd', '-10'); pg.wait_for_timeout(200)
+            h = T('#sCalc'); snap('sell', '#sCalc')
+            if '-$' in h or 'Зафиксируешь' in h or 'Цена продажи' in h: bad.append(f'продажа, сумма с минусом: {h!r}')
+            pg.fill('#sUsd', '120'); pg.wait_for_timeout(200); h = T('#sCalc')
+            if 'Зафиксируешь' not in h or '+$20' not in h: bad.append(f'продажа, обычная сумма: {h!r}')
+            pg.evaluate("closeSheets()"); pg.wait_for_timeout(500); pg.evaluate("openAct('sell')"); pg.wait_for_timeout(600); pg.select_option('#sSym', 'BTC')
+            pg.fill('#sQty', '-0.001'); pg.wait_for_timeout(200); h = T('#sCalc'); v = pg.input_value('#sUsd')
+            if '-$' in h or 'Себестоимость' in h or 'Впиши количество' not in h or v.startswith('-'): bad.append(f'продажа, количество с минусом: {h!r} {v!r}')
+            pg.evaluate("closeSheets()"); pg.wait_for_timeout(500)
+            pg.evaluate("openAct('deposit')"); pg.wait_for_timeout(600); pg.fill('#depUah', ''); pg.fill('#depUsd', '-50'); pg.wait_for_timeout(200)
+            h = T('#depCalc'); snap('dep', '#depCalc')
+            if '-$' in h or 'Резерв станет' in h or 'Впиши сумму пополнения' not in h: bad.append(f'пополнение, $ с минусом: {h!r}')
+            pg.evaluate("closeSheets()"); pg.wait_for_timeout(500); pg.evaluate("openAct('deposit')"); pg.wait_for_timeout(600)
+            pg.fill('#depUah', '-2000'); pg.wait_for_timeout(200); h = T('#depCalc'); v = pg.input_value('#depUsd')
+            if '-$' in h or 'Резерв станет' in h or v.startswith('-'): bad.append(f'пополнение, гривна с минусом: {h!r} {v!r}')
+            pg.fill('#depUah', ''); pg.fill('#depUsd', '50'); pg.wait_for_timeout(200); h = T('#depCalc')
+            if 'Резерв станет' not in h: bad.append(f'пополнение, обычная сумма: {h!r}')
+            pg.evaluate("closeSheets()"); pg.wait_for_timeout(500)
+            pg.evaluate("openAct('income')"); pg.wait_for_timeout(600); pg.fill('#incUah', '-1000'); pg.wait_for_timeout(200); h = T('#incCalc')
+            if '-' in h.replace('—', '') or 'Впиши сумму' not in h: bad.append(f'доход: {h!r}')
+            pg.evaluate("closeSheets()"); pg.wait_for_timeout(500)
+            pg.evaluate("openAct('buy');setBuyMode('one')"); pg.wait_for_timeout(600); pg.fill('#oSym', 'BTC'); pg.fill('#oUsd', '-100'); pg.wait_for_timeout(200); h = T('#oHint')
+            if h != '—': bad.append(f'«Одна монета»: {h!r}')
+            pg.evaluate("closeSheets()"); pg.wait_for_timeout(500)
+            pg.evaluate("openAct('dip')"); pg.wait_for_timeout(700); pg.fill('#dTotal', '-100'); pg.wait_for_timeout(200)
+            v = [pg.input_value(f'#du_{k}') for k in ['BTC', 'ETH', 'ALT']]
+            pg.fill('#du_BTC', '-50'); pg.wait_for_timeout(200); h = T('#dh_BTC')
+            if any(x.startswith('-') for x in v) or h != '—': bad.append(f'докупка: {v} {h!r}')
+            pg.evaluate("closeSheets()"); pg.wait_for_timeout(500)
+            pg.evaluate("openAct('earn')"); pg.wait_for_timeout(600); pg.fill('#erBal', '-5'); pg.wait_for_timeout(200); h = T('#erCalc')
+            if 'Разница' in h or 'Впиши сумму' not in h: bad.append(f'стейкинг: {h!r}')
+            pg.evaluate("closeSheets()")
+            if not bad: ok('подсказки с минусом: «Продать», «Пополнить биржу», «Доход», «Купить», «Докупка», «Стейкинг» — без расчёта и без «−$»; с обычной суммой расчёт как был')
+            else: fail('подсказки с минусом', ' | '.join(bad))
+        scenario('Формы: подсказки при минусе', {'session': True, 'docs': SEED + [{'col': 'app', 'id': 'cycle', 'data': CYC}]}, s_neg_hints)
+
         def s_v3_demo(pg, n):
             pg.wait_for_selector('#mlaDemo', state='visible', timeout=8000)
             pg.click('#mlaDemo'); wait_app(pg); pg.wait_for_timeout(3500)
