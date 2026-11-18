@@ -2157,10 +2157,43 @@ def run_browser():
             shot(pg, 'v3-home')
             pg.click('#hInfo'); pg.wait_for_timeout(800)
             t = pg.evaluate("document.getElementById('xTitle').textContent+' | '+document.getElementById('xBody').innerText")
-            if t.startswith('Из чего итог') and all(x in t for x in ('посчитано 2 из 2', 'Резерв USDT — отдельно', 'Вложено в монеты', 'Монеты и резерв вместе')): ok('3.0: «Из чего итог» — монеты, вложено, резерв отдельно')
+            if t.startswith('Из чего итог') and all(x in t for x in ('посчитано 2 из 2', 'Резерв USDT — отдельно', 'Вложено в монеты', 'Монеты и резерв вместе')) and 'с ценой' not in t and 'Без цены' not in t: ok('3.0: «Из чего итог» — монеты, вложено, резерв отдельно; цены у всех — «Вложено в монеты» как было')
             else: fail('3.0: из чего итог', t[:300])
             shot(pg, 'v3-total')
         scenario('3.0: главная и итог', {'session': True, 'docs': SEED3}, s_v3_home)
+
+        # 18.11 (охота 17.11, P2 #3): у части монет нет цены — раньше «Вложено в монеты» было по всем ($870), а прибыль — только по монетам
+        #     с ценой ($800), и 950 − 870 ≠ 150. Теперь «Вложено в монеты с ценой $800» и «Без цены (не в итоге) $70»; когда цены есть у всех —
+        #     как было (проверка выше: «Вложено в монеты» без «с ценой»). ZZQX в тестах — без цены
+        TOTNP = SEED3 + [{'col': 'tx', 'id': 'tz', 'data': {'ts': '2026-08-04T10:00:00.000Z', 'type': 'buy', 'symbol': 'ZZQX', 'qty': 1000, 'usd': 70, 'price': 0.07}}]
+        TOT_KV = """()=>[...document.querySelectorAll('#xBody .kv>div')].map(d=>[...d.children].map(c=>c.textContent.replace(/\\s+/g,' ').trim()))"""
+        def s_total_np(pg, n):
+            wait_app(pg); pg.wait_for_timeout(1500)
+            d = pg.evaluate("(()=>{const D=derive();return {inv:D.inv,ip:D.invPriced,tot:D.total,zz:+D.prices.ZZQX||0}})()")
+            if d['zz'] or abs(d['inv'] - 870) > .01 or abs(d['ip'] - 800) > .01: raise AssertionError('сценарий не воспроизводит находку: ' + str(d))
+            pg.click('#hInfo'); pg.wait_for_timeout(800)
+            kv = dict((r[0], r[1]) for r in pg.evaluate(TOT_KV) if len(r) == 2); bad = []
+            if 'Вложено в монеты' in kv: bad.append('осталось «Вложено в монеты» по всем монетам: ' + kv['Вложено в монеты'])
+            if kv.get('Вложено в монеты с ценой') != '$800,00': bad.append(f"«Вложено в монеты с ценой» = {kv.get('Вложено в монеты с ценой')!r}")
+            if kv.get('Без цены (не в итоге)') != '$70,00': bad.append(f"«Без цены (не в итоге)» = {kv.get('Без цены (не в итоге)')!r}")
+            if not (kv.get('Прибыль сейчас') or '').startswith('+$150,00'): bad.append(f"прибыль {kv.get('Прибыль сейчас')!r} (нужно +$150,00 = $950 − $800)")
+            if abs(d['tot'] - 950) > .01: bad.append(f"итог {d['tot']} (нужно 950 — расчёт не должен меняться)")
+            keys = [r[0] for r in pg.evaluate(TOT_KV)]
+            if keys[:3] != ['Вложено в монеты с ценой', 'Без цены (не в итоге)', 'Прибыль сейчас']: bad.append('порядок строк: ' + str(keys))
+            if not bad: ok('«Как посчитано»: у части монет нет цены — «Вложено в монеты с ценой $800», «Без цены (не в итоге) $70», прибыль +$150 сходится ($950 − $800)')
+            else: fail('«Как посчитано»: монеты без цены', '; '.join(bad))
+            for th in ('dark', 'light'):
+                pg.evaluate(f"document.documentElement.setAttribute('data-theme','{th}')"); pg.wait_for_timeout(300)
+                pg.evaluate("(document.querySelector('#xBody .kv')||document.body).scrollIntoView({block:'center'})"); pg.wait_for_timeout(300); shot(pg, f'fix-total-priced-{th}')
+            pg.evaluate("localStorage.setItem('ml-lang','uk'); location.reload()"); pg.wait_for_timeout(2500); wait_app(pg); pg.wait_for_timeout(800)
+            pg.click('#hInfo'); pg.wait_for_timeout(800)
+            t = pg.evaluate("document.getElementById('xBody').innerText")
+            if 'Вкладено в монети з ціною' in t and 'Без ціни (не в підсумку)' in t and 'Вложено' not in t and 'Без цены' not in t: ok('«Як пораховано» (UA): «Вкладено в монети з ціною», «Без ціни (не в підсумку)»')
+            else: fail('«Як пораховано» (UA): новые строки', t[:400])
+            for th in ('dark', 'light'):
+                pg.evaluate(f"document.documentElement.setAttribute('data-theme','{th}')"); pg.wait_for_timeout(300)
+                pg.evaluate("(document.querySelector('#xBody .kv')||document.body).scrollIntoView({block:'center'})"); pg.wait_for_timeout(300); shot(pg, f'fix-total-priced-uk-{th}')
+        scenario('Итог: часть монет без цены', {'session': True, 'docs': TOTNP}, s_total_np, dsf=1)
 
         # --- 13.11.2026 (владелец): ступени тратят долю от ВСЕГО резерва цикла (10/15/20/25/30%), а выполненная ступень
         #     снова открывается после отскока BTC на 10% выше её цены (прошлые траты копятся в spentPrev)
