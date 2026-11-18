@@ -1534,6 +1534,23 @@ def run_browser():
               return [Array.isArray(d.levels), !!d.plan&&'need' in d.plan&&'hasPlan' in d.plan, !!d.streak&&'n' in d.streak, d.tz, JSON.stringify(d).match(/\\d{4,}\\.\\d/)?'':'ok', !!xs];})()""")
             if sg[0] and sg[1] and sg[2] and sg[3] and sg[5]: ok('Сигналы через сервер: копия ступеней, цели, плана месяца и серии — в аккаунте; отправленное сервером телефон не повторяет')
             else: fail('Сигналы через сервер', str(sg))
+            # 18.11.2026 (этап 5, часть 3): «что вы пропустили», потолок доли крипты, урок к ситуации
+            aw = pg.evaluate("""(()=>{const D=derive(),tot=D.total||1000,inv=D.invPriced||0,b=(S.live&&S.live.prices&&S.live.prices.BTC)||100000;
+              Mascot.debug.snapPrev({day:'x',at:Date.now()-5*864e5-3600e3,total:tot,pnl:(tot-inv)+80,btc:b/1.1});
+              return Mascot.debug.brief2({morning:true,calm:false});})()""")
+            if 'Вас не было 5 дней' in aw and 'снизился на' in aw and 'биткоин — плюс' in aw: ok('Орион: после перерыва 3+ дня — «вас не было 5 дней», что изменилось за это время')
+            else: fail('Орион: что вы пропустили', aw)
+            ct = pg.evaluate("Mascot.debug.ceilText({sh:14,ceil:10})")
+            if '14 процентов' in ct and 'потолке 10' in ct and 'решаете вы' in ct and not any(w in ct for w in ['продайте', 'продать']): ok('Орион: крипта выше потолка из личного плана — говорит и объясняет ребалансировку, без совета продать')
+            else: fail('Орион: потолок доли', ct)
+            ls = pg.evaluate("""(()=>{const o=MLX.fng;MLX.fng=()=>({v:15,w:'сильный страх'});localStorage.removeItem('or-lesAt');const r=Mascot.debug.lessonPick();MLX.fng=o;return r;})()""")
+            pg.evaluate("Mascot.debug.lessonOffer('emo'); Mascot.debug.ask('открой урок')"); pg.wait_for_timeout(700)
+            try: pg.wait_for_function("()=>Mascot.debug.sayLog().some(x=>x.indexOf('Открываю урок')===0)", polling=200, timeout=8000)
+            except Exception: pass
+            lo = pg.evaluate("[Mascot.debug.sayLog().join(' | '), document.getElementById('xBody').innerText.slice(0, 300), document.getElementById('xSheet') ? document.getElementById('xSheet').classList.contains('open') : null]")
+            pg.evaluate("closeSheets()"); pg.wait_for_timeout(300)
+            if ls and ls.get('id') == 'emo' and 'открой урок' in ls.get('say', '') and 'Эмоции' in lo[0] and 'Эмоции' in lo[1]: ok('Орион: при страхе предлагает урок «Эмоции — главный враг»; «открой урок» — открывает')
+            else: fail('Орион: урок к ситуации', f'{ls} | {lo}')
             pg.evaluate("document.querySelector('.or-cap') && document.querySelector('.or-cap').click()"); pg.unroute('**/functions/v1/orion-ask')
         scenario('Орион', {'session': True, 'docs': SEED}, s_mascot)
 
