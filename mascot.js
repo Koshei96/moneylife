@@ -700,7 +700,7 @@
   function snapTake(D) {
     if (!D || !(D.total > 0) || D.noPrice) return;
     const sn = lsGet('or-snap', null), k = dayKey(), pnl = D.total - (+D.invPriced || 0);
-    if (!sn || sn.day !== k) { if (sn && sn.day) ST.snapPrev = sn; lsSet('or-snap', { day: k, at: Date.now(), total: D.total, pnl }); }
+    if (!sn || sn.day !== k) { if (sn && sn.day) ST.snapPrev = sn; const lv = (ST.S && ST.S.live) || {}; lsSet('or-snap', { day: k, at: Date.now(), total: D.total, pnl, btc: +(lv.prices && lv.prices.BTC) || +(D.prices && D.prices.BTC) || 0 }); }
     else if (!ST.snapPrev) ST.snapPrev = lsGet('or-snapPrev', null);
     if (ST.snapPrev) lsSet('or-snapPrev', ST.snapPrev);
   }
@@ -709,7 +709,14 @@
     const sp = ST.snapPrev;
     if (sp && sp.total > 0 && D.total > 0 && !D.noPrice) {
       const pnl = D.total - (+D.invPriced || 0), dl = pnl - (+sp.pnl || 0), pc = dl / sp.total * 100, yd = Date.now() - (+sp.at || 0) < 36 * 3600e3;
-      if (Math.abs(pc) >= 0.3) out.push((yd ? 'Со вчера' : 'С прошлого раза') + ' портфель ' + (dl > 0 ? 'вырос' : 'снизился') + ' на ' + (ST.hide ? pctW(Math.abs(pc)) : moneyW(Math.abs(dl))) + '.');
+      const away = Math.floor((Date.now() - (+sp.at || 0)) / 864e5);   /* №7: перерыв 3+ дня — «что вы пропустили» */
+      if (away >= 3) {
+        const lv = (ST.S && ST.S.live) || {}, b = +(lv.prices && lv.prices.BTC) || +(D.prices && D.prices.BTC) || 0, bc = sp.btc > 0 && b > 0 ? (b / sp.btc - 1) * 100 : null;
+        out.push('Вас не было ' + away + ' ' + plural(away, 'день', 'дня', 'дней') + '. За это время портфель ' + (Math.abs(pc) < 0.3 ? 'почти не изменился' : (dl > 0 ? 'вырос' : 'снизился') + ' на ' + (ST.hide ? pctW(Math.abs(pc)) : moneyW(Math.abs(dl)))) + (bc != null && Math.abs(bc) >= 1 ? ', биткоин — ' + signW(bc) + ' ' + pctW(bc) : '') + '.');
+        const missed = TASK.rem.filter(x => x.done && x.when > (+sp.at || 0) && x.when < Date.now()).length;
+        if (missed) out.push((missed > 1 ? 'Прошло напоминаний: ' + missed + ' — они в «Делах Ориона».' : 'Прошло одно напоминание — оно в «Делах Ориона».'));
+      }
+      else if (Math.abs(pc) >= 0.3) out.push((yd ? 'Со вчера' : 'С прошлого раза') + ' портфель ' + (dl > 0 ? 'вырос' : 'снизился') + ' на ' + (ST.hide ? pctW(Math.abs(pc)) : moneyW(Math.abs(dl))) + '.');
       else out.push((yd ? 'Со вчера' : 'С прошлого раза') + ' портфель почти не изменился.');
     }
     const td = new Date(), end = new Date(td.getFullYear(), td.getMonth(), td.getDate() + 1).getTime();
@@ -719,7 +726,28 @@
     const lw = left <= 7 ? (left === 0 ? ' Сегодня последний день месяца.' : ' До конца месяца ' + left + ' ' + (left === 1 ? 'день' : left < 5 ? 'дня' : 'дней') + '.') : '';
     if (mi && mi.hasDep && mi.dca > 0.5) out.push('По плану месяца осталось купить на ' + (ST.hide ? 'сумму из плана' : moneyW(mi.dca)) + '.' + lw);
     else if (mi && !mi.hasDep && mi.budget > 0 && mi.bought < mi.budget * 0.98) out.push('План месяца выполнен на ' + Math.round(mi.bought / mi.budget * 100) + ' процентов.' + lw);
+    const ov = ceilDue(D); if (ov) out.push(ceilText(ov));
+    const ls = lessonPick(D); if (ls) out.push(ls.say);
     return out;
+  }
+  /* №8: крипта выше потолка из личного плана — не чаще раза в неделю; без совета продать */
+  const weekKey = () => { const d = new Date(), j = new Date(d.getFullYear(), 0, 1); return d.getFullYear() + '-w' + Math.ceil(((d - j) / 864e5 + j.getDay() + 1) / 7); };
+  function ceilDue(D) { const M = window.MLX || {}; if (!M.cryptoOver || lsGet('or-ceil', '') === weekKey()) return null; return M.cryptoOver(D); }
+  function ceilText(ov) { return 'Крипта сейчас — ' + ov.sh + ' ' + plural(ov.sh, 'процент', 'процента', 'процентов') + ' ваших накоплений при потолке ' + ov.ceil + ' из личного плана. Ребалансировка — это возврат к заданным долям, так её описывает Энтони Роббинс. Как вернуться к плану — решаете вы.'; }
+  /* №9: урок к ситуации — раз в 3 дня, только не прочитанный; «открой урок» откроет его */
+  const LES_FOR = [
+    [(c) => c.ch != null && c.ch <= -5 || c.fear, 'emo', 'В такие дни помогает урок «Эмоции — главный враг».'],
+    [(c) => c.ath || c.greed, 'timing', 'К такому рынку подходит урок «Не угадывай рынок».'],
+    [(c) => c.over, 'alloc', 'По теме — урок «Главное решение — пропорции».']
+  ];
+  function lessonPick(D) {
+    const M = window.MLX || {}; if (!M.lesson) return null;
+    if (Date.now() - (+lsGet('or-lesAt', 0) || 0) < 3 * 864e5) return null;
+    const S = ST.S || {}, lv = S.live || {}, ch = lv.change ? +lv.change.BTC : null, btc = +(lv.prices && lv.prices.BTC) || 0, ath = +(S.cycle && S.cycle.ath) || 0;
+    let fv = null; try { const f = M.fng && M.fng(); if (f) fv = +f.v; } catch (e) {}
+    const c = { ch: isFinite(ch) ? ch : null, fear: fv != null && fv <= 25, greed: fv != null && fv >= 75, ath: ath > 0 && btc >= ath * 0.995, over: !!(M.cryptoOver && M.cryptoOver(D)) };
+    const hit = LES_FOR.find(([f, id]) => f(c) && !M.lesson.read(id)); if (!hit) return null;
+    return { id: hit[1], say: hit[2] + ' Скажите «открой урок», и я открою.' };
   }
   function brief(o) {
     o = o || {};
@@ -772,6 +800,8 @@
   function tell(auto) {
     const t = brief(); if (!t) return;
     if (calmDue()) lsSet('or-calm', dayKey());
+    if (t.indexOf('ваших накоплений при потолке') >= 0) lsSet('or-ceil', weekKey());   /* сказали — следующая неделя */
+    { const lp = lessonPick(ST.D); if (lp && t.indexOf(lp.say) >= 0) { ST.lessonOffer = { id: lp.id, at: now() }; lsSet('or-lesAt', Date.now()); } }
     lsSet('ms-news', Date.now()); lsSet('ms-newsDay', dayKey());
     speak(t, { pri: auto ? 1 : 2 });
     ST.lastLocal = { at: now(), q: '', sym: '', money: true, redo: () => brief() };   /* «а в гривнах?» после сводки */
@@ -1100,6 +1130,9 @@
   const buyQ = t => /(запиши|внеси|добавь|запиши мне|занеси)\s+(мою\s+|мне\s+)?(покупк|что (я )?купил|что (я )?докупил)|^(я\s+)?(купил|докупил|прикупил)\s/.test(t);   /* «запиши покупку…», «я купил…» — цифры разбирает «мозг», сохраняет человек */
   /* команды телефона: без сервера и без затрат */
   function taskCmd(t, q) {
+    if (/^(открой|покажи|давай|відкрий)\s+(этот\s+|мне\s+)?урок$|^давай урок$/.test(t.trim()) && ST.lessonOffer && now() - ST.lessonOffer.at < 1800 && window.MLX && MLX.lesson) {
+      const id = ST.lessonOffer.id; MLX.lesson.open(id); logAct('Открыл урок: ' + MLX.lesson.title(id)); ST.lessonOffer = null; return 'Открываю урок «' + MLX.lesson.title(id) + '».';
+    }
     const nv = t.match(/^(открой|покажи|перейди|зайди|отвори|відкрий|покажи мне)\s+(?:мне\s+)?(?:в\s+|на\s+)?(.+)$/);
     if (nv) { const tgt = NAV.find(([re]) => re.test(nv[2])); if (tgt) { const say = navTo(tgt[1]); if (say) return say; } }
     const nm = String(q || '').match(/^\s*(?:орион,?\s*)?(?:запиши|запиши-ка|сделай|добавь|запиши мне)?\s*(?:заметку|заметка|в заметки|нотатку)[,:]?\s*(?:что\s+)?(.+)$/i);
@@ -1482,7 +1515,7 @@
       lx: t => Lx(t),
       ask: q => answer(q), lastAsk: () => ST.lastAsk || null, ctx: () => brainCtx(), hist: () => ST.hist || [],
       mood: m => { if (ST.forceHour == null) ST.forceHour = 12; ST.pct = { calm: 0, up: 3, rocket: 9, down: -3, crash: -9 }[m]; ST.go = m === 'hunter'; if (m === 'offline') { ST.offline = true; ST.offSince = now() - 120; } else ST.offline = false; ST.lastInput = now(); wake(); },
-      say: t => speak(t, { pri: 2 }), sayLog: () => ST.sayLog || [], nameFill: t => nameFill(t), memo: t => memoSplit(t), memSafe: t => memSafe(t), act: (n, x) => doAct(n, x), calm: () => calmText(), calmDue: () => calmDue(), brief2: o => brief(o), snapPrev: v => { ST.snapPrev = v; }, remTick: () => remTick(), remDue: (t, ago) => remAdd(t, Date.now() - (ago || 1000)), remQ: t => remQ(t), split: (t, live) => splitParts(t, live), stress: t => stressRu(t),
+      say: t => speak(t, { pri: 2 }), sayLog: () => ST.sayLog || [], nameFill: t => nameFill(t), memo: t => memoSplit(t), memSafe: t => memSafe(t), act: (n, x) => doAct(n, x), calm: () => calmText(), lessonPick: () => lessonPick(ST.D), ceilText: o => ceilText(o), lessonOffer: v => { ST.lessonOffer = v ? { id: v, at: now() } : null; }, calmDue: () => calmDue(), brief2: o => brief(o), snapPrev: v => { ST.snapPrev = v; }, remTick: () => remTick(), remDue: (t, ago) => remAdd(t, Date.now() - (ago || 1000)), remQ: t => remQ(t), split: (t, live) => splitParts(t, live), stress: t => stressRu(t),
       tap: () => tapped(),
       brief: () => brief(),
       reply: q => reply(q),

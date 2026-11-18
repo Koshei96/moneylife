@@ -237,6 +237,8 @@
   function planGet() { const p = lsGet(planKey(), null); if (!p || p.v !== 1 || !p.a) return null; for (const q of Q) { const v = p.a[q.k]; if (!(Number.isInteger(v) && v >= 0 && v < q.o.length)) return null; } return p; }
   const planSave = p => lsSet(planKey(), p);
   X.planGet = planGet;
+  /* 18.11.2026 (этап 5, №8): доля крипты выше потолка из личного плана — для Ориона */
+  X.cryptoOver = D => { try { const pl = planGet(); if (!pl) return null; const R = planResult(pl), sh = cryptoShare(pl, D || derive()); return sh != null && sh > R.ceil + .5 ? { sh: Math.round(sh), ceil: R.ceil } : null; } catch (e) { return null; } };
   X.open = (...a) => xOpen(...a);   /* общая шторка — для других модулей (достижения) */
   /* чистая функция: ответы → этап, профиль, потолок крипты, набор правил, шаги */
   function planResult(p) {
@@ -350,6 +352,8 @@
     xOpen('learn', 'Знания', h, null, learnFromPlan && planGet() ? () => showPlan(planGet()) : null);
   }
   let learnFromPlan = false, lesBack = null;
+  /* 18.11.2026 (этап 5, №9): урок к ситуации — Орион предлагает, человек открывает голосом или кнопкой */
+  X.lesson = { title: id => { const l = LESSONS.find(x => x.id === id); return l ? l.t : ''; }, read: id => !!readGet()[id], open: id => { closeSheets(); setTimeout(() => openLesson(id, () => openLearn()), 260); } };
   function openLesson(id, back) {
     const l = LESSONS.find(x => x.id === id); if (!l) return; lesBack = back || lesBack || (() => openLearn());
     const rd = readGet(); if (!rd[id]) { rd[id] = today(); xPatch({ read: rd }); }
