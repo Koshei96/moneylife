@@ -1535,6 +1535,19 @@ def run_browser():
               await M.ask('удали заметку про налоги'); const r=T.notes().filter(x=>!keep.has(x.id)).map(x=>x.t); T.notes().filter(x=>!keep.has(x.id)).forEach(x=>T.delNote(x.id)); return r;})()""")
             if fr == ['налоги за прошлый год', 'купить SOL']: ok('Орион: подходят несколько заметок — снимает самую свежую («налоговую» по основе слова «налоги»)')
             else: fail('Орион: удаление самой свежей подходящей', str(fr))
+            # ревью Глеба (PR №12): короткие слова не обрезаются — «про долг» не снимает «долларов», «про план» — не «оплатить платеж», «банк» — не «банан», «газ» — не «газета»
+            sw = pg.evaluate("""(async()=>{const M=Mascot.debug,T=Mascot.tasks,said=()=>M.state().said,keep=new Set(T.notes().map(x=>x.id)),keepR=new Set(T.rem().map(x=>x.id)),out={};
+              for(const n of ['купить на 100 долларов BTC','оплатить платеж за квартиру','купить банан','почитать газету']) await M.ask('запиши заметку: '+n);
+              const n0=T.notes().map(x=>x.t);
+              for(const w of ['долг','план','банк','газ']){await M.ask('удали заметку про '+w); out[w]=[said(), T.notes().length===n0.length];}
+              await M.ask('запиши заметку: вернуть долги Саше'); await M.ask('удали заметку про долг'); out.dolgi=[said(), T.notes().some(x=>x.t==='вернуть долги Саше')];
+              const w=h=>new Date(Date.now()+h*3600e3).toISOString().slice(0,16), r0=T.rem().filter(x=>!x.done).length;
+              M.act('add_reminder',{text:'оплатить платеж за квартиру',when:w(5)}); await M.ask('отмени напоминание про план'); out.rem=[said(), T.rem().filter(x=>!x.done).length===r0+1];
+              T.notes().filter(x=>!keep.has(x.id)).forEach(x=>T.delNote(x.id)); T.rem().filter(x=>!keepR.has(x.id)).forEach(x=>T.delRem(x.id)); return out;})()""")
+            if (all(sw[k] == [f'Не нашёл заметку про {k}.', True] for k in ['долг', 'план', 'банк', 'газ']) and sw['dolgi'] == ['Удалил: вернуть долги Саше.', False]
+                    and sw['rem'] == ['Не нашёл напоминание про план.', True]):
+                ok('Орион: короткие слова — целиком: «про долг» не снимает заметку про доллары, «про план» — про платёж, «банк» — не «банан», «газ» — не «газета»; «долг» находит «долги»')
+            else: fail('Орион: удаление по короткому слову', str(sw))
             # 18.11.2026 (этап 5): утренний брифинг, антипаника, оповещения о цене через сервер
             mb = pg.evaluate("""(()=>{const D=Mascot.debug.state&&window.MSC&&MSC.last?null:null;
               const tot=(window.derive?derive():{}).total||0, inv=(window.derive?derive():{}).invPriced||0;
