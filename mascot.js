@@ -682,12 +682,56 @@
   const plain = h => String(h || '').replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim();
 
   /* ---------- сводка: «Доброе утро, Андрей. Портфель — …» ---------- */
-  function brief() {
+  /* антипаника (этап 5, 18.11.2026): биткоин за сутки −10% и больше — один раз в день спокойно: правило из книги и ваш план. Не совет купить или продать */
+  const CALM_AT = -10;
+  function calmDue() { const lv = (ST.S && ST.S.live) || {}, ch = lv.change ? +lv.change.BTC : NaN; return isFinite(ch) && ch <= CALM_AT && lsGet('or-calm', '') !== dayKey(); }
+  function calmText() {
+    const S = ST.S || {}, D = ST.D || {}, lv = S.live || {}, ch = +(lv.change && lv.change.BTC), btc = +(lv.prices && lv.prices.BTC) || +(D.prices && D.prices.BTC) || 0;
+    const out = ['Спокойно' + nm() + '. Биткоин за сутки ' + signW(ch) + ' ' + pctW(ch) + '.'];
+    out.push(pick(['Морган Хаузел в «Психологии денег» пишет: колебания — это плата за доходность, а не штраф.', 'Хаузел в «Психологии денег»: лучшая стратегия — та, которой вы держитесь и в плохие дни.', 'Хаузел в «Психологии денег»: главное в плане — что делать, если всё пошло не по плану. Этот план у вас уже есть.']));
+    const ath = +(S.cycle && S.cycle.ath) || 0, l = ((S.cycle && S.cycle.levels) || []).filter(x => x && x.status === 'pending' && x.drop > 0).sort((a, b) => a.n - b.n)[0];
+    if (ST.go) out.push('Биткоин на ступени лестницы — для таких дней она и рассчитана. Решение по плану за вами.');
+    else if (l && ath > 0 && btc > 0) { const tg = ath * (1 - l.drop / 100), dist = (1 - tg / btc) * 100; if (dist > 0.5) out.push('Ваша лестница рассчитана заранее: до ' + (ORD[l.n] || l.n + '-й') + ' ступени ещё ' + pctW(dist) + '.'); }
+    out.push('Резких решений сегодня не нужно.');
+    return out.join(' ');
+  }
+  /* утро (первая сводка за день): что изменилось с прошлого раза, напоминания на сегодня, план месяца */
+  const morningDue = () => lsGet('ms-newsDay', '') !== dayKey();
+  function snapTake(D) {
+    if (!D || !(D.total > 0) || D.noPrice) return;
+    const sn = lsGet('or-snap', null), k = dayKey(), pnl = D.total - (+D.invPriced || 0);
+    if (!sn || sn.day !== k) { if (sn && sn.day) ST.snapPrev = sn; lsSet('or-snap', { day: k, at: Date.now(), total: D.total, pnl }); }
+    else if (!ST.snapPrev) ST.snapPrev = lsGet('or-snapPrev', null);
+    if (ST.snapPrev) lsSet('or-snapPrev', ST.snapPrev);
+  }
+  function morningBits(D) {
+    const out = [], M = window.MLX || {};
+    const sp = ST.snapPrev;
+    if (sp && sp.total > 0 && D.total > 0 && !D.noPrice) {
+      const pnl = D.total - (+D.invPriced || 0), dl = pnl - (+sp.pnl || 0), pc = dl / sp.total * 100, yd = Date.now() - (+sp.at || 0) < 36 * 3600e3;
+      if (Math.abs(pc) >= 0.3) out.push((yd ? 'Со вчера' : 'С прошлого раза') + ' портфель ' + (dl > 0 ? 'вырос' : 'снизился') + ' на ' + (ST.hide ? pctW(Math.abs(pc)) : moneyW(Math.abs(dl))) + '.');
+      else out.push((yd ? 'Со вчера' : 'С прошлого раза') + ' портфель почти не изменился.');
+    }
+    const td = new Date(), end = new Date(td.getFullYear(), td.getMonth(), td.getDate() + 1).getTime();
+    const R = TASK.rem.filter(x => !x.done && x.when > Date.now() && x.when < end).sort((a, b) => a.when - b.when);
+    if (R.length) out.push((R.length > 1 ? 'Сегодня напоминания: ' : 'Сегодня напоминание: ') + R.slice(0, 2).map(x => 'в ' + new Date(x.when).getHours() + ':' + pad2(new Date(x.when).getMinutes()) + ' — ' + x.t).join('; ') + '.');
+    const mi = M.monthInfo ? M.monthInfo(D) : null, left = new Date(td.getFullYear(), td.getMonth() + 1, 0).getDate() - td.getDate();
+    const lw = left <= 7 ? (left === 0 ? ' Сегодня последний день месяца.' : ' До конца месяца ' + left + ' ' + (left === 1 ? 'день' : left < 5 ? 'дня' : 'дней') + '.') : '';
+    if (mi && mi.hasDep && mi.dca > 0.5) out.push('По плану месяца осталось купить на ' + (ST.hide ? 'сумму из плана' : moneyW(mi.dca)) + '.' + lw);
+    else if (mi && !mi.hasDep && mi.budget > 0 && mi.bought < mi.budget * 0.98) out.push('План месяца выполнен на ' + Math.round(mi.bought / mi.budget * 100) + ' процентов.' + lw);
+    return out;
+  }
+  function brief(o) {
+    o = o || {};
     const S = ST.S, D = ST.D; if (!S || !D) return '';
+    const morning = o.morning != null ? o.morning : morningDue(), calm = o.calm != null ? o.calm : calmDue();
+    if (calm) { const c = calmText(); return morning ? c + ' ' + morningBits(D).join(' ') : c; }
     const h = new Date().getHours(), out = [];
     out.push((h < 5 ? 'Доброй ночи' : h < 12 ? 'Доброе утро' : h < 18 ? 'Добрый день' : 'Добрый вечер') + nm() + '.');
     const lv = S.live || {}, btc = +(lv.prices && lv.prices.BTC) || +(D.prices && D.prices.BTC) || 0, ch = lv.change ? lv.change.BTC : null;
-    if (D.total > 0 && !D.noPrice) {
+    const mb = morning ? morningBits(D) : [];
+    if (mb.length && mb[0].indexOf('портфель') > 0) out.push(mb.shift());
+    else if (D.total > 0 && !D.noPrice) {
       const inv = +D.invPriced || 0, gp = inv > 0 ? (D.total - inv) / inv * 100 : null;
       if (ST.hide) { if (gp != null) out.push('Суммы скрыты, поэтому только проценты: портфель ' + (gp >= 0 ? 'в плюсе' : 'в минусе') + ' на ' + pctW(gp) + '.'); }
       else out.push('Портфель — ' + moneyW(D.total) + (gp != null ? ', ' + signW(gp) + ' ' + pctW(gp) + ' к вложенному.' : '.'));
@@ -700,16 +744,17 @@
       if (btc >= ath * 0.995) out.push('Это исторический максимум.');
       else if (l) { const tg = ath * (1 - l.drop / 100), dist = (1 - tg / btc) * 100; if (dist > 0.5) out.push('До ' + (ORD[l.n] || l.n + '-й') + ' ступени лестницы — ' + pctW(dist) + '.'); }
     }
+    out.push(...mb);
     const dd = +(S.settings && S.settings.depositDay) || 0, td = new Date();
     if (dd && td.getDate() === dd && !(S.tx || []).some(t => t && t.type === 'deposit' && String(t.ts || '').slice(0, 10) === td.toISOString().slice(0, 10))) out.push('Сегодня день пополнения биржи.');
     if (ST.fresh > 0) out.push('Есть непрочитанный сигнал — он на главной.');
-    let fv = null; try { const f = window.MLX && window.MLX.fng && window.MLX.fng(); if (f) { fv = +f.v; out.push('Индекс страха и жадности — ' + f.v + ', ' + f.w + '.'); } } catch (e) {}
+    let fv = null; try { const f = window.MLX && window.MLX.fng && window.MLX.fng(); if (f) { fv = +f.v; if (!mb.length && !morning) out.push('Индекс страха и жадности — ' + f.v + ', ' + f.w + '.'); } } catch (e) {}   /* утром — короче: индекс только словами ниже, если страх или жадность */
     /* «спокоен» — только когда и цена стоит, и настроение ровное. При страхе или жадности тихая цена — не спокойствие (17.11.2026, владелец: «страх 12, а потом — рынок спокоен» — нелогично) */
     const flat = ch != null && Math.abs(ch) < 1, fear = fv != null && isFinite(fv) && fv <= 25, greed = fv != null && isFinite(fv) && fv >= 75;
     out.push(fear ? (flat ? 'Цена за сутки почти не двигается, но настроение тревожное — на рынке сильный страх.' : 'На рынке сильный страх — в такие дни цена дёргается сильнее обычного.')
       : greed ? (flat ? 'Цена за сутки почти не двигается, но на рынке жадность — затишье бывает обманчивым.' : 'На рынке жадность — в такие дни легко поддаться азарту.')
-      : flat ? 'Рынок спокоен. Скучно — значит, всё по плану.' : pick(['На этом всё.', 'Если понадоблюсь — я рядом.', 'Остальное — штатно.']));
-    return out.join(' ');
+      : flat ? 'Рынок спокоен. Скучно — значит, всё по плану.' : morning ? '' : pick(['На этом всё.', 'Если понадоблюсь — я рядом.', 'Остальное — штатно.']));
+    return out.filter(Boolean).join(' ');
   }
   /* сводку озвучиваем заранее, в фоне: нажали на сферу — звук уже в памяти телефона и начинается сразу.
      Не чаще раза в 5 минут и только если текст изменился; под тестами и без живого голоса — нет */
@@ -726,6 +771,7 @@
   }
   function tell(auto) {
     const t = brief(); if (!t) return;
+    if (calmDue()) lsSet('or-calm', dayKey());
     lsSet('ms-news', Date.now()); lsSet('ms-newsDay', dayKey());
     speak(t, { pri: auto ? 1 : 2 });
     ST.lastLocal = { at: now(), q: '', sym: '', money: true, redo: () => brief() };   /* «а в гривнах?» после сводки */
@@ -819,7 +865,7 @@
     if (!t.trim()) return 'Не расслышал. Нажмите на меня и спросите ещё раз.';
     let sym = coinIn(t); const num = numIn(t, sym || (alertQ(t) ? 'BTC' : ''));
     /* оповещение: «сообщи, когда солана будет 150» */
-    if (alertQ(t) && (has('когда', 'если') || num)) {
+    if (alertQ(t) && !remQ(t) && (has('когда', 'если') || num)) {
       /* монету не назвали («поставь уведомление на 74 тысячи») — берём ту, чья цена ближе всего к названной (обычно биткоин) */
       if (!sym && num > 0) { let best = '', d = 1e9; ['BTC', 'ETH', 'SOL', 'BNB', 'XRP', 'TON', 'DOGE', 'ADA'].forEach(k => { const p = coinPrice(k); if (p > 0) { const x = Math.abs(Math.log(num / p)); if (x < d) { d = x; best = k; } } }); if (best && d < Math.log(3)) sym = best; }
       if (!sym) return 'Какая монета? Скажите, например: «сообщи, когда солана будет 150».';
@@ -909,6 +955,7 @@
       const f = M.fng ? M.fng() : null; if (f) c.fng = f.v;
       const ch = S.live && S.live.change ? +S.live.change.BTC : NaN; if (isFinite(ch)) c.btc24 = Math.round(ch * 10) / 10;   /* для правила «без шуток, когда рынок падает» */
       if (pl && pl.a && Number.isInteger(pl.a.exp)) c.exp = pl.a.exp;   /* опыт из «Личного плана»: 0 — начинаю … 3 — больше 3 лет */
+      { const d = new Date(), wd = ['воскресенье', 'понедельник', 'вторник', 'среда', 'четверг', 'пятница', 'суббота'][d.getDay()]; c.now = d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()) + ' ' + pad2(d.getHours()) + ':' + pad2(d.getMinutes()) + ', ' + wd; }   /* местное время — для «напомни завтра в 9» */
       if (MEM.on && MEM.items.length) c.mem = MEM.items.slice(-12).map(x => String(x.t).slice(0, 100)); else if (!MEM.on) c.memOff = true;   /* долгая память — только строки без сумм */
     } catch (e) {}
     return c;
@@ -964,12 +1011,118 @@
   /* «мозг» предлагает запомнить последней строкой «ПАМЯТЬ: …» — вырезаем её из речи и спрашиваем согласие */
   const MEMO_RE = /\s*ПАМ(?:ЯТЬ|['’ʼ]?ЯТЬ):\s*([^\n]*)$/;
   function memoSplit(t) { const m = String(t || '').match(MEMO_RE); return m ? { text: String(t).slice(0, m.index).trim(), memo: m[1].replace(/[.!]+$/, '').trim() } : { text: String(t || '').trim(), memo: '' }; }
+  /* ---------- голосовые действия (этап 4, 18.11.2026): переходы, заметки, напоминания, запись покупки, журнал ----------
+     Деньги голосом не двигаются: запись покупки только открывает заполненную форму — сохраняет человек своей кнопкой.
+     Заметки и напоминания — в телефоне, копия — в аккаунте (app/orion-notes, app/orion-rem). Журнал — в телефоне, 50 последних. */
+  const TASK = { notes: lsGet('or-notes', []), rem: lsGet('or-rem', []), log: lsGet('or-log', []) };
+  ['notes', 'rem', 'log'].forEach(k => { if (!Array.isArray(TASK[k])) TASK[k] = []; });
+  const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+  function taskSave(k) {
+    lsSet('or-' + k, TASK[k]);
+    if (k !== 'log') try { if (A.docSave) A.docSave(k === 'notes' ? 'orion-notes' : 'orion-rem', TASK[k]); } catch (e) {}
+    try { if (window.MLX && MLX.tasksRow) MLX.tasksRow(); } catch (e) {}
+  }
+  function logAct(t, how) { TASK.log.push({ at: Date.now(), t: String(t).slice(0, 160), how: how || 'голос' }); if (TASK.log.length > 50) TASK.log = TASK.log.slice(-50); taskSave('log'); }
+  function noteAdd(t) { t = String(t || '').replace(/\s+/g, ' ').trim().replace(/^[,:—-]\s*/, ''); if (!t) return false; TASK.notes.push({ id: uid(), at: Date.now(), t: t.slice(0, 300) }); if (TASK.notes.length > 100) TASK.notes = TASK.notes.slice(-100); taskSave('notes'); return true; }
+  function remAdd(t, when) { TASK.rem.push({ id: uid(), at: Date.now(), when, t: String(t).slice(0, 200), done: false }); TASK.rem = TASK.rem.filter(x => !x.done || Date.now() - x.when < 7 * 864e5).slice(-50); taskSave('rem'); }
+  const pad2 = n => String(n).padStart(2, '0');
+  const MON_G = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
+  function whenW(ms) {
+    const d = new Date(ms), n = new Date(), day = x => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime(), dd = Math.round((day(d) - day(n)) / 864e5);
+    const hm = d.getHours() + ':' + pad2(d.getMinutes());
+    return (dd === 0 ? 'сегодня' : dd === 1 ? 'завтра' : dd === 2 ? 'послезавтра' : d.getDate() + ' ' + MON_G[d.getMonth()]) + ' в ' + hm;
+  }
+  /* напоминания: проверка раз в 20 секунд, пока приложение открыто; пропущенные — при следующем открытии */
+  function remTick() {
+    const due = TASK.rem.filter(x => !x.done && x.when <= Date.now());
+    if (!due.length || document.getElementById('mlIntro')) return;
+    due.forEach(x => { x.done = true; });
+    taskSave('rem');
+    const late = due.filter(x => Date.now() - x.when > 10 * 60e3);
+    const txt = due.map(x => x.t).join('; ');
+    speak((late.length === due.length ? (due.length > 1 ? 'Пропущенные напоминания: ' : 'Пропущенное напоминание: ') : 'Напоминание: ') + txt + '.', { pri: 3, raw: false });
+    try { if (A.notify) A.notify('Напоминание MoneyLife', txt); } catch (e) {}
+    logAct('Напомнил: ' + txt, 'авто');
+  }
+  /* копии из аккаунта: новый телефон — заметки и напоминания возвращаются */
+  async function taskRestore() {
+    if (ST.taskSynced || !A.docLoad) return; ST.taskTries = (ST.taskTries || 0) + 1; if (ST.taskTries > 6) { ST.taskSynced = true; return; }
+    let a = null, b = null; try { [a, b] = await Promise.all([A.docLoad('orion-notes'), A.docLoad('orion-rem')]); } catch (e) { a = b = null; }
+    if (a == null || b == null) return;
+    ST.taskSynced = true;
+    [['notes', a], ['rem', b]].forEach(([k, r]) => {
+      const have = new Set(TASK[k].map(x => x.id)); let add = 0;
+      (Array.isArray(r) ? r : []).forEach(x => { if (x && x.id && x.t && !have.has(x.id)) { TASK[k].push(x); add++; } });
+      if (add) { TASK[k].sort((p, q) => p.at - q.at); lsSet('or-' + k, TASK[k]); }
+      if (add || (TASK[k].length && !(Array.isArray(r) && r.length))) taskSave(k);
+    });
+  }
+  /* исполнитель действий — общий для команд телефона и инструментов «мозга» */
+  const NAV = [[/главн|домой|начал/, 'home'], [/монет|портфел|актив/, 'coins'], [/стратег|лестниц|ступен|резерв/, 'strategy'], [/истори|сделк|операци|покупки$|журнал сдел/, 'activity'],
+    [/настройк/, 'settings'], [/личн\w* план|план\w* (пути|независим)|мой план/, 'plan'], [/знани|урок/, 'learn'], [/оповещ|алерт/, 'alerts'], [/памят|что ты помнишь/, 'memory'],
+    [/замет|напомин|дела ориона|дела/, 'tasks'], [/покупк|купить|запис\w* покупк/, 'buy'], [/пополнен|депозит/, 'deposit']];
+  function navTo(to) {
+    if (!A.act) return '';
+    const r = A.act('nav', { to }); if (!r || !r.ok) return '';
+    logAct('Открыл: ' + r.label); return 'Открываю ' + r.label + '.';
+  }
+  function doAct(name, x) {
+    x = x || {};
+    if (name === 'navigate') { const say = navTo(String(x.screen || '')); return say || 'Этот экран я пока открыть не могу.'; }
+    if (name === 'add_note') { const t = String(x.text || '').trim(); if (!t) return 'Что записать?'; noteAdd(t); logAct('Заметка: ' + t); return 'Записал.'; }
+    if (name === 'add_reminder') {
+      const t = String(x.text || '').trim(), w = Date.parse(String(x.when || '').replace(' ', 'T'));
+      if (!t) return 'О чём напомнить?';
+      if (!isFinite(w) || w < Date.now() + 30e3) return 'Не понял, когда напомнить. Скажите, например: «напомни завтра в девять проверить портфель».';
+      if (w > Date.now() + 366 * 864e5) return 'Так далеко вперёд не напоминаю — не больше чем на год.';
+      remAdd(t, w); logAct('Напоминание ' + whenW(w) + ': ' + t);
+      let tip = ''; try { if (A.pushOn && !A.pushOn() && Date.now() - (ST.pushTip || 0) > 6 * 3600e3) { ST.pushTip = Date.now(); tip = ' Чтобы оно пришло и при закрытом приложении, включите в настройках «Сигналы на телефоне».'; } } catch (e) {}
+      return 'Напомню ' + whenW(w) + ': ' + t + '.' + tip;
+    }
+    if (name === 'record_purchase') {
+      const sym = String(x.sym || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 12);
+      const r = A.act ? A.act('buy', { sym, usd: +x.usd || 0, qty: +x.qty || 0, price: +x.price || 0 }) : null;
+      if (!r || !r.ok) return 'Не получилось открыть запись покупки.';
+      logAct('Открыл запись покупки' + (sym ? ' ' + sym : '') + (+x.usd ? ' на $' + (+x.usd) : '') + (+x.price ? ' по $' + (+x.price) : '') + ' — ждёт вашего «Сохранить»');
+      return 'Открыл запись покупки' + (sym ? ' ' + sym : '') + '. Проверьте цифры и нажмите «Сохранить» — без вашего нажатия ничего не запишется.';
+    }
+    if (name === 'set_price_alert') {
+      const sym = String(x.sym || '').toUpperCase().replace(/[^A-Z0-9]/g, ''), price = +x.price;
+      if (!sym || !(price > 0)) return 'Для оповещения нужна монета и цена.';
+      let r = null; try { r = A.addAlert ? A.addAlert(sym, price) : null; } catch (e) { r = null; }
+      if (!r) return 'Не получилось поставить оповещение.';
+      logAct('Оповещение: ' + sym + ' — $' + price); return typeof r === 'string' ? r : 'Поставил оповещение: ' + sym + ', ' + Math.round(price) + ' долларов.';
+    }
+    return '';
+  }
+  const REM_Q = /(напомни|напомин|нагадай|нагадаю)/, REM_T = /(завтра|сегодня|послезавтра|утром|вечером|дн[её]м|ночью|через|в\s+\d{1,2}(:\d\d)?(?![\d.,])|час|понедельн|вторник|сред[уау]|четверг|пятниц|суббот|воскресен|числа|январ|феврал|март|апрел|ма[йя]|июн|июл|август|сентябр|октябр|ноябр|декабр)/, PRICE_T = /(будет|станет|достигнет|упад|вырастет|подним|опуст|дойд|цена|курс|по\s+\d|долл|\$)/;
+  const remQ = t => REM_Q.test(t) && REM_T.test(t) && !PRICE_T.test(t);
+  const buyQ = t => /(запиши|внеси|добавь|запиши мне|занеси)\s+(мою\s+|мне\s+)?(покупк|что (я )?купил|что (я )?докупил)|^(я\s+)?(купил|докупил|прикупил)\s/.test(t);   /* «запиши покупку…», «я купил…» — цифры разбирает «мозг», сохраняет человек */
+  /* команды телефона: без сервера и без затрат */
+  function taskCmd(t, q) {
+    const nv = t.match(/^(открой|покажи|перейди|зайди|отвори|відкрий|покажи мне)\s+(?:мне\s+)?(?:в\s+|на\s+)?(.+)$/);
+    if (nv) { const tgt = NAV.find(([re]) => re.test(nv[2])); if (tgt) { const say = navTo(tgt[1]); if (say) return say; } }
+    const nm = String(q || '').match(/^\s*(?:орион,?\s*)?(?:запиши|запиши-ка|сделай|добавь|запиши мне)?\s*(?:заметку|заметка|в заметки|нотатку)[,:]?\s*(?:что\s+)?(.+)$/i);
+    if (nm && nm[1] && nm[1].trim().length > 1) { noteAdd(nm[1]); logAct('Заметка: ' + nm[1].trim()); return 'Записал.'; }
+    if (/^(какие|прочитай|прочти|что)\s+(у меня\s+)?(в\s+)?заметк/.test(t) || /^мои заметки/.test(t)) {
+      if (!TASK.notes.length) return 'Заметок пока нет. Скажите «запиши заметку…».';
+      return 'Последние заметки: ' + TASK.notes.slice(-3).reverse().map(x => x.t).join('; ') + '.';
+    }
+    if (/^удали\s+(последнюю\s+)?заметку/.test(t)) { const x = TASK.notes.pop(); if (!x) return 'Заметок нет.'; taskSave('notes'); logAct('Удалил заметку: ' + x.t); return 'Удалил: ' + x.t + '.'; }
+    if (/^(какие|что)\s+(у меня\s+)?напоминани|^мои напоминани/.test(t)) {
+      const L = TASK.rem.filter(x => !x.done).sort((a, b) => a.when - b.when);
+      if (!L.length) return 'Напоминаний нет.';
+      return L.slice(0, 3).map(x => whenW(x.when) + ' — ' + x.t).join('; ') + '.';
+    }
+    if (/^(отмени|удали|убери)\s+(все\s+)?напоминани/.test(t)) { const n = TASK.rem.filter(x => !x.done).length; TASK.rem = TASK.rem.filter(x => x.done); taskSave('rem'); logAct('Отменил напоминания: ' + n); return n ? 'Отменил.' : 'Напоминаний и так нет.'; }
+    return '';
+  }
   const ASK_ERR = { day_limit: 'На сегодня вопросы ко мне закончились. Завтра продолжим.', month_limit: 'Лимит вопросов на этот месяц исчерпан.' };
   async function answer(q, byVoice) {
     const t = norm(q), local = t.trim() ? reply(q) : reply('');
     const sure = local && local.indexOf(UNK) !== 0 && !/^Не расслышал/.test(local);
     const follow = ST.lastBrain && now() - ST.lastBrain < 120 && (/^\s*(а|и|ну|тогда|а\s+если)(?=[\s,?!.]|$)/.test(t) || t.trim().split(/\s+/).length <= 3) && !/(у меня|мои |мой |сколько у)/.test(t);   /* переспрос: «а эфир?», «а почему?» */
-    const toBrain = A.ask && t.trim() && !(alertQ(t) && sure) && (marketQ(t) || !sure || follow);
+    const toBrain = A.ask && t.trim() && (remQ(t) || buyQ(t) || (!(alertQ(t) && sure) && (marketQ(t) || !sure || follow)));   /* «напомни завтра в 9…» — разбирает «мозг» (дата и время) */
     if (ST.pendingMemo && now() - ST.pendingMemo.at < 60) {   /* ответ на «Запомнить: …?» */
       const pm = ST.pendingMemo; ST.pendingMemo = null;
       if (YES.test(t)) { const okm = memAdd(pm.t); speak(okm ? 'Запомнил.' : 'Это я не запоминаю.', { pri: 2 }); return; }
@@ -977,6 +1130,8 @@
     }
     const mc = memCmd(t, q);
     if (mc) { speak(mc, { pri: 2, follow: byVoice }); return; }
+    const tc = taskCmd(t, q);
+    if (tc) { speak(tc, { pri: 2, follow: byVoice && !/^Открываю/.test(tc) }); return; }
     const fu = localFollow(t);
     if (fu) { remember(q, fu, PRIV.test(fu)); speak(fu, { pri: 2, follow: byVoice }); return; }
     if (!toBrain) {
@@ -999,6 +1154,10 @@
     let r = null; try { r = await A.ask(q, sym, { hist, ctx: brainCtx(), lang: UK ? 'uk' : 'ru' }, onPart); } catch (e) { r = null; }
     ST.lastAsk = r;
     if (gen !== ST.askGen) return;   /* пока ждали — человек перебил или задал новый вопрос */
+    if (r && r.act && r.act.name) {   /* «мозг» попросил действие — исполняет телефон и сам говорит, что вышло */
+      const say = doAct(r.act.name, r.act.input);
+      if (say) { remember(q, say); ST.lastBrain = now(); if (!first) speak(say, { pri: 2, follow: byVoice && !/^Открыл/.test(say) }); else speak(say, { pri: 2, append: true, follow: false }); return; }
+    }
     if (r && r.text) {
       const ms = memoSplit(r.text); r.text = ms.text || r.text;
       ST.lastBrain = now(); remember(q, r.text);
@@ -1010,6 +1169,8 @@
       return;
     }
     if (first) return;   /* начало ответа уже прозвучало — обрыв связи не озвучиваем */
+    if (buyQ(t) && !(r && ASK_ERR[r.error])) { speak(doAct('record_purchase', { sym: sym || '' }) + (sym ? '' : ' Монету и цифры впишите сами.'), { pri: 2 }); return; }   /* без связи — просто открываем форму покупки */
+    if (remQ(t) && !(r && ASK_ERR[r.error])) { speak('Сейчас нет связи — не могу разобрать время напоминания. Попробуйте чуть позже.', { pri: 2 }); return; }
     const msg = (r && ASK_ERR[r.error]) || (sure ? local : (sym && coinPrice(sym) ? reply(NAME_N[sym] || sym) + ' ' : '') + 'Сейчас не могу связаться с сервером — попробуйте чуть позже.');
     speak(msg, { pri: 2 });
   }
@@ -1124,7 +1285,7 @@
     else if (name === 'milestone') { t = ST.hide || !data.v ? 'Новый рубеж портфеля пройден' + nm() + '.' : 'Рубеж пройден: портфель больше ' + moneyW(data.v) + '.'; buzz([15, 50, 15]); }
     else if (name === 'coinMove') t = data.sym + ' за сутки ' + signW(data.ch) + ' ' + pctW(data.ch) + '. ' + (data.neg ? 'Решения — по плану, а не по эмоциям.' : 'Хороший день для этой монеты.');
     else if (name === 'screen') t = 'Свежий подбор альткоинов готов.';
-    else if (name === 'priceAlert') { t = Nm() + (NAME_N[data.sym] || data.sym) + (data.dir === 'up' ? ' поднялся' : ' опустился') + ' до ' + priceW(+data.price) + ' — ваше оповещение сработало.'; t = cap1(t); buzz([20, 60, 20]); }
+    else if (name === 'priceAlert') { t = Nm() + (NAME_N[data.sym] || data.sym) + (data.dir === 'up' ? ' поднялся' : ' опустился') + ' до ' + priceW(+data.price) + (data.late ? ', пока приложение было закрыто, — оповещение сработало.' : ' — ваше оповещение сработало.'); t = cap1(t); buzz([20, 60, 20]); }
     else if (name === 'ach') t = pick(['Новое достижение' + nm() + ': ' + data.t + '.', 'Отмечаю достижение — «' + data.t + '». Так держать.']);
     else if (name === 'streak') t = 'Серия — ' + data.n + ' ' + plural(data.n, 'месяц', 'месяца', 'месяцев') + ' подряд с покупками' + nm() + '. Дисциплина — главный актив.';
     else if (name === 'd14') t = data && data.text ? String(data.text) : '';
@@ -1242,10 +1403,16 @@
     const S = info.S, D = info.D, P = info.P || {};
     ST.hide = !!P.hide; ST.sound = P.msVoice !== false; if (ST.fx !== !!P.msFx) { ST.fx = !!P.msFx; voFx(); } ST.go = !!info.go; ST.fresh = info.fresh || 0; ST.money = info.money || ST.money; if (typeof info.rate === 'function') ST.rate = info.rate;
     ST.name = String(P.name || '').trim().slice(0, 24);
+    snapTake(D);
     prefetchBrief();
     if (!ST.sound && TTS.ok && TTS.cur) try { speechSynthesis.cancel(); } catch (e) {}
+    /* антипаника вживую: падение дошло до −10%, пока приложение открыто и с ним уже говорили (звук разрешён жестом) */
+    if (AUTO && ST.lastInput && !ST.hide && ST.sound && calmDue() && !morningDue() && !speaking() && visible() && !isNight()) { lsSet('or-calm', dayKey()); speak(calmText(), { pri: 2 }); }
     ST.S = S; ST.D = D;
     if (!ST.memSynced && window.mlUser) memRestore();
+    if (!ST.taskSynced && window.mlUser) taskRestore();
+    try { if (A.pushRefresh) A.pushRefresh(); } catch (e) {}
+    if (!ST.remT) { ST.remT = setInterval(remTick, 20000); setTimeout(remTick, 4000); }
     const off = !!info.offline; if (off && !ST.offline) ST.offSince = now(); ST.offline = off;
     ST.pct = info.pct == null || !isFinite(info.pct) ? null : info.pct;
     if (!S.ready) return;
@@ -1300,6 +1467,7 @@
   window.Mascot = {
     init, sync, number, greet,
     hush: () => { TTS.q = []; stopVoice(); },
+    tasks: { notes: () => TASK.notes.slice(), rem: () => TASK.rem.slice(), log: () => TASK.log.slice(), delNote: id => { TASK.notes = TASK.notes.filter(x => x.id !== id); taskSave('notes'); }, delRem: id => { TASK.rem = TASK.rem.filter(x => x.id !== id); taskSave('rem'); }, when: ms => whenW(ms) },
     mem: { list: () => MEM.items.slice(), del: id => memDel(id), clear: () => memClear(), on: v => { if (v != null) memSetOn(v); return MEM.on; } },   /* замолчать сразу (перед обучающим роликом) */
     ask: q => answer(q), listen: () => listen(),
     event: (name, data) => trigger(name, data),
@@ -1314,7 +1482,7 @@
       lx: t => Lx(t),
       ask: q => answer(q), lastAsk: () => ST.lastAsk || null, ctx: () => brainCtx(), hist: () => ST.hist || [],
       mood: m => { if (ST.forceHour == null) ST.forceHour = 12; ST.pct = { calm: 0, up: 3, rocket: 9, down: -3, crash: -9 }[m]; ST.go = m === 'hunter'; if (m === 'offline') { ST.offline = true; ST.offSince = now() - 120; } else ST.offline = false; ST.lastInput = now(); wake(); },
-      say: t => speak(t, { pri: 2 }), sayLog: () => ST.sayLog || [], nameFill: t => nameFill(t), memo: t => memoSplit(t), memSafe: t => memSafe(t), split: (t, live) => splitParts(t, live), stress: t => stressRu(t),
+      say: t => speak(t, { pri: 2 }), sayLog: () => ST.sayLog || [], nameFill: t => nameFill(t), memo: t => memoSplit(t), memSafe: t => memSafe(t), act: (n, x) => doAct(n, x), calm: () => calmText(), calmDue: () => calmDue(), brief2: o => brief(o), snapPrev: v => { ST.snapPrev = v; }, remTick: () => remTick(), remDue: (t, ago) => remAdd(t, Date.now() - (ago || 1000)), remQ: t => remQ(t), split: (t, live) => splitParts(t, live), stress: t => stressRu(t),
       tap: () => tapped(),
       brief: () => brief(),
       reply: q => reply(q),

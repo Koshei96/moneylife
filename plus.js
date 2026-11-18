@@ -419,20 +419,43 @@
   let sigT = 0, seenPulled = !('caches' in window);
   /* что уже показала фоновая проверка — забираем один раз при запуске, чтобы не повторять тот же сигнал */
   if (!seenPulled) caches.open('ml-cfg').then(ch => ch.match('cfg.json')).then(r => r ? r.json() : null).then(c => { if (c && c.seen) xPatch({ seen: Object.assign({}, c.seen, xGet().seen || {}) }); }).catch(() => {}).finally(() => { seenPulled = true; });
-  function sigCheck(D) { if (!seenPulled || !S.ready || S.live.status !== 'ok' || Date.now() - sigT < 20000) return; sigT = Date.now();
-    const btc = +D.prices.BTC || 0, cfg = cfgForSw(D), states = {}; for (const l of (S.cycle && S.cycle.levels) || []) states[l.n] = lvState(l, btc, D);
+  /* 18.11.2026 (этап 5, часть 2): копия сигналов в аккаунте — сервер orion-push раз в минуту сверяет ступени и цель с ценой BTC,
+     а в конце месяца напоминает о плане и серии. Сумм в копии нет: только цены ступеней, цель и «план выполнен или нет». */
+  let sigPulled = false, sigLast = '', sigSent = {};
+  async function sigPull() {
+    try { const d = await db.doc('app/orion-signals').get(), j = d && d.exists ? d.data() || {} : {}, sent = j.sent || {}; sigSent = sent;
+      const ks = Object.keys(sent); if (ks.length) { const seen = Object.assign({}, xGet().seen || {}); ks.forEach(k => { if (!seen[k]) seen[k] = +sent[k] || Date.now(); }); xPatch({ seen }); cfgLast = ''; } } catch (e) {}
+    sigPulled = true;
+  }
+  function sigCopy(D, cfg) {
+    if (typeof db === 'undefined' || !db || !window.mlUser || window.mlDemo) return;
+    const mi = X.monthInfo(D), st = streak(), d = new Date(), ym = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+    const hasPlan = !!mi.hasDep || mi.budget > 0, need = mi.hasDep ? mi.dca > 0.5 : mi.budget > 0 && mi.bought < mi.budget * 0.98;
+    let tz = 'Europe/Kyiv'; try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || tz; } catch (e) {}
+    const o = { v: 1, lang: cfg.lang, tz, on: !!cfg.on, ath: cfg.ath, athDate: cfg.athDate, levels: cfg.levels, goal: cfg.goal, plan: { ym, hasPlan, need }, streak: { ym, n: st.n, thisMonth: st.thisMonth } };
+    const k = JSON.stringify(o); if (k === sigLast) return; sigLast = k;
+    try {
+      const seen = xGet().seen || {}, sent = Object.assign({}, sigSent); Object.keys(seen).forEach(x => { if (/^(lv|goal):/.test(x) && !sent[x]) sent[x] = seen[x]; });   /* что телефон уже показал — сервер не повторит */
+      db.doc('app/orion-signals').set(Object.assign({ at: Date.now(), sent }, o)); } catch (e) {}
+  }
+  X.sigPull = sigPull; X.sigCopy = (D) => { sigLast = ''; sigCopy(D || derive(), cfgForSw(D || derive())); };
+  function sigCheck(D) { if (!seenPulled || !S.ready || S.live.status !== 'ok' || Date.now() - sigT < 20000) return;
+    if (!sigPulled && window.mlUser && !window.mlDemo && typeof db !== 'undefined' && db) { sigT = Date.now() - 15000; sigPull(); return; }
+    sigT = Date.now();
+    const btc = +D.prices.BTC || 0, cfg = cfgForSw(D), states = {}; sigCopy(D, cfg); for (const l of (S.cycle && S.cycle.levels) || []) states[l.n] = lvState(l, btc, D);
     const ev = sigEvents(cfg, btc, states); if (!ev.length) { cfgPush(D); return; }
     const seen = Object.assign({}, cfg.seen); for (const e of ev) { seen[e.k] = Date.now(); notify(e.title, e.body, e.k); }
     const keys = Object.keys(seen).sort((a, b) => seen[b] - seen[a]).slice(0, 40), keep = {}; for (const k of keys) keep[k] = seen[k]; xPatch({ seen: keep }); cfgPush(D); }
   async function notifToggle() {
     const sw = el('swNotif'); if (!sw) return; const was = !!xGet().notif;
-    if (was) { xPatch({ notif: false }); swSet('swNotif', false); play('tick'); cfgLast = ''; cfgPush(derive()); return; }
+    if (was) { xPatch({ notif: false }); swSet('swNotif', false); play('tick'); cfgLast = ''; cfgPush(derive()); try { if (window.mlPushSub) window.mlPushSub(false); } catch (e) {} return; }
     if (typeof Notification === 'undefined') { toast('Этот браузер не умеет показывать уведомления'); return; }
     let perm = Notification.permission; if (perm === 'default') { try { perm = await Notification.requestPermission(); } catch (e) { perm = 'denied'; } }
     if (perm !== 'granted') { toast('Уведомления запрещены в настройках телефона для этого приложения'); return; }
     xPatch({ notif: true }); swSet('swNotif', true); play('cash'); cfgLast = ''; cfgPush(derive());
     try { const reg = await navigator.serviceWorker.ready; if (reg.periodicSync) await reg.periodicSync.register('ml-check', { minInterval: 6 * 3600e3 }); } catch (e) {}
-    toast('Сигналы включены: ступени лестницы и цель BTC');
+    let push = false; try { push = window.mlPushSub ? await window.mlPushSub(true) : false; } catch (e) {}
+    toast(push ? 'Сигналы включены: ступени, цель BTC и напоминания Ориона' : 'Сигналы включены: ступени лестницы и цель BTC');
   }
 
   /* ================= события ================= */
@@ -442,7 +465,7 @@
     fng: () => openFng(), goal: () => openGoal(), goalsave: () => saveGoal(), share: () => share(), refresh: () => { el('refreshBtn').click(); },
     backup: () => exportData(), rules: () => { closeSheets(); openSettings(false); setTimeout(() => { const r = el('rules'); if (r && r.scrollIntoView) r.scrollIntoView({ block: 'start', behavior: reduced ? 'auto' : 'smooth' }); }, 380); },
     orname: () => { closeSheets(); setTimeout(X.askName, 260); }, namesave: () => nameSave(),
-    ormem: () => { closeSheets(); setTimeout(openMem, 260); }, memdel: b => { const M = window.Mascot && window.Mascot.mem; if (M) M.del(b.dataset.i); play('tick'); openMem(); }, memclear: () => { const M = window.Mascot && window.Mascot.mem; if (M) M.clear(); play('tick'); openMem(); toast('Орион всё забыл'); },
+    ormem: () => { closeSheets(); setTimeout(openMem, 260); }, ortasks: () => { closeSheets(); setTimeout(openTasks, 260); }, notedel: b => { const T = window.Mascot && window.Mascot.tasks; if (T) T.delNote(b.dataset.i); play('tick'); openTasks(); }, remdel: b => { const T = window.Mascot && window.Mascot.tasks; if (T) T.delRem(b.dataset.i); play('tick'); openTasks(); }, memdel: b => { const M = window.Mascot && window.Mascot.mem; if (M) M.del(b.dataset.i); play('tick'); openMem(); }, memclear: () => { const M = window.Mascot && window.Mascot.mem; if (M) M.clear(); play('tick'); openMem(); toast('Орион всё забыл'); },
     memtoggle: () => { const M = window.Mascot && window.Mascot.mem; if (M) M.on(!M.on()); play('tick'); openMem(); },
     alertnew: () => { const s = typeof cvSym === 'string' && cvSym ? cvSym : 'BTC'; closeSheets(); setTimeout(() => openAlert(s), 260); }, alsave: b => alertSave(b), aldel: b => alDel(b), alerts: () => { closeSheets(); setTimeout(openAlerts, 260); },
     week: () => { try { if (window.Mascot && window.Mascot.ask) window.Mascot.ask('как прошла неделя'); } catch (e) {} },
@@ -468,7 +491,27 @@
      Хранятся на этом телефоне: ml-x:<uid>.alerts = [{id, sym, price, dir: 'up'|'down', at}]. Срабатывают один раз:
      пока приложение открыто — при обновлении цен (сигнал на телефон, тост, Орион говорит); в фоне — sw.js по ценам Binance. */
   function alGet() { return (xGet().alerts || []).filter(a => a && a.sym && +a.price > 0); }
-  function alSave(list) { xPatch({ alerts: list.slice(-20) }); cfgLast = ''; try { cfgPush(derive()); } catch (e) {} renderAlCount(); }
+  function alSave(list) { xPatch({ alerts: list.slice(-20) }); cfgLast = ''; try { cfgPush(derive()); } catch (e) {} renderAlCount(); alCopy(); }
+  /* 18.11.2026 (этап 5): копия оповещений в аккаунте — сервер orion-push сверяет цены раз в минуту и шлёт уведомление при закрытом приложении */
+  function alCopy() { try { if (typeof db !== 'undefined' && db && window.mlUser && !window.mlDemo) db.doc('app/orion-alerts').set({ v: 1, at: Date.now(), lang: window.mlLang ? window.mlLang() : 'ru', items: alGet().map(a => ({ id: a.id, sym: a.sym, price: a.price, dir: a.dir, at: a.at })) }); } catch (e) {} }
+  /* что сработало на сервере, пока приложение было закрыто, — снимаем у себя и говорим; один раз за запуск, до своей проверки */
+  let alPulled = false, alPulling = false;
+  async function alPull() {
+    if (alPulled || alPulling) return; alPulling = true;
+    try {
+      const d = await db.doc('app/orion-alerts').get(), j = d && d.exists ? d.data() || {} : {};
+      const fired = (Array.isArray(j.fired) ? j.fired : []).filter(f => f && f.id), ids = new Set(fired.map(f => f.id));
+      const mine = alGet(), hit = mine.filter(a => ids.has(a.id));
+      if (hit.length) {
+        const seen = Object.assign({}, xGet().seen || {});
+        for (const a of hit) { seen['al:' + a.id] = Date.now(); const f = fired.find(x => x.id === a.id) || {}; toast(a.sym + ': ' + alUsd(a.price) + ' — оповещение сработало, пока приложение было закрыто');
+          try { if (window.Mascot) window.Mascot.event('priceAlert', { sym: a.sym, price: a.price, dir: a.dir, late: true, now: +f.now || 0 }); } catch (e) {} }
+        xPatch({ seen }); xPatch({ alerts: mine.filter(a => !ids.has(a.id)) }); renderAlCount(); cfgLast = '';
+      }
+      if (fired.length || (mine.length && !(j.items || []).length)) alCopy();   /* fired прочитан — копия без него; копии не было — создаём */
+      alPulled = true;
+    } catch (e) { alPulled = true; } finally { alPulling = false; }
+  }
   const livePx = sym => +(S.live && S.live.prices && S.live.prices[sym]) || 0;
   const pxOf = (sym, D) => livePx(sym) || +(D && D.prices && D.prices[sym]) || 0;
   const alUsd = v => usd(v, v >= 100 ? 0 : v >= 1 ? 2 : 4);
@@ -507,6 +550,7 @@
   function renderAlCount() { const c = el('alCnt'); if (c) { const n = alGet().length; c.textContent = n ? n + ' ' + (n % 10 === 1 && n % 100 !== 11 ? 'ждёт' : 'ждут') + ' срабатывания' : 'Скажу, когда монета дойдёт до вашей цены'; } }
   function alertsCheck(D) {
     if (!seenPulled || !S.ready || S.live.status !== 'ok') return;
+    if (!alPulled && window.mlUser && !window.mlDemo && typeof db !== 'undefined' && db) { alPull(); return; }
     const list = alGet(); if (!list.length) return;
     const left = [], fired = [];
     for (const a of list) { const p = livePx(a.sym); if (p && ((a.dir === 'up' && p >= a.price) || (a.dir === 'down' && p <= a.price))) fired.push(Object.assign({ now: p }, a)); else left.push(a); }
@@ -521,6 +565,7 @@
     xPatch({ seen }); alSave(left);
   }
   X.alertsCheck = alertsCheck;
+  X.alPull = force => { if (force) alPulled = false; return alPull(); };
 
   /* ================= серия дисциплины и итог недели ================= */
   const BUY_T = ['buy', 'dca', 'dip', 'start'];
@@ -584,6 +629,33 @@
   }
   function renderMemRow() { const r = el('orMemVal'), M = window.Mascot && window.Mascot.mem; if (!r || !M) return; const n = M.list().length; r.textContent = !M.on() ? 'Память выключена' : n ? n + ' ' + (n % 10 === 1 && n % 100 !== 11 ? 'запись' : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20) ? 'записи' : 'записей') : 'Пока ничего'; }
   X.memOpen = openMem; X.memRow = renderMemRow;
+  /* «Дела Ориона» (18.11.2026, этап 4): напоминания, заметки и журнал всего, что Орион сделал по голосу */
+  function openTasks() {
+    const T = window.Mascot && window.Mascot.tasks;
+    if (!T) { toast('Орион ещё не проснулся — откройте главную'); return; }
+    const tm = ms => { const d = new Date(ms); return dShort(d.toISOString()) + ', ' + d.getHours() + ':' + String(d.getMinutes()).padStart(2, '0'); };
+    const R = T.rem().filter(x => !x.done).sort((a, b) => a.when - b.when), N = T.notes().slice().reverse(), L = T.log().slice().reverse().slice(0, 20);
+    const row = (t, sub, x, id, lbl) => `<div class="row r3 static"><span class="col" style="grid-column:1/3"><span class="nm wrap">${esc(t)}</span><span class="sub">${esc(sub)}</span></span>${x ? `<button type="button" class="btn sm ghost" data-x="${x}" data-i="${esc(id)}" aria-label="${lbl}: ${esc(t)}">${lbl}</button>` : ''}</div>`;
+    const html = '<h4>Напоминания</h4>' + (R.length ? '<div class="list">' + R.map(x => row(x.t, T.when(x.when), 'remdel', x.id, 'Отменить')).join('') + '</div>' : '<p class="hint">Нет. Скажите Ориону: «напомни завтра в девять проверить портфель».</p>')
+      + '<h4>Заметки</h4>' + (N.length ? '<div class="list">' + N.map(x => row(x.t, 'записал ' + tm(x.at), 'notedel', x.id, 'Удалить')).join('') + '</div>' : '<p class="hint">Нет. Скажите: «запиши заметку: …».</p>')
+      + '<h4>Журнал действий</h4>' + (L.length ? '<div class="list">' + L.map(x => row(x.t, tm(x.at) + ' · ' + x.how, '', '', '')).join('') + '</div>' : '<p class="hint">Пока пусто. Здесь видно всё, что Орион сделал по вашей просьбе.</p>')
+      + (X.pushOn() ? '<p class="hint">Уведомления на телефон включены — напоминание придёт и при закрытом приложении.</p>' : '<p class="hint">Напоминание звучит, когда приложение открыто. Чтобы оно приходило и при закрытом — включите «Сигналы на телефоне» в настройках.</p>')
+      + '<p class="hint">Заметки и напоминания хранятся в телефоне, копия — в вашем аккаунте. Деньги Орион не двигает: покупку он только открывает заполненной — сохраняете вы сами.</p>';
+    xOpen('ortasks', 'Дела Ориона', html);
+    renderTasksRow();
+  }
+  function renderTasksRow() { const r = el('orTaskVal'), T = window.Mascot && window.Mascot.tasks; if (!r || !T) return; const a = T.rem().filter(x => !x.done).length, b = T.notes().length; r.textContent = a || b ? 'Напоминаний: ' + a + ' · заметок: ' + b : 'Заметки, напоминания, журнал действий'; }
+  X.tasksRow = renderTasksRow;
+  /* уведомления включены — напоминания придут и при закрытом приложении; подписку обновляем раз за запуск */
+  X.pushOn = () => !!xGet().notif && typeof Notification !== 'undefined' && Notification.permission === 'granted';
+  let pushRef = false;
+  X.pushRefresh = () => { if (pushRef || !window.mlUser || !X.pushOn() || !window.mlPushSub) return; pushRef = true; window.mlPushSub(true).catch(() => {}); };
+  /* переходы по голосу на экраны из этого файла */
+  X.go = function (to) {
+    const M = { plan: ['личный план', openPlan], learn: ['знания', () => openLearn()], alerts: ['оповещения', openAlerts], memory: ['память Ориона', openMem], tasks: ['дела Ориона', openTasks] }[to];
+    if (!M) return '';
+    closeSheets(); setTimeout(M[1], 260); return M[0];
+  };
   function renderNameRow() { const r = el('orNameVal'); if (r) r.textContent = P.name ? P.name : 'не указано'; }
   document.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target && e.target.id === 'xName') { e.preventDefault(); nameSave(); } });
   renderNameRow(); renderAlCount();
