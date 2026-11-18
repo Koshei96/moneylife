@@ -1710,6 +1710,17 @@ def run_browser():
             ux = pg.evaluate(f"['Не нашёл заметку про отпуск.', 'Не нашёл напоминание про биржу.', 'Отменил напоминание: x.'].map(t=>{M}.lx(t))")
             if ux == ['Не знайшов нотатку про відпустку.', 'Не знайшов нагадування про біржу.', 'Скасував нагадування: x.'] or (all('знайшов' in x or 'Скасував' in x for x in ux) and not re.search('[ыэъё]', ''.join(ux))): ok('Орион по-украински: «Не знайшов нотатку / нагадування про …», «Скасував нагадування»')
             else: fail('Орион по-украински: удаление по теме', str(ux))
+            # 18.11.2026 (BACKLOG №2): «Справи Оріона» — текст, который записал человек, словарь перевода не переписывает
+            pg.evaluate(f"{M}.act('add_note', {{text: 'Купить BTC після зарплати'}}); {M}.act('add_reminder', {{text: 'Перевірити портфель и купить эфир', when: new Date(Date.now()+5*3600e3).toISOString().slice(0,16)}})")
+            pg.evaluate("closeSheets(); MLX.go('tasks')"); pg.wait_for_timeout(900)
+            tk = pg.evaluate("""(()=>{const b=document.getElementById('xBody'),nm=[...b.querySelectorAll('.nm')].map(x=>x.textContent),bt=[...b.querySelectorAll('button[data-x="notedel"],button[data-x="remdel"]')];
+              return [document.getElementById('xTitle').textContent, nm, bt.map(x=>x.textContent.trim()), bt.map(x=>x.getAttribute('aria-label'))];})()""")
+            shot(pg, 'uk-dela-oriona')
+            pg.evaluate("closeSheets(); Mascot.tasks.notes().filter(x=>x.t==='Купить BTC після зарплати').forEach(x=>Mascot.tasks.delNote(x.id)); Mascot.tasks.rem().filter(x=>x.t==='Перевірити портфель и купить эфир').forEach(x=>Mascot.tasks.delRem(x.id))"); pg.wait_for_timeout(300)
+            if (tk[0] == 'Справи Оріона' and 'Купить BTC після зарплати' in tk[1] and 'Перевірити портфель и купить эфир' in tk[1] and 'Видалити' in tk[2] and 'Скасувати' in tk[2]
+                    and 'Видалити: Купить BTC після зарплати' in tk[3] and 'Скасувати: Перевірити портфель и купить эфир' in tk[3]):
+                ok('украинский: «Справи Оріона» — заметка «Купить BTC після зарплати» и напоминание показаны ровно как записаны, кнопки — по-украински')
+            else: fail('украинский: «Справи Оріона» портят текст человека', str(tk))
             pg.evaluate("window.__askX=null; window.mlAsk=async(q,s,x)=>{window.__askX=x;return {text:'Схоже, біткоїн зростає через новини про ETF.'};}")
             pg.evaluate(f"{M}.ask('чому біткоїн росте')"); pg.wait_for_timeout(1200)
             lang = pg.evaluate("window.__askX&&window.__askX.lang"); said = pg.evaluate(f"{M}.state().said")
