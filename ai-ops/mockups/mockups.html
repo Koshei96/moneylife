@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="ru"><head><meta charset="utf-8">
+<title>Макеты BACKLOG — MoneyLife</title>
+<!-- Наброски к пунктам ai-ops/BACKLOG.md. Стиль «Графит» (токены — как в <style id="v4"> index.html). Только тестовые цифры. -->
+<style>
+:root{--bg:#09090b;--bg2:#101013;--surface:#141417;--raise:#222227;--line:#222228;--line2:#2f2f37;--fg:#f5f5f7;--mute:#a3a3ae;--dim:#6e6e7a;
+--accent:#8b7dff;--pos:#30d158;--neg:#ff5b5b;--warn:#f5b545;--warn-soft:#f5b5451c;--btn-bg:#f5f5f7;--btn-fg:#09090b;
+--ui:"Onest","Golos Text",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+*{box-sizing:border-box;margin:0}
+body{background:#2a2a30;font-family:var(--ui);color:var(--fg);padding:24px;display:flex;flex-wrap:wrap;gap:24px;font-variant-numeric:tabular-nums;font-size:15px;line-height:1.45}
+.phone{width:390px;background:var(--bg);padding:16px;position:relative;overflow:hidden}
+.top{display:flex;align-items:center;gap:10px;margin-bottom:22px}
+.mark{width:40px;height:40px;border-radius:11px;background:#7566f5;display:grid;place-items:center;font-weight:800}
+.wm b{font-size:19px;letter-spacing:-.02em}.wm span{color:var(--mute);font-weight:500;font-size:19px}
+.wm small{display:block;color:var(--mute);font-size:12px}
+.ib{width:46px;height:46px;border-radius:50%;background:var(--surface);margin-left:auto}
+.ib+.ib{margin-left:8px}
+.hl{color:var(--mute);font-size:14px;font-weight:500}
+.bal{font-size:54px;font-weight:700;letter-spacing:-.04em;line-height:1;margin-top:8px}
+.sub{margin-top:10px}.pos{color:var(--pos)}.neg{color:var(--neg)}.mute{color:var(--mute)}.dim{color:var(--dim)}
+.orb{position:absolute;right:30px;top:120px;width:60px;height:60px;border-radius:50%;background:radial-gradient(circle at 40% 40%,#9fe6ff,#3d6bd6 60%,#1a1a2a);box-shadow:0 0 40px #4a7bff55}
+.chips{display:flex;gap:8px;margin-top:12px}
+.chip{background:#ffffff0f;border-radius:999px;padding:7px 12px;font-size:13px;font-weight:600;display:inline-flex;gap:6px;align-items:center;min-height:36px}
+.chip.on{outline:1.5px solid var(--accent);color:var(--fg)}
+.new{position:absolute;font-size:11px;font-weight:700;color:#09090b;background:var(--warn);border-radius:6px;padding:2px 6px}
+.card{background:var(--surface);border-radius:20px;padding:16px}
+.label{font-size:15px;font-weight:650}
+.sheet{background:var(--bg2);border-radius:26px 26px 0 0;padding:10px 16px 18px;margin:0 -16px -16px}
+.grab{width:40px;height:4px;border-radius:2px;background:var(--line2);margin:0 auto 14px}
+.sh{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+.sh b{font-size:19px}
+.x{width:40px;height:40px;border-radius:50%;background:var(--surface);display:grid;place-items:center;color:var(--mute)}
+.row{display:grid;grid-template-columns:32px 1fr auto;gap:12px;align-items:center;padding:12px 0;border-top:1px solid var(--line)}
+.coin{width:32px;height:32px;border-radius:50%;display:grid;place-items:center;font-size:12px;font-weight:800;color:#fff}
+.r{text-align:right}.r small{display:block;color:var(--mute);font-size:12px}
+.bar{height:6px;border-radius:3px;background:var(--raise);margin-top:6px;overflow:hidden}.bar i{display:block;height:100%}
+.sum{display:flex;justify-content:space-between;padding:14px 0 4px;border-top:1px solid var(--line2);font-weight:650}
+.note{font-size:12px;color:var(--dim);margin-top:10px}
+.set{display:flex;gap:12px;padding:14px 0;border-top:1px solid var(--line);align-items:center}
+.set:first-child{border-top:0}
+.tg{width:50px;height:30px;border-radius:15px;background:var(--pos);margin-left:auto;position:relative}.tg::after{content:"";position:absolute;right:3px;top:3px;width:24px;height:24px;border-radius:50%;background:#fff}
+.safe{display:flex;gap:12px;background:var(--surface);border-radius:14px;padding:14px;outline:1.5px dashed var(--warn)}
+.shield{width:36px;height:36px;flex:none;border-radius:10px;background:#ffffff0f;display:grid;place-items:center}
+.lv{display:grid;grid-template-columns:36px 1fr auto;gap:12px;align-items:center;padding:12px 0;border-top:1px solid var(--line)}
+.num{width:36px;height:36px;border-radius:50%;background:var(--raise);display:grid;place-items:center;font-weight:700}
+.st{font-size:12px;font-weight:700;border-radius:999px;padding:5px 10px}
+.st.ok{background:#30d1581c;color:var(--pos)}.st.wait{background:#ffffff0f;color:var(--mute)}.st.no{background:var(--warn-soft);color:var(--warn)}
+.cap{width:100%;font-size:13px;font-weight:700;color:var(--mute);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px}
+.cap.bad{color:var(--neg)}.cap.good{color:var(--pos)}
+.btn{display:flex;justify-content:center;align-items:center;min-height:48px;border-radius:14px;background:var(--btn-bg);color:var(--btn-fg);font-weight:700;margin-top:12px}
+.spark{height:70px;margin:14px 0 6px;position:relative}
+.spark svg{width:100%;height:100%}
+.hint{font-size:13px;color:var(--mute)}
+</style></head>
+<body>
+
+<!-- M1 · Итог в BTC -->
+<div class="phone" id="m1">
+  <div class="top"><div class="mark">M</div><div class="wm"><b>Money</b><span>Life</span><small>Цены на 18 нояб., 13:05</small></div><div class="ib"></div><div class="ib"></div></div>
+  <div class="hl">Стоимость портфеля ›</div>
+  <div class="bal">$540</div>
+  <div class="orb"></div>
+  <div class="sub"><span class="pos">+$40 · +8,1%</span> <span class="mute">прибыль сейчас</span></div>
+  <div class="chips" style="position:relative">
+    <span class="chip on">≈ 0,00491 BTC <span class="mute">⇄</span></span>
+    <span class="chip">24ч <span class="pos">+1,5%</span></span>
+    <span class="new" style="position:static;align-self:center">НОВОЕ</span>
+  </div>
+  <p class="hint" style="margin-top:16px">Нажатие на «≈ BTC» переключает весь итог: $540 ⇄ 0,00491 BTC. Выбор запоминается на телефоне.</p>
+</div>
+
+<!-- M2 · Из чего 24ч -->
+<div class="phone" id="m2">
+  <div class="hl">Стоимость портфеля ›</div>
+  <div class="bal" style="opacity:.35">$540</div>
+  <div class="chips"><span class="chip on">24ч <span class="pos">+$8,15</span></span></div>
+  <div style="height:22px"></div>
+  <div class="sheet">
+    <div class="grab"></div>
+    <div class="sh"><b>Из чего +$8,15 за сутки</b><span class="x">✕</span></div>
+    <p class="hint" style="margin-bottom:6px">Сумма строк равна изменению итога. Цены — CoinGecko.</p>
+    <div class="row"><span class="coin" style="background:#f7931a">₿</span><div>BTC<div class="bar"><i style="width:62%;background:var(--pos)"></i></div></div><div class="r pos">+$5,13<small>+1,9%</small></div></div>
+    <div class="row"><span class="coin" style="background:#627eea">Ξ</span><div>ETH<div class="bar"><i style="width:40%;background:var(--pos)"></i></div></div><div class="r pos">+$3,24<small>+2,0%</small></div></div>
+    <div class="row"><span class="coin" style="background:#14f195;color:#09090b">S</span><div>SOL<div class="bar"><i style="width:3%;background:var(--neg)"></i></div></div><div class="r neg">−$0,22<small>−0,2%</small></div></div>
+    <div class="sum"><span>Итого за 24 часа</span><span class="pos">+$8,15</span></div>
+    <p class="note">Не прогноз и не совет — только разложение вашего итога по монетам.</p>
+  </div>
+</div>
+
+<!-- M3 · Строка безопасности в Настройках -->
+<div class="phone" id="m3">
+  <div class="sh" style="margin-bottom:14px"><b>Настройки</b><span class="x">✕</span></div>
+  <div class="safe">
+    <div class="shield">🛡</div>
+    <div><b style="font-size:14px">Ваши деньги — не у нас</b>
+      <p class="hint" style="margin-top:4px">MoneyLife не хранит деньги и не просит ключи бирж, сид-фразы и переводы. Кто просит от нашего имени — мошенник.</p></div>
+  </div>
+  <div class="card" style="margin-top:14px">
+    <div class="set"><div><b style="font-size:14px">Тема</b><div class="hint">Тёмная</div></div><div class="tg"></div></div>
+    <div class="set"><div><b style="font-size:14px">Скрывать суммы</b><div class="hint">Вместо цифр — точки</div></div><div class="tg" style="background:var(--raise)"></div></div>
+    <div class="set"><div><b style="font-size:14px">Орион — голосовой помощник</b><div class="hint">Сфера рядом с суммой</div></div><div class="tg"></div></div>
+  </div>
+  <p class="note">Пунктир — только чтобы показать новое место; в приложении карточка без рамки (правило «Графит»).</p>
+</div>
+
+<!-- M4 · Лестница без резерва: до / после -->
+<div class="phone" id="m4">
+  <div class="cap bad">Сейчас — путает</div>
+  <div class="card">
+    <div class="label" style="margin-bottom:4px">Ступени лестницы <span class="dim" style="font-weight:500">· резерв $0</span></div>
+    <div class="lv"><span class="num">1</span><div>−30% · $79 800<div class="hint">куплено ✓ $0,00</div></div><span class="st ok">куплено</span></div>
+    <div class="lv"><span class="num">2</span><div>−40% · $68 400<div class="hint">куплено ✓ $0,00</div></div><span class="st ok">куплено</span></div>
+  </div>
+  <div style="height:18px"></div>
+  <div class="cap good">Предлагается — понятно</div>
+  <div class="card">
+    <div class="label" style="margin-bottom:4px">Ступени лестницы <span class="dim" style="font-weight:500">· резерв $0</span></div>
+    <div class="lv"><span class="num">1</span><div>−30% · $79 800<div class="hint">нет бюджета — пополните резерв</div></div><span class="st no">нет бюджета</span></div>
+    <div class="lv"><span class="num">2</span><div>−40% · $68 400<div class="hint">нет бюджета — пополните резерв</div></div><span class="st no">нет бюджета</span></div>
+    <div class="btn">Пополнить резерв</div>
+  </div>
+  <p class="note">Меняется только надпись. Расчёт лестницы — без изменений (иначе — решение владельца).</p>
+</div>
+
+<!-- M5 · Демо: пустое место под графиком -->
+<div class="phone" id="m5">
+  <div class="hl">Стоимость портфеля ›</div>
+  <div class="bal">$540</div>
+  <div class="sub"><span class="pos">+$40 · +8,1%</span> <span class="mute">прибыль сейчас</span></div>
+  <div class="spark">
+    <svg viewBox="0 0 358 70" preserveAspectRatio="none"><polyline fill="none" stroke="#8b7dff" stroke-width="2" stroke-dasharray="5 5" stroke-linecap="round"
+      points="0,58 30,54 60,57 90,46 120,49 150,40 180,43 210,33 240,36 270,27 300,30 330,20 358,16"/></svg>
+  </div>
+  <p class="hint">Пример линии. Ваша наполнится из ежедневных снимков.</p>
+  <div class="chips"><span class="chip on">1Н</span><span class="chip">1М</span><span class="chip">3М</span><span class="chip">Всё</span></div>
+</div>
+
+<!-- M6 · «Другие деньги» (вариант Б, ждёт решения владельца): карты, наличные, депозит — одной суммой, без учёта трат -->
+<div class="phone" id="m6">
+  <div class="hl">Весь капитал ›</div>
+  <div class="bal">$2 790</div>
+  <div class="sub"><span class="mute">крипта</span> $540 <span class="dim">·</span> <span class="mute">другие деньги</span> $2 250</div>
+  <div class="chips" style="position:relative"><span class="chip on">Крипта $540</span><span class="chip">Другие $2 250</span>
+    <span class="new" style="position:static;align-self:center">НОВОЕ</span></div>
+  <div style="height:22px"></div>
+  <div class="sheet">
+    <div class="grab"></div>
+    <div class="sh"><b>Другие деньги</b><span class="x">✕</span></div>
+    <p class="hint" style="margin-bottom:6px">Только остатки, без учёта трат. Обновляйте раз в месяц — Орион напомнит.</p>
+    <div class="row"><span class="coin" style="background:#222227">▭</span><div>Карта<div class="hint">₴ 52 000 · обновлено 1 нояб.</div></div><div class="r">$1 250</div></div>
+    <div class="row"><span class="coin" style="background:#222227">$</span><div>Наличные<div class="hint">$ 800</div></div><div class="r">$800</div></div>
+    <div class="row"><span class="coin" style="background:#222227">%</span><div>Депозит<div class="hint">₴ 8 300 · до 1 марта</div></div><div class="r">$200</div></div>
+    <div class="sum"><span>Другие деньги</span><span>$2 250</span></div>
+    <div class="btn" style="margin-top:12px">Добавить</div>
+    <p class="note">«Число свободы» и потолок доли крипты считаются от всего капитала. Тестовые цифры.</p>
+  </div>
+</div>
+
+</body></html>
