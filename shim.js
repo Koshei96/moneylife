@@ -620,7 +620,7 @@
     const c = client(); if (!c || demo || !uid || navigator.onLine === false) return null;
     let ses = null; try { ses = (await c.auth.getSession()).data.session; } catch (e) {}
     if (!ses) return null;
-    const ctl = typeof AbortController !== 'undefined' ? new AbortController() : null, t = setTimeout(() => { try { ctl && ctl.abort(); } catch (e) {} }, 6000);
+    const ctl = typeof AbortController !== 'undefined' ? new AbortController() : null, t = setTimeout(() => { try { ctl && ctl.abort(); } catch (e) {} }, 10000);   /* Eleven v4 озвучивает дольше прежней модели (3–5 с) — ждём до 10 с */
     try {
       const r = await fetch(CFG.supabaseUrl.replace(/\/$/, '') + '/functions/v1/orion-voice', { method: 'POST', signal: ctl ? ctl.signal : undefined,
         headers: { Authorization: 'Bearer ' + ses.access_token, apikey: CFG.supabaseKey, 'content-type': 'application/json' }, body: JSON.stringify({ text, prev: (ctx && ctx.prev) || '', next: (ctx && ctx.next) || '' }) });
@@ -630,14 +630,24 @@
   };
 
   /* Орион про рынок (11.11.2026): вопрос → функция orion-ask (новости + цены + Claude). уходят вопрос, начало разговора и портфель только долями в %, без сумм. null — ответить без сети */
-  window.mlAsk = async (q, sym, extra) => {
+  window.mlAsk = async (q, sym, extra, onPart) => {   /* onPart(кусок) — ответ потоком (18.11.2026): Орион начинает говорить, пока «мозг» дописывает остальное */
     const c = client(); if (!c || demo || !uid || navigator.onLine === false) return null;
     let ses = null; try { ses = (await c.auth.getSession()).data.session; } catch (e) {}
     if (!ses) return null;
     const ctl = typeof AbortController !== 'undefined' ? new AbortController() : null, t = setTimeout(() => { try { ctl && ctl.abort(); } catch (e) {} }, 25000);
     try {
       const r = await fetch(CFG.supabaseUrl.replace(/\/$/, '') + '/functions/v1/orion-ask', { method: 'POST', signal: ctl ? ctl.signal : undefined,
-        headers: { Authorization: 'Bearer ' + ses.access_token, apikey: CFG.supabaseKey, 'content-type': 'application/json' }, body: JSON.stringify(Object.assign({ q, sym: sym || '' }, extra || {})) });
+        headers: { Authorization: 'Bearer ' + ses.access_token, apikey: CFG.supabaseKey, 'content-type': 'application/json' }, body: JSON.stringify(Object.assign({ q, sym: sym || '' }, extra || {}, onPart ? { stream: true } : {})) });
+      if (r.ok && /ndjson/.test(r.headers.get('content-type') || '')) {   /* поток: строки JSON {t} … {done,text,sources} */
+        let buf = '', fin = null, err = '';
+        const line = l => { l = l.trim(); if (!l) return; let o = null; try { o = JSON.parse(l); } catch (x) { return; } if (o.t) { try { onPart && onPart(String(o.t)); } catch (x) {} } else if (o.done) fin = o; else if (o.error) err = o.error; };
+        const eat = chunk => { buf += chunk; let i; while ((i = buf.indexOf('\n')) >= 0) { line(buf.slice(0, i)); buf = buf.slice(i + 1); } };
+        if (r.body && r.body.getReader) { const rd = r.body.getReader(), dec = new TextDecoder(); for (;;) { const x = await rd.read(); if (x.done) break; eat(dec.decode(x.value, { stream: true })); } }
+        else eat(await r.text());
+        line(buf);
+        if (fin && fin.text) return { text: String(fin.text), sources: fin.sources || [] };
+        return { error: err || 'llm' };
+      }
       let j = null; try { j = await r.json(); } catch (x) {}
       if (!r.ok || !j || !j.text) return { error: (j && j.error) || ('http ' + r.status) };
       return { text: String(j.text), sources: j.sources || [] };

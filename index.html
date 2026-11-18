@@ -11,7 +11,7 @@ addEventListener('error',function(e){if(e&&e.message)add(e.message,(e.filename||
 addEventListener('unhandledrejection',function(e){var r=e&&e.reason;add(r&&(r.message||r)||'отклонённое обещание','promise');});
 window.mlErrLog=function(){try{return JSON.parse(localStorage.getItem(K)||'[]');}catch(e){return [];}};window.mlErrAdd=add;})();
 </script>
-<script src="i18n.js?v=20261117211000"></script>
+<script src="i18n.js?v=20261118022200"></script>
 <title>MoneyLife</title>
 <meta name="theme-color" content="#06040e">
 <script>/* тема до отрисовки: «Авто» — как в телефоне, иначе выбор из настроек */
@@ -1682,6 +1682,8 @@ document.querySelectorAll('nav.tabs .tab').forEach(b=>{const v=b.querySelector('
       <div class="setrow"><div><b>Голос Ориона</b><small>Живой голос, без интернета — голос телефона. Выключено — только субтитры</small><small id="voWarn" class="vo-warn" hidden>Сейчас голос телефона: у ElevenLabs закончились символы ключа. Пополните лимит ключа «Orion» в ElevenLabs.</small></div><button type="button" class="switch" id="swMsSound" role="switch" aria-checked="true" aria-label="Голос Ориона"></button></div>
       <div class="setrow"><div><b>Эффект «шлема»</b><small>Плотный низ, эхо зала и звук включения. Выключено — голос как на сайте ElevenLabs</small></div><button type="button" class="switch" id="swMsFx" role="switch" aria-checked="false" aria-label="Эффект шлема"></button></div>
       <button type="button" class="setrow setbtn" data-x="orname"><div><b>Как Орион обращается к вам</b><small id="orNameVal">не указано</small></div><span class="chev" aria-hidden="true">›</span></button>
+      <button type="button" class="setrow setbtn" data-x="ormem"><div><b>Что помнит Орион</b><small id="orMemVal">Цели, интересы, как с вами говорить</small></div><span class="chev" aria-hidden="true">›</span></button>
+      <button type="button" class="setrow setbtn" id="introBtn"><div><b>Как пользоваться MoneyLife</b><small>Ролик на минуту: главное о приложении</small></div><span class="chev" aria-hidden="true">›</span></button>
       <div class="setrow" id="d14Row"><div><b>Карточка «14 дней»</b><small>Короткие подсказки о приложении на главной</small></div><button type="button" class="switch" id="swD14" role="switch" aria-checked="true" aria-label="Карточка «14 дней»"></button></div>
     </div>
     <span class="label" data-fold="plan">План и сигналы</span>
@@ -1746,9 +1748,9 @@ document.querySelectorAll('nav.tabs .tab').forEach(b=>{const v=b.querySelector('
 
 <div class="toast" id="toast" role="status"><span id="toastMsg"></span><button type="button" id="toastBtn" hidden></button></div>
 
-<script src="config.js?v=20261117211000"></script>
+<script src="config.js?v=20261118022200"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="shim.js?v=20261117211000"></script>
+<script src="shim.js?v=20261118022200"></script>
 <script>
 /* ===== основа ===== */
 const $=id=>document.getElementById(id);
@@ -2810,7 +2812,7 @@ $('eDel').addEventListener('click',delTx);
 
 /* ===== настройки ===== */
 const swSet=(id,on)=>$(id).setAttribute('aria-checked',String(!!on));
-function fillSettings(){try{const st=window.Mascot&&Mascot.debug&&Mascot.debug.state&&Mascot.debug.state();$('voWarn').hidden=!(st&&st.err==='quota');}catch(e){}if(window.mlLang)[...$('langSeg').children].forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.lang===mlLang())));thSync();[...$('curSeg').children].forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.c===P.cur)));
+function fillSettings(){try{if(window.MLX&&MLX.memRow)MLX.memRow();}catch(e){}try{const st=window.Mascot&&Mascot.debug&&Mascot.debug.state&&Mascot.debug.state();$('voWarn').hidden=!(st&&st.err==='quota');}catch(e){}if(window.mlLang)[...$('langSeg').children].forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.lang===mlLang())));thSync();[...$('curSeg').children].forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.c===P.cur)));
   swSet('swHide',P.hide);swSet('swDust',P.dust);swSet('swSound',P.sound);swSet('swHaptic',P.haptic);swSet('swMascot',P.mascot!==false);swSet('swMsSound',P.msVoice!==false);swSet('swMsFx',!!P.msFx);swSet('swD14',!d14Load().hid);$('d14Row').hidden=!window.mlUser;
   const sp=split();$('stB').value=sp.BTC;$('stE').value=sp.ETH;$('stA').value=sp.ALT;$('stCap').value=S.settings.capPct||20;$('stDep').value=Math.round(depShare()*100);$('stAlt').value=S.settings.altOfMonth||'';{const b=S.settings.budget;$('stIncL').textContent=b?'В крипту в месяц, '+(b.cur==='USD'?'$':'грн'):'Доход в месяц, грн';$('stInc').value=b?(b.amount||''):(S.settings.incomeMonthlyUah||'');}swSet('swLadder',ladderOn());$('stK2').value=k2Cfg().pct;$('stAltCap').value=altCapPct();$('setErr').textContent='';
   const U=window.mlUser;$('accInfo').innerHTML=U?`<div><span>Почта</span><span>${esc(U.email||'—')}</span></div><div><span>Вход</span><span>${U.provider==='google'?'через Google':'почта и пароль'}</span></div>`:'<div><span>Аккаунт</span><span>—</span></div>';$('delBtn').hidden=!!window.mlDemo||!(window.ML_CONFIG&&ML_CONFIG.accountDelete);$('expBtn').hidden=$('outBtn').hidden=!!window.mlDemo;   /* в демо аккаунта нет — скачать, выйти и удалить нечего (Вера 15.11, #3); «Создать аккаунт» — на полосе «Демо» */
@@ -2861,7 +2863,13 @@ TPL.own=TPL.author;
 const OB={step:0,cur:'USD',tpl:'author',amt:'',amtCur:'UAH',day:'',coins:[{sym:'',qty:''}],busy:false};
 const obNeed=()=>S.ready&&!!window.mlUser&&!S.settings.onboardedAt&&!S.settings.split&&!S.tx.length;
 let obShown=false;
-function obCheck(){if(obShown||!obNeed())return;obShown=true;OB.cur=P.cur||'USD';$('ob').hidden=false;OB.dir='fwd';obDraw();}
+function obCheck(){if(obShown||!obNeed())return;obShown=true;OB.cur=P.cur||'USD';$('ob').hidden=false;OB.dir='fwd';obDraw();introFirst();}
+/* обучающий ролик «MoneyLife за минуту» (intro.js, 17.11.2026): один раз для нового пользователя — поверх знакомства, последняя кнопка ведёт в него;
+   пересмотреть — «Настройки» → «Отображение». Модуль грузится только когда нужен; отметка «показан» — ml-intro на телефоне */
+function introLoad(cb){if(window.MLIntro)return cb(window.MLIntro);const s=document.createElement('script');s.src='intro.js?v=20261118022200';s.onload=()=>cb(window.MLIntro||null);s.onerror=()=>cb(null);document.head.appendChild(s);}
+function introSeen(){try{return !!localStorage.getItem('ml-intro');}catch(e){return true;}}
+function introFirst(){if(introSeen()||window.mlDemo)return;introLoad(M=>{if(!M||$('ob').hidden||M.seen())return;M.open({mode:'first',voiceOff:P.msVoice===false,onClose:()=>{setTimeout(()=>{const b=$('obNext');if(b&&!$('ob').hidden)try{b.focus();}catch(e){}},400);}});});}
+function introReplay(){introLoad(M=>{if(!M){toast('Ролик не загрузился — проверь интернет');return;}closeSheets();try{if(window.Mascot&&Mascot.hush)Mascot.hush();}catch(e){}setTimeout(()=>M.open({mode:'replay',voiceOff:P.msVoice===false}),250);});}
 function obMoney(v){return OB.amtCur==='USD'?usd(v,0):uah(v);}
 function obDraw(){const st=OB.step,N=4,dots='<div class="ob-dots" aria-hidden="true">'+[0,1,2,3].map(i=>`<i class="${i<=st?'on':''}${i===st?' cur':''}"></i>`).join('')+'</div>';
   const top=`<div class="ob-top">${dots}${st<3?'<button type="button" class="ob-skip" id="obSkip">Пропустить</button>':''}</div>`;
@@ -3074,7 +3082,7 @@ function renderD14(){const el=$('d14');if(!el)return;$('d14Row').hidden=!window.
 /* Слиток празднует 3/14, 7/14, 14/14 — один раз; если ещё не загружен — ждёт до следующей отрисовки */
 function d14Party(){const st=d14Load();if(!st.party)return;
   if(P.mascot===false||MSC.failed){delete st.party;d14Save(st);return;}
-  if(!window.Mascot||!$('ob').hidden||document.getElementById('mlAuth'))return;
+  if(!window.Mascot||!$('ob').hidden||document.getElementById('mlAuth')||document.getElementById('mlIntro'))return;
   const lb=st.party;delete st.party;d14Save(st);try{window.Mascot.event('milestone',{label:lb});}catch(e){}}
 function d14Hide(on){const st=d14Load();st.hid=on;d14Save(st);swSet('swD14',!on);renderD14();}
 function d14Act(k){if(!d14Can())return;const today=isoDay(new Date()),v=d14View(d14Load(),today,!!S.settings.onboardedAt);let st=v.st;
@@ -3085,6 +3093,7 @@ function d14Act(k){if(!d14Can())return;const today=isoDay(new Date()),v=d14View(
     if(k==='go'&&D14_GO[c.go])D14_GO[c.go]();}}
 $('d14').addEventListener('click',e=>{const b=e.target.closest('[data-d14]');if(b)d14Act(b.dataset.d14);});
 $('swD14').addEventListener('click',()=>{play('tick');d14Hide(!d14Load().hid);});
+$('introBtn').addEventListener('click',()=>{play('tick');introReplay();});
 /* полночь при открытом приложении: проверка при возврате в приложение и раз в 30 с (только смена даты — без отрисовки всего) */
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')renderD14();});
 setInterval(()=>{if(D14.day&&document.visibilityState==='visible'&&isoDay(new Date())!==D14.day)renderD14();},30000);
@@ -3109,12 +3118,12 @@ $('inst').addEventListener('click',e=>{const b=e.target.closest('[data-inst]');i
 const MSC={loading:false,failed:false,last:null};
 function msApply(){const on=P.mascot!==false,h=document.querySelector('.hero');if(h&&h.classList)h.classList.toggle('has-ms',on);const m=$('mascot');if(m)m.hidden=!on;return on;}
 function msPayload(x){let fresh=0;try{fresh=S.alerts.filter(a=>String(a.ts||'')>sigSeen).length;}catch(e){}
-  return Object.assign({S,P,money,fresh,offline:(typeof navigator!=='undefined'&&navigator.onLine===false)||S.live.status==='off'},x);}
-function msSync(x){MSC.last=x;if(!msApply())return;if(!S.ready||document.getElementById('mlAuth')||!$('ob').hidden)return;   /* Слиток просыпается только на главном экране, после входа */
+  return Object.assign({S,P,money,rate,fresh,offline:(typeof navigator!=='undefined'&&navigator.onLine===false)||S.live.status==='off'},x);}
+function msSync(x){MSC.last=x;if(!msApply())return;if(!S.ready||document.getElementById('mlAuth')||!$('ob').hidden||document.getElementById('mlIntro'))return;   /* Слиток просыпается только на главном экране, после входа */
   if(window.Mascot){try{window.Mascot.sync(msPayload(x));}catch(e){}}else msLoad();}
 function msLoad(){if(MSC.loading||MSC.failed)return;MSC.loading=true;
   const add=(src,ok)=>{try{const s=document.createElement('script');s.src=src;s.async=true;s.onload=ok;s.onerror=()=>{MSC.failed=true;};document.head.appendChild(s);}catch(e){MSC.failed=true;}};
-  const boot=()=>add('mascot.js?v=20261117211000',()=>{try{if(window.Mascot&&window.Mascot.init({host:$('mascot'),app:{buzz,askName:()=>{if(window.MLX&&MLX.askName)MLX.askName();},addAlert:(y,v)=>window.MLX&&MLX.addAlert?MLX.addAlert(y,v):null,voice:(t,x)=>window.mlVoice?window.mlVoice(t,x):null,ask:(q,y,x)=>window.mlAsk?window.mlAsk(q,y,x):null}})&&MSC.last&&$('ob').hidden&&!document.getElementById('mlAuth'))window.Mascot.sync(msPayload(MSC.last));}catch(e){}});
+  const boot=()=>add('mascot.js?v=20261118022200',()=>{try{if(window.Mascot&&window.Mascot.init({host:$('mascot'),app:{buzz,askName:()=>{if(window.MLX&&MLX.askName)MLX.askName();},addAlert:(y,v)=>window.MLX&&MLX.addAlert?MLX.addAlert(y,v):null,voice:(t,x)=>window.mlVoice?window.mlVoice(t,x):null,ask:(q,y,x,p)=>window.mlAsk?window.mlAsk(q,y,x,p):null,memSave:m=>{try{if(db&&window.mlUser&&!window.mlDemo)db.doc('app/orion-mem').set({v:1,at:Date.now(),items:m});}catch(e){}},memLoad:async()=>{try{if(!db||!window.mlUser)return null;const d=await db.doc('app/orion-mem').get();return d&&d.exists?((d.data()||{}).items||[]):[];}catch(e){return null;}}}})&&MSC.last&&$('ob').hidden&&!document.getElementById('mlAuth'))window.Mascot.sync(msPayload(MSC.last));}catch(e){}});
   setTimeout(boot,300);}
 function render(){const D=derive();renderHeader();renderHome(D);renderGrowth();renderCoins(D);renderStrategy(D);renderActivity();renderD14();renderInst();if(window.MLX)try{MLX.render(D);}catch(e){console.error(e);}earnNudge();if(cvSym&&$('coinSheet').classList.contains('open'))renderCoinView();}
 document.body.classList.add('loading');
@@ -3199,9 +3208,9 @@ render();requestAnimationFrame(inkMove);setTimeout(inkMove,600);
     sy=null;swipe=null;pull=0;armed=false;},{passive:true});
 })();
 </script>
-<script src="plus.js?v=20261117211000"></script>
-<script src="wins.js?v=20261117211000"></script>
-<script src="folds.js?v=20261117211000"></script>
+<script src="plus.js?v=20261118022200"></script>
+<script src="wins.js?v=20261118022200"></script>
+<script src="folds.js?v=20261118022200"></script>
 <script>
 /* ===== 12.11.2026: ползунок «Купить», смахнуть запись влево с «рассыпанием» монеты ===== */
 (function(){

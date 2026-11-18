@@ -442,6 +442,8 @@
     fng: () => openFng(), goal: () => openGoal(), goalsave: () => saveGoal(), share: () => share(), refresh: () => { el('refreshBtn').click(); },
     backup: () => exportData(), rules: () => { closeSheets(); openSettings(false); setTimeout(() => { const r = el('rules'); if (r && r.scrollIntoView) r.scrollIntoView({ block: 'start', behavior: reduced ? 'auto' : 'smooth' }); }, 380); },
     orname: () => { closeSheets(); setTimeout(X.askName, 260); }, namesave: () => nameSave(),
+    ormem: () => { closeSheets(); setTimeout(openMem, 260); }, memdel: b => { const M = window.Mascot && window.Mascot.mem; if (M) M.del(b.dataset.i); play('tick'); openMem(); }, memclear: () => { const M = window.Mascot && window.Mascot.mem; if (M) M.clear(); play('tick'); openMem(); toast('Орион всё забыл'); },
+    memtoggle: () => { const M = window.Mascot && window.Mascot.mem; if (M) M.on(!M.on()); play('tick'); openMem(); },
     alertnew: () => { const s = typeof cvSym === 'string' && cvSym ? cvSym : 'BTC'; closeSheets(); setTimeout(() => openAlert(s), 260); }, alsave: b => alertSave(b), aldel: b => alDel(b), alerts: () => { closeSheets(); setTimeout(openAlerts, 260); },
     week: () => { try { if (window.Mascot && window.Mascot.ask) window.Mascot.ask('как прошла неделя'); } catch (e) {} },
     buy: () => openAct('buy'), dca: () => { openAct('buy'); setBuyMode('dca'); }, deposit: () => openAct('deposit')
@@ -498,8 +500,8 @@
   }
   function openAlerts() {
     const list = alGet();
-    xOpen('alerts', 'Оповещения о цене', list.length ? '<div class="list">' + list.map(alRow).join('') + '</div><p class="hint">Новое оповещение — в карточке монеты, кнопка «Оповещение о цене». Или зажмите Ориона и скажите: «сообщи, когда солана будет 150».</p>'
-      : '<p>Оповещений пока нет. Откройте монету во вкладке «Монеты» и нажмите «Оповещение о цене» — или зажмите Ориона и скажите: «сообщи, когда биткоин будет 120 тысяч».</p>');
+    xOpen('alerts', 'Оповещения о цене', list.length ? '<div class="list">' + list.map(alRow).join('') + '</div><p class="hint">Новое оповещение — в карточке монеты, кнопка «Оповещение о цене». Или нажмите на Ориона и скажите: «сообщи, когда солана будет 150».</p>'
+      : '<p>Оповещений пока нет. Откройте монету во вкладке «Монеты» и нажмите «Оповещение о цене» — или нажмите на Ориона и скажите: «сообщи, когда биткоин будет 120 тысяч».</p>');
   }
   function alDel(btn) { const id = btn.dataset.id, a = alGet().find(x => x.id === id); alSave(alGet().filter(x => x.id !== id)); play('tick'); if (sheetKind === 'alert' && a) openAlert(a.sym); else openAlerts(); }
   function renderAlCount() { const c = el('alCnt'); if (c) { const n = alGet().length; c.textContent = n ? n + ' ' + (n % 10 === 1 && n % 100 !== 11 ? 'ждёт' : 'ждут') + ' срабатывания' : 'Скажу, когда монета дойдёт до вашей цены'; } }
@@ -569,6 +571,19 @@
     P.name = v; savePrefs(); closeSheets(); play('tick'); renderNameRow();
     setTimeout(() => { try { if (window.Mascot && window.Mascot.greet) window.Mascot.greet(v); } catch (e) {} }, 420);
   }
+  /* «Что помнит Орион» (18.11.2026): список, удалить пункт, забыть всё, выключить. Хранится в телефоне, копия — в аккаунте */
+  function openMem() {
+    const M = window.Mascot && window.Mascot.mem;
+    if (!M) { toast('Орион ещё не проснулся — откройте главную'); return; }
+    const L = M.list(), on = M.on();
+    const rows = L.length ? '<div class="list">' + L.slice().reverse().map(x => `<div class="row r3 static"><span class="col" style="grid-column:1/3"><span class="nm wrap">${esc(x.t)}</span><span class="sub">запомнил ${dShort(new Date(x.at).toISOString())}</span></span><button type="button" class="btn sm ghost" data-x="memdel" data-i="${esc(x.id)}" aria-label="Забыть: ${esc(x.t)}">Забыть</button></div>`).join('') + '</div>'
+      : '<p class="hint">Пока ничего. Скажите Ориону «запомни, что…» — например, «запомни, что я коплю на квартиру». Или он сам спросит «Запомнить?», когда вы расскажете о цели.</p>';
+    xOpen('ormem', 'Что помнит Орион', `<p>Орион запоминает цели, интересы и то, как с вами говорить, — только с вашего согласия. Суммы, долги, здоровье и пароли он не запоминает никогда. Память хранится в телефоне, резервная копия — в вашем аккаунте.</p>${rows}`,
+      `<button class="btn block" type="button" data-x="memtoggle">${on ? 'Выключить память' : 'Включить память'}</button>` + (L.length ? '<button class="btn ghost block" type="button" data-x="memclear">Забыть всё</button>' : ''));
+    renderMemRow();
+  }
+  function renderMemRow() { const r = el('orMemVal'), M = window.Mascot && window.Mascot.mem; if (!r || !M) return; const n = M.list().length; r.textContent = !M.on() ? 'Память выключена' : n ? n + ' ' + (n % 10 === 1 && n % 100 !== 11 ? 'запись' : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20) ? 'записи' : 'записей') : 'Пока ничего'; }
+  X.memOpen = openMem; X.memRow = renderMemRow;
   function renderNameRow() { const r = el('orNameVal'); if (r) r.textContent = P.name ? P.name : 'не указано'; }
   document.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target && e.target.id === 'xName') { e.preventDefault(); nameSave(); } });
   renderNameRow(); renderAlCount();

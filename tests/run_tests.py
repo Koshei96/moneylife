@@ -320,7 +320,7 @@ def run_browser():
     with sync_playwright() as p:
         browser = p.chromium.launch(args=['--no-proxy-server'])
 
-        def page_for(name, test_cfg, prices=True, dsf=2, theme=None, extra=None, tz='Europe/Kyiv', motion=None):
+        def page_for(name, test_cfg, prices=True, dsf=2, theme=None, extra=None, tz='Europe/Kyiv', motion=None, intro=False):
             ctx = browser.new_context(viewport={'width': 390, 'height': 844}, device_scale_factor=dsf, service_workers='block',
                                       locale='ru-RU', timezone_id=tz, is_mobile=True, has_touch=True,
                                       reduced_motion=motion or 'no-preference')
@@ -338,6 +338,8 @@ def run_browser():
                 return r.abort('internetdisconnected')
             ctx.route('**/*', route)
             ctx.add_init_script('window.__ML_TEST=' + json.dumps(test_cfg) + ';' + MOCK)
+            # обучающий ролик (17.11): во всех сценариях, кроме своих, считается уже показанным — иначе он закрыл бы знакомство
+            if not intro: ctx.add_init_script("try{if(!localStorage.getItem('ml-intro'))localStorage.setItem('ml-intro','{\"seen\":\"test\"}')}catch(e){}")
             if theme: ctx.add_init_script("try{localStorage.setItem('cp-prefs2',JSON.stringify(Object.assign(JSON.parse(localStorage.getItem('cp-prefs2')||'{}'),{theme:%s})))}catch(e){}" % json.dumps(theme))
             pg = ctx.new_page()
             errs = []
@@ -363,9 +365,9 @@ def run_browser():
             pg.mouse.move(b[0] + 30, y); pg.mouse.down()
             for k in range(1, 11): pg.mouse.move(b[0] + 30 + (b[2] - 50) * k / 10, y); pg.wait_for_timeout(16)
             pg.mouse.up()
-        def scenario(name, cfg, body, prices=True, path='index.html', dsf=2, theme=None, extra=None, tz='Europe/Kyiv', clock=None, motion=None):
+        def scenario(name, cfg, body, prices=True, path='index.html', dsf=2, theme=None, extra=None, tz='Europe/Kyiv', clock=None, motion=None, intro=False):
             if os.environ.get('ML_ONLY') and os.environ['ML_ONLY'] not in name: return
-            ctx, pg, errs = page_for(name, cfg, prices, dsf, theme, extra, tz, motion)
+            ctx, pg, errs = page_for(name, cfg, prices, dsf, theme, extra, tz, motion, intro)
             try:
                 if clock: pg.clock.install(time=clock)   # подменённые часы телефона (идут дальше сами)
                 pg.goto(base + path, wait_until='load', timeout=30000)
@@ -670,6 +672,149 @@ def run_browser():
                 pg.evaluate("document.getElementById('alloc').scrollIntoView({block:'center'})"); pg.wait_for_timeout(300); shot(pg, f'first-record-alloc-{th}')
             pg.evaluate("document.documentElement.setAttribute('data-theme','dark')")
         scenario('Путь новичка', {'session': True, 'docs': []}, s_newbie)
+
+        # --- Б3. обучающий ролик «MoneyLife за минуту» (17.11.2026): один раз для нового пользователя, поверх знакомства;
+        #     7 слайдов, субтитры, «Пропустить» всегда видна, кнопки ≥ 48 px, «Назад»/«Далее», смахивание, пауза при сворачивании,
+        #     «Уменьшить движение», украинский, пересмотр из «Настроек», события ml-intro-log
+        IST = "(()=>window.MLIntro&&MLIntro.debug.state())()"
+        ILOG = "(()=>{try{return JSON.parse(localStorage.getItem('ml-intro-log')||'[]').map(e=>e.e+(e.n!=null?':'+e.n:''))}catch(e){return []}})()"
+        def intro_sizes(pg):
+            return pg.evaluate("""()=>[...document.querySelectorAll('#mlIntro button')].filter(b=>b.offsetParent&&getComputedStyle(b).visibility!=='hidden').map(b=>{const r=b.getBoundingClientRect();return [b.id||b.className,Math.round(r.width),Math.round(r.height),b.getAttribute('aria-label')||b.textContent.trim()]})""")
+        def s_intro_first(pg, n):
+            pg.wait_for_selector('#mlIntro', state='visible', timeout=10000); pg.wait_for_timeout(600)
+            pg.evaluate("document.documentElement.setAttribute('data-theme','dark')")
+            if pg.evaluate("!document.getElementById('ob').hidden"): ok('ролик: открыт поверх знакомства (знакомство ждёт под ним)')
+            else: fail('ролик: знакомство под роликом', 'знакомство скрыто')
+            small = [x for x in intro_sizes(pg) if min(x[1], x[2]) < 48 or not x[3]]
+            ok('ролик, обложка: кнопки ≥ 48 px и с названием') if not small else fail('ролик, обложка: кнопки', str(small))
+            shot(pg, 'intro-0-cover-dark')
+            pg.click('#miWatch'); pg.wait_for_timeout(900)
+            st = pg.evaluate(IST)
+            if st['i'] == 0 and not st['paused']: ok(f"ролик: «Смотреть» запускает слайд 1 (голос: {st['kind']})")
+            else: fail('ролик: старт', str(st))
+            pg.wait_for_timeout(1200)
+            cap = pg.evaluate(IST)['cap']
+            ok(f'ролик: субтитры идут — «{cap[:40]}…»') if cap.startswith('Привет, я Орион') else fail('ролик: субтитры', repr(cap))
+            # автоматический переход после длительности слайда (8 с)
+            pg.wait_for_function("()=>MLIntro.debug.state().i===1", polling=250, timeout=12000); ok('ролик: слайд 1 сам сменился слайдом 2')
+            pg.wait_for_timeout(5200); shot(pg, 'intro-2-home-dark')
+            for i in range(2, 7):
+                pg.click('#miNext'); pg.wait_for_timeout(300)
+                st = pg.evaluate(IST)
+                if st['i'] != i: raise AssertionError(f'«Далее» не перешёл на слайд {i+1}: {st}')
+                pg.wait_for_timeout(5000 if i in (2, 3, 4) else 1600); shot(pg, f'intro-{i+1}-dark')
+            ok('ролик: «Далее» проходит все 7 слайдов')
+            bad = pg.evaluate("""()=>{const r=document.querySelector('#mlIntro .mi-sl.cur');const out=[];r.querySelectorAll('*').forEach(e=>{const b=e.getBoundingClientRect();if(b.width&&(b.right>innerWidth+1||b.left<-1))out.push(e.className||e.tagName)});return out.slice(0,5)}""")
+            ok('ролик: последний слайд не вылезает за экран 390 px') if not bad else fail('ролик: вылезает за экран', str(bad))
+            if pg.locator('#miCta').inner_text().strip() == 'Настроить мой план' and pg.locator('#miNext').count() == 0: ok('ролик: на последнем слайде — «Настроить мой план»')
+            else: fail('ролик: последний слайд', pg.inner_text('#miNav'))
+            pg.click('#miBack'); pg.wait_for_timeout(400)
+            ok('ролик: «Назад» возвращает на слайд 6') if pg.evaluate(IST)['i'] == 5 else fail('ролик: «Назад»', str(pg.evaluate(IST)))
+            # смахивание влево — вперёд
+            b = pg.evaluate("(()=>{const r=document.getElementById('miBody').getBoundingClientRect();return [r.left,r.top,r.width,r.height]})()")
+            y = b[1] + b[3] / 2; pg.mouse.move(b[0] + b[2] - 40, y); pg.mouse.down()
+            for k in range(1, 8): pg.mouse.move(b[0] + b[2] - 40 - 30 * k, y); pg.wait_for_timeout(16)
+            pg.mouse.up(); pg.wait_for_timeout(400)
+            ok('ролик: смахивание влево — следующий слайд') if pg.evaluate(IST)['i'] == 6 else fail('ролик: смахивание', str(pg.evaluate(IST)))
+            # светлая тема
+            pg.evaluate("document.documentElement.setAttribute('data-theme','light')"); pg.wait_for_timeout(500); shot(pg, 'intro-7-light')
+            pg.evaluate("MLIntro.debug.go(4)"); pg.wait_for_timeout(5600); shot(pg, 'intro-5-light')
+            pg.evaluate("MLIntro.debug.go(1)"); pg.wait_for_timeout(3600); shot(pg, 'intro-2-light')
+            pg.evaluate("document.documentElement.setAttribute('data-theme','dark')")
+            pg.evaluate("MLIntro.debug.go(6)"); pg.wait_for_timeout(500)
+            pg.click('#miCta'); pg.wait_for_selector('#mlIntro', state='detached', timeout=5000)
+            if pg.evaluate("!document.getElementById('ob').hidden") and pg.evaluate("!!localStorage.getItem('ml-intro')"): ok('ролик: «Настроить мой план» — открыто знакомство, ролик отмечен показанным')
+            else: fail('ролик: после «Настроить мой план»', 'знакомство скрыто или нет отметки ml-intro')
+            log = pg.evaluate(ILOG)
+            need = ['open', 'start', 'slide:1', 'slide:2', 'slide:7', 'complete:7', 'cta']
+            miss = [x for x in need if x not in log]
+            ok('ролик: события старт / слайды / завершение / нажатие кнопки записаны') if not miss else fail('ролик: события', f'нет {miss}: {log}')
+            pg.reload(wait_until='load'); pg.wait_for_selector('#ob:not([hidden])', timeout=10000); pg.wait_for_timeout(1500)
+            ok('ролик: при повторном запуске не показывается') if pg.locator('#mlIntro').count() == 0 else fail('ролик: повторный запуск', 'ролик показан снова')
+        scenario('Ролик: первый запуск', {'session': True, 'docs': []}, s_intro_first, intro=True)
+
+        def s_intro_skip(pg, n):
+            pg.wait_for_selector('#mlIntro', state='visible', timeout=10000)
+            pg.click('#miWatch'); pg.wait_for_timeout(500)
+            pg.click('#miNext'); pg.wait_for_timeout(200); pg.click('#miNext'); pg.wait_for_timeout(300)
+            # сворачивание приложения — пауза, «Продолжить» по центру
+            pg.evaluate("Object.defineProperty(document,'visibilityState',{configurable:true,get:()=>'hidden'});document.dispatchEvent(new Event('visibilitychange'))")
+            pg.wait_for_timeout(300); t1 = pg.evaluate(IST)
+            pg.evaluate("Object.defineProperty(document,'visibilityState',{configurable:true,get:()=>'visible'});document.dispatchEvent(new Event('visibilitychange'))")
+            pg.wait_for_timeout(1200); t2 = pg.evaluate(IST)
+            if t1['paused'] and t2['paused'] and abs(t2['t'] - t1['t']) < 0.05 and pg.locator('#miResume').is_visible(): ok('ролик: свернули приложение — пауза, время стоит, видна «Продолжить»')
+            else: fail('ролик: пауза при сворачивании', f'{t1} → {t2}')
+            shot(pg, 'intro-paused-dark')
+            pg.click('#miResume'); pg.wait_for_timeout(800)
+            t3 = pg.evaluate(IST)
+            ok('ролик: «Продолжить» — показ идёт дальше') if not t3['paused'] and t3['t'] > t2['t'] else fail('ролик: продолжить', str(t3))
+            # звук: кнопка переключает и подписана
+            lab0 = pg.get_attribute('#miSnd', 'aria-label'); pg.click('#miSnd'); pg.wait_for_timeout(150)
+            lab1 = pg.get_attribute('#miSnd', 'aria-label')
+            ok(f'ролик: кнопка звука «{lab0}» → «{lab1}»') if pg.evaluate(IST)['muted'] and lab0 != lab1 else fail('ролик: кнопка звука', f'{lab0} / {lab1}')
+            v0 = pg.is_visible('#miCap'); pg.click('#miCc'); pg.wait_for_timeout(150)
+            v1 = pg.evaluate("getComputedStyle(document.getElementById('miCap')).visibility"); pr = pg.get_attribute('#miCc', 'aria-pressed')
+            ok('ролик: субтитры включены сразу, кнопка «CC» их скрывает') if v0 and v1 == 'hidden' and pr == 'false' else fail('ролик: субтитры вкл/выкл', f'{v0} {v1} {pr}')
+            pg.click('#miCc'); pg.wait_for_timeout(100)
+            pg.click('#miSkip'); pg.wait_for_selector('#mlIntro', state='detached', timeout=5000)
+            log = pg.evaluate(ILOG)
+            ok('ролик: «Пропустить» на 3-м слайде — открыто знакомство, событие skip:3') if 'skip:3' in log and pg.evaluate("!document.getElementById('ob').hidden") else fail('ролик: пропуск', str(log))
+            pg.click('#obSkip'); pg.wait_for_selector('#ob[hidden]', state='attached', timeout=6000)
+            ok('ролик → знакомство → «Пропустить»: приложение открылось') if pg.evaluate("!!localStorage.getItem('ml-intro')") else fail('ролик: отметка', 'нет ml-intro')
+        scenario('Ролик: пропуск и сворачивание', {'session': True, 'docs': []}, s_intro_skip, intro=True)
+
+        def s_intro_calm(pg, n):
+            pg.wait_for_selector('#mlIntro', state='visible', timeout=10000)
+            pg.click('#miWatch'); pg.wait_for_timeout(400)
+            moves = []
+            for i in range(1, 7):
+                pg.evaluate(f"MLIntro.debug.go({i})"); pg.wait_for_timeout(2500 if i in (1, 2, 4) else 900)
+                moves += pg.evaluate("""()=>document.getAnimations().filter(a=>a.effect&&a.effect.target&&a.effect.target.closest&&a.effect.target.closest('#mlIntro .mi-sl.cur')).map(a=>a.effect.getKeyframes().filter(k=>k.transform&&k.transform!=='none').length).filter(x=>x>0)""")
+                if pg.evaluate("[...document.querySelectorAll('#mlIntro .mi-sl.cur .mi-fg')].some(f=>getComputedStyle(f).opacity!=='0')"): moves.append('палец')
+                if i == 4: shot(pg, 'intro-5-reduced')
+            st = pg.evaluate(IST)
+            ok('ролик, «Уменьшить движение»: без сдвигов и «пальца», только плавное появление') if st['rm'] and not moves else fail('ролик: уменьшить движение', f"rm={st['rm']} {moves[:5]}")
+        scenario('Ролик: уменьшить движение', {'session': True, 'docs': []}, s_intro_calm, intro=True, motion='reduce')
+
+        def s_intro_uk(pg, n):
+            pg.wait_for_selector('#mlIntro', state='visible', timeout=10000)
+            t0 = pg.inner_text('#mlIntro')
+            pg.click('#miWatch'); pg.wait_for_timeout(1500)
+            t1 = pg.inner_text('#mlIntro')
+            pg.evaluate("MLIntro.debug.go(6)"); pg.wait_for_timeout(600); t2 = pg.inner_text('#mlIntro')
+            ru = [w for w in ['Пропустить', 'Смотреть', 'Далее', 'Настроить', 'Привет', 'Выключить'] if w in t0 + t1 + t2]
+            if not ru and 'Пропустити' in t0 and 'Налаштувати мій план' in t2 and 'Привіт, я Оріон' in pg.evaluate("MLIntro.debug.text.uk.slides[0].vo"): ok('ролик по-украински: обложка, слайды и кнопки без русских слов')
+            else: fail('ролик по-украински', f'русское: {ru}')
+            shot(pg, 'intro-7-uk')
+        scenario('Ролик: украинский', {'session': True, 'docs': []}, lambda pg, n: (pg.evaluate("localStorage.setItem('ml-lang','uk')"), pg.reload(wait_until='load'), pg.wait_for_timeout(1500), s_intro_uk(pg, n)), intro=True)
+
+        def s_intro_replay(pg, n):
+            wait_app(pg)
+            if pg.locator('#mlIntro').count(): raise AssertionError('у давнего пользователя ролик показался сам')
+            ok('ролик: давнему пользователю сам не показывается')
+            pg.evaluate("openSheet('setSheet');fillSettings()"); pg.wait_for_timeout(500)
+            r = pg.evaluate("(()=>{const b=document.getElementById('introBtn');const r=b.getBoundingClientRect();return [b.textContent.trim(),Math.round(r.height)]})()")
+            ok(f'«Настройки»: строка «Как пользоваться MoneyLife», {r[1]} px') if r[0].startswith('Как пользоваться MoneyLife') and r[1] >= 48 else fail('«Настройки»: строка ролика', str(r))
+            pg.evaluate("P.msVoice=false")   # «Голос Ориона» выключен → ролик без звука, только субтитры
+            pg.evaluate("document.getElementById('introBtn').click()")
+            pg.wait_for_selector('#mlIntro', state='visible', timeout=8000); pg.wait_for_timeout(400)
+            st = pg.evaluate(IST)
+            ok('ролик из «Настроек»: открыт в режиме пересмотра, без звука при выключенном «Голосе Ориона»') if st['mode'] == 'replay' and st['muted'] else fail('ролик из настроек', str(st))
+            ok('ролик: остальное приложение недоступно скринридеру, пока идёт ролик') if pg.evaluate("!!document.querySelector('nav.tabs').closest('[inert]')") else fail('ролик: inert', 'нижнее меню доступно')
+            pg.click('#miWatch'); pg.wait_for_timeout(300); pg.evaluate("MLIntro.debug.go(6)"); pg.wait_for_timeout(1300)
+            cta = pg.inner_text('#miCta').strip(); cap = pg.evaluate(IST)['cap']
+            ok('пересмотр: в конце «Готово» и подсказка, где найти ролик') if cta == 'Готово' and 'Настройках' in cap else fail('пересмотр: конец', f'{cta} / {cap}')
+            pg.click('#miCta'); pg.wait_for_selector('#mlIntro', state='detached', timeout=5000)
+            ok('пересмотр: «Готово» закрывает ролик, знакомство не открывается') if pg.evaluate("document.getElementById('ob').hidden") else fail('пересмотр: закрытие', 'открылось знакомство')
+            pg.wait_for_timeout(500)
+            ok('после ролика приложение снова доступно (inert снят)') if pg.evaluate("!document.querySelector('[inert]')") else fail('после ролика: inert', 'остался')
+            # пауза → «Далее»: звук не остаётся выключенным (AudioContext возобновлён)
+            pg.evaluate("document.getElementById('introBtn').click()"); pg.wait_for_selector('#mlIntro', state='visible', timeout=8000); pg.wait_for_timeout(300)
+            pg.click('#miWatch'); pg.wait_for_timeout(400); pg.click('#miPause'); pg.wait_for_timeout(200); pg.click('#miNext'); pg.wait_for_timeout(500)
+            st = pg.evaluate(IST)
+            ok('пауза → «Далее»: показ продолжается со следующего слайда') if st['i'] == 1 and not st['paused'] else fail('пауза → «Далее»', str(st))
+            pg.click('#miSkip'); pg.wait_for_selector('#mlIntro', state='detached', timeout=5000)
+        scenario('Ролик: пересмотр из настроек', {'session': True, 'docs': SEED}, s_intro_replay, intro=True)
 
         # --- В. пользователь с данными: вкладки и шторки
         def s_user(pg, n):
@@ -1071,12 +1216,28 @@ def run_browser():
                 pg.evaluate(f"document.documentElement.setAttribute('data-theme','{th}')"); pg.wait_for_timeout(400)
                 shot(pg, f'15-mascot-home-{th}')
             pg.evaluate("document.documentElement.setAttribute('data-theme','dark')")
+            # 18.11.2026: нажатие — слушает вопрос (зажимать не нужно); во время речи — замолкает и слушает; молчание — сводка
+            LST = "(()=>{const c=document.querySelector('.or-cap');return {listen:!!(c&&c.classList.contains('listen')),text:c?c.innerText:'',talking:Mascot.debug.state().talking}})()"
             pg.click('#mascot .ms-hit'); pg.wait_for_timeout(300)
-            if not pg.evaluate("Mascot.debug.state().talking"): ok('Орион: нажатие во время речи — тишина')
-            else: fail('Орион: остановка речи', str(pg.evaluate("Mascot.debug.state()")))
-            pg.click('#mascot .ms-hit'); pg.wait_for_timeout(600)
+            a1 = pg.evaluate(LST)
+            if not a1['talking'] and a1['listen']: ok('Орион: нажатие во время речи — замолкает и сразу слушает (перебивание)')
+            else: fail('Орион: перебивание нажатием', str(a1))
+            pg.click('#mascot .ms-hit'); pg.wait_for_timeout(250)
+            a2 = pg.evaluate(LST)
+            if not a2['listen'] and not a2['talking']: ok('Орион: нажатие во время слушания — отмена')
+            else: fail('Орион: отмена слушания', str(a2))
+            pg.click('#mascot .ms-hit'); pg.wait_for_timeout(300); pg.click('#mascot .ms-hit'); pg.wait_for_timeout(4200)
+            s0 = pg.evaluate("Mascot.debug.state().said")
+            if not s0.startswith('Добр') and not pg.evaluate(LST)['listen']: ok('Орион: передумали — второе нажатие отменяет вопрос без сводки')
+            else: fail('Орион: отмена вопроса', s0)
+            pg.click('#mascot .ms-hit'); pg.wait_for_timeout(300)
+            a3 = pg.evaluate(LST)
+            if a3['listen'] and 'помолчите' in a3['text']: ok('Орион: нажатие — слушает вопрос, подсказка «спросите или помолчите»')
+            else: fail('Орион: нажатие — слушает', str(a3))
+            try: pg.wait_for_function("()=>Mascot.debug.state().said.startsWith('Добр')", polling=200, timeout=9000)
+            except Exception: pass
             said = pg.evaluate("Mascot.debug.state().said").replace('\u00a0', ' ')
-            if said.startswith('Добр') and 'Андрей' in said and 'Портфель' in said and 'Биткоин' in said: ok('Орион: сводка — приветствие по имени, портфель, биткоин')
+            if said.startswith('Добр') and 'Андрей' in said and 'Портфель' in said and 'Биткоин' in said: ok('Орион: промолчали после нажатия — сводка: приветствие по имени, портфель, биткоин')
             else: fail('Орион: сводка', said)
             if not any(w in said for w in ['купи', 'продай', 'советую']): ok('Орион: в сводке нет советов купить или продать')
             else: fail('Орион: советы в сводке', said)
@@ -1139,11 +1300,20 @@ def run_browser():
             # живой голос: не больше двух запросов одновременно (ElevenLabs отказывает при большем числе — Орион уходил на голос телефона, 12.11)
             pg.evaluate("""(()=>{window.__vq={n:0,max:0,calls:0};const o=window.mlVoice;window.__mlVoiceOrig=o;window.mlVoice=async(t,c)=>{const q=window.__vq;q.n++;q.calls++;q.max=Math.max(q.max,q.n);await new Promise(r=>setTimeout(r,250));q.n--;return {error:'net'};};})()""")
             pg.evaluate("Mascot.debug.premium(true)")
-            pg.evaluate("Mascot.debug.say('Первая фраза для проверки. Вторая фраза подлиннее для проверки. Третья фраза тоже длинная для проверки. Четвёртая фраза в конце для проверки.')"); pg.wait_for_timeout(2500)
+            pg.evaluate("Mascot.debug.say('Первая фраза для проверки очереди живого голоса, она нарочно длинная. Вторая фраза подлиннее для проверки, чтобы весь текст был больше трёхсот пятидесяти знаков. Третья фраза тоже длинная для проверки и тоже про очередь запросов. Четвёртая фраза в конце для проверки. Пятая фраза добавлена, чтобы ответ точно разделился на две части. Шестая и последняя фраза.')"); pg.wait_for_timeout(2500)
             vq = pg.evaluate("window.__vq")
             if vq['max'] <= 2 and vq['calls'] >= 3: ok(f"Орион: запросы живого голоса — не больше двух одновременно ({vq['calls']} запросов)")
             else: fail('Орион: одновременные запросы голоса', str(vq))
             pg.evaluate("window.mlVoice=window.__mlVoiceOrig; document.querySelector('.or-cap')&&document.querySelector('.or-cap').click()")
+            # 18.11.2026: ответ в разговоре озвучивается по предложениям (первый звук быстрее), сводка — целиком
+            LT = 'Если коротко, рынок нервничает. По новостям, из биржевых фондов ушли деньги, пишет Cointelegraph. Индекс страха опустился до двенадцати. Рассказать, что это значит для вашего портфеля?'
+            sp2 = pg.evaluate("t=>[Mascot.debug.split(t,true),Mascot.debug.split(t,false)]", LT)
+            if len(sp2[0]) >= 3 and sp2[0][0] == 'Если коротко, рынок нервничает.' and len(sp2[1]) == 1: ok(f"Орион: ответ в разговоре — по предложениям ({len(sp2[0])} части, первая короткая), сводка до 350 знаков — целиком")
+            else: fail('Орион: разбиение ответа', str(sp2))
+            # 18.11.2026: ударения для живого голоса — знак над гласной (Eleven v4 его слышит, проверка владельца)
+            st = pg.evaluate("Mascot.debug.stress('Халвинг прошёл. Средства на бирже, договор подписан, в этом квартале волатильность выше.')")
+            if all(w in st for w in ['Ха\u0301лвинг', 'Сре\u0301дства', 'догово\u0301р', 'кварта\u0301ле', 'волати\u0301льность']): ok('Орион: словарь ударений — ха́лвинг, сре́дства, догово́р, кварта́ле, волати́льность')
+            else: fail('Орион: словарь ударений', st)
             # живой голос: числа словами в нужном падеже («до семидесяти четырёх тысяч», «к … тысячам»), «тыс.», «млн»
             sp = pg.evaluate("[Mascot.debug.spoken('Биткоин держится около 74 тысяч долларов.'), Mascot.debug.spoken('Упал до $74 тыс. и отскочил к 76 000 $.'), Mascot.debug.spoken('Оборот 1,2 млн долларов, рост более 2%.'), Mascot.debug.spoken('Серия 21 месяц, 41 покупка, 2 тысячи гривен.')]")
             want = ['около семидесяти четырёх тысяч долларов.', 'до семидесяти четырёх тысяч долларов и отскочил к семидесяти шести тысячам долларов.', 'одна целая две десятых миллиона долларов, рост более двух процентов.', 'двадцать один месяц, сорок одна покупка, две тысячи гривен.']
@@ -1152,6 +1322,22 @@ def run_browser():
             pr = pg.evaluate("Mascot.debug.spoken('На OKX и Binance приток в ETF, пишет Cointelegraph; ОКХ, ФРС.')")
             if all(w in pr for w in ['о-кей-икс', 'Бинанс', 'и-ти-эф', 'Коинтелеграф', 'эф-эр-эс']) and 'ОКХ' not in pr: ok('Орион: биржи, бренды и аббревиатуры произносятся правильно (OKX — «о-кей-икс», ETF — «и-ти-эф»)')
             else: fail('Орион: произношение', pr)
+            # 18.11.2026: подготовка текста к голосу — набор фраз из этапа 2 (деньги, проценты, даты, порядковые, тикеры, разметка)
+            PH = [('Биткоин — $110K.', 'Биткоин — сто десять тысяч долларов.'), ('Портфель — $1 250.', 'Портфель — тысяча двести пятьдесят долларов.'),
+                  ('Резерв — 300 €.', 'Резерв — триста евро.'), ('Комиссия $0,15.', 'Комиссия пятнадцать центов.'), ('PEPE стоит $0.0000123.', 'пепе стоит доли цента.'),
+                  ('За сутки +3,5%.', 'За сутки плюс три с половиной процента.'), ('Доля крипты 0,5%.', 'Доля крипты полпроцента.'), ('до 1,5%', 'до полутора процентов'),
+                  ('С 1 января.', 'С первого января.'), ('Пополнение 15.12.', 'Пополнение пятнадцатого декабря.'), ('Халвинг был в 2024 году.', 'Халвинг был в две тысячи двадцать четвёртом году.'),
+                  ('Заседание 17 декабря.', 'Заседание семнадцатого декабря.'), ('Напомню в 9:30.', 'Напомню в девять тридцать.'), ('Обновлено 3 ч назад.', 'Обновлено три часа назад.'),
+                  ('До 3-й ступени — 8%.', 'До третьей ступени — восемь процентов.'), ('Вы на 2-м этапе плана.', 'Вы на втором этапе плана.'),
+                  ('Колебания 5–10% за день.', 'Колебания от пяти до десяти процентов за день.'), ('Через 2-3 недели', 'Через две или три недели'), ('Объём x3 за неделю.', 'Объём в три раза за неделю.'),
+                  ('BTC растёт, ETH стоит на месте.', 'биткоин растёт, эфир стоит на месте.'), ('Цена BTC упала.', 'Цена биткоина упала.'), ('У вас 5 BTC.', 'У вас пять биткоинов.'),
+                  ('У вас 5 SOL.', 'У вас пять монет соланы.'), ('Купили ONDO и NEAR.', 'Купили ондо и нир.'), ('Стейкинг даёт 4% APY.', 'Стейкинг даёт четыре процента годовых.'),
+                  ('Spot ETF одобрили.', 'спотовые и-ти-эф одобрили.'), ('Все упало.', 'Всё упало.'), ('**Важно:** рынок падает 🚀', 'Важно: рынок падает'),
+                  ('- первое\n- второе', 'Первое. Второе'), ('Подробнее: https://forklog.com/news', 'Подробнее.'), ('Лестница (5 ступеней) готова.', 'Лестница — пять ступеней — готова.')]
+            got = pg.evaluate("a=>a.map(x=>Mascot.debug.spoken(x))", [x[0] for x in PH])
+            bad = [f'{a!r} → {g!r} (нужно {w!r})' for (a, w), g in zip(PH, got) if g.replace('\u00a0', ' ') != w]
+            if not bad: ok(f'Орион: подготовка текста к голосу — {len(PH)} фраз (деньги, центы, «с половиной», даты, время, порядковые, диапазоны, тикеры в падеже, разметка)')
+            else: fail('Орион: подготовка текста к голосу', ' | '.join(bad))
             # «мозг»: вопрос → функция orion-ask (имитация). Уходят вопрос, тикер, начало разговора и портфель только долями; ответ звучит
             asks = []
             def fa(route):
@@ -1164,7 +1350,7 @@ def run_browser():
             b1 = asks[0] if asks else {}
             ctx = b1.get('ctx') or {}
             flat = json.dumps(ctx)
-            no_sums = set(b1) <= {'q', 'sym', 'hist', 'ctx', 'lang'} and b1.get('lang') == 'ru' and all(0 < v <= 100 for v in (ctx.get('shares') or {}).values()) and 'total' not in flat and '@' not in flat
+            no_sums = set(b1) <= {'q', 'sym', 'hist', 'ctx', 'lang', 'stream'} and b1.get('lang') == 'ru' and all(0 < v <= 100 for v in (ctx.get('shares') or {}).values()) and 'total' not in flat and '@' not in flat
             if b1.get('sym') == 'BTC' and 'растёт' in b1.get('q', '') and ctx.get('shares') and no_sums and 'Cointelegraph' in cap: ok('Орион: «почему биткоин растёт» — ответ «мозга»; портфель уходит только долями в %, без сумм')
             else: fail('Орион: вопрос «мозгу»', str(b1) + ' | ' + cap)
             pg.evaluate("document.querySelector('.or-cap') && document.querySelector('.or-cap').click()")
@@ -1182,6 +1368,76 @@ def run_browser():
             cap = pg.evaluate("(document.querySelector('.or-cap')||{}).textContent||''")
             if len(asks) == 3 and 'У вас' in cap: ok('Орион: вопросы о своём портфеле отвечаются на телефоне, без сервера')
             else: fail('Орион: портфель без сервера', str(len(asks)) + ' ' + cap)
+            pg.evaluate("document.querySelector('.or-cap') && document.querySelector('.or-cap').click()"); pg.unroute('**/functions/v1/orion-ask')
+            # 18.11.2026: ответ «мозга» потоком — первое предложение звучит сразу, остальное следом; в истории — ответ целиком
+            S1 = 'Если коротко — по новостям, рынок растёт на притоке денег в биржевые фонды.'
+            S2 = 'Пишет Cointelegraph. Рассказать про эфир?'
+            sb = []
+            def fs(route):
+                sb.append(json.loads(route.request.post_data or '{}'))
+                lines = [{'t': S1[:30]}, {'t': S1[30:] + ' '}, {'t': 'Пишет '}, {'t': 'Cointelegraph. Рассказать про эфир?'}, {'done': True, 'text': S1 + ' ' + S2, 'sources': ['Cointelegraph']}]
+                route.fulfill(status=200, headers={'content-type': 'application/x-ndjson; charset=utf-8', 'access-control-allow-origin': '*'}, body='\n'.join(json.dumps(x, ensure_ascii=False) for x in lines) + '\n')
+            pg.route('**/functions/v1/orion-ask', fs)
+            pg.evaluate("Mascot.debug.ask('Почему растёт рынок?')")
+            try: pg.wait_for_function("t=>Mascot.debug.sayLog().includes(t)", arg=S2, polling=200, timeout=15000)
+            except Exception: pass
+            log = pg.evaluate("Mascot.debug.sayLog()"); la = pg.evaluate("(Mascot.debug.lastAsk()||{}).text||''"); hh = pg.evaluate("Mascot.debug.hist()")
+            if sb and sb[0].get('stream') is True and S1 in log and S2 in log and log.index(S1) < log.index(S2) and la == S1 + ' ' + S2 and hh and hh[-1]['a'] == S1 + ' ' + S2:
+                ok('Орион: ответ «мозга» потоком — первое предложение звучит сразу, остальное следом; в памяти разговора ответ целиком')
+            else: fail('Орион: поток ответа', f'{sb[:1]} | {log} | {la}')
+            # 18.11.2026: переспросы к ответу телефона — «а биткоин?», «а в гривнах?» — считаются на телефоне, без сервера; имя подставляется вместо метки
+            pg.evaluate("document.querySelector('.or-cap') && document.querySelector('.or-cap').click()")
+            n0 = len(sb)
+            pg.evaluate("S.settings.usdUah=41.5"); pg.evaluate("Mascot.debug.ask('сколько у меня эфира')"); pg.wait_for_timeout(400)
+            e1 = pg.evaluate("Mascot.debug.state().said").replace('\u00a0', ' ')
+            pg.evaluate("Mascot.debug.ask('а биткоин?')"); pg.wait_for_timeout(400)
+            e2 = pg.evaluate("Mascot.debug.state().said").replace('\u00a0', ' ')
+            pg.evaluate("Mascot.debug.ask('а в гривнах?')"); pg.wait_for_timeout(400)
+            e3 = pg.evaluate("Mascot.debug.state().said").replace('\u00a0', ' ')
+            if 'эфир' in e1 and 'У вас' in e2 and 'биткоин' in e2 and 'У вас' in e3 and ('гривн' in e3 or 'гривен' in e3) and len(sb) == n0: ok('Орион: переспросы «а биткоин?» и «а в гривнах?» — понимает по прошлому ответу, считает на телефоне')
+            else: fail('Орион: переспросы', f'{e1} | {e2} | {e3} | {len(sb) - n0}')
+            pg.evaluate("Mascot.debug.ask('Почему рынок растёт?')"); pg.wait_for_timeout(1500)
+            hs = (sb[-1].get('hist') if sb else None) or []
+            mine = [x['a'] for x in hs if 'У вас' in x['a']]
+            if mine and all(not any(c.isdigit() for c in a) for a in mine): ok('Орион: ответы про ваши деньги уходят «мозгу» без чисел — суммы и количества остаются на телефоне')
+            else: fail('Орион: приватность истории', str(hs))
+            nf = pg.evaluate("[Mascot.debug.nameFill('Смотрите, {ИМЯ}, рынок спокоен.'), Mascot.debug.nameFill('{ИМЯ}, всё по плану.')]")
+            if nf[0] == 'Смотрите, Андрей, рынок спокоен.' and nf[1] == 'Андрей, всё по плану.': ok('Орион: имя подставляется в телефоне вместо метки {ИМЯ} — на сервер не уходит')
+            else: fail('Орион: имя вместо метки', str(nf))
+            # 18.11.2026: долгая память — «запомни, что…», согласие на предложение «мозга», запрет сумм и долгов, копия в аккаунте, «забудь всё»
+            pg.evaluate("document.querySelector('.or-cap') && document.querySelector('.or-cap').click()")
+            pg.evaluate("Mascot.debug.ask('запомни, что я коплю на квартиру')"); pg.wait_for_timeout(300)
+            m1 = pg.evaluate("Mascot.debug.state().said"); l1 = pg.evaluate("Mascot.mem.list().map(x=>x.t)")
+            pg.evaluate("Mascot.debug.ask('запомни, что мой долг 5000 долларов')"); pg.wait_for_timeout(300)
+            m2 = pg.evaluate("Mascot.debug.state().said"); l2 = pg.evaluate("Mascot.mem.list().map(x=>x.t)")
+            if m1.startswith('Запомнил') and 'я коплю на квартиру' in l1 and 'не запоминаю' in m2 and len(l2) == len(l1): ok('Орион: «запомни, что…» — запоминает; суммы и долги — отказывается')
+            else: fail('Орион: запомни', f'{m1} | {l1} | {m2} | {l2}')
+            MEMO_T = 'Эфир — второй по размеру после биткоина. Рассказать подробнее? ПАМЯТЬ: интересуется эфиром'
+            def fm(route):
+                sb.append(json.loads(route.request.post_data or '{}'))
+                route.fulfill(status=200, headers={'content-type': 'application/x-ndjson; charset=utf-8', 'access-control-allow-origin': '*'}, body='\n'.join(json.dumps(x, ensure_ascii=False) for x in [{'t': MEMO_T}, {'done': True, 'text': MEMO_T, 'sources': []}]) + '\n')
+            pg.unroute('**/functions/v1/orion-ask'); pg.route('**/functions/v1/orion-ask', fm)
+            pg.evaluate("Mascot.debug.ask('Что такое эфир? Мне он интересен')")
+            try: pg.wait_for_function("()=>Mascot.debug.sayLog().some(x=>x.startsWith('Запомнить'))", polling=200, timeout=15000)
+            except Exception: pass
+            lg = pg.evaluate("Mascot.debug.sayLog()"); ctxm = (sb[-1].get('ctx') or {}).get('mem') if sb else None
+            spoke_memo = any('ПАМЯТЬ' in x for x in lg)
+            pg.evaluate("Mascot.debug.ask('да')"); pg.wait_for_timeout(300)
+            l3 = pg.evaluate("Mascot.mem.list().map(x=>x.t)")
+            if 'Запомнить: интересуется эфиром?' in lg and not spoke_memo and 'интересуется эфиром' in l3 and ctxm and 'я коплю на квартиру' in ctxm: ok('Орион: «мозг» предлагает запомнить — строка не звучит, Орион спрашивает «Запомнить?», после «да» — запомнил; память уходит «мозгу» строками')
+            else: fail('Орион: согласие на память', f'{lg} | {l3} | {ctxm}')
+            bk = pg.evaluate("(async()=>{const db=await window.claude.use('db');const d=await db.doc('app/orion-mem').get();return d.exists?(d.data().items||[]).map(x=>x.t):null})()")
+            if bk and 'интересуется эфиром' in bk and 'я коплю на квартиру' in bk: ok('Орион: резервная копия памяти — в аккаунте (app/orion-mem)')
+            else: fail('Орион: копия памяти в аккаунте', str(bk))
+            pg.evaluate("MLX.memOpen()"); pg.wait_for_timeout(500)
+            sh = pg.evaluate("[document.getElementById('xTitle').textContent, document.getElementById('xBody').innerText]")
+            if sh[0] == 'Что помнит Орион' and 'я коплю на квартиру' in sh[1] and 'никогда' in sh[1]: ok('Настройки: «Что помнит Орион» — список с кнопкой «Забыть»')
+            else: fail('Настройки: память Ориона', str(sh))
+            pg.evaluate("closeSheets()"); pg.wait_for_timeout(300)
+            pg.evaluate("Mascot.debug.ask('забудь всё')"); pg.wait_for_timeout(300)
+            if pg.evaluate("Mascot.mem.list().length") == 0 and 'забыл' in pg.evaluate("Mascot.debug.state().said"): ok('Орион: «забудь всё» — память очищена')
+            else: fail('Орион: забудь всё', pg.evaluate("Mascot.debug.state().said"))
+            pg.unroute('**/functions/v1/orion-ask')
             pg.evaluate("document.querySelector('.or-cap') && document.querySelector('.or-cap').click()"); pg.unroute('**/functions/v1/orion-ask')
         scenario('Орион', {'session': True, 'docs': SEED}, s_mascot)
 
