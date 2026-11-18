@@ -1683,6 +1683,52 @@ def run_browser():
             else: fail('украинский: возврат к русскому', tabs)
         scenario('Украинский язык', {'session': True, 'docs': SEED}, s_uk)
 
+        # 18.11 (охота 17.11, P2 #5): «Проверка рынка — 8:41 и 20:41 по Киеву» и «Подбор альткоинов — 1-го числа, 10:13» в «Правилах»
+        #     и «Проверка рынка» в «Данных» видел каждый, хотя это задачи владельца (app/market с source). Теперь — только при ownerFeeds()
+        OWN_KV = """()=>{const k=id=>[...document.querySelectorAll('#'+id+'>div')].map(d=>(d.firstElementChild||{}).textContent);return {own:ownerFeeds(),rules:k('rules'),data:k('dataInfo'),hint:document.getElementById('stHint').textContent}}"""
+        # 18.11, второй круг (Вера): «Последняя проверка» в «Данных» и подсказка «Изменить правила» про «проверку рынка 2 раза в день» — тоже только у владельца
+        T = {'ru': {'rules': ('Проверка рынка', 'Подбор альткоинов'), 'last': 'Последняя проверка', 'common': ('Распределение', 'Новый максимум BTC', 'Курс доллара', 'Записей'),
+                    'hint_own': 'Эти правила общие для приложения и для проверки рынка 2 раза в день.', 'hint_user': 'Эти правила — для расчётов в приложении.'},
+             'uk': {'rules': ('Перевірка ринку', 'Добір альткоїнів'), 'last': 'Остання перевірка', 'common': ('Розподіл', 'Новий максимум BTC', 'Курс долара', 'Записів'),
+                    'hint_own': 'Ці правила спільні для застосунку й для перевірки ринку 2 рази на день.', 'hint_user': 'Ці правила — для розрахунків у застосунку.'}}
+        def s_owner_rows(owner, lang='ru'):
+            def body(pg, n):
+                wait_app(pg)
+                if lang == 'uk': pg.evaluate("localStorage.setItem('ml-lang','uk'); location.reload()"); pg.wait_for_timeout(2500); wait_app(pg)
+                pg.wait_for_timeout(1200)
+                pg.evaluate("openSettings()"); pg.wait_for_timeout(800)
+                t = T[lang]; r = pg.evaluate(OWN_KV); who = ('владелец' if owner else 'не владелец') + (', укр.' if lang == 'uk' else ''); bad = []
+                if r['own'] != owner: raise AssertionError(f'ownerFeeds()={r["own"]} — сценарий не тот')
+                if owner:
+                    if not (r['rules'][-2:] == list(t['rules']) and t['rules'][0] in r['data'] and t['last'] in r['data']): bad.append('у владельца пропали строки: ' + str(r))
+                    if r['hint'] != t['hint_own']: bad.append('подсказка владельца: ' + r['hint'])
+                else:
+                    if any(x in r['rules'] + r['data'] for x in t['rules'] + (t['last'],)): bad.append('строки владельца видны: ' + str(r))
+                    if r['hint'] != t['hint_user']: bad.append('подсказка не владельца: ' + r['hint'])
+                if not all(x in r['rules'] + r['data'] for x in t['common']): bad.append('пропали общие строки: ' + str(r))
+                if not bad: ok(f'«Правила», «Данные», «Изменить правила» ({who}): «Проверка рынка», «Подбор альткоинов», «Последняя проверка» и подсказка про проверку ' + ('на месте' if owner else 'не показаны — это задачи владельца') + ', остальные строки на месте')
+                else: fail(f'«Правила», «Данные», «Изменить правила» ({who})', '; '.join(bad))
+                for th in ('dark', 'light'):
+                    pg.evaluate(f"document.documentElement.setAttribute('data-theme','{th}')"); pg.wait_for_timeout(300)
+                    for blk, el in (('rules', 'rules'), ('dataInfo', 'dataInfo'), ('edit', 'stHint')):
+                        pg.evaluate(f"document.getElementById('{el}').scrollIntoView({{block:'center'}})"); pg.wait_for_timeout(300)
+                        shot(pg, f"fix-owner-feeds-{'owner' if owner else 'user'}-{blk}-{lang + '-' if lang == 'uk' else ''}{th}")
+                if not owner and lang == 'ru':
+                    # app/market приходит позже загрузки: у владельца подсказка и строки должны появиться без перезагрузки
+                    r2 = pg.evaluate("""()=>{const was=S.market;S.market={source:'agent',updatedAt:Date.now()};render();openSettings();
+                        const k=id=>[...document.querySelectorAll('#'+id+'>div')].map(d=>(d.firstElementChild||{}).textContent);
+                        const a={hint:document.getElementById('stHint').textContent,data:k('dataInfo'),rules:k('rules')};
+                        S.market=was;render();openSettings();a.back=document.getElementById('stHint').textContent;a.dataBack=k('dataInfo');return a;}""")
+                    if r2['hint'] == t['hint_own'] and t['last'] in r2['data'] and t['rules'][0] in r2['rules'] and r2['back'] == t['hint_user'] and t['last'] not in r2['dataBack']:
+                        ok('«Изменить правила»: проверка рынка пришла позже — подсказка и строки владельца появились без перезагрузки и ушли обратно')
+                    else: fail('«Изменить правила»: поздний app/market', str(r2))
+            return body
+        MARKET = [{'col': 'app', 'id': 'market', 'data': {'source': 'agent', 'updatedAt': NOW}}]
+        scenario('Настройки: строки владельца — не владелец', {'session': True, 'docs': SEED}, s_owner_rows(False), dsf=1)
+        scenario('Настройки: строки владельца — владелец', {'session': True, 'docs': SEED + MARKET}, s_owner_rows(True), dsf=1)
+        scenario('Настройки: строки владельца — не владелец, укр.', {'session': True, 'docs': SEED}, s_owner_rows(False, 'uk'), dsf=1)
+        scenario('Настройки: строки владельца — владелец, укр.', {'session': True, 'docs': SEED + MARKET}, s_owner_rows(True, 'uk'), dsf=1)
+
         # --- складки (12.11.2026): разделы настроек и вкладок сложены, одно нажатие раскрывает; состояние запоминается
         def s_folds(pg, n):
             pg.evaluate("localStorage.setItem('ml-fold-real','1'); localStorage.removeItem('ml-fold'); location.reload()"); pg.wait_for_timeout(2500)
