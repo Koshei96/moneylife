@@ -1143,6 +1143,19 @@
   const REM_Q = /(напомни|напомин|нагадай|нагадаю)/, REM_T = /(завтра|сегодня|послезавтра|утром|вечером|дн[её]м|ночью|через|в\s+\d{1,2}(:\d\d)?(?![\d.,])|час|понедельн|вторник|сред[уау]|четверг|пятниц|суббот|воскресен|числа|январ|феврал|март|апрел|ма[йя]|июн|июл|август|сентябр|октябр|ноябр|декабр)/, PRICE_T = /(будет|станет|достигнет|упад|вырастет|подним|опуст|дойд|цена|курс|по\s+\d|долл|\$)/;
   const remQ = t => REM_Q.test(t) && REM_T.test(t) && !PRICE_T.test(t);
   const buyQ = t => /(запиши|внеси|добавь|запиши мне|занеси)\s+(мою\s+|мне\s+)?(покупк|что (я )?купил|что (я )?докупил)|^(я\s+)?(купил|докупил|прикупил)\s/.test(t);   /* «запиши покупку…», «я купил…» — цифры разбирает «мозг», сохраняет человек */
+  /* «…про налоги»: значимые слова после «про» и их основы (первые 3–5 букв), чтобы «биржу» нашла «на бирже» (18.11.2026, BACKLOG №1) */
+  const ABOUT_STOP = /^(и|в|во|на|с|со|по|для|что|это|эту|этот|эти|мою|мой|мои|мое|ту|тот|те|к|ко|о|об|за|из|у|от|до|не|же|ли|бы|а|но|или|где|как|мне|меня)$/, WSPLIT = /[^a-zа-яіїєґ0-9]+/;
+  function aboutQ(t, q) {
+    const m = t.match(/(?:^|\s)про\s+(.+)$/); if (!m) return null;
+    const w = m[1].split(WSPLIT).filter(x => x && !ABOUT_STOP.test(x));
+    const rq = String(q || '').match(/(?:^|\s)про\s+(.+)$/i), raw = ((rq && rq[1]) || m[1]).replace(/[\s.,!?…]+$/, '').trim();
+    return { raw, stems: w.map(x => x.length <= 3 ? x : x.slice(0, Math.min(5, x.length - 1))) };
+  }
+  function aboutPick(list, ab) {   /* подходят все основы; из подходящих — самая свежая; нет подходящих — null */
+    if (!ab.stems.length) return null;
+    const hit = list.filter(x => { const w = norm(x.t).split(WSPLIT); return ab.stems.every(s => w.some(y => y.indexOf(s) === 0)); });
+    return hit.reduce((b, x) => (!b || (+x.at || 0) >= (+b.at || 0) ? x : b), null);   /* при равном времени — записанная позже */
+  }
   /* команды телефона: без сервера и без затрат */
   function taskCmd(t, q) {
     if (/^(открой|покажи|давай|відкрий)\s+(этот\s+|мне\s+)?урок$|^давай урок$/.test(t.trim()) && ST.lessonOffer && now() - ST.lessonOffer.at < 1800 && window.MLX && MLX.lesson) {
@@ -1156,11 +1169,22 @@
       if (!TASK.notes.length) return 'Заметок пока нет. Скажите «запиши заметку…».';
       return 'Последние заметки: ' + TASK.notes.slice(-3).reverse().map(x => x.t).join('; ') + '.';
     }
-    if (/^удали\s+(последнюю\s+)?заметку/.test(t)) { const x = TASK.notes.pop(); if (!x) return 'Заметок нет.'; taskSave('notes'); logAct('Удалил заметку: ' + x.t); return 'Удалил: ' + x.t + '.'; }
+    if (/^удали\s+(последнюю\s+)?заметку/.test(t)) {
+      const ab = aboutQ(t, q);
+      if (ab) {   /* «удали заметку про налоги» — снимаем самую свежую из тех, где есть эти слова; нет такой — ничего не трогаем */
+        const x = aboutPick(TASK.notes, ab); if (!x) return 'Не нашёл заметку про ' + ab.raw + '.';
+        TASK.notes = TASK.notes.filter(y => y !== x); taskSave('notes'); logAct('Удалил заметку: ' + x.t); return 'Удалил: ' + x.t + '.';
+      }
+      const x = TASK.notes.pop(); if (!x) return 'Заметок нет.'; taskSave('notes'); logAct('Удалил заметку: ' + x.t); return 'Удалил: ' + x.t + '.';
+    }
     if (/^(какие|что)\s+(у меня\s+)?напоминани|^мои напоминани/.test(t)) {
       const L = TASK.rem.filter(x => !x.done).sort((a, b) => a.when - b.when);
       if (!L.length) return 'Напоминаний нет.';
       return L.slice(0, 3).map(x => whenW(x.when) + ' — ' + x.t).join('; ') + '.';
+    }
+    if (/^(отмени|удали|убери)\s+(все\s+)?напоминани/.test(t) && aboutQ(t, q)) {   /* «отмени напоминание про биржу» — только подходящее, самое свежее */
+      const ab = aboutQ(t, q), x = aboutPick(TASK.rem.filter(y => !y.done), ab); if (!x) return 'Не нашёл напоминание про ' + ab.raw + '.';
+      TASK.rem = TASK.rem.filter(y => y !== x); taskSave('rem'); logAct('Отменил напоминание: ' + x.t); return 'Отменил напоминание: ' + x.t + '.';
     }
     if (/^(отмени|удали|убери)\s+(все\s+)?напоминани/.test(t)) { const n = TASK.rem.filter(x => !x.done).length; TASK.rem = TASK.rem.filter(x => x.done); taskSave('rem'); logAct('Отменил напоминания: ' + n); return n ? 'Отменил.' : 'Напоминаний и так нет.'; }
     return '';
