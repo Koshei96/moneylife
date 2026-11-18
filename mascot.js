@@ -682,12 +682,56 @@
   const plain = h => String(h || '').replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim();
 
   /* ---------- сводка: «Доброе утро, Андрей. Портфель — …» ---------- */
-  function brief() {
+  /* антипаника (этап 5, 18.11.2026): биткоин за сутки −10% и больше — один раз в день спокойно: правило из книги и ваш план. Не совет купить или продать */
+  const CALM_AT = -10;
+  function calmDue() { const lv = (ST.S && ST.S.live) || {}, ch = lv.change ? +lv.change.BTC : NaN; return isFinite(ch) && ch <= CALM_AT && lsGet('or-calm', '') !== dayKey(); }
+  function calmText() {
+    const S = ST.S || {}, D = ST.D || {}, lv = S.live || {}, ch = +(lv.change && lv.change.BTC), btc = +(lv.prices && lv.prices.BTC) || +(D.prices && D.prices.BTC) || 0;
+    const out = ['Спокойно' + nm() + '. Биткоин за сутки ' + signW(ch) + ' ' + pctW(ch) + '.'];
+    out.push(pick(['Морган Хаузел в «Психологии денег» пишет: колебания — это плата за доходность, а не штраф.', 'Хаузел в «Психологии денег»: лучшая стратегия — та, которой вы держитесь и в плохие дни.', 'Хаузел в «Психологии денег»: главное в плане — что делать, если всё пошло не по плану. Этот план у вас уже есть.']));
+    const ath = +(S.cycle && S.cycle.ath) || 0, l = ((S.cycle && S.cycle.levels) || []).filter(x => x && x.status === 'pending' && x.drop > 0).sort((a, b) => a.n - b.n)[0];
+    if (ST.go) out.push('Биткоин на ступени лестницы — для таких дней она и рассчитана. Решение по плану за вами.');
+    else if (l && ath > 0 && btc > 0) { const tg = ath * (1 - l.drop / 100), dist = (1 - tg / btc) * 100; if (dist > 0.5) out.push('Ваша лестница рассчитана заранее: до ' + (ORD[l.n] || l.n + '-й') + ' ступени ещё ' + pctW(dist) + '.'); }
+    out.push('Резких решений сегодня не нужно.');
+    return out.join(' ');
+  }
+  /* утро (первая сводка за день): что изменилось с прошлого раза, напоминания на сегодня, план месяца */
+  const morningDue = () => lsGet('ms-newsDay', '') !== dayKey();
+  function snapTake(D) {
+    if (!D || !(D.total > 0) || D.noPrice) return;
+    const sn = lsGet('or-snap', null), k = dayKey(), pnl = D.total - (+D.invPriced || 0);
+    if (!sn || sn.day !== k) { if (sn && sn.day) ST.snapPrev = sn; lsSet('or-snap', { day: k, at: Date.now(), total: D.total, pnl }); }
+    else if (!ST.snapPrev) ST.snapPrev = lsGet('or-snapPrev', null);
+    if (ST.snapPrev) lsSet('or-snapPrev', ST.snapPrev);
+  }
+  function morningBits(D) {
+    const out = [], M = window.MLX || {};
+    const sp = ST.snapPrev;
+    if (sp && sp.total > 0 && D.total > 0 && !D.noPrice) {
+      const pnl = D.total - (+D.invPriced || 0), dl = pnl - (+sp.pnl || 0), pc = dl / sp.total * 100, yd = Date.now() - (+sp.at || 0) < 36 * 3600e3;
+      if (Math.abs(pc) >= 0.3) out.push((yd ? 'Со вчера' : 'С прошлого раза') + ' портфель ' + (dl > 0 ? 'вырос' : 'снизился') + ' на ' + (ST.hide ? pctW(Math.abs(pc)) : moneyW(Math.abs(dl))) + '.');
+      else out.push((yd ? 'Со вчера' : 'С прошлого раза') + ' портфель почти не изменился.');
+    }
+    const td = new Date(), end = new Date(td.getFullYear(), td.getMonth(), td.getDate() + 1).getTime();
+    const R = TASK.rem.filter(x => !x.done && x.when > Date.now() && x.when < end).sort((a, b) => a.when - b.when);
+    if (R.length) out.push((R.length > 1 ? 'Сегодня напоминания: ' : 'Сегодня напоминание: ') + R.slice(0, 2).map(x => 'в ' + new Date(x.when).getHours() + ':' + pad2(new Date(x.when).getMinutes()) + ' — ' + x.t).join('; ') + '.');
+    const mi = M.monthInfo ? M.monthInfo(D) : null, left = new Date(td.getFullYear(), td.getMonth() + 1, 0).getDate() - td.getDate();
+    const lw = left <= 7 ? (left === 0 ? ' Сегодня последний день месяца.' : ' До конца месяца ' + left + ' ' + (left === 1 ? 'день' : left < 5 ? 'дня' : 'дней') + '.') : '';
+    if (mi && mi.hasDep && mi.dca > 0.5) out.push('По плану месяца осталось купить на ' + (ST.hide ? 'сумму из плана' : moneyW(mi.dca)) + '.' + lw);
+    else if (mi && !mi.hasDep && mi.budget > 0 && mi.bought < mi.budget * 0.98) out.push('План месяца выполнен на ' + Math.round(mi.bought / mi.budget * 100) + ' процентов.' + lw);
+    return out;
+  }
+  function brief(o) {
+    o = o || {};
     const S = ST.S, D = ST.D; if (!S || !D) return '';
+    const morning = o.morning != null ? o.morning : morningDue(), calm = o.calm != null ? o.calm : calmDue();
+    if (calm) { const c = calmText(); return morning ? c + ' ' + morningBits(D).join(' ') : c; }
     const h = new Date().getHours(), out = [];
     out.push((h < 5 ? 'Доброй ночи' : h < 12 ? 'Доброе утро' : h < 18 ? 'Добрый день' : 'Добрый вечер') + nm() + '.');
     const lv = S.live || {}, btc = +(lv.prices && lv.prices.BTC) || +(D.prices && D.prices.BTC) || 0, ch = lv.change ? lv.change.BTC : null;
-    if (D.total > 0 && !D.noPrice) {
+    const mb = morning ? morningBits(D) : [];
+    if (mb.length && mb[0].indexOf('портфель') > 0) out.push(mb.shift());
+    else if (D.total > 0 && !D.noPrice) {
       const inv = +D.invPriced || 0, gp = inv > 0 ? (D.total - inv) / inv * 100 : null;
       if (ST.hide) { if (gp != null) out.push('Суммы скрыты, поэтому только проценты: портфель ' + (gp >= 0 ? 'в плюсе' : 'в минусе') + ' на ' + pctW(gp) + '.'); }
       else out.push('Портфель — ' + moneyW(D.total) + (gp != null ? ', ' + signW(gp) + ' ' + pctW(gp) + ' к вложенному.' : '.'));
@@ -700,16 +744,17 @@
       if (btc >= ath * 0.995) out.push('Это исторический максимум.');
       else if (l) { const tg = ath * (1 - l.drop / 100), dist = (1 - tg / btc) * 100; if (dist > 0.5) out.push('До ' + (ORD[l.n] || l.n + '-й') + ' ступени лестницы — ' + pctW(dist) + '.'); }
     }
+    out.push(...mb);
     const dd = +(S.settings && S.settings.depositDay) || 0, td = new Date();
     if (dd && td.getDate() === dd && !(S.tx || []).some(t => t && t.type === 'deposit' && String(t.ts || '').slice(0, 10) === td.toISOString().slice(0, 10))) out.push('Сегодня день пополнения биржи.');
     if (ST.fresh > 0) out.push('Есть непрочитанный сигнал — он на главной.');
-    let fv = null; try { const f = window.MLX && window.MLX.fng && window.MLX.fng(); if (f) { fv = +f.v; out.push('Индекс страха и жадности — ' + f.v + ', ' + f.w + '.'); } } catch (e) {}
+    let fv = null; try { const f = window.MLX && window.MLX.fng && window.MLX.fng(); if (f) { fv = +f.v; if (!mb.length && !morning) out.push('Индекс страха и жадности — ' + f.v + ', ' + f.w + '.'); } } catch (e) {}   /* утром — короче: индекс только словами ниже, если страх или жадность */
     /* «спокоен» — только когда и цена стоит, и настроение ровное. При страхе или жадности тихая цена — не спокойствие (17.11.2026, владелец: «страх 12, а потом — рынок спокоен» — нелогично) */
     const flat = ch != null && Math.abs(ch) < 1, fear = fv != null && isFinite(fv) && fv <= 25, greed = fv != null && isFinite(fv) && fv >= 75;
     out.push(fear ? (flat ? 'Цена за сутки почти не двигается, но настроение тревожное — на рынке сильный страх.' : 'На рынке сильный страх — в такие дни цена дёргается сильнее обычного.')
       : greed ? (flat ? 'Цена за сутки почти не двигается, но на рынке жадность — затишье бывает обманчивым.' : 'На рынке жадность — в такие дни легко поддаться азарту.')
-      : flat ? 'Рынок спокоен. Скучно — значит, всё по плану.' : pick(['На этом всё.', 'Если понадоблюсь — я рядом.', 'Остальное — штатно.']));
-    return out.join(' ');
+      : flat ? 'Рынок спокоен. Скучно — значит, всё по плану.' : morning ? '' : pick(['На этом всё.', 'Если понадоблюсь — я рядом.', 'Остальное — штатно.']));
+    return out.filter(Boolean).join(' ');
   }
   /* сводку озвучиваем заранее, в фоне: нажали на сферу — звук уже в памяти телефона и начинается сразу.
      Не чаще раза в 5 минут и только если текст изменился; под тестами и без живого голоса — нет */
@@ -726,6 +771,7 @@
   }
   function tell(auto) {
     const t = brief(); if (!t) return;
+    if (calmDue()) lsSet('or-calm', dayKey());
     lsSet('ms-news', Date.now()); lsSet('ms-newsDay', dayKey());
     speak(t, { pri: auto ? 1 : 2 });
     ST.lastLocal = { at: now(), q: '', sym: '', money: true, redo: () => brief() };   /* «а в гривнах?» после сводки */
@@ -1239,7 +1285,7 @@
     else if (name === 'milestone') { t = ST.hide || !data.v ? 'Новый рубеж портфеля пройден' + nm() + '.' : 'Рубеж пройден: портфель больше ' + moneyW(data.v) + '.'; buzz([15, 50, 15]); }
     else if (name === 'coinMove') t = data.sym + ' за сутки ' + signW(data.ch) + ' ' + pctW(data.ch) + '. ' + (data.neg ? 'Решения — по плану, а не по эмоциям.' : 'Хороший день для этой монеты.');
     else if (name === 'screen') t = 'Свежий подбор альткоинов готов.';
-    else if (name === 'priceAlert') { t = Nm() + (NAME_N[data.sym] || data.sym) + (data.dir === 'up' ? ' поднялся' : ' опустился') + ' до ' + priceW(+data.price) + ' — ваше оповещение сработало.'; t = cap1(t); buzz([20, 60, 20]); }
+    else if (name === 'priceAlert') { t = Nm() + (NAME_N[data.sym] || data.sym) + (data.dir === 'up' ? ' поднялся' : ' опустился') + ' до ' + priceW(+data.price) + (data.late ? ', пока приложение было закрыто, — оповещение сработало.' : ' — ваше оповещение сработало.'); t = cap1(t); buzz([20, 60, 20]); }
     else if (name === 'ach') t = pick(['Новое достижение' + nm() + ': ' + data.t + '.', 'Отмечаю достижение — «' + data.t + '». Так держать.']);
     else if (name === 'streak') t = 'Серия — ' + data.n + ' ' + plural(data.n, 'месяц', 'месяца', 'месяцев') + ' подряд с покупками' + nm() + '. Дисциплина — главный актив.';
     else if (name === 'd14') t = data && data.text ? String(data.text) : '';
@@ -1357,8 +1403,11 @@
     const S = info.S, D = info.D, P = info.P || {};
     ST.hide = !!P.hide; ST.sound = P.msVoice !== false; if (ST.fx !== !!P.msFx) { ST.fx = !!P.msFx; voFx(); } ST.go = !!info.go; ST.fresh = info.fresh || 0; ST.money = info.money || ST.money; if (typeof info.rate === 'function') ST.rate = info.rate;
     ST.name = String(P.name || '').trim().slice(0, 24);
+    snapTake(D);
     prefetchBrief();
     if (!ST.sound && TTS.ok && TTS.cur) try { speechSynthesis.cancel(); } catch (e) {}
+    /* антипаника вживую: падение дошло до −10%, пока приложение открыто и с ним уже говорили (звук разрешён жестом) */
+    if (AUTO && ST.lastInput && !ST.hide && ST.sound && calmDue() && !morningDue() && !speaking() && visible() && !isNight()) { lsSet('or-calm', dayKey()); speak(calmText(), { pri: 2 }); }
     ST.S = S; ST.D = D;
     if (!ST.memSynced && window.mlUser) memRestore();
     if (!ST.taskSynced && window.mlUser) taskRestore();
@@ -1433,7 +1482,7 @@
       lx: t => Lx(t),
       ask: q => answer(q), lastAsk: () => ST.lastAsk || null, ctx: () => brainCtx(), hist: () => ST.hist || [],
       mood: m => { if (ST.forceHour == null) ST.forceHour = 12; ST.pct = { calm: 0, up: 3, rocket: 9, down: -3, crash: -9 }[m]; ST.go = m === 'hunter'; if (m === 'offline') { ST.offline = true; ST.offSince = now() - 120; } else ST.offline = false; ST.lastInput = now(); wake(); },
-      say: t => speak(t, { pri: 2 }), sayLog: () => ST.sayLog || [], nameFill: t => nameFill(t), memo: t => memoSplit(t), memSafe: t => memSafe(t), act: (n, x) => doAct(n, x), remTick: () => remTick(), remDue: (t, ago) => remAdd(t, Date.now() - (ago || 1000)), remQ: t => remQ(t), split: (t, live) => splitParts(t, live), stress: t => stressRu(t),
+      say: t => speak(t, { pri: 2 }), sayLog: () => ST.sayLog || [], nameFill: t => nameFill(t), memo: t => memoSplit(t), memSafe: t => memSafe(t), act: (n, x) => doAct(n, x), calm: () => calmText(), calmDue: () => calmDue(), brief2: o => brief(o), snapPrev: v => { ST.snapPrev = v; }, remTick: () => remTick(), remDue: (t, ago) => remAdd(t, Date.now() - (ago || 1000)), remQ: t => remQ(t), split: (t, live) => splitParts(t, live), stress: t => stressRu(t),
       tap: () => tapped(),
       brief: () => brief(),
       reply: q => reply(q),

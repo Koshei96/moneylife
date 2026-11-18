@@ -4,7 +4,8 @@
    - читает напоминания людей (копия в аккаунте: docs app/orion-rem) — наступившие больше 40 с назад и ещё не выполненные
      (40 с — запас: если приложение открыто, Орион скажет сам и отметит выполненным, двойного не будет);
    - шлёт пуш на телефоны человека (подписки: docs app/push-subs) и ставит метку «отправлено» в хранилище push/sent/…;
-   - умершие подписки (404/410) убирает.
+   - умершие подписки (404/410) убирает;
+   - (этап 5) сверяет оповещения о цене (docs app/orion-alerts) с ценами Binance и шлёт сработавшие.
    Ключи VAPID функция создаёт сама при первом запуске и хранит в закрытом хранилище (push/vapid.json) — в приложение уходит только публичный.
    Ключ расписания проверяется по отпечатку SHA-256: сам ключ в коде не лежит. Текст напоминания — слова самого человека; больше ничего не уходит. */
 import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
@@ -76,5 +77,51 @@ Deno.serve(async (req) => {
       await sb.from('docs').update({ data: { ...(sd && sd.data), items: subs.filter(s => !bad.has(s.endpoint)) }, updated_at: new Date().toISOString() }).eq('owner', row.owner).eq('col', 'app').eq('id', 'push-subs');
     }
   }
-  return json({ ok: true, due, sent, dead });
+  /* 18.11.2026 (этап 5): оповещения о цене — точно в срок. Копия оповещений в аккаунте: docs app/orion-alerts.
+     Цены — Binance раз в минуту, только если оповещения у кого-то есть. Сработавшее убираем из копии и пишем в fired — телефон снимет его у себя */
+  const { data: arows } = await sb.from('docs').select('owner,data').eq('col', 'app').eq('id', 'orion-alerts');
+  const al = (arows || []).map(r => ({ owner: r.owner as string, data: r.data || {}, items: (((r.data || {}).items) || []).filter((a: Al) => a && a.id && a.sym && +a.price > 0 && (a.dir === 'up' || a.dir === 'down')) as Al[] })).filter(r => r.items.length);
+  let fired = 0;
+  if (al.length) {
+    const px = await prices(Array.from(new Set(al.flatMap(r => r.items.map(a => String(a.sym).toUpperCase())))).slice(0, 100));
+    for (const r of al) {
+      const hit = r.items.filter(a => { const p = px[String(a.sym).toUpperCase()]; return p > 0 && (a.dir === 'up' ? p >= +a.price : p <= +a.price); });
+      if (!hit.length) continue;
+      const marks = await Promise.all(hit.map(a => store.download(`push/sent/${r.owner}/al-${a.id}`).then(x => !!x.data).catch(() => false)));
+      const todo = hit.filter((_, i) => !marks[i]);
+      if (!todo.length) continue;
+      const { data: sd } = await sb.from('docs').select('data').eq('owner', r.owner).eq('col', 'app').eq('id', 'push-subs').maybeSingle();
+      const subs: Sub[] = ((sd && sd.data && sd.data.items) || []).filter((s: Sub) => s && s.endpoint && s.keys && s.keys.p256dh && s.keys.auth);
+      const uk = r.data.lang === 'uk';
+      for (const a of todo) {
+        const p = px[String(a.sym).toUpperCase()], up = a.dir === 'up';
+        const msg = { title: a.sym + (up ? (uk ? ' піднявся до ' : ' поднялся до ') : (uk ? ' опустився до ' : ' опустился до ')) + usdTxt(+a.price), body: (uk ? 'Зараз ' : 'Сейчас ') + usdTxt(p) + (uk ? '. Сповіщення спрацювало і зняте.' : '. Оповещение сработало и снято.'), url: './', tag: 'al:' + a.id };
+        for (const s of subs) { try { const st = await sendPush(s, msg, JWK, PUB, CONTACT); if (st >= 200 && st < 300) sent++; else console.error('orion-push: al status', st); } catch (e) { console.error('orion-push: al send', String(e).slice(0, 200)); } }
+        await store.upload(`push/sent/${r.owner}/al-${a.id}`, new Blob(['1'], { type: 'text/plain' }), { upsert: true }).catch(() => null);
+        fired++;
+      }
+      const ids = new Set(todo.map(a => a.id)), was = Array.isArray(r.data.fired) ? r.data.fired : [];
+      await sb.from('docs').update({ data: { ...r.data, items: (r.data.items || []).filter((a: Al) => !ids.has(a.id)), fired: was.concat(todo.map(a => ({ id: a.id, at: now, now: px[String(a.sym).toUpperCase()] }))).slice(-20) }, updated_at: new Date().toISOString() }).eq('owner', r.owner).eq('col', 'app').eq('id', 'orion-alerts');
+    }
+  }
+  return json({ ok: true, due, sent, dead, fired });
 });
+
+type Al = { id: string; sym: string; price: number; dir: 'up' | 'down' };
+const usdTxt = (v: number) => '$' + (v >= 100 ? Math.round(v).toLocaleString('ru-RU') : String(+v.toPrecision(4)).replace('.', ','));
+/* цены монет к USDT; монеты, которых нет на Binance, просто пропускаем */
+async function prices(syms: string[]) {
+  const out: Record<string, number> = {}; const list = syms.filter(s => /^[A-Z0-9]{2,12}$/.test(s) && s !== 'USDT');
+  if (!list.length) return out;
+  for (const h of ['https://data-api.binance.vision', 'https://api.binance.com']) {
+    const c = new AbortController(), t = setTimeout(() => c.abort(), 6000);
+    try {
+      const r = await fetch(h + '/api/v3/ticker/price', { signal: c.signal }); if (!r.ok) continue;
+      const all = await r.json(); if (!Array.isArray(all)) continue;
+      const want = new Set(list.map(s => s + 'USDT'));
+      for (const x of all) if (want.has(x.symbol)) out[String(x.symbol).replace(/USDT$/, '')] = +x.price || 0;
+      return out;
+    } catch (_) { /* следующий адрес */ } finally { clearTimeout(t); }
+  }
+  return out;
+}

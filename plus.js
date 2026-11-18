@@ -469,7 +469,27 @@
      Хранятся на этом телефоне: ml-x:<uid>.alerts = [{id, sym, price, dir: 'up'|'down', at}]. Срабатывают один раз:
      пока приложение открыто — при обновлении цен (сигнал на телефон, тост, Орион говорит); в фоне — sw.js по ценам Binance. */
   function alGet() { return (xGet().alerts || []).filter(a => a && a.sym && +a.price > 0); }
-  function alSave(list) { xPatch({ alerts: list.slice(-20) }); cfgLast = ''; try { cfgPush(derive()); } catch (e) {} renderAlCount(); }
+  function alSave(list) { xPatch({ alerts: list.slice(-20) }); cfgLast = ''; try { cfgPush(derive()); } catch (e) {} renderAlCount(); alCopy(); }
+  /* 18.11.2026 (этап 5): копия оповещений в аккаунте — сервер orion-push сверяет цены раз в минуту и шлёт уведомление при закрытом приложении */
+  function alCopy() { try { if (typeof db !== 'undefined' && db && window.mlUser && !window.mlDemo) db.doc('app/orion-alerts').set({ v: 1, at: Date.now(), lang: window.mlLang ? window.mlLang() : 'ru', items: alGet().map(a => ({ id: a.id, sym: a.sym, price: a.price, dir: a.dir, at: a.at })) }); } catch (e) {} }
+  /* что сработало на сервере, пока приложение было закрыто, — снимаем у себя и говорим; один раз за запуск, до своей проверки */
+  let alPulled = false, alPulling = false;
+  async function alPull() {
+    if (alPulled || alPulling) return; alPulling = true;
+    try {
+      const d = await db.doc('app/orion-alerts').get(), j = d && d.exists ? d.data() || {} : {};
+      const fired = (Array.isArray(j.fired) ? j.fired : []).filter(f => f && f.id), ids = new Set(fired.map(f => f.id));
+      const mine = alGet(), hit = mine.filter(a => ids.has(a.id));
+      if (hit.length) {
+        const seen = Object.assign({}, xGet().seen || {});
+        for (const a of hit) { seen['al:' + a.id] = Date.now(); const f = fired.find(x => x.id === a.id) || {}; toast(a.sym + ': ' + alUsd(a.price) + ' — оповещение сработало, пока приложение было закрыто');
+          try { if (window.Mascot) window.Mascot.event('priceAlert', { sym: a.sym, price: a.price, dir: a.dir, late: true, now: +f.now || 0 }); } catch (e) {} }
+        xPatch({ seen }); xPatch({ alerts: mine.filter(a => !ids.has(a.id)) }); renderAlCount(); cfgLast = '';
+      }
+      if (fired.length || (mine.length && !(j.items || []).length)) alCopy();   /* fired прочитан — копия без него; копии не было — создаём */
+      alPulled = true;
+    } catch (e) { alPulled = true; } finally { alPulling = false; }
+  }
   const livePx = sym => +(S.live && S.live.prices && S.live.prices[sym]) || 0;
   const pxOf = (sym, D) => livePx(sym) || +(D && D.prices && D.prices[sym]) || 0;
   const alUsd = v => usd(v, v >= 100 ? 0 : v >= 1 ? 2 : 4);
@@ -508,6 +528,7 @@
   function renderAlCount() { const c = el('alCnt'); if (c) { const n = alGet().length; c.textContent = n ? n + ' ' + (n % 10 === 1 && n % 100 !== 11 ? 'ждёт' : 'ждут') + ' срабатывания' : 'Скажу, когда монета дойдёт до вашей цены'; } }
   function alertsCheck(D) {
     if (!seenPulled || !S.ready || S.live.status !== 'ok') return;
+    if (!alPulled && window.mlUser && !window.mlDemo && typeof db !== 'undefined' && db) { alPull(); return; }
     const list = alGet(); if (!list.length) return;
     const left = [], fired = [];
     for (const a of list) { const p = livePx(a.sym); if (p && ((a.dir === 'up' && p >= a.price) || (a.dir === 'down' && p <= a.price))) fired.push(Object.assign({ now: p }, a)); else left.push(a); }
@@ -522,6 +543,7 @@
     xPatch({ seen }); alSave(left);
   }
   X.alertsCheck = alertsCheck;
+  X.alPull = force => { if (force) alPulled = false; return alPull(); };
 
   /* ================= серия дисциплины и итог недели ================= */
   const BUY_T = ['buy', 'dca', 'dip', 'start'];

@@ -1508,6 +1508,24 @@ def run_browser():
             pg.unroute('**/functions/v1/orion-push')
             if 'Сигналы на телефоне' in rs[1] and 'Сигналы' not in tip and ps[0] is True and ps[1] == ['https://push.example/abc|A']: ok('Уведомления: подписка телефона сохраняется в аккаунте; без уведомлений Орион подсказывает их включить — не чаще раза в 6 часов')
             else: fail('Уведомления: подписка', f'{pon} | {tip} | {ps}')
+            # 18.11.2026 (этап 5): утренний брифинг, антипаника, оповещения о цене через сервер
+            mb = pg.evaluate("""(()=>{const D=Mascot.debug.state&&window.MSC&&MSC.last?null:null;
+              const tot=(window.derive?derive():{}).total||0, inv=(window.derive?derive():{}).invPriced||0;
+              Mascot.debug.snapPrev({day:'x',at:Date.now()-20*3600e3,total:tot||1000,pnl:(tot-inv)-150});
+              return [Mascot.debug.brief2({morning:true,calm:false}), Mascot.debug.brief2({morning:false,calm:false})];})()""")
+            if 'Со вчера портфель вырос на' in mb[0] and 'Сегодня напоминание' in mb[0] and 'позвонить в банк' in mb[0] and 'Со вчера' not in mb[1]: ok('Орион: утренний брифинг — что изменилось со вчера и напоминания на сегодня; днём — обычная сводка')
+            else: fail('Орион: утренний брифинг', str(mb))
+            cm = pg.evaluate("[Mascot.debug.brief2({calm:true,morning:false}), Mascot.debug.calmDue()]")
+            if cm[0].startswith('Спокойно') and 'Хаузел' in cm[0] and 'Резких решений сегодня не нужно' in cm[0] and not any(w in cm[0] for w in ['купите', 'продайте', 'докупите']) and cm[1] is False: ok('Орион: антипаника при падении на 10% — правило из книги и план, без советов купить или продать; в обычный день молчит')
+            else: fail('Орион: антипаника', str(cm))
+            aa = pg.evaluate("""(async()=>{const a=MLX.addAlert('ETH', 99999); const db=await window.claude.use('db');
+              await new Promise(r=>setTimeout(r,300)); const d=await db.doc('app/orion-alerts').get(); const c=d.exists?(d.data().items||[]).map(x=>x.sym+':'+x.price):null;
+              await db.doc('app/orion-alerts').set({v:1,at:Date.now(),items:[],fired:[{id:a.id,at:Date.now(),now:100000}]});
+              await MLX.alPull(true); const left=(JSON.parse(localStorage.getItem(Object.keys(localStorage).find(k=>{try{return 'alerts' in (JSON.parse(localStorage.getItem(k))||{})}catch(e){return false}}))||'{}').alerts||[]).map(x=>x.id);
+              const d2=await db.doc('app/orion-alerts').get();
+              return [c, left.includes(a.id), (d2.data().fired||[]).length, document.getElementById('toastMsg').textContent];})()""")
+            if aa[0] and 'ETH:99999' in aa[0] and aa[1] is False and aa[2] == 0 and 'пока приложение было закрыто' in aa[3]: ok('Оповещения о цене: копия в аккаунте для сервера; сработавшее на сервере снимается в телефоне и звучит «пока приложение было закрыто»')
+            else: fail('Оповещения через сервер', str(aa))
             pg.evaluate("document.querySelector('.or-cap') && document.querySelector('.or-cap').click()"); pg.unroute('**/functions/v1/orion-ask')
         scenario('Орион', {'session': True, 'docs': SEED}, s_mascot)
 
