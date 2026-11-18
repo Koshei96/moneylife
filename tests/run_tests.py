@@ -1551,6 +1551,20 @@ def run_browser():
             pg.evaluate("closeSheets()"); pg.wait_for_timeout(300)
             if ls and ls.get('id') == 'emo' and 'открой урок' in ls.get('say', '') and 'Эмоции' in lo[0] and 'Эмоции' in lo[1]: ok('Орион: при страхе предлагает урок «Эмоции — главный враг»; «открой урок» — открывает')
             else: fail('Орион: урок к ситуации', f'{ls} | {lo}')
+            # 18.11.2026 (этап 5, часть 4): цифры плашками, заголовок новости в утренней сводке, день пополнения для сервера
+            # 18.11.2026 (владелец): «биткоин 64 149, а Орион говорит 64 тысячи» — цену монеты говорит до доллара
+            pw = pg.evaluate("[Mascot.debug.priceW(64149), Mascot.debug.priceW(110000), Mascot.debug.priceW(2501.4), Mascot.debug.figs('Биткоин — 64 тысячи 149 долларов.').map(x=>x.t), Mascot.debug.spoken('Биткоин — 64 тысячи 149 долларов.')]")
+            if pw[0] == '64 тысячи 149 долларов' and pw[1] == '110 тысяч долларов' and pw[2] == '2 тысячи 501 доллар' and pw[3] == ['64 тысячи 149 долларов'] and 'шестьдесят четыре тысячи сто сорок девять долларов' in pw[4]: ok('Орион: цена монеты — до доллара («64 тысячи 149 долларов»), плашка — целиком')
+            else: fail('Орион: точная цена', str(pw))
+            fg = pg.evaluate("Mascot.debug.figs('Биткоин — 110 тысяч долларов, за сутки плюс 2 процента. Портфель минус 3%.')")
+            if [x['t'] for x in fg] == ['110 тысяч долларов', 'плюс 2 процента', 'минус 3%'] and fg[1]['c'] == 'up' and fg[2]['c'] == 'dn': ok('Орион: цифры из ответа — плашками под текстом (рост зелёным, падение красным)')
+            else: fail('Орион: плашки с цифрами', str(fg))
+            hd = pg.evaluate("""(()=>{const d=new Date(),k=d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate();Mascot.debug.headline({day:k,text:'Из новостей, ForkLog: «Биткоин обновил максимум».'});const t=Mascot.debug.brief2({morning:true,calm:false});Mascot.debug.headline(null);return t;})()""")
+            if 'Из новостей, ForkLog: «Биткоин обновил максимум».' in hd: ok('Орион: в утренней сводке — один свежий заголовок по вашим монетам, с источником')
+            else: fail('Орион: заголовок в сводке', hd)
+            dp = pg.evaluate("""(async()=>{MLX.sigCopy();await new Promise(r=>setTimeout(r,300));const db=await window.claude.use('db');const d=(await db.doc('app/orion-signals').get()).data()||{};const a=(await db.doc('app/orion-alerts').get()).data()||{};return [d.dep||null, a.tz||null];})()""")
+            if dp[0] is not None and 'day' in dp[0] and 'last' in dp[0] and dp[1]: ok('Сигналы через сервер: день пополнения и часовой пояс — для уведомления в день пополнения и тихих часов')
+            else: fail('Сигналы: день пополнения', str(dp))
             pg.evaluate("document.querySelector('.or-cap') && document.querySelector('.or-cap').click()"); pg.unroute('**/functions/v1/orion-ask')
         scenario('Орион', {'session': True, 'docs': SEED}, s_mascot)
 

@@ -98,10 +98,10 @@ Deno.serve(async (req) => {
       if (!todo.length) continue;
       const { data: sd } = await sb.from('docs').select('data').eq('owner', r.owner).eq('col', 'app').eq('id', 'push-subs').maybeSingle();
       const subs: Sub[] = ((sd && sd.data && sd.data.items) || []).filter((s: Sub) => s && s.endpoint && s.keys && s.keys.p256dh && s.keys.auth);
-      const uk = r.data.lang === 'uk';
+      const uk = r.data.lang === 'uk', silent = isNight(r.data.tz, now);   /* №12: ночью — без звука */
       for (const a of todo) {
         const p = px[String(a.sym).toUpperCase()], up = a.dir === 'up';
-        const msg = { title: a.sym + (up ? (uk ? ' піднявся до ' : ' поднялся до ') : (uk ? ' опустився до ' : ' опустился до ')) + usdTxt(+a.price), body: (uk ? 'Зараз ' : 'Сейчас ') + usdTxt(p) + (uk ? '. Сповіщення спрацювало і зняте.' : '. Оповещение сработало и снято.'), url: './', tag: 'al:' + a.id };
+        const msg = { silent, title: a.sym + (up ? (uk ? ' піднявся до ' : ' поднялся до ') : (uk ? ' опустився до ' : ' опустился до ')) + usdTxt(+a.price), body: (uk ? 'Зараз ' : 'Сейчас ') + usdTxt(p) + (uk ? '. Сповіщення спрацювало і зняте.' : '. Оповещение сработало и снято.'), url: './', tag: 'al:' + a.id };
         for (const s of subs) { try { const st = await sendPush(s, msg, JWK, PUB, CONTACT); if (st >= 200 && st < 300) sent++; else console.error('orion-push: al status', st); } catch (e) { console.error('orion-push: al send', String(e).slice(0, 200)); } }
         await store.upload(`push/sent/${r.owner}/al-${a.id}`, new Blob(['1'], { type: 'text/plain' }), { upsert: true }).catch(() => null);
         fired++;
@@ -125,6 +125,7 @@ Deno.serve(async (req) => {
       if (+d.goal > 0 && btc >= +d.goal) ev.push({ k: 'goal:' + d.goal, title: uk ? 'BTC дійшов до твоєї цілі' : 'BTC дошёл до твоей цели', body: (uk ? 'Ціна вище $' : 'Цена выше $') + Math.round(+d.goal).toLocaleString('ru-RU') + (uk ? '. Що робити далі — за твоїм планом.' : '. Что делать дальше — по твоему плану.') });
     }
     const m = monthNote(d, now, uk); if (m) ev.push(m);
+    const dn = depNote(d, now, uk); if (dn) ev.push(dn);
     const todo: typeof ev = [];
     for (const e of ev) {
       if (sentK[e.k]) continue;
@@ -136,7 +137,7 @@ Deno.serve(async (req) => {
     if (todo.length) {
       const { data: sd } = await sb.from('docs').select('data').eq('owner', r.owner).eq('col', 'app').eq('id', 'push-subs').maybeSingle();
       const subs: Sub[] = ((sd && sd.data && sd.data.items) || []).filter((s: Sub) => s && s.endpoint && s.keys && s.keys.p256dh && s.keys.auth);
-      for (const e of todo) { sig++; for (const s of subs) { try { const st = await sendPush(s, { title: e.title, body: e.body, url: './', tag: e.k }, JWK, PUB, CONTACT); if (st >= 200 && st < 300) sent++; } catch (x) { console.error('orion-push: sig send', String(x).slice(0, 200)); } } }
+      for (const e of todo) { sig++; for (const s of subs) { try { const st = await sendPush(s, { title: e.title, body: e.body, url: './', tag: e.k, silent: isNight(d.tz, now) }, JWK, PUB, CONTACT); if (st >= 200 && st < 300) sent++; } catch (x) { console.error('orion-push: sig send', String(x).slice(0, 200)); } } }
     }
     if (Object.keys(sentK).length !== Object.keys(d.sent || {}).length) {
       const keep: Record<string, number> = {}; Object.keys(sentK).sort((a, b) => sentK[b] - sentK[a]).slice(0, 40).forEach(k => { keep[k] = sentK[k]; });
@@ -145,6 +146,23 @@ Deno.serve(async (req) => {
   }
   return json({ ok: true, due, sent, dead, fired, sig });
 });
+
+/* местные дата и час человека (часовой пояс телефона) */
+function localParts(tz0: unknown, now: number) {
+  let tz = String(tz0 || 'Europe/Kyiv'); try { new Intl.DateTimeFormat('en-CA', { timeZone: tz }); } catch (_) { tz = 'Europe/Kyiv'; }
+  const p: Record<string, string> = {}; for (const x of new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', hourCycle: 'h23' }).formatToParts(new Date(now))) p[x.type] = x.value;
+  return { y: +p.year, mo: +p.month, day: +p.day, h: +p.hour, ymd: p.year + '-' + p.month + '-' + p.day };
+}
+/* №12: тихие часы — с 23 до 7 по местному времени уведомления о цене и сигналах приходят без звука; напоминания — как обычно */
+const isNight = (tz: unknown, now: number) => { const h = localParts(tz, now).h; return h >= 23 || h < 7; };
+/* №13: день пополнения (из настроек) — с 10 до 20, если пополнения сегодня ещё не было; раз в день. Без сумм */
+// deno-lint-ignore no-explicit-any
+function depNote(d: any, now: number, uk: boolean) {
+  const dep = d.dep || {}, dd = +dep.day || 0; if (!(dd >= 1 && dd <= 31)) return null;
+  const L = localParts(d.tz, now), last = new Date(Date.UTC(L.y, L.mo, 0)).getUTCDate();
+  if (L.day !== Math.min(dd, last) || L.h < 10 || L.h >= 20 || dep.last === L.ymd) return null;
+  return { k: 'dep:' + L.ymd, title: uk ? 'MoneyLife · день поповнення' : 'MoneyLife · день пополнения', body: uk ? 'Сьогодні ваш день поповнення біржі. Поповнили — запишіть у застосунку, щоб план місяця порахувався.' : 'Сегодня ваш день пополнения биржи. Пополнили — запишите в приложении, чтобы план месяца посчитался.' };
+}
 
 /* конец месяца по местному времени человека: последние 3 дня, с 10 до 20 часов, один раз за месяц. Без сумм — уведомление видно на экране блокировки */
 // deno-lint-ignore no-explicit-any

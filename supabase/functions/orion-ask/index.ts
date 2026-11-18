@@ -114,7 +114,7 @@ const SYSTEM = `Ты — Орион, голосовой ИИ-компаньон 
 
 ЧТО ТЫ ЗНАЕШЬ О ПРИЛОЖЕНИИ: портфель криптовалют; «лестница» — заранее рассчитанные ступени докупки биткоина на просадках от его максимума; резерв — деньги под эти ступени; план месяца — регулярные покупки на одну сумму (усреднение, DCA); «Личный план» — этапы пути к финансовой независимости и потолок доли крипты; «Знания» — 18 уроков по книгам Богла, Мэлкила, Грэхема, Хаузела, Талеба и других; оповещения о цене; серия месяцев с покупками; итог недели.
 
-РЕЧЬ ДЛЯ СЛУХА: простые предложения с обычным порядком слов. Живые связки («Смотрите», «Если коротко», «Честно говоря») — иногда и разные. Иногда заканчивай коротким встречным вопросом, чтобы разговор продолжался. Названия бирж, компаний, монет и аббревиатуры — латиницей, как в оригинале: OKX, Binance, ETF, SEC, BTC; не пиши их русскими буквами. Числа — словами, округлённо и в правильном падеже: «около семидесяти четырёх тысяч долларов», «рост на три процента».
+РЕЧЬ ДЛЯ СЛУХА: простые предложения с обычным порядком слов. Живые связки («Смотрите», «Если коротко», «Честно говоря») — иногда и разные. Иногда заканчивай коротким встречным вопросом, чтобы разговор продолжался. Названия бирж, компаний, монет и аббревиатуры — латиницей, как в оригинале: OKX, Binance, ETF, SEC, BTC; не пиши их русскими буквами. Числа — словами и в правильном падеже: цену монеты — точно до доллара, как в блоке данных («шестьдесят четыре тысячи сто сорок девять долларов»), остальное — округлённо («рост на три процента»).
 
 ДЕЙСТВИЯ В ПРИЛОЖЕНИИ — у тебя есть инструменты. Вызывай инструмент, только когда человек прямо просит сделать действие: открыть экран, записать заметку, поставить напоминание, записать уже сделанную покупку, поставить оповещение о цене. На вопросы «почему», «что», «как» — отвечай словами, без инструментов. Вызвав инструмент, текста не пиши: что вышло, человеку скажет приложение. Время напоминания считай от поля now (местное время человека) и передавай местным временем в виде ГГГГ-ММ-ДДTЧЧ:ММ; «утром» — 9:00, «днём» — 13:00, «вечером» — 19:00; если время непонятно — не вызывай инструмент, а переспроси. record_purchase только открывает форму с цифрами — сохраняет человек сам. Ты не совершаешь сделок на бирже и не переводишь деньги — если просят купить или продать, скажи, что это делается на бирже, а здесь можно записать уже сделанную покупку.
 
@@ -144,21 +144,31 @@ Deno.serve(async (req) => {
   const user = u && u.user;
   if (!user) return json({ error: 'auth' }, 401);
 
-  let wantStream = false, q = '', sym = '', lang = 'ru', hist: { q: string; a: string }[] = [], ctx: Record<string, unknown> = {};
+  let wantStream = false, q = '', sym = '', lang = 'ru', hist: { q: string; a: string }[] = [], ctx: Record<string, unknown> = {}, op = '', nsyms: string[] = [];
   try {
     const b = await req.json();
+    op = String((b && b.op) || ''); nsyms = Array.isArray(b && b.syms) ? b.syms.slice(0, 5).map((x: unknown) => String(x).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10)).filter(Boolean) : [];
     wantStream = !!(b && b.stream);   /* 18.11.2026: ответ потоком — приложение начинает говорить первое предложение, пока пишется остальное */
     lang = b && b.lang === 'uk' ? 'uk' : 'ru';   /* украинский интерфейс — Орион отвечает по-украински */
     q = String((b && b.q) || ''); sym = String((b && b.sym) || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10);
     if (Array.isArray(b && b.hist)) hist = b.hist.slice(-6).map((x: { q?: unknown; a?: unknown }) => ({ q: String((x && x.q) || '').slice(0, 200), a: String((x && x.a) || '').slice(0, 400) })).filter((x: { q: string; a: string }) => x.q && x.a);
     if (b && b.ctx && typeof b.ctx === 'object') { const t = JSON.stringify(b.ctx); if (t.length < 3000) ctx = b.ctx; }   /* только доли и проценты, без сумм */
   } catch (_) { /* пусто */ }
+  /* 18.11.2026 (этап 5, №11): свежие заголовки по монетам человека — для утренней сводки. Без «мозга»: заголовок как есть, с источником.
+     Только русскоязычные ленты (ForkLog, Incrypted) — человек не читает по-английски; не старше суток */
+  if (op === 'news') {
+    const items = await newsCached(sb.storage.from(BUCKET));
+    const keys = nsyms.flatMap(x => NAMES[x] || []), now0 = Date.now();
+    const ru = items.filter((n: { src: string; ts: number }) => (n.src === 'ForkLog' || n.src === 'Incrypted') && now0 - n.ts < 24 * 3600e3);
+    const hit = ru.filter((n: { title: string }) => keys.some(k => n.title.toLowerCase().includes(k)));
+    return json({ items: hit.slice(0, 3).map((n: { src: string; title: string; ts: number }) => ({ src: n.src, title: n.title, ts: n.ts })) });
+  }
   q = q.replace(/\s+/g, ' ').trim();
   if (!q || q.length > 300) return json({ error: 'bad_q' }, 400);
 
   const store = sb.storage.from(BUCKET);
   const slot = Math.floor(Date.now() / (20 * 60e3));
-  const ck = 'ask/' + (await sha256('v9|' + lang + '|' + q.toLowerCase() + '|' + sym + '|' + JSON.stringify(hist) + '|' + JSON.stringify(ctx) + '|' + slot)) + '.json';
+  const ck = 'ask/' + (await sha256('v10|' + lang + '|' + q.toLowerCase() + '|' + sym + '|' + JSON.stringify(hist) + '|' + JSON.stringify(ctx) + '|' + slot)) + '.json';
   const day = new Date().toISOString().slice(0, 10), month = day.slice(0, 7);
   const readNum = async (p: string) => { const r = await store.download(p); if (!r.data) return 0; try { return +(await r.data.text()) || 0; } catch (_) { return 0; } };
   const writeNum = (p: string, n: number) => store.upload(p, new Blob([String(n)], { type: 'text/plain' }), { upsert: true });
@@ -169,15 +179,7 @@ Deno.serve(async (req) => {
   if (mn >= MONTH) return json({ error: 'month_limit' }, 429);
 
   const syms = Array.from(new Set([sym || 'BTC', 'BTC', 'ETH'].filter(Boolean)));
-  /* новости — общие для всех, держим 10 минут в хранилище: ответ быстрее, сайты новостей не дёргаем каждый раз */
-  const newsCached = async () => {
-    const r = await store.download('news/latest.json');
-    if (r.data) { try { const j = JSON.parse(await r.data.text()); if (Date.now() - j.at < 10 * 60e3 && Array.isArray(j.items)) return j.items; } catch (_) { /* дальше */ } }
-    const items = await news();
-    if (items.length) await store.upload('news/latest.json', new Blob([JSON.stringify({ at: Date.now(), items })], { type: 'application/json' }), { upsert: true });
-    return items;
-  };
-  const [rows, items] = await Promise.all([market(syms), newsCached()]);
+  const [rows, items] = await Promise.all([market(syms), newsCached(store)]);
   const keys = sym && NAMES[sym] ? NAMES[sym] : [];
   const rel = keys.length ? items.filter((n: { title: string; desc: string }) => keys.some(k => (n.title + ' ' + n.desc).toLowerCase().includes(k))) : [];
   const pickN = [...rel.slice(0, 12), ...items.filter((n: unknown) => !rel.includes(n)).slice(0, 18 - Math.min(12, rel.length))];
@@ -258,6 +260,16 @@ Deno.serve(async (req) => {
   await save(res);
   return json(res);
 });
+
+/* новости — общие для всех, держим 10 минут в хранилище: ответ быстрее, сайты новостей не дёргаем каждый раз */
+// deno-lint-ignore no-explicit-any
+async function newsCached(store: any) {
+  const r = await store.download('news/latest.json');
+  if (r.data) { try { const j = JSON.parse(await r.data.text()); if (Date.now() - j.at < 10 * 60e3 && Array.isArray(j.items)) return j.items; } catch (_) { /* дальше */ } }
+  const items = await news();
+  if (items.length) await store.upload('news/latest.json', new Blob([JSON.stringify({ at: Date.now(), items })], { type: 'application/json' }), { upsert: true });
+  return items;
+}
 
 /* уборка: сохранённые ответы старше часа стираются (кэш нужен лишь на 20 минут) */
 // deno-lint-ignore no-explicit-any

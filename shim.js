@@ -655,6 +655,16 @@
     } catch (e) { return false; }
   };
 
+  /* №11 (18.11.2026): свежие заголовки по монетам — с сервера orion-ask без «мозга» (без затрат и без пересказа) */
+  window.mlNews = async (syms) => {
+    try {
+      const c = client(); if (!c || demo || !uid || navigator.onLine === false) return null;
+      const ses = (await c.auth.getSession()).data.session; if (!ses) return null;
+      const r = await fetch(CFG.supabaseUrl.replace(/\/$/, '') + '/functions/v1/orion-ask', { method: 'POST', headers: { Authorization: 'Bearer ' + ses.access_token, apikey: CFG.supabaseKey, 'content-type': 'application/json' }, body: JSON.stringify({ op: 'news', syms: (syms || []).slice(0, 5), lang: window.mlLang ? window.mlLang() : 'ru' }) });
+      return r.ok ? await r.json() : null;
+    } catch (e) { return null; }
+  };
+
   /* Орион про рынок (11.11.2026): вопрос → функция orion-ask (новости + цены + Claude). уходят вопрос, начало разговора и портфель только долями в %, без сумм. null — ответить без сети */
   window.mlAsk = async (q, sym, extra, onPart) => {   /* onPart(кусок) — ответ потоком (18.11.2026): Орион начинает говорить, пока «мозг» дописывает остальное */
     const c = client(); if (!c || demo || !uid || navigator.onLine === false) return null;

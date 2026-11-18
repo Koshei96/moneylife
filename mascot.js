@@ -34,6 +34,7 @@
 .or-cap.listen i{animation:orPulse .6s ease-in-out infinite;box-shadow:0 0 0 6px color-mix(in srgb,var(--oc,#8b7dff) 25%,transparent),0 0 18px var(--oc,#8b7dff)}
 .or-cap b{font-size:12px;font-weight:600;letter-spacing:.02em;color:var(--mute,#a3a3ae)}
 .or-cap span{font-size:14.5px;line-height:1.45;overflow-wrap:anywhere}
+.or-cap em{grid-column:2;display:flex;flex-wrap:wrap;gap:6px;font-style:normal}.or-cap em:empty{display:none}.or-cap em u{text-decoration:none;font-size:12.5px;font-weight:700;padding:3px 9px;border-radius:999px;background:color-mix(in srgb,var(--oc,#8b7dff) 16%,transparent);color:var(--fg,#fff)}.or-cap em u.up{color:#4fd18b}.or-cap em u.dn{color:#ff7a7a}
 .or-cap:focus-visible{outline:2px solid var(--fg,#fff);outline-offset:2px}
 @keyframes orPulse{50%{transform:scale(1.12)}}
 .ms-dg{position:relative;display:inline-block}
@@ -163,9 +164,20 @@
   }
   if (TTS.ok) { try { speechSynthesis.addEventListener('voiceschanged', pickVoice); } catch (e) {} pickVoice(); }
   const speaking = () => !!TTS.cur;
+  /* №14 (18.11.2026): цифры из ответа — плашками под текстом, чтобы их было видно, а не только слышно */
+  const FIG = /(плюс|минус|\+|−|-)?\s?\$?\d[\d\s\u00a0]*(?:[.,]\d+)?\s?(?:тысяч[аи]?\s(?:\d{1,3}\s)?|миллион(?:а|ов)?\s|млн\s|тыс\.\s)?(?:доллар(?:а|ов)?|гривн(?:я|и|ы)|гривен|процент(?:а|ов)?|%|\$|BTC|ETH)/gi;
+  function figs(text) {
+    const out = []; let m; FIG.lastIndex = 0;
+    while ((m = FIG.exec(String(text || ''))) && out.length < 4) {
+      const t = m[0].replace(/\s+/g, ' ').trim(); if (!/\d/.test(t) || t.length < 2 || out.some(x => x.t === t)) continue;
+      out.push({ t, c: /^(плюс|\+)/i.test(t) ? 'up' : /^(минус|−|-)/i.test(t) ? 'dn' : '' });
+    }
+    return out.length >= 1 && out.length <= 4 ? out : [];
+  }
   function capShow(text) {
     if (!ui.cap) return;
     ui.capT.textContent = text;
+    if (ui.capN) { ui.capN.textContent = ''; figs(text).forEach(f => { const u = document.createElement('u'); u.textContent = f.t; if (f.c) u.className = f.c; ui.capN.appendChild(u); }); }
     ui.cap.classList.add('on', 'talk');
     ui.cap.setAttribute('aria-label', Lx('Орион') + ': ' + text + '. ' + Lx('Нажмите, чтобы остановить'));
   }
@@ -666,7 +678,7 @@
   function pctW(p) { const r = Math.round(Math.abs(p)); return r < 1 ? 'меньше процента' : r + ' ' + plural(r, 'процент', 'процента', 'процентов'); }
   const signW = p => (p >= 0 ? 'плюс' : 'минус');
   /* сумма словами в валюте приложения: «950 долларов», «110 тысяч долларов», «39 тысяч гривен» */
-  function moneyW(usdV) {
+  function moneyW(usdV, exact) {   /* exact — цена монеты до доллара: «64 тысячи 149 долларов» (18.11.2026, владелец: «64 149, а Орион говорит 64 тыс.») */
     let s = ''; const rt = (() => { try { return +(ST.rate && ST.rate()) || 0; } catch (e) { return 0; } })();
     if (ST.curForce === 'UAH' && rt > 0) s = Math.round(Math.abs(usdV) * rt) + ' ₴';   /* переспрос «а в гривнах?» */
     else if (ST.curForce === 'USD') s = '$' + Math.round(Math.abs(usdV));
@@ -675,6 +687,7 @@
     const cur = k => (uah ? plural(k, 'гривна', 'гривны', 'гривен') : plural(k, 'доллар', 'доллара', 'долларов'));
     const gen = uah ? 'гривен' : 'долларов';
     if (n >= 1e6) { const m = Math.round(n / 1e5) / 10; return String(m).replace('.', ',') + ' ' + (m % 1 ? 'миллиона' : plural(m, 'миллион', 'миллиона', 'миллионов')) + ' ' + gen; }
+    if (exact && n >= 1000 && n < 1e6) { const k = Math.floor(n / 1000), r = n % 1000; return k + ' ' + plural(k, 'тысяча', 'тысячи', 'тысяч') + (r ? ' ' + r + ' ' + cur(r) : ' ' + gen); }
     if (n >= 10000) { const k = Math.round(n / 1000); return k + ' ' + plural(k, 'тысяча', 'тысячи', 'тысяч') + ' ' + gen; }
     return n + ' ' + cur(n);
   }
@@ -726,6 +739,7 @@
     const lw = left <= 7 ? (left === 0 ? ' Сегодня последний день месяца.' : ' До конца месяца ' + left + ' ' + (left === 1 ? 'день' : left < 5 ? 'дня' : 'дней') + '.') : '';
     if (mi && mi.hasDep && mi.dca > 0.5) out.push('По плану месяца осталось купить на ' + (ST.hide ? 'сумму из плана' : moneyW(mi.dca)) + '.' + lw);
     else if (mi && !mi.hasDep && mi.budget > 0 && mi.bought < mi.budget * 0.98) out.push('План месяца выполнен на ' + Math.round(mi.bought / mi.budget * 100) + ' процентов.' + lw);
+    const hl = ST.headline; if (hl && hl.day === dayKey() && hl.text) out.push(hl.text);   /* №11: одна свежая новость по вашим монетам — заголовок как есть, с источником */
     const ov = ceilDue(D); if (ov) out.push(ceilText(ov));
     const ls = lessonPick(D); if (ls) out.push(ls.say);
     return out;
@@ -764,7 +778,7 @@
       if (ST.hide) { if (gp != null) out.push('Суммы скрыты, поэтому только проценты: портфель ' + (gp >= 0 ? 'в плюсе' : 'в минусе') + ' на ' + pctW(gp) + '.'); }
       else out.push('Портфель — ' + moneyW(D.total) + (gp != null ? ', ' + signW(gp) + ' ' + pctW(gp) + ' к вложенному.' : '.'));
     } else if (!(S.tx || []).length) out.push('Портфель пока пуст. Начнём с первой покупки — кнопка «Купить».');
-    if (btc > 0) out.push('Биткоин — ' + moneyW(btc) + (ch != null && isFinite(ch) ? (Math.abs(ch) < 0.5 ? ', за сутки почти без изменений.' : ', за сутки ' + signW(ch) + ' ' + pctW(ch) + '.') : '.'));
+    if (btc > 0) out.push('Биткоин — ' + moneyW(btc, true) + (ch != null && isFinite(ch) ? (Math.abs(ch) < 0.5 ? ', за сутки почти без изменений.' : ', за сутки ' + signW(ch) + ' ' + pctW(ch) + '.') : '.'));
     const ath = +(S.cycle && S.cycle.ath) || 0;
     if (ST.go) out.push('Биткоин на ступени лестницы — по плану можно докупать. Решение за вами.');
     else if (ath > 0 && btc > 0) {
@@ -807,6 +821,7 @@
     ST.lastLocal = { at: now(), q: '', sym: '', money: true, redo: () => brief() };   /* «а в гривнах?» после сводки */
     remember('Расскажи главное', t, true);
   }
+  function weekDue() { const d = new Date(); return AUTO && !ST.hide && ST.sound && d.getDay() === 0 && d.getHours() >= 17 && !isNight() && !newsDue() && lsGet('or-week', '') !== weekKey() && !!(ST.S && (ST.S.tx || []).length); }
   function newsDue() {
     if (!AUTO || isNight() || ST.hide || !ST.sound || !ST.S) return false;
     return lsGet('ms-newsDay', '') !== dayKey();   /* сам — один раз в день, после первого касания */
@@ -886,7 +901,7 @@
   }
   const qtyW = v => (+v).toLocaleString(LOC, { maximumFractionDigits: v >= 100 ? 0 : v >= 1 ? 3 : 6 });
   function coinPrice(sym) { const S = ST.S || {}, D = ST.D || {}, lv = S.live || {}; return +(lv.prices && lv.prices[sym]) || +(D.prices && D.prices[sym]) || 0; }
-  function priceW(v) { return v >= 10 ? moneyW(v) : (v >= 1 ? String(+v.toFixed(2)).replace('.', ',') : String(+v.toPrecision(3)).replace('.', ',')) + ' доллара'; }
+  function priceW(v) { return v >= 10 ? moneyW(v, true) : (v >= 1 ? String(+v.toFixed(2)).replace('.', ',') : String(+v.toPrecision(3)).replace('.', ',')) + ' доллара'; }
   /* просьба поставить оповещение о цене — любыми словами: «сообщи», «напомни», «поставь уведомление», «оповещение», «сигнал» (12.11.2026) */
   function alertQ(t) { return /(сообщи|сповищ|нагадув|скажи,? когда|оповест|оповещ|уведом|напомни|напомин|предупреди|дай знать|сигнал|алерт|будильник)/.test(t); }
   function reply(q) {
@@ -1437,6 +1452,10 @@
     ST.hide = !!P.hide; ST.sound = P.msVoice !== false; if (ST.fx !== !!P.msFx) { ST.fx = !!P.msFx; voFx(); } ST.go = !!info.go; ST.fresh = info.fresh || 0; ST.money = info.money || ST.money; if (typeof info.rate === 'function') ST.rate = info.rate;
     ST.name = String(P.name || '').trim().slice(0, 24);
     snapTake(D);
+    if (A.news && window.mlUser && (!ST.headline || ST.headline.day !== dayKey()) && !ST.newsAsk) {   /* №11: заголовки — с сервера, без «мозга» и без затрат */
+      ST.newsAsk = 1; const syms = Object.keys(D.h || {}).filter(k => (D.h[k] && +D.h[k].usd > 0)).sort((a, b) => (+D.h[b].usd || 0) - (+D.h[a].usd || 0)).slice(0, 3);
+      Promise.resolve(A.news(Array.from(new Set(syms.concat(['BTC']))))).then(r => { const it = r && r.items && r.items[0]; ST.headline = { day: dayKey(), text: it && it.title ? 'Из новостей, ' + it.src + ': «' + String(it.title).replace(/[«»"]/g, '').slice(0, 160) + '».' : '' }; }).catch(() => {}).finally(() => { ST.newsAsk = 0; });
+    }
     prefetchBrief();
     if (!ST.sound && TTS.ok && TTS.cur) try { speechSynthesis.cancel(); } catch (e) {}
     /* антипаника вживую: падение дошло до −10%, пока приложение открыто и с ним уже говорили (звук разрешён жестом) */
@@ -1459,6 +1478,8 @@
     ST.lastInput = now(); wake();
     /* утренняя сводка — сама, раз в день, вскоре после первого касания (голос в телефоне включается только жестом) */
     if (BL.ready && !ST.autoT && now() - ST.t0 > 4 && newsDue()) ST.autoT = setTimeout(() => { ST.autoT = 0; if (newsDue() && !speaking() && visible()) tell(true); }, 1800);
+    /* №10: итог недели — сам, в воскресенье вечером, раз в неделю (если утренняя сводка уже была) */
+    else if (BL.ready && !ST.autoT && now() - ST.t0 > 4 && weekDue()) ST.autoT = setTimeout(() => { ST.autoT = 0; if (weekDue() && !speaking() && visible()) { lsSet('or-week', weekKey()); const t = reply('итог недели'); if (t) { speak(t, { pri: 1 }); remember('Итог недели', t, true); } } }, 1800);
   }
 
   function init(opts) {
@@ -1484,7 +1505,7 @@
     ui.hit.addEventListener('contextmenu', e => e.preventDefault());
     ui.hit.addEventListener('click', () => { if (lp) { lp = false; return; } tapped(); });
     ui.cap = document.createElement('button'); ui.cap.type = 'button'; ui.cap.className = 'or-cap'; ui.cap.setAttribute('aria-live', 'polite'); ui.cap.setAttribute('translate', 'no');   /* субтитры переводит сам Орион (ответы «мозга» уже на нужном языке) */
-    ui.cap.innerHTML = '<i aria-hidden="true"></i><b>' + Lx('Орион') + '</b><span></span>'; ui.capT = ui.cap.querySelector('span');
+    ui.cap.innerHTML = '<i aria-hidden="true"></i><b>' + Lx('Орион') + '</b><span></span><em aria-hidden="true"></em>'; ui.capT = ui.cap.querySelector('span'); ui.capN = ui.cap.querySelector('em');
     ui.cap.addEventListener('click', () => { stopVoice(); ui.cap.classList.remove('on'); });
     document.body.appendChild(ui.cap);
     window.addEventListener('resize', () => { fit(); wake(); });
@@ -1515,7 +1536,7 @@
       lx: t => Lx(t),
       ask: q => answer(q), lastAsk: () => ST.lastAsk || null, ctx: () => brainCtx(), hist: () => ST.hist || [],
       mood: m => { if (ST.forceHour == null) ST.forceHour = 12; ST.pct = { calm: 0, up: 3, rocket: 9, down: -3, crash: -9 }[m]; ST.go = m === 'hunter'; if (m === 'offline') { ST.offline = true; ST.offSince = now() - 120; } else ST.offline = false; ST.lastInput = now(); wake(); },
-      say: t => speak(t, { pri: 2 }), sayLog: () => ST.sayLog || [], nameFill: t => nameFill(t), memo: t => memoSplit(t), memSafe: t => memSafe(t), act: (n, x) => doAct(n, x), calm: () => calmText(), lessonPick: () => lessonPick(ST.D), ceilText: o => ceilText(o), lessonOffer: v => { ST.lessonOffer = v ? { id: v, at: now() } : null; }, calmDue: () => calmDue(), brief2: o => brief(o), snapPrev: v => { ST.snapPrev = v; }, remTick: () => remTick(), remDue: (t, ago) => remAdd(t, Date.now() - (ago || 1000)), remQ: t => remQ(t), split: (t, live) => splitParts(t, live), stress: t => stressRu(t),
+      say: t => speak(t, { pri: 2 }), sayLog: () => ST.sayLog || [], nameFill: t => nameFill(t), memo: t => memoSplit(t), memSafe: t => memSafe(t), act: (n, x) => doAct(n, x), calm: () => calmText(), priceW: v => priceW(v), figs: t => figs(t), weekDue: () => weekDue(), headline: v => { ST.headline = v; }, lessonPick: () => lessonPick(ST.D), ceilText: o => ceilText(o), lessonOffer: v => { ST.lessonOffer = v ? { id: v, at: now() } : null; }, calmDue: () => calmDue(), brief2: o => brief(o), snapPrev: v => { ST.snapPrev = v; }, remTick: () => remTick(), remDue: (t, ago) => remAdd(t, Date.now() - (ago || 1000)), remQ: t => remQ(t), split: (t, live) => splitParts(t, live), stress: t => stressRu(t),
       tap: () => tapped(),
       brief: () => brief(),
       reply: q => reply(q),
