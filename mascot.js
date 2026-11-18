@@ -165,7 +165,7 @@
   if (TTS.ok) { try { speechSynthesis.addEventListener('voiceschanged', pickVoice); } catch (e) {} pickVoice(); }
   const speaking = () => !!TTS.cur;
   /* №14 (18.11.2026): цифры из ответа — плашками под текстом, чтобы их было видно, а не только слышно */
-  const FIG = /(плюс|минус|\+|−|-)?\s?\$?\d[\d\s\u00a0]*(?:[.,]\d+)?\s?(?:тысяч[аи]?\s|миллион(?:а|ов)?\s|млн\s|тыс\.\s)?(?:доллар(?:а|ов)?|гривн(?:я|и|ы)|гривен|процент(?:а|ов)?|%|\$|BTC|ETH)/gi;
+  const FIG = /(плюс|минус|\+|−|-)?\s?\$?\d[\d\s\u00a0]*(?:[.,]\d+)?\s?(?:тысяч[аи]?\s(?:\d{1,3}\s)?|миллион(?:а|ов)?\s|млн\s|тыс\.\s)?(?:доллар(?:а|ов)?|гривн(?:я|и|ы)|гривен|процент(?:а|ов)?|%|\$|BTC|ETH)/gi;
   function figs(text) {
     const out = []; let m; FIG.lastIndex = 0;
     while ((m = FIG.exec(String(text || ''))) && out.length < 4) {
@@ -678,7 +678,7 @@
   function pctW(p) { const r = Math.round(Math.abs(p)); return r < 1 ? 'меньше процента' : r + ' ' + plural(r, 'процент', 'процента', 'процентов'); }
   const signW = p => (p >= 0 ? 'плюс' : 'минус');
   /* сумма словами в валюте приложения: «950 долларов», «110 тысяч долларов», «39 тысяч гривен» */
-  function moneyW(usdV) {
+  function moneyW(usdV, exact) {   /* exact — цена монеты до доллара: «64 тысячи 149 долларов» (18.11.2026, владелец: «64 149, а Орион говорит 64 тыс.») */
     let s = ''; const rt = (() => { try { return +(ST.rate && ST.rate()) || 0; } catch (e) { return 0; } })();
     if (ST.curForce === 'UAH' && rt > 0) s = Math.round(Math.abs(usdV) * rt) + ' ₴';   /* переспрос «а в гривнах?» */
     else if (ST.curForce === 'USD') s = '$' + Math.round(Math.abs(usdV));
@@ -687,6 +687,7 @@
     const cur = k => (uah ? plural(k, 'гривна', 'гривны', 'гривен') : plural(k, 'доллар', 'доллара', 'долларов'));
     const gen = uah ? 'гривен' : 'долларов';
     if (n >= 1e6) { const m = Math.round(n / 1e5) / 10; return String(m).replace('.', ',') + ' ' + (m % 1 ? 'миллиона' : plural(m, 'миллион', 'миллиона', 'миллионов')) + ' ' + gen; }
+    if (exact && n >= 1000 && n < 1e6) { const k = Math.floor(n / 1000), r = n % 1000; return k + ' ' + plural(k, 'тысяча', 'тысячи', 'тысяч') + (r ? ' ' + r + ' ' + cur(r) : ' ' + gen); }
     if (n >= 10000) { const k = Math.round(n / 1000); return k + ' ' + plural(k, 'тысяча', 'тысячи', 'тысяч') + ' ' + gen; }
     return n + ' ' + cur(n);
   }
@@ -777,7 +778,7 @@
       if (ST.hide) { if (gp != null) out.push('Суммы скрыты, поэтому только проценты: портфель ' + (gp >= 0 ? 'в плюсе' : 'в минусе') + ' на ' + pctW(gp) + '.'); }
       else out.push('Портфель — ' + moneyW(D.total) + (gp != null ? ', ' + signW(gp) + ' ' + pctW(gp) + ' к вложенному.' : '.'));
     } else if (!(S.tx || []).length) out.push('Портфель пока пуст. Начнём с первой покупки — кнопка «Купить».');
-    if (btc > 0) out.push('Биткоин — ' + moneyW(btc) + (ch != null && isFinite(ch) ? (Math.abs(ch) < 0.5 ? ', за сутки почти без изменений.' : ', за сутки ' + signW(ch) + ' ' + pctW(ch) + '.') : '.'));
+    if (btc > 0) out.push('Биткоин — ' + moneyW(btc, true) + (ch != null && isFinite(ch) ? (Math.abs(ch) < 0.5 ? ', за сутки почти без изменений.' : ', за сутки ' + signW(ch) + ' ' + pctW(ch) + '.') : '.'));
     const ath = +(S.cycle && S.cycle.ath) || 0;
     if (ST.go) out.push('Биткоин на ступени лестницы — по плану можно докупать. Решение за вами.');
     else if (ath > 0 && btc > 0) {
@@ -900,7 +901,7 @@
   }
   const qtyW = v => (+v).toLocaleString(LOC, { maximumFractionDigits: v >= 100 ? 0 : v >= 1 ? 3 : 6 });
   function coinPrice(sym) { const S = ST.S || {}, D = ST.D || {}, lv = S.live || {}; return +(lv.prices && lv.prices[sym]) || +(D.prices && D.prices[sym]) || 0; }
-  function priceW(v) { return v >= 10 ? moneyW(v) : (v >= 1 ? String(+v.toFixed(2)).replace('.', ',') : String(+v.toPrecision(3)).replace('.', ',')) + ' доллара'; }
+  function priceW(v) { return v >= 10 ? moneyW(v, true) : (v >= 1 ? String(+v.toFixed(2)).replace('.', ',') : String(+v.toPrecision(3)).replace('.', ',')) + ' доллара'; }
   /* просьба поставить оповещение о цене — любыми словами: «сообщи», «напомни», «поставь уведомление», «оповещение», «сигнал» (12.11.2026) */
   function alertQ(t) { return /(сообщи|сповищ|нагадув|скажи,? когда|оповест|оповещ|уведом|напомни|напомин|предупреди|дай знать|сигнал|алерт|будильник)/.test(t); }
   function reply(q) {
@@ -1535,7 +1536,7 @@
       lx: t => Lx(t),
       ask: q => answer(q), lastAsk: () => ST.lastAsk || null, ctx: () => brainCtx(), hist: () => ST.hist || [],
       mood: m => { if (ST.forceHour == null) ST.forceHour = 12; ST.pct = { calm: 0, up: 3, rocket: 9, down: -3, crash: -9 }[m]; ST.go = m === 'hunter'; if (m === 'offline') { ST.offline = true; ST.offSince = now() - 120; } else ST.offline = false; ST.lastInput = now(); wake(); },
-      say: t => speak(t, { pri: 2 }), sayLog: () => ST.sayLog || [], nameFill: t => nameFill(t), memo: t => memoSplit(t), memSafe: t => memSafe(t), act: (n, x) => doAct(n, x), calm: () => calmText(), figs: t => figs(t), weekDue: () => weekDue(), headline: v => { ST.headline = v; }, lessonPick: () => lessonPick(ST.D), ceilText: o => ceilText(o), lessonOffer: v => { ST.lessonOffer = v ? { id: v, at: now() } : null; }, calmDue: () => calmDue(), brief2: o => brief(o), snapPrev: v => { ST.snapPrev = v; }, remTick: () => remTick(), remDue: (t, ago) => remAdd(t, Date.now() - (ago || 1000)), remQ: t => remQ(t), split: (t, live) => splitParts(t, live), stress: t => stressRu(t),
+      say: t => speak(t, { pri: 2 }), sayLog: () => ST.sayLog || [], nameFill: t => nameFill(t), memo: t => memoSplit(t), memSafe: t => memSafe(t), act: (n, x) => doAct(n, x), calm: () => calmText(), priceW: v => priceW(v), figs: t => figs(t), weekDue: () => weekDue(), headline: v => { ST.headline = v; }, lessonPick: () => lessonPick(ST.D), ceilText: o => ceilText(o), lessonOffer: v => { ST.lessonOffer = v ? { id: v, at: now() } : null; }, calmDue: () => calmDue(), brief2: o => brief(o), snapPrev: v => { ST.snapPrev = v; }, remTick: () => remTick(), remDue: (t, ago) => remAdd(t, Date.now() - (ago || 1000)), remQ: t => remQ(t), split: (t, live) => splitParts(t, live), stress: t => stressRu(t),
       tap: () => tapped(),
       brief: () => brief(),
       reply: q => reply(q),
