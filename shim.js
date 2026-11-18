@@ -645,10 +645,12 @@
         if (r.body && r.body.getReader) { const rd = r.body.getReader(), dec = new TextDecoder(); for (;;) { const x = await rd.read(); if (x.done) break; eat(dec.decode(x.value, { stream: true })); } }
         else eat(await r.text());
         line(buf);
+        if (fin && fin.act && fin.act.name) return { text: String(fin.text || ''), act: { name: String(fin.act.name), input: fin.act.input || {} }, sources: [] };   /* этап 4: «мозг» просит действие — исполнит Орион */
         if (fin && fin.text) return { text: String(fin.text), sources: fin.sources || [] };
         return { error: err || 'llm' };
       }
       let j = null; try { j = await r.json(); } catch (x) {}
+      if (r.ok && j && j.act && j.act.name) return { text: '', act: { name: String(j.act.name), input: j.act.input || {} }, sources: [] };
       if (!r.ok || !j || !j.text) return { error: (j && j.error) || ('http ' + r.status) };
       return { text: String(j.text), sources: j.sources || [] };
     } catch (e) { return null; } finally { clearTimeout(t); }

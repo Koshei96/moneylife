@@ -1438,6 +1438,62 @@ def run_browser():
             if pg.evaluate("Mascot.mem.list().length") == 0 and 'забыл' in pg.evaluate("Mascot.debug.state().said"): ok('Орион: «забудь всё» — память очищена')
             else: fail('Орион: забудь всё', pg.evaluate("Mascot.debug.state().said"))
             pg.unroute('**/functions/v1/orion-ask')
+            # 18.11.2026 (этап 4): голосовые действия — переходы и заметки без сервера, напоминания и покупка через инструменты «мозга», журнал
+            n0 = len(sb)
+            pg.evaluate("Mascot.debug.ask('открой стратегию')"); pg.wait_for_timeout(500)
+            v1 = pg.evaluate("[Mascot.debug.state().said, (document.querySelector('.view:not([hidden])')||{}).dataset.view]")
+            pg.evaluate("Mascot.debug.ask('открой настройки')"); pg.wait_for_timeout(600)
+            v2 = pg.evaluate("[Mascot.debug.state().said, document.getElementById('setSheet').classList.contains('open')]")
+            pg.evaluate("closeSheets()"); pg.wait_for_timeout(300)
+            if v1[1] == 'strategy' and 'стратег' in v1[0] and v2[1] and len(sb) == n0: ok('Орион: «открой стратегию», «открой настройки» — открывает сам, без сервера')
+            else: fail('Орион: переходы голосом', f'{v1} | {v2} | {len(sb) - n0}')
+            pg.evaluate("Mascot.debug.ask('запиши заметку: проверить комиссию на бирже')"); pg.wait_for_timeout(300)
+            nt = pg.evaluate("Mascot.tasks.notes().map(x=>x.t)")
+            pg.evaluate("Mascot.debug.ask('прочитай заметки')"); pg.wait_for_timeout(300)
+            rd = pg.evaluate("Mascot.debug.state().said")
+            if 'проверить комиссию на бирже' in nt and 'комиссию' in rd and len(sb) == n0: ok('Орион: «запиши заметку…» и «прочитай заметки» — на телефоне')
+            else: fail('Орион: заметки', f'{nt} | {rd}')
+            ACTS = {'rem': {'name': 'add_reminder', 'input': {'text': 'проверить портфель', 'when': ''}}, 'buy': {'name': 'record_purchase', 'input': {'sym': 'ETH', 'usd': 200, 'price': 2500}}}
+            cur = {'k': 'rem'}
+            def fa(route):
+                sb.append(json.loads(route.request.post_data or '{}'))
+                route.fulfill(status=200, headers={'content-type': 'application/x-ndjson; charset=utf-8', 'access-control-allow-origin': '*'}, body=json.dumps({'done': True, 'text': '', 'act': ACTS[cur['k']], 'sources': []}, ensure_ascii=False) + '\n')
+            ACTS['rem']['input']['when'] = pg.evaluate("(()=>{const d=new Date(Date.now()+864e5);d.setHours(9,0,0,0);const p=n=>String(n).padStart(2,'0');return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+'T09:00'})()")
+            pg.route('**/functions/v1/orion-ask', fa)
+            pg.evaluate("Mascot.debug.ask('напомни завтра в девять проверить портфель')")
+            try: pg.wait_for_function("()=>Mascot.tasks.rem().length>0", polling=200, timeout=8000)
+            except Exception: pass
+            rs = pg.evaluate("[Mascot.tasks.rem().map(x=>x.t), Mascot.debug.state().said]"); cx = (sb[-1].get('ctx') or {}).get('now') if len(sb) > n0 else None
+            if 'проверить портфель' in rs[0] and 'завтра в 9:00' in rs[1] and cx: ok('Орион: «напомни завтра в девять…» — «мозг» вызывает инструмент, телефон ставит напоминание и называет время')
+            else: fail('Орион: напоминание', f'{rs} | {cx}')
+            cur['k'] = 'buy'
+            nb = len(pg.evaluate("S.tx")) if pg.evaluate("typeof S!=='undefined'&&!!S.tx") else -1
+            pg.evaluate("Mascot.debug.ask('запиши покупку эфира на 200 долларов по 2500')")
+            try: pg.wait_for_function("()=>document.getElementById('actSheet').classList.contains('open')", polling=200, timeout=8000)
+            except Exception: pass
+            pg.wait_for_timeout(300)
+            fb = pg.evaluate("[document.getElementById('actSheet').classList.contains('open'), document.getElementById('oSym').value, document.getElementById('oUsd').value, document.getElementById('oPrice').value, document.getElementById('oQty').value, Mascot.debug.sayLog().slice(-3).join(' | ')]")
+            na = len(pg.evaluate("S.tx")) if nb >= 0 else -1
+            if fb[0] and fb[1] == 'ETH' and fb[2] == '200' and fb[3] == '2500' and fb[4] in ('0.08', '0.080') and 'Сохранить' in fb[5] and na == nb: ok('Орион: «запиши покупку…» — открывает форму с цифрами, сам не сохраняет (ждёт кнопку)')
+            else: fail('Орион: запись покупки', f'{fb} | {nb} → {na}')
+            pg.evaluate("closeSheets()"); pg.wait_for_timeout(300)
+            pg.evaluate("Mascot.debug.remDue('выпить воды', 30*60e3); Mascot.debug.remTick()"); pg.wait_for_timeout(300)
+            rt = pg.evaluate("[Mascot.debug.sayLog().slice(-2).join(' | '), Mascot.tasks.rem().filter(x=>x.t==='выпить воды'&&x.done).length]")
+            if 'Пропущенное напоминание: выпить воды' in rt[0] and rt[1] == 1: ok('Орион: пропущенное напоминание звучит при открытии и отмечается выполненным')
+            else: fail('Орион: срабатывание напоминания', str(rt))
+            pg.unroute('**/functions/v1/orion-ask')
+            pg.evaluate("MLX.tasksRow && MLX.tasksRow(); MLX.go('tasks')"); pg.wait_for_timeout(700)
+            sh = pg.evaluate("[document.getElementById('xTitle').textContent, document.getElementById('xBody').innerText]")
+            if sh[0] == 'Дела Ориона' and 'проверить портфель' in sh[1] and 'проверить комиссию' in sh[1] and 'Открыл запись покупки ETH' in sh[1] and 'Открыл: стратегию' in sh[1]: ok('«Дела Ориона»: напоминания, заметки и журнал всех действий по голосу')
+            else: fail('«Дела Ориона»', str(sh))
+            pg.evaluate("closeSheets()"); pg.wait_for_timeout(300)
+            bk = pg.evaluate("(async()=>{const db=await window.claude.use('db');const a=await db.doc('app/orion-notes').get(),b=await db.doc('app/orion-rem').get();return [a.exists?(a.data().items||[]).map(x=>x.t):null,b.exists?(b.data().items||[]).map(x=>x.t):null]})()")
+            if bk[0] and 'проверить комиссию на бирже' in bk[0] and bk[1] and 'проверить портфель' in bk[1]: ok('Орион: копия заметок и напоминаний — в аккаунте')
+            else: fail('Орион: копия дел в аккаунте', str(bk))
+            pg.evaluate("Mascot.debug.ask('сколько у меня биткоина')"); pg.wait_for_timeout(300)
+            rq = pg.evaluate("[Mascot.debug.remQ('напомни завтра в девять проверить портфель'), Mascot.debug.remQ('напомни, когда биткоин будет 120000'), Mascot.debug.act('add_reminder', {text:'x', when:'вчера'})]")
+            if rq[0] and not rq[1] and 'Не понял' in rq[2]: ok('Орион: «напомни, когда биткоин…» — оповещение о цене, а не напоминание; непонятное время — переспрашивает')
+            else: fail('Орион: напоминание или оповещение', str(rq))
             pg.evaluate("document.querySelector('.or-cap') && document.querySelector('.or-cap').click()"); pg.unroute('**/functions/v1/orion-ask')
         scenario('Орион', {'session': True, 'docs': SEED}, s_mascot)
 

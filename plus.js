@@ -442,7 +442,7 @@
     fng: () => openFng(), goal: () => openGoal(), goalsave: () => saveGoal(), share: () => share(), refresh: () => { el('refreshBtn').click(); },
     backup: () => exportData(), rules: () => { closeSheets(); openSettings(false); setTimeout(() => { const r = el('rules'); if (r && r.scrollIntoView) r.scrollIntoView({ block: 'start', behavior: reduced ? 'auto' : 'smooth' }); }, 380); },
     orname: () => { closeSheets(); setTimeout(X.askName, 260); }, namesave: () => nameSave(),
-    ormem: () => { closeSheets(); setTimeout(openMem, 260); }, memdel: b => { const M = window.Mascot && window.Mascot.mem; if (M) M.del(b.dataset.i); play('tick'); openMem(); }, memclear: () => { const M = window.Mascot && window.Mascot.mem; if (M) M.clear(); play('tick'); openMem(); toast('Орион всё забыл'); },
+    ormem: () => { closeSheets(); setTimeout(openMem, 260); }, ortasks: () => { closeSheets(); setTimeout(openTasks, 260); }, notedel: b => { const T = window.Mascot && window.Mascot.tasks; if (T) T.delNote(b.dataset.i); play('tick'); openTasks(); }, remdel: b => { const T = window.Mascot && window.Mascot.tasks; if (T) T.delRem(b.dataset.i); play('tick'); openTasks(); }, memdel: b => { const M = window.Mascot && window.Mascot.mem; if (M) M.del(b.dataset.i); play('tick'); openMem(); }, memclear: () => { const M = window.Mascot && window.Mascot.mem; if (M) M.clear(); play('tick'); openMem(); toast('Орион всё забыл'); },
     memtoggle: () => { const M = window.Mascot && window.Mascot.mem; if (M) M.on(!M.on()); play('tick'); openMem(); },
     alertnew: () => { const s = typeof cvSym === 'string' && cvSym ? cvSym : 'BTC'; closeSheets(); setTimeout(() => openAlert(s), 260); }, alsave: b => alertSave(b), aldel: b => alDel(b), alerts: () => { closeSheets(); setTimeout(openAlerts, 260); },
     week: () => { try { if (window.Mascot && window.Mascot.ask) window.Mascot.ask('как прошла неделя'); } catch (e) {} },
@@ -584,6 +584,28 @@
   }
   function renderMemRow() { const r = el('orMemVal'), M = window.Mascot && window.Mascot.mem; if (!r || !M) return; const n = M.list().length; r.textContent = !M.on() ? 'Память выключена' : n ? n + ' ' + (n % 10 === 1 && n % 100 !== 11 ? 'запись' : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20) ? 'записи' : 'записей') : 'Пока ничего'; }
   X.memOpen = openMem; X.memRow = renderMemRow;
+  /* «Дела Ориона» (18.11.2026, этап 4): напоминания, заметки и журнал всего, что Орион сделал по голосу */
+  function openTasks() {
+    const T = window.Mascot && window.Mascot.tasks;
+    if (!T) { toast('Орион ещё не проснулся — откройте главную'); return; }
+    const tm = ms => { const d = new Date(ms); return dShort(d.toISOString()) + ', ' + d.getHours() + ':' + String(d.getMinutes()).padStart(2, '0'); };
+    const R = T.rem().filter(x => !x.done).sort((a, b) => a.when - b.when), N = T.notes().slice().reverse(), L = T.log().slice().reverse().slice(0, 20);
+    const row = (t, sub, x, id, lbl) => `<div class="row r3 static"><span class="col" style="grid-column:1/3"><span class="nm wrap">${esc(t)}</span><span class="sub">${esc(sub)}</span></span>${x ? `<button type="button" class="btn sm ghost" data-x="${x}" data-i="${esc(id)}" aria-label="${lbl}: ${esc(t)}">${lbl}</button>` : ''}</div>`;
+    const html = '<h4>Напоминания</h4>' + (R.length ? '<div class="list">' + R.map(x => row(x.t, T.when(x.when), 'remdel', x.id, 'Отменить')).join('') + '</div>' : '<p class="hint">Нет. Скажите Ориону: «напомни завтра в девять проверить портфель». Напоминание звучит, когда приложение открыто; пропущенное — при следующем открытии.</p>')
+      + '<h4>Заметки</h4>' + (N.length ? '<div class="list">' + N.map(x => row(x.t, 'записал ' + tm(x.at), 'notedel', x.id, 'Удалить')).join('') + '</div>' : '<p class="hint">Нет. Скажите: «запиши заметку: …».</p>')
+      + '<h4>Журнал действий</h4>' + (L.length ? '<div class="list">' + L.map(x => row(x.t, tm(x.at) + ' · ' + x.how, '', '', '')).join('') + '</div>' : '<p class="hint">Пока пусто. Здесь видно всё, что Орион сделал по вашей просьбе.</p>')
+      + '<p class="hint">Заметки и напоминания хранятся в телефоне, копия — в вашем аккаунте. Деньги Орион не двигает: покупку он только открывает заполненной — сохраняете вы сами.</p>';
+    xOpen('ortasks', 'Дела Ориона', html);
+    renderTasksRow();
+  }
+  function renderTasksRow() { const r = el('orTaskVal'), T = window.Mascot && window.Mascot.tasks; if (!r || !T) return; const a = T.rem().filter(x => !x.done).length, b = T.notes().length; r.textContent = a || b ? 'Напоминаний: ' + a + ' · заметок: ' + b : 'Заметки, напоминания, журнал действий'; }
+  X.tasksRow = renderTasksRow;
+  /* переходы по голосу на экраны из этого файла */
+  X.go = function (to) {
+    const M = { plan: ['личный план', openPlan], learn: ['знания', () => openLearn()], alerts: ['оповещения', openAlerts], memory: ['память Ориона', openMem], tasks: ['дела Ориона', openTasks] }[to];
+    if (!M) return '';
+    closeSheets(); setTimeout(M[1], 260); return M[0];
+  };
   function renderNameRow() { const r = el('orNameVal'); if (r) r.textContent = P.name ? P.name : 'не указано'; }
   document.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target && e.target.id === 'xName') { e.preventDefault(); nameSave(); } });
   renderNameRow(); renderAlCount();
