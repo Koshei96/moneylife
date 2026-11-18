@@ -144,15 +144,25 @@ Deno.serve(async (req) => {
   const user = u && u.user;
   if (!user) return json({ error: 'auth' }, 401);
 
-  let wantStream = false, q = '', sym = '', lang = 'ru', hist: { q: string; a: string }[] = [], ctx: Record<string, unknown> = {};
+  let wantStream = false, q = '', sym = '', lang = 'ru', hist: { q: string; a: string }[] = [], ctx: Record<string, unknown> = {}, op = '', nsyms: string[] = [];
   try {
     const b = await req.json();
+    op = String((b && b.op) || ''); nsyms = Array.isArray(b && b.syms) ? b.syms.slice(0, 5).map((x: unknown) => String(x).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10)).filter(Boolean) : [];
     wantStream = !!(b && b.stream);   /* 18.11.2026: ответ потоком — приложение начинает говорить первое предложение, пока пишется остальное */
     lang = b && b.lang === 'uk' ? 'uk' : 'ru';   /* украинский интерфейс — Орион отвечает по-украински */
     q = String((b && b.q) || ''); sym = String((b && b.sym) || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10);
     if (Array.isArray(b && b.hist)) hist = b.hist.slice(-6).map((x: { q?: unknown; a?: unknown }) => ({ q: String((x && x.q) || '').slice(0, 200), a: String((x && x.a) || '').slice(0, 400) })).filter((x: { q: string; a: string }) => x.q && x.a);
     if (b && b.ctx && typeof b.ctx === 'object') { const t = JSON.stringify(b.ctx); if (t.length < 3000) ctx = b.ctx; }   /* только доли и проценты, без сумм */
   } catch (_) { /* пусто */ }
+  /* 18.11.2026 (этап 5, №11): свежие заголовки по монетам человека — для утренней сводки. Без «мозга»: заголовок как есть, с источником.
+     Только русскоязычные ленты (ForkLog, Incrypted) — человек не читает по-английски; не старше суток */
+  if (op === 'news') {
+    const items = await newsCached(sb.storage.from(BUCKET));
+    const keys = nsyms.flatMap(x => NAMES[x] || []), now0 = Date.now();
+    const ru = items.filter((n: { src: string; ts: number }) => (n.src === 'ForkLog' || n.src === 'Incrypted') && now0 - n.ts < 24 * 3600e3);
+    const hit = ru.filter((n: { title: string }) => keys.some(k => n.title.toLowerCase().includes(k)));
+    return json({ items: hit.slice(0, 3).map((n: { src: string; title: string; ts: number }) => ({ src: n.src, title: n.title, ts: n.ts })) });
+  }
   q = q.replace(/\s+/g, ' ').trim();
   if (!q || q.length > 300) return json({ error: 'bad_q' }, 400);
 
@@ -169,15 +179,7 @@ Deno.serve(async (req) => {
   if (mn >= MONTH) return json({ error: 'month_limit' }, 429);
 
   const syms = Array.from(new Set([sym || 'BTC', 'BTC', 'ETH'].filter(Boolean)));
-  /* новости — общие для всех, держим 10 минут в хранилище: ответ быстрее, сайты новостей не дёргаем каждый раз */
-  const newsCached = async () => {
-    const r = await store.download('news/latest.json');
-    if (r.data) { try { const j = JSON.parse(await r.data.text()); if (Date.now() - j.at < 10 * 60e3 && Array.isArray(j.items)) return j.items; } catch (_) { /* дальше */ } }
-    const items = await news();
-    if (items.length) await store.upload('news/latest.json', new Blob([JSON.stringify({ at: Date.now(), items })], { type: 'application/json' }), { upsert: true });
-    return items;
-  };
-  const [rows, items] = await Promise.all([market(syms), newsCached()]);
+  const [rows, items] = await Promise.all([market(syms), newsCached(store)]);
   const keys = sym && NAMES[sym] ? NAMES[sym] : [];
   const rel = keys.length ? items.filter((n: { title: string; desc: string }) => keys.some(k => (n.title + ' ' + n.desc).toLowerCase().includes(k))) : [];
   const pickN = [...rel.slice(0, 12), ...items.filter((n: unknown) => !rel.includes(n)).slice(0, 18 - Math.min(12, rel.length))];
@@ -258,6 +260,16 @@ Deno.serve(async (req) => {
   await save(res);
   return json(res);
 });
+
+/* новости — общие для всех, держим 10 минут в хранилище: ответ быстрее, сайты новостей не дёргаем каждый раз */
+// deno-lint-ignore no-explicit-any
+async function newsCached(store: any) {
+  const r = await store.download('news/latest.json');
+  if (r.data) { try { const j = JSON.parse(await r.data.text()); if (Date.now() - j.at < 10 * 60e3 && Array.isArray(j.items)) return j.items; } catch (_) { /* дальше */ } }
+  const items = await news();
+  if (items.length) await store.upload('news/latest.json', new Blob([JSON.stringify({ at: Date.now(), items })], { type: 'application/json' }), { upsert: true });
+  return items;
+}
 
 /* уборка: сохранённые ответы старше часа стираются (кэш нужен лишь на 20 минут) */
 // deno-lint-ignore no-explicit-any

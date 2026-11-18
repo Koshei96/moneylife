@@ -410,7 +410,7 @@
   async function notify(title, body, tag) {
     if (!notifOn()) return;
     if (window.L) { title = window.L(title); body = window.L(body); }   /* украинский язык — уведомления тоже */
-    try { const reg = navigator.serviceWorker && await navigator.serviceWorker.getRegistration(); const opt = { body, tag, icon: 'icons/icon-192.png', badge: 'icons/badge-96.png', data: { url: './' } };
+    try { const reg = navigator.serviceWorker && await navigator.serviceWorker.getRegistration(), hr = new Date().getHours(); const opt = { body, tag, icon: 'icons/icon-192.png', badge: 'icons/badge-96.png', silent: hr >= 23 || hr < 7, data: { url: './' } };   /* №12: ночью — без звука */
       if (reg && reg.showNotification) await reg.showNotification(title, opt); else new Notification(title, opt); } catch (e) {}
   }
   /* чистая функция (та же логика — в sw.js): какие события новые. seen — уже показанные ключи */
@@ -436,7 +436,8 @@
     const mi = X.monthInfo(D), st = streak(), d = new Date(), ym = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
     const hasPlan = !!mi.hasDep || mi.budget > 0, need = mi.hasDep ? mi.dca > 0.5 : mi.budget > 0 && mi.bought < mi.budget * 0.98;
     let tz = 'Europe/Kyiv'; try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || tz; } catch (e) {}
-    const o = { v: 1, lang: cfg.lang, tz, on: !!cfg.on, ath: cfg.ath, athDate: cfg.athDate, levels: cfg.levels, goal: cfg.goal, plan: { ym, hasPlan, need }, streak: { ym, n: st.n, thisMonth: st.thisMonth } };
+    const depDay = +(S.settings && S.settings.depositDay) || 0, lastDep = (S.tx || []).filter(t => t && t.type === 'deposit' && t.ts).map(t => { const x = new Date(t.ts); return x.getFullYear() + '-' + String(x.getMonth() + 1).padStart(2, '0') + '-' + String(x.getDate()).padStart(2, '0'); }).sort().pop() || '';
+    const o = { v: 1, lang: cfg.lang, tz, on: !!cfg.on, ath: cfg.ath, athDate: cfg.athDate, levels: cfg.levels, goal: cfg.goal, plan: { ym, hasPlan, need }, streak: { ym, n: st.n, thisMonth: st.thisMonth }, dep: { day: depDay, last: lastDep } };   /* №13: день пополнения */
     const k = JSON.stringify(o); if (k === sigLast) return; sigLast = k;
     try {
       const seen = xGet().seen || {}, sent = Object.assign({}, sigSent); Object.keys(seen).forEach(x => { if (/^(lv|goal):/.test(x) && !sent[x]) sent[x] = seen[x]; });   /* что телефон уже показал — сервер не повторит */
@@ -497,7 +498,7 @@
   function alGet() { return (xGet().alerts || []).filter(a => a && a.sym && +a.price > 0); }
   function alSave(list) { xPatch({ alerts: list.slice(-20) }); cfgLast = ''; try { cfgPush(derive()); } catch (e) {} renderAlCount(); alCopy(); }
   /* 18.11.2026 (этап 5): копия оповещений в аккаунте — сервер orion-push сверяет цены раз в минуту и шлёт уведомление при закрытом приложении */
-  function alCopy() { try { if (typeof db !== 'undefined' && db && window.mlUser && !window.mlDemo) db.doc('app/orion-alerts').set({ v: 1, at: Date.now(), lang: window.mlLang ? window.mlLang() : 'ru', items: alGet().map(a => ({ id: a.id, sym: a.sym, price: a.price, dir: a.dir, at: a.at })) }); } catch (e) {} }
+  function alCopy() { try { if (typeof db !== 'undefined' && db && window.mlUser && !window.mlDemo) db.doc('app/orion-alerts').set({ v: 1, at: Date.now(), lang: window.mlLang ? window.mlLang() : 'ru', tz: (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Kyiv'; } catch (e) { return 'Europe/Kyiv'; } })(), items: alGet().map(a => ({ id: a.id, sym: a.sym, price: a.price, dir: a.dir, at: a.at })) }); } catch (e) {} }
   /* что сработало на сервере, пока приложение было закрыто, — снимаем у себя и говорим; один раз за запуск, до своей проверки */
   let alPulled = false, alPulling = false;
   async function alPull() {
