@@ -1570,6 +1570,31 @@ def run_browser():
             else: fail('украинский: возврат к русскому', tabs)
         scenario('Украинский язык', {'session': True, 'docs': SEED}, s_uk)
 
+        # 18.11 (охота 17.11, P2 #5): «Проверка рынка — 8:41 и 20:41 по Киеву» и «Подбор альткоинов — 1-го числа, 10:13» в «Правилах»
+        #     и «Проверка рынка» в «Данных» видел каждый, хотя это задачи владельца (app/market с source). Теперь — только при ownerFeeds()
+        OWN_KV = """()=>{const k=id=>[...document.querySelectorAll('#'+id+'>div')].map(d=>(d.firstElementChild||{}).textContent);return {own:ownerFeeds(),rules:k('rules'),data:k('dataInfo')}}"""
+        OWNER_ROWS = ('Проверка рынка', 'Подбор альткоинов')
+        def s_owner_rows(owner):
+            def body(pg, n):
+                wait_app(pg); pg.wait_for_timeout(1200)
+                pg.evaluate("openSettings()"); pg.wait_for_timeout(800)
+                r = pg.evaluate(OWN_KV); who = 'владелец' if owner else 'не владелец'; bad = []
+                if r['own'] != owner: raise AssertionError(f'ownerFeeds()={r["own"]} — сценарий не тот')
+                if owner:
+                    if not (r['rules'][-2:] == list(OWNER_ROWS) and 'Проверка рынка' in r['data']): bad.append('у владельца пропали строки: ' + str(r))
+                elif any(x in r['rules'] + r['data'] for x in OWNER_ROWS): bad.append('строки владельца видны: ' + str(r))
+                if not ('Распределение' in r['rules'] and 'Новый максимум BTC' in r['rules'] and 'Курс доллара' in r['data'] and 'Записей' in r['data']): bad.append('пропали общие строки: ' + str(r))
+                if not bad: ok(f'«Правила» и «Данные» ({who}): «Проверка рынка» и «Подбор альткоинов» ' + ('на месте' if owner else 'не показаны — это задачи владельца') + ', остальные строки на месте')
+                else: fail(f'«Правила» и «Данные» ({who})', '; '.join(bad))
+                for th in ('dark', 'light'):
+                    pg.evaluate(f"document.documentElement.setAttribute('data-theme','{th}')"); pg.wait_for_timeout(300)
+                    for blk in ('rules', 'dataInfo'):
+                        pg.evaluate(f"document.getElementById('{blk}').scrollIntoView({{block:'center'}})"); pg.wait_for_timeout(300)
+                        shot(pg, f"fix-owner-feeds-{'owner' if owner else 'user'}-{blk}-{th}")
+            return body
+        scenario('Настройки: строки владельца — не владелец', {'session': True, 'docs': SEED}, s_owner_rows(False), dsf=1)
+        scenario('Настройки: строки владельца — владелец', {'session': True, 'docs': SEED + [{'col': 'app', 'id': 'market', 'data': {'source': 'agent', 'updatedAt': NOW}}]}, s_owner_rows(True), dsf=1)
+
         # --- складки (12.11.2026): разделы настроек и вкладок сложены, одно нажатие раскрывает; состояние запоминается
         def s_folds(pg, n):
             pg.evaluate("localStorage.setItem('ml-fold-real','1'); localStorage.removeItem('ml-fold'); location.reload()"); pg.wait_for_timeout(2500)
