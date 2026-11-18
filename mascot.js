@@ -201,7 +201,7 @@
     if (UK && !o.raw) text = Lx(text);   /* ответ «мозга» уже по-украински — его не переводим */
     if (!text) return false;
     if (document.getElementById('mlIntro')) return false;   /* идёт обучающий ролик (intro.js) — Орион молчит, чтобы не перебить его голос */
-    if (o.append && TTS.cur) { TTS.q.unshift({ text, o: Object.assign({}, o, { append: false, queue: false }), at: now(), fast: true }); return true; }   /* продолжение ответа «мозга» — сразу после текущей фразы */
+    if (o.append && TTS.cur) { const it = { text, o: Object.assign({}, o, { append: false, queue: false }), at: now(), fast: true }, k = TTS.q.findIndex(x => !x.fast); if (k < 0) TTS.q.push(it); else TTS.q.splice(k, 0, it); return true; }   /* продолжение — после других продолжений, но раньше обычной очереди */   /* продолжение ответа «мозга» — сразу после текущей фразы */
     if (TTS.cur && (TTS.cur.pri || 0) > (o.pri || 0)) {   /* занят важным — скажет следом (не больше двух в очереди) */
       if (o.queue !== false && TTS.q.length < 2 && !TTS.q.some(x => x.text === text)) TTS.q.push({ text, o, at: now() });
       return false;
@@ -909,15 +909,74 @@
       const f = M.fng ? M.fng() : null; if (f) c.fng = f.v;
       const ch = S.live && S.live.change ? +S.live.change.BTC : NaN; if (isFinite(ch)) c.btc24 = Math.round(ch * 10) / 10;   /* для правила «без шуток, когда рынок падает» */
       if (pl && pl.a && Number.isInteger(pl.a.exp)) c.exp = pl.a.exp;   /* опыт из «Личного плана»: 0 — начинаю … 3 — больше 3 лет */
+      if (MEM.on && MEM.items.length) c.mem = MEM.items.slice(-12).map(x => String(x.t).slice(0, 100)); else if (!MEM.on) c.memOff = true;   /* долгая память — только строки без сумм */
     } catch (e) {}
     return c;
   }
+  /* ---------- долгая память о человеке (18.11.2026, решение владельца: «и в телефоне, и резервная копия в аккаунте») ----------
+     Цели, интересы, как с ним говорить, опыт — только с согласия («Запомнить?» → «да») или по прямой просьбе «запомни, что…».
+     Никогда: суммы, долги, здоровье, пароли, ключи, адреса, документы. Хранится в телефоне (or-mem), копия — в аккаунте (app/orion-mem). */
+  const MEM_BAD = /\d[\d\s.,]*\s*(\$|₴|€|грн|гривн|гривен|доллар|евро|usd|uah|тыс|млн|к\b)|\$\s*\d|долг|кредит|займ|ипотек|рассрочк|зарплат|доход|болез|болеет|диагноз|лекарств|здоров|беремен|пароль|парол|ключ|сид|seed|фраз[аы] восстановлен|карт[аыу]\s*\d|номер карт|адрес|паспорт|\d{6,}/i;
+  const MEM = { items: lsGet('or-mem', []), on: lsGet('or-mem-on', true) !== false };
+  if (!Array.isArray(MEM.items)) MEM.items = [];
+  const memSafe = t => { t = String(t || '').replace(/\s+/g, ' ').trim(); return t.length >= 3 && t.length <= 120 && !MEM_BAD.test(t); };
+  function memPersist() { lsSet('or-mem', MEM.items); try { if (A.memSave) A.memSave(MEM.items); } catch (e) {} }
+  function memAdd(t) {
+    t = String(t || '').replace(/\s+/g, ' ').trim().replace(/[.!]+$/, '');
+    if (!memSafe(t)) return false;
+    const low = t.toLowerCase(); MEM.items = MEM.items.filter(x => x && String(x.t).toLowerCase() !== low);
+    MEM.items.push({ id: Date.now().toString(36) + Math.random().toString(36).slice(2, 5), t, at: Date.now() });
+    if (MEM.items.length > 20) MEM.items = MEM.items.slice(-20);
+    memPersist(); return true;
+  }
+  function memDel(id) { MEM.items = MEM.items.filter(x => x.id !== id); memPersist(); }
+  function memClear() { MEM.items = []; memPersist(); }
+  function memSetOn(on) { MEM.on = !!on; lsSet('or-mem-on', MEM.on); }
+  /* копия из аккаунта: новый телефон — память возвращается; на старом — объединяем без повторов */
+  async function memRestore() {
+    if (ST.memSynced || !A.memLoad) return; ST.memTries = (ST.memTries || 0) + 1; if (ST.memTries > 6) { ST.memSynced = true; return; }
+    let r = null; try { r = await A.memLoad(); } catch (e) { r = null; }
+    if (r == null) return;   /* база ещё не готова — попробуем при следующей отрисовке */
+    ST.memSynced = true;
+    const seen = new Set(MEM.items.map(x => String(x.t).toLowerCase())); let add = 0;
+    (Array.isArray(r) ? r : []).forEach(x => { if (x && x.t && memSafe(x.t) && !seen.has(String(x.t).toLowerCase())) { MEM.items.push({ id: x.id || Date.now().toString(36), t: String(x.t), at: +x.at || Date.now() }); add++; } });
+    if (add) { MEM.items.sort((a, b) => a.at - b.at); MEM.items = MEM.items.slice(-20); lsSet('or-mem', MEM.items); }
+    if (add || (MEM.items.length && !(Array.isArray(r) && r.length))) memPersist();
+  }
+  const YES = /^\s*(да|ага|угу|конечно|запомни|давай|можно|хорошо|ок|окей|так|верно|так точно|так, запамятай|так)(?=[\s,.!?]|$)/, NO = /^\s*(нет|не надо|не нужно|не запоминай|не стоит|ні|ни|не треба)(?=[\s,.!?]|$)/;
+  /* команды памяти голосом: «запомни, что…», «что ты обо мне помнишь», «забудь всё», «забудь про…» */
+  function memCmd(t, q) {
+    if (/^(что|чего)\s+(ты\s+)?(обо мне|про меня)\s+(помнишь|знаешь)|^что ты помнишь/.test(t)) {
+      if (!MEM.items.length) return 'Пока ничего. Скажите «запомни, что…» — и я запомню.';
+      return 'Помню: ' + MEM.items.slice(-5).map(x => x.t).join('; ') + '.';
+    }
+    if (/^забудь\s+(все|всё)(?=[\s,.!?]|$)/.test(t)) { memClear(); return 'Готово, всё забыл.'; }
+    const fm = t.match(/^забудь\s+(?:про|о|об|что)\s+(.+)$/);
+    if (fm) { const w = fm[1].replace(/[.!?]+$/, '').trim(), x = MEM.items.find(i => String(i.t).toLowerCase().indexOf(w) >= 0) || MEM.items.find(i => w.split(/\s+/).some(k => k.length > 3 && String(i.t).toLowerCase().indexOf(k.slice(0, -1)) >= 0)); if (!x) return 'Такого я не помню.'; memDel(x.id); return 'Забыл.'; }
+    const rm = String(q || '').match(/^\s*(?:орион,?\s*)?(?:запомни|запам['’ʼ]?ятай)[,:]?\s*(?:что|що)?\s*(.+)$/i);
+    if (rm) {
+      if (!MEM.on) return 'Память выключена в настройках — включите «Память Ориона», и я запомню.';
+      const x = rm[1].replace(/[.!?]+$/, '').trim();
+      return memAdd(x) ? 'Запомнил: ' + x + '.' : 'Это я не запоминаю: суммы, долги, здоровье и пароли пусть остаются только у вас.';
+    }
+    return '';
+  }
+  /* «мозг» предлагает запомнить последней строкой «ПАМЯТЬ: …» — вырезаем её из речи и спрашиваем согласие */
+  const MEMO_RE = /\s*ПАМ(?:ЯТЬ|['’ʼ]?ЯТЬ):\s*([^\n]*)$/;
+  function memoSplit(t) { const m = String(t || '').match(MEMO_RE); return m ? { text: String(t).slice(0, m.index).trim(), memo: m[1].replace(/[.!]+$/, '').trim() } : { text: String(t || '').trim(), memo: '' }; }
   const ASK_ERR = { day_limit: 'На сегодня вопросы ко мне закончились. Завтра продолжим.', month_limit: 'Лимит вопросов на этот месяц исчерпан.' };
   async function answer(q, byVoice) {
     const t = norm(q), local = t.trim() ? reply(q) : reply('');
     const sure = local && local.indexOf(UNK) !== 0 && !/^Не расслышал/.test(local);
     const follow = ST.lastBrain && now() - ST.lastBrain < 120 && (/^\s*(а|и|ну|тогда|а\s+если)(?=[\s,?!.]|$)/.test(t) || t.trim().split(/\s+/).length <= 3) && !/(у меня|мои |мой |сколько у)/.test(t);   /* переспрос: «а эфир?», «а почему?» */
     const toBrain = A.ask && t.trim() && !(alertQ(t) && sure) && (marketQ(t) || !sure || follow);
+    if (ST.pendingMemo && now() - ST.pendingMemo.at < 60) {   /* ответ на «Запомнить: …?» */
+      const pm = ST.pendingMemo; ST.pendingMemo = null;
+      if (YES.test(t)) { const okm = memAdd(pm.t); speak(okm ? 'Запомнил.' : 'Это я не запоминаю.', { pri: 2 }); return; }
+      if (NO.test(t)) { speak('Хорошо, не запоминаю.', { pri: 2 }); return; }
+    }
+    const mc = memCmd(t, q);
+    if (mc) { speak(mc, { pri: 2, follow: byVoice }); return; }
     const fu = localFollow(t);
     if (fu) { remember(q, fu, PRIV.test(fu)); speak(fu, { pri: 2, follow: byVoice }); return; }
     if (!toBrain) {
@@ -934,17 +993,20 @@
     let acc = '', first = '';
     const onPart = t => {
       acc += t; if (first || gen !== ST.askGen) return;
-      const m = sq(acc).match(/^.*?[.!?…](?=\s)/g), all = sq(acc), cut = (() => { let c = ''; const re = /[^.!?…]+[.!?…]+(?=\s)/g; let x; while ((x = re.exec(all))) { c = all.slice(0, x.index + x[0].length); if (c.length >= 60) break; } return c.length >= 60 || (c && all.length > c.length + 80) ? c : ''; })();
+      const all = sq(acc).replace(/\s*ПАМ['’ʼ]?ЯТЬ:.*$/, ''), m = all.match(/^.*?[.!?…](?=\s)/g), cut = (() => { let c = ''; const re = /[^.!?…]+[.!?…]+(?=\s)/g; let x; while ((x = re.exec(all))) { c = all.slice(0, x.index + x[0].length); if (c.length >= 60) break; } return c.length >= 60 || (c && all.length > c.length + 80) ? c : ''; })();
       if (m && cut) { first = cut.trim(); ST.lastBrain = now(); speak(nameFill(first), { pri: 2, raw: true, live: true }); }
     };
     let r = null; try { r = await A.ask(q, sym, { hist, ctx: brainCtx(), lang: UK ? 'uk' : 'ru' }, onPart); } catch (e) { r = null; }
     ST.lastAsk = r;
     if (gen !== ST.askGen) return;   /* пока ждали — человек перебил или задал новый вопрос */
     if (r && r.text) {
+      const ms = memoSplit(r.text); r.text = ms.text || r.text;
       ST.lastBrain = now(); remember(q, r.text);
       const full = sq(r.text);
-      if (first && full.indexOf(first) === 0) { const rest = full.slice(first.length).trim(); if (rest) { const rf = nameFill(rest); voPrefetch(rf, true); speak(rf, { pri: 2, follow: byVoice, raw: true, append: true, live: true }); } else if (byVoice && TTS.cur && TTS.cur.text === nameFill(first)) TTS.cur.follow = true; return; }
-      if (!first) speak(nameFill(r.text), { pri: 2, follow: byVoice, raw: true, live: true });
+      const memo = MEM.on && ms.memo && memSafe(ms.memo) && !MEM.items.some(x => String(x.t).toLowerCase() === ms.memo.toLowerCase()) ? ms.memo : '';
+      if (memo) setTimeout(() => { if (gen !== ST.askGen) return; ST.pendingMemo = { t: memo, at: now() }; speak((UK ? 'Запам\u2019ятати: ' : 'Запомнить: ') + memo + '?', { pri: 2, raw: true, append: true, follow: true }); }, 0);
+      if (first && full.indexOf(first) === 0) { const rest = full.slice(first.length).trim(); if (rest) { const rf = nameFill(rest); voPrefetch(rf, true); speak(rf, { pri: 2, follow: byVoice && !memo, raw: true, append: true, live: true }); } else if (byVoice && !memo && TTS.cur && TTS.cur.text === nameFill(first)) TTS.cur.follow = true; return; }
+      if (!first) speak(nameFill(r.text), { pri: 2, follow: byVoice && !memo, raw: true, live: true });
       return;
     }
     if (first) return;   /* начало ответа уже прозвучало — обрыв связи не озвучиваем */
@@ -1183,6 +1245,7 @@
     prefetchBrief();
     if (!ST.sound && TTS.ok && TTS.cur) try { speechSynthesis.cancel(); } catch (e) {}
     ST.S = S; ST.D = D;
+    if (!ST.memSynced && window.mlUser) memRestore();
     const off = !!info.offline; if (off && !ST.offline) ST.offSince = now(); ST.offline = off;
     ST.pct = info.pct == null || !isFinite(info.pct) ? null : info.pct;
     if (!S.ready) return;
@@ -1236,7 +1299,8 @@
 
   window.Mascot = {
     init, sync, number, greet,
-    hush: () => { TTS.q = []; stopVoice(); },   /* замолчать сразу (перед обучающим роликом) */
+    hush: () => { TTS.q = []; stopVoice(); },
+    mem: { list: () => MEM.items.slice(), del: id => memDel(id), clear: () => memClear(), on: v => { if (v != null) memSetOn(v); return MEM.on; } },   /* замолчать сразу (перед обучающим роликом) */
     ask: q => answer(q), listen: () => listen(),
     event: (name, data) => trigger(name, data),
     debug: {
@@ -1250,7 +1314,7 @@
       lx: t => Lx(t),
       ask: q => answer(q), lastAsk: () => ST.lastAsk || null, ctx: () => brainCtx(), hist: () => ST.hist || [],
       mood: m => { if (ST.forceHour == null) ST.forceHour = 12; ST.pct = { calm: 0, up: 3, rocket: 9, down: -3, crash: -9 }[m]; ST.go = m === 'hunter'; if (m === 'offline') { ST.offline = true; ST.offSince = now() - 120; } else ST.offline = false; ST.lastInput = now(); wake(); },
-      say: t => speak(t, { pri: 2 }), sayLog: () => ST.sayLog || [], nameFill: t => nameFill(t), split: (t, live) => splitParts(t, live), stress: t => stressRu(t),
+      say: t => speak(t, { pri: 2 }), sayLog: () => ST.sayLog || [], nameFill: t => nameFill(t), memo: t => memoSplit(t), memSafe: t => memSafe(t), split: (t, live) => splitParts(t, live), stress: t => stressRu(t),
       tap: () => tapped(),
       brief: () => brief(),
       reply: q => reply(q),
