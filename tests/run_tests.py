@@ -1526,6 +1526,14 @@ def run_browser():
               return [c, left.includes(a.id), (d2.data().fired||[]).length, document.getElementById('toastMsg').textContent];})()""")
             if aa[0] and 'ETH:99999' in aa[0] and aa[1] is False and aa[2] == 0 and 'пока приложение было закрыто' in aa[3]: ok('Оповещения о цене: копия в аккаунте для сервера; сработавшее на сервере снимается в телефоне и звучит «пока приложение было закрыто»')
             else: fail('Оповещения через сервер', str(aa))
+            # 18.11.2026 (этап 5, часть 2): копия сигналов для сервера (ступени, цель, план месяца, серия) и возврат отправленного сервером
+            sg = pg.evaluate("""(async()=>{MLX.sigCopy(); await new Promise(r=>setTimeout(r,300)); const db=await window.claude.use('db');
+              const d=(await db.doc('app/orion-signals').get()).data()||{}; const k='lv:test:9:k1';
+              await db.doc('app/orion-signals').set(Object.assign({},d,{sent:{[k]:Date.now()}})); await MLX.sigPull();
+              const xs=Object.keys(localStorage).map(x=>{try{return JSON.parse(localStorage.getItem(x))}catch(e){return null}}).find(o=>o&&typeof o==='object'&&o.seen&&o.seen[k]);
+              return [Array.isArray(d.levels), !!d.plan&&'need' in d.plan&&'hasPlan' in d.plan, !!d.streak&&'n' in d.streak, d.tz, JSON.stringify(d).match(/\\d{4,}\\.\\d/)?'':'ok', !!xs];})()""")
+            if sg[0] and sg[1] and sg[2] and sg[3] and sg[5]: ok('Сигналы через сервер: копия ступеней, цели, плана месяца и серии — в аккаунте; отправленное сервером телефон не повторяет')
+            else: fail('Сигналы через сервер', str(sg))
             pg.evaluate("document.querySelector('.or-cap') && document.querySelector('.or-cap').click()"); pg.unroute('**/functions/v1/orion-ask')
         scenario('Орион', {'session': True, 'docs': SEED}, s_mascot)
 

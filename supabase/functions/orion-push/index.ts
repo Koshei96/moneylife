@@ -5,7 +5,8 @@
      (40 с — запас: если приложение открыто, Орион скажет сам и отметит выполненным, двойного не будет);
    - шлёт пуш на телефоны человека (подписки: docs app/push-subs) и ставит метку «отправлено» в хранилище push/sent/…;
    - умершие подписки (404/410) убирает;
-   - (этап 5) сверяет оповещения о цене (docs app/orion-alerts) с ценами Binance и шлёт сработавшие.
+   - (этап 5) сверяет оповещения о цене (docs app/orion-alerts) с ценами Binance и шлёт сработавшие;
+   - (этап 5) ступени лестницы и цель BTC, конец месяца — план не выполнен или серия под угрозой (docs app/orion-signals).
    Ключи VAPID функция создаёт сама при первом запуске и хранит в закрытом хранилище (push/vapid.json) — в приложение уходит только публичный.
    Ключ расписания проверяется по отпечатку SHA-256: сам ключ в коде не лежит. Текст напоминания — слова самого человека; больше ничего не уходит. */
 import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
@@ -79,11 +80,16 @@ Deno.serve(async (req) => {
   }
   /* 18.11.2026 (этап 5): оповещения о цене — точно в срок. Копия оповещений в аккаунте: docs app/orion-alerts.
      Цены — Binance раз в минуту, только если оповещения у кого-то есть. Сработавшее убираем из копии и пишем в fired — телефон снимет его у себя */
-  const { data: arows } = await sb.from('docs').select('owner,data').eq('col', 'app').eq('id', 'orion-alerts');
+  const [{ data: arows }, { data: srows }] = await Promise.all([
+    sb.from('docs').select('owner,data').eq('col', 'app').eq('id', 'orion-alerts'),
+    sb.from('docs').select('owner,data').eq('col', 'app').eq('id', 'orion-signals')
+  ]);
   const al = (arows || []).map(r => ({ owner: r.owner as string, data: r.data || {}, items: (((r.data || {}).items) || []).filter((a: Al) => a && a.id && a.sym && +a.price > 0 && (a.dir === 'up' || a.dir === 'down')) as Al[] })).filter(r => r.items.length);
-  let fired = 0;
+  const sg = (srows || []).filter(r => r.data && r.data.on);
+  const want = new Set(al.flatMap(r => r.items.map(a => String(a.sym).toUpperCase()))); if (sg.length) want.add('BTC');
+  const px = want.size ? await prices(Array.from(want).slice(0, 100)) : {};
+  let fired = 0, sig = 0;
   if (al.length) {
-    const px = await prices(Array.from(new Set(al.flatMap(r => r.items.map(a => String(a.sym).toUpperCase())))).slice(0, 100));
     for (const r of al) {
       const hit = r.items.filter(a => { const p = px[String(a.sym).toUpperCase()]; return p > 0 && (a.dir === 'up' ? p >= +a.price : p <= +a.price); });
       if (!hit.length) continue;
@@ -104,8 +110,60 @@ Deno.serve(async (req) => {
       await sb.from('docs').update({ data: { ...r.data, items: (r.data.items || []).filter((a: Al) => !ids.has(a.id)), fired: was.concat(todo.map(a => ({ id: a.id, at: now, now: px[String(a.sym).toUpperCase()] }))).slice(-20) }, updated_at: new Date().toISOString() }).eq('owner', r.owner).eq('col', 'app').eq('id', 'orion-alerts');
     }
   }
-  return json({ ok: true, due, sent, dead, fired });
+  /* 18.11.2026 (этап 5, часть 2): ступени лестницы и цель BTC (ключ 1 — по цене), конец месяца: план не выполнен / серия под угрозой.
+     Копия сигналов: docs app/orion-signals (пишет телефон, когда включены «Сигналы на телефоне»). Отправленное — в data.sent: телефон заберёт и не повторит */
+  const btc = +px.BTC || 0;
+  for (const r of sg) {
+    const d = r.data, uk = d.lang === 'uk', sentK: Record<string, number> = { ...(d.sent || {}) }, ev: { k: string; title: string; body: string }[] = [];
+    if (btc > 0) {
+      for (const l of Array.isArray(d.levels) ? d.levels : []) {
+        if (!l || !(+l.price > 0) || btc > +l.price) continue;
+        const b = 'lv:' + (d.athDate || d.ath) + ':' + l.n + (l.r ? ':r' + l.r : ''), k = b + ':k1';
+        if (sentK[b + ':go']) continue;   /* «можно докупить» уже показан телефоном — «ступень открыта» не нужна */
+        ev.push({ k, title: (uk ? 'Сходинка ' : 'Ступень ') + l.n + (uk ? ' відкрита' : ' открыта'), body: (uk ? 'BTC дійшов до −' : 'BTC дошёл до −') + l.drop + (uk ? '% від максимуму ($' : '% от максимума ($') + Math.round(+l.price).toLocaleString('ru-RU') + (uk ? '). Ключ 2 перевірить застосунок.' : '). Ключ 2 проверит приложение.') });
+      }
+      if (+d.goal > 0 && btc >= +d.goal) ev.push({ k: 'goal:' + d.goal, title: uk ? 'BTC дійшов до твоєї цілі' : 'BTC дошёл до твоей цели', body: (uk ? 'Ціна вище $' : 'Цена выше $') + Math.round(+d.goal).toLocaleString('ru-RU') + (uk ? '. Що робити далі — за твоїм планом.' : '. Что делать дальше — по твоему плану.') });
+    }
+    const m = monthNote(d, now, uk); if (m) ev.push(m);
+    const todo: typeof ev = [];
+    for (const e of ev) {
+      if (sentK[e.k]) continue;
+      const mk = `push/sent/${r.owner}/sig-${e.k.replace(/[^A-Za-z0-9_-]+/g, '_')}`;
+      const was = await store.download(mk).then(x => !!x.data).catch(() => false);
+      if (was) { sentK[e.k] = now; continue; }
+      todo.push(e); await store.upload(mk, new Blob(['1'], { type: 'text/plain' }), { upsert: true }).catch(() => null); sentK[e.k] = now;
+    }
+    if (todo.length) {
+      const { data: sd } = await sb.from('docs').select('data').eq('owner', r.owner).eq('col', 'app').eq('id', 'push-subs').maybeSingle();
+      const subs: Sub[] = ((sd && sd.data && sd.data.items) || []).filter((s: Sub) => s && s.endpoint && s.keys && s.keys.p256dh && s.keys.auth);
+      for (const e of todo) { sig++; for (const s of subs) { try { const st = await sendPush(s, { title: e.title, body: e.body, url: './', tag: e.k }, JWK, PUB, CONTACT); if (st >= 200 && st < 300) sent++; } catch (x) { console.error('orion-push: sig send', String(x).slice(0, 200)); } } }
+    }
+    if (Object.keys(sentK).length !== Object.keys(d.sent || {}).length) {
+      const keep: Record<string, number> = {}; Object.keys(sentK).sort((a, b) => sentK[b] - sentK[a]).slice(0, 40).forEach(k => { keep[k] = sentK[k]; });
+      await sb.from('docs').update({ data: { ...d, sent: keep }, updated_at: new Date().toISOString() }).eq('owner', r.owner).eq('col', 'app').eq('id', 'orion-signals');
+    }
+  }
+  return json({ ok: true, due, sent, dead, fired, sig });
 });
+
+/* конец месяца по местному времени человека: последние 3 дня, с 10 до 20 часов, один раз за месяц. Без сумм — уведомление видно на экране блокировки */
+// deno-lint-ignore no-explicit-any
+function monthNote(d: any, now: number, uk: boolean) {
+  let tz = String(d.tz || 'Europe/Kyiv'); try { new Intl.DateTimeFormat('en-CA', { timeZone: tz }); } catch (_) { tz = 'Europe/Kyiv'; }
+  const p: Record<string, string> = {}; for (const x of new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', hourCycle: 'h23' }).formatToParts(new Date(now))) p[x.type] = x.value;
+  const y = +p.year, mo = +p.month, day = +p.day, h = +p.hour, last = new Date(Date.UTC(y, mo, 0)).getUTCDate(), left = last - day;
+  if (left > 2 || h < 10 || h >= 20) return null;
+  const ym = y + '-' + String(mo).padStart(2, '0'), prev = (mo === 1 ? (y - 1) + '-12' : y + '-' + String(mo - 1).padStart(2, '0'));
+  const pl = d.plan || {}, st = d.streak || {};
+  const planNeed = pl.ym === ym ? !!pl.need : !!pl.hasPlan;   /* телефон в этом месяце не открывали — значит, план месяца ещё не начат */
+  const n = st.ym === ym ? (st.thisMonth ? 0 : +st.n || 0) : st.ym === prev && st.thisMonth ? +st.n || 0 : 0;
+  if (!planNeed && !(n >= 2)) return null;
+  const lw = left === 0 ? (uk ? 'Сьогодні останній день місяця.' : 'Сегодня последний день месяца.') : (uk ? 'До кінця місяця ' + left + (left === 1 ? ' день.' : ' дні.') : 'До конца месяца ' + left + (left === 1 ? ' день.' : ' дня.'));
+  const bits: string[] = [];
+  if (planNeed) bits.push(uk ? 'План покупок ще не виконано' : 'План покупок ещё не выполнен');
+  if (n >= 2) bits.push(uk ? 'серія ' + n + ' міс. поспіль під загрозою' : 'серия ' + n + ' мес. подряд под угрозой');
+  const b = bits.join(', '); return { k: 'month:' + ym, title: uk ? 'MoneyLife · кінець місяця' : 'MoneyLife · конец месяца', body: lw + ' ' + b.charAt(0).toUpperCase() + b.slice(1) + (uk ? '. Рішення — за вами.' : '. Решение — за вами.') };
+}
 
 type Al = { id: string; sym: string; price: number; dir: 'up' | 'down' };
 const usdTxt = (v: number) => '$' + (v >= 100 ? Math.round(v).toLocaleString('ru-RU') : String(+v.toPrecision(4)).replace('.', ','));

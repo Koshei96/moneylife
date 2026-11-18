@@ -419,8 +419,30 @@
   let sigT = 0, seenPulled = !('caches' in window);
   /* что уже показала фоновая проверка — забираем один раз при запуске, чтобы не повторять тот же сигнал */
   if (!seenPulled) caches.open('ml-cfg').then(ch => ch.match('cfg.json')).then(r => r ? r.json() : null).then(c => { if (c && c.seen) xPatch({ seen: Object.assign({}, c.seen, xGet().seen || {}) }); }).catch(() => {}).finally(() => { seenPulled = true; });
-  function sigCheck(D) { if (!seenPulled || !S.ready || S.live.status !== 'ok' || Date.now() - sigT < 20000) return; sigT = Date.now();
-    const btc = +D.prices.BTC || 0, cfg = cfgForSw(D), states = {}; for (const l of (S.cycle && S.cycle.levels) || []) states[l.n] = lvState(l, btc, D);
+  /* 18.11.2026 (этап 5, часть 2): копия сигналов в аккаунте — сервер orion-push раз в минуту сверяет ступени и цель с ценой BTC,
+     а в конце месяца напоминает о плане и серии. Сумм в копии нет: только цены ступеней, цель и «план выполнен или нет». */
+  let sigPulled = false, sigLast = '', sigSent = {};
+  async function sigPull() {
+    try { const d = await db.doc('app/orion-signals').get(), j = d && d.exists ? d.data() || {} : {}, sent = j.sent || {}; sigSent = sent;
+      const ks = Object.keys(sent); if (ks.length) { const seen = Object.assign({}, xGet().seen || {}); ks.forEach(k => { if (!seen[k]) seen[k] = +sent[k] || Date.now(); }); xPatch({ seen }); cfgLast = ''; } } catch (e) {}
+    sigPulled = true;
+  }
+  function sigCopy(D, cfg) {
+    if (typeof db === 'undefined' || !db || !window.mlUser || window.mlDemo) return;
+    const mi = X.monthInfo(D), st = streak(), d = new Date(), ym = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+    const hasPlan = !!mi.hasDep || mi.budget > 0, need = mi.hasDep ? mi.dca > 0.5 : mi.budget > 0 && mi.bought < mi.budget * 0.98;
+    let tz = 'Europe/Kyiv'; try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || tz; } catch (e) {}
+    const o = { v: 1, lang: cfg.lang, tz, on: !!cfg.on, ath: cfg.ath, athDate: cfg.athDate, levels: cfg.levels, goal: cfg.goal, plan: { ym, hasPlan, need }, streak: { ym, n: st.n, thisMonth: st.thisMonth } };
+    const k = JSON.stringify(o); if (k === sigLast) return; sigLast = k;
+    try {
+      const seen = xGet().seen || {}, sent = Object.assign({}, sigSent); Object.keys(seen).forEach(x => { if (/^(lv|goal):/.test(x) && !sent[x]) sent[x] = seen[x]; });   /* что телефон уже показал — сервер не повторит */
+      db.doc('app/orion-signals').set(Object.assign({ at: Date.now(), sent }, o)); } catch (e) {}
+  }
+  X.sigPull = sigPull; X.sigCopy = (D) => { sigLast = ''; sigCopy(D || derive(), cfgForSw(D || derive())); };
+  function sigCheck(D) { if (!seenPulled || !S.ready || S.live.status !== 'ok' || Date.now() - sigT < 20000) return;
+    if (!sigPulled && window.mlUser && !window.mlDemo && typeof db !== 'undefined' && db) { sigT = Date.now() - 15000; sigPull(); return; }
+    sigT = Date.now();
+    const btc = +D.prices.BTC || 0, cfg = cfgForSw(D), states = {}; sigCopy(D, cfg); for (const l of (S.cycle && S.cycle.levels) || []) states[l.n] = lvState(l, btc, D);
     const ev = sigEvents(cfg, btc, states); if (!ev.length) { cfgPush(D); return; }
     const seen = Object.assign({}, cfg.seen); for (const e of ev) { seen[e.k] = Date.now(); notify(e.title, e.body, e.k); }
     const keys = Object.keys(seen).sort((a, b) => seen[b] - seen[a]).slice(0, 40), keep = {}; for (const k of keys) keep[k] = seen[k]; xPatch({ seen: keep }); cfgPush(D); }
