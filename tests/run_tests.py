@@ -1494,6 +1494,20 @@ def run_browser():
             rq = pg.evaluate("[Mascot.debug.remQ('напомни завтра в девять проверить портфель'), Mascot.debug.remQ('напомни, когда биткоин будет 120000'), Mascot.debug.act('add_reminder', {text:'x', when:'вчера'})]")
             if rq[0] and not rq[1] and 'Не понял' in rq[2]: ok('Орион: «напомни, когда биткоин…» — оповещение о цене, а не напоминание; непонятное время — переспрашивает')
             else: fail('Орион: напоминание или оповещение', str(rq))
+            # 18.11.2026: уведомления на телефон — подписка уходит в аккаунт (app/push-subs); без разрешения Орион подсказывает включить
+            pg.route('**/functions/v1/orion-push', lambda route: route.fulfill(status=200, headers={'content-type': 'application/json', 'access-control-allow-origin': '*'}, body=json.dumps({'pub': 'BFYQuME9hn7VOtlUCyCLoctugRyAFldcLQMKpvbML5LDX65Qv0JPo0RoPcayQNf-WHZf-on_Bvfw6kgUpL3Feew'})))
+            pon = pg.evaluate("[MLX.pushOn(), typeof Notification!=='undefined'&&Notification.permission]")
+            tip = pg.evaluate("Mascot.debug.act('add_reminder', {text:'позвонить в банк', when: new Date(Date.now()+3*3600e3).toISOString().slice(0,16)})")
+            ps = pg.evaluate("""(async()=>{
+              try{Object.defineProperty(Notification,'permission',{configurable:true,get:()=>'granted'});}catch(e){}
+              const fake={endpoint:'https://push.example/abc',toJSON(){return{endpoint:this.endpoint,keys:{p256dh:'P',auth:'A'}}},unsubscribe:async()=>true};
+              let n=0;const pm={getSubscription:async()=>n?fake:null,subscribe:async()=>{n++;return fake;}};try{Object.defineProperty(navigator.serviceWorker,'getRegistration',{configurable:true,value:async()=>({pushManager:pm})});}catch(e){return ['nosw',String(e)];}
+              const ok=await Promise.race([window.mlPushSub(true),new Promise(r=>setTimeout(()=>r('timeout'),5000))]);
+              const db=await window.claude.use('db');const d=await db.doc('app/push-subs').get();
+              return [ok, d.exists?(d.data().items||[]).map(x=>x.endpoint+'|'+x.keys.auth):null];})()""")
+            pg.unroute('**/functions/v1/orion-push')
+            if 'Сигналы на телефоне' in rs[1] and 'Сигналы' not in tip and ps[0] is True and ps[1] == ['https://push.example/abc|A']: ok('Уведомления: подписка телефона сохраняется в аккаунте; без уведомлений Орион подсказывает их включить — не чаще раза в 6 часов')
+            else: fail('Уведомления: подписка', f'{pon} | {tip} | {ps}')
             pg.evaluate("document.querySelector('.or-cap') && document.querySelector('.or-cap').click()"); pg.unroute('**/functions/v1/orion-ask')
         scenario('Орион', {'session': True, 'docs': SEED}, s_mascot)
 

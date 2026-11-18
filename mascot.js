@@ -1029,7 +1029,9 @@
       if (!t) return 'О чём напомнить?';
       if (!isFinite(w) || w < Date.now() + 30e3) return 'Не понял, когда напомнить. Скажите, например: «напомни завтра в девять проверить портфель».';
       if (w > Date.now() + 366 * 864e5) return 'Так далеко вперёд не напоминаю — не больше чем на год.';
-      remAdd(t, w); logAct('Напоминание ' + whenW(w) + ': ' + t); return 'Напомню ' + whenW(w) + ': ' + t + '.';
+      remAdd(t, w); logAct('Напоминание ' + whenW(w) + ': ' + t);
+      let tip = ''; try { if (A.pushOn && !A.pushOn() && Date.now() - (ST.pushTip || 0) > 6 * 3600e3) { ST.pushTip = Date.now(); tip = ' Чтобы оно пришло и при закрытом приложении, включите в настройках «Сигналы на телефоне».'; } } catch (e) {}
+      return 'Напомню ' + whenW(w) + ': ' + t + '.' + tip;
     }
     if (name === 'record_purchase') {
       const sym = String(x.sym || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 12);
@@ -1360,6 +1362,7 @@
     ST.S = S; ST.D = D;
     if (!ST.memSynced && window.mlUser) memRestore();
     if (!ST.taskSynced && window.mlUser) taskRestore();
+    try { if (A.pushRefresh) A.pushRefresh(); } catch (e) {}
     if (!ST.remT) { ST.remT = setInterval(remTick, 20000); setTimeout(remTick, 4000); }
     const off = !!info.offline; if (off && !ST.offline) ST.offSince = now(); ST.offline = off;
     ST.pct = info.pct == null || !isFinite(info.pct) ? null : info.pct;

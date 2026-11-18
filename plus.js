@@ -426,13 +426,14 @@
     const keys = Object.keys(seen).sort((a, b) => seen[b] - seen[a]).slice(0, 40), keep = {}; for (const k of keys) keep[k] = seen[k]; xPatch({ seen: keep }); cfgPush(D); }
   async function notifToggle() {
     const sw = el('swNotif'); if (!sw) return; const was = !!xGet().notif;
-    if (was) { xPatch({ notif: false }); swSet('swNotif', false); play('tick'); cfgLast = ''; cfgPush(derive()); return; }
+    if (was) { xPatch({ notif: false }); swSet('swNotif', false); play('tick'); cfgLast = ''; cfgPush(derive()); try { if (window.mlPushSub) window.mlPushSub(false); } catch (e) {} return; }
     if (typeof Notification === 'undefined') { toast('Этот браузер не умеет показывать уведомления'); return; }
     let perm = Notification.permission; if (perm === 'default') { try { perm = await Notification.requestPermission(); } catch (e) { perm = 'denied'; } }
     if (perm !== 'granted') { toast('Уведомления запрещены в настройках телефона для этого приложения'); return; }
     xPatch({ notif: true }); swSet('swNotif', true); play('cash'); cfgLast = ''; cfgPush(derive());
     try { const reg = await navigator.serviceWorker.ready; if (reg.periodicSync) await reg.periodicSync.register('ml-check', { minInterval: 6 * 3600e3 }); } catch (e) {}
-    toast('Сигналы включены: ступени лестницы и цель BTC');
+    let push = false; try { push = window.mlPushSub ? await window.mlPushSub(true) : false; } catch (e) {}
+    toast(push ? 'Сигналы включены: ступени, цель BTC и напоминания Ориона' : 'Сигналы включены: ступени лестницы и цель BTC');
   }
 
   /* ================= события ================= */
@@ -591,15 +592,20 @@
     const tm = ms => { const d = new Date(ms); return dShort(d.toISOString()) + ', ' + d.getHours() + ':' + String(d.getMinutes()).padStart(2, '0'); };
     const R = T.rem().filter(x => !x.done).sort((a, b) => a.when - b.when), N = T.notes().slice().reverse(), L = T.log().slice().reverse().slice(0, 20);
     const row = (t, sub, x, id, lbl) => `<div class="row r3 static"><span class="col" style="grid-column:1/3"><span class="nm wrap">${esc(t)}</span><span class="sub">${esc(sub)}</span></span>${x ? `<button type="button" class="btn sm ghost" data-x="${x}" data-i="${esc(id)}" aria-label="${lbl}: ${esc(t)}">${lbl}</button>` : ''}</div>`;
-    const html = '<h4>Напоминания</h4>' + (R.length ? '<div class="list">' + R.map(x => row(x.t, T.when(x.when), 'remdel', x.id, 'Отменить')).join('') + '</div>' : '<p class="hint">Нет. Скажите Ориону: «напомни завтра в девять проверить портфель». Напоминание звучит, когда приложение открыто; пропущенное — при следующем открытии.</p>')
+    const html = '<h4>Напоминания</h4>' + (R.length ? '<div class="list">' + R.map(x => row(x.t, T.when(x.when), 'remdel', x.id, 'Отменить')).join('') + '</div>' : '<p class="hint">Нет. Скажите Ориону: «напомни завтра в девять проверить портфель».</p>')
       + '<h4>Заметки</h4>' + (N.length ? '<div class="list">' + N.map(x => row(x.t, 'записал ' + tm(x.at), 'notedel', x.id, 'Удалить')).join('') + '</div>' : '<p class="hint">Нет. Скажите: «запиши заметку: …».</p>')
       + '<h4>Журнал действий</h4>' + (L.length ? '<div class="list">' + L.map(x => row(x.t, tm(x.at) + ' · ' + x.how, '', '', '')).join('') + '</div>' : '<p class="hint">Пока пусто. Здесь видно всё, что Орион сделал по вашей просьбе.</p>')
+      + (X.pushOn() ? '<p class="hint">Уведомления на телефон включены — напоминание придёт и при закрытом приложении.</p>' : '<p class="hint">Напоминание звучит, когда приложение открыто. Чтобы оно приходило и при закрытом — включите «Сигналы на телефоне» в настройках.</p>')
       + '<p class="hint">Заметки и напоминания хранятся в телефоне, копия — в вашем аккаунте. Деньги Орион не двигает: покупку он только открывает заполненной — сохраняете вы сами.</p>';
     xOpen('ortasks', 'Дела Ориона', html);
     renderTasksRow();
   }
   function renderTasksRow() { const r = el('orTaskVal'), T = window.Mascot && window.Mascot.tasks; if (!r || !T) return; const a = T.rem().filter(x => !x.done).length, b = T.notes().length; r.textContent = a || b ? 'Напоминаний: ' + a + ' · заметок: ' + b : 'Заметки, напоминания, журнал действий'; }
   X.tasksRow = renderTasksRow;
+  /* уведомления включены — напоминания придут и при закрытом приложении; подписку обновляем раз за запуск */
+  X.pushOn = () => !!xGet().notif && typeof Notification !== 'undefined' && Notification.permission === 'granted';
+  let pushRef = false;
+  X.pushRefresh = () => { if (pushRef || !window.mlUser || !X.pushOn() || !window.mlPushSub) return; pushRef = true; window.mlPushSub(true).catch(() => {}); };
   /* переходы по голосу на экраны из этого файла */
   X.go = function (to) {
     const M = { plan: ['личный план', openPlan], learn: ['знания', () => openLearn()], alerts: ['оповещения', openAlerts], memory: ['память Ориона', openMem], tasks: ['дела Ориона', openTasks] }[to];

@@ -629,6 +629,32 @@
     } catch (e) { return null; } finally { clearTimeout(t); }
   };
 
+  /* уведомления на телефон (18.11.2026): подписка Web Push → копия в аккаунте (app/push-subs); рассылку по времени делает сервер orion-push.
+     Публичный ключ VAPID берём у сервера (закрытый остаётся там). on=false — отписаться. */
+  const vapidPub = async () => {
+    try { const v = localStorage.getItem('ml-vapid'); if (v) return v; } catch (e) {}
+    const c = client(); const ses = c ? (await c.auth.getSession()).data.session : null; if (!ses) return '';
+    const r = await fetch(CFG.supabaseUrl.replace(/\/$/, '') + '/functions/v1/orion-push', { method: 'POST', headers: { Authorization: 'Bearer ' + ses.access_token, apikey: CFG.supabaseKey, 'content-type': 'application/json' }, body: '{"op":"pub"}' });
+    const j = r.ok ? await r.json().catch(() => null) : null; const p = j && j.pub ? String(j.pub) : '';
+    if (p) try { localStorage.setItem('ml-vapid', p); } catch (e) {}
+    return p;
+  };
+  const u8 = s => { const t = s.replace(/-/g, '+').replace(/_/g, '/'); const r = atob(t + '==='.slice((t.length + 3) % 4)); return Uint8Array.from(r, c => c.charCodeAt(0)); };
+  window.mlPushSub = async (on) => {
+    try {
+      if (demo || !uid || !('serviceWorker' in navigator) || !('PushManager' in window)) return false;
+      const reg = await navigator.serviceWorker.getRegistration(); if (!reg || !reg.pushManager) return false; let sub = await reg.pushManager.getSubscription();
+      const ref = dbApi.doc('app/push-subs'), cur = await ref.get(), list = ((cur.exists && cur.data().items) || []).filter(x => x && x.endpoint);
+      if (on === false) { if (sub) { const e = sub.endpoint; try { await sub.unsubscribe(); } catch (x) {} await ref.set({ v: 1, at: Date.now(), items: list.filter(x => x.endpoint !== e) }); } return true; }
+      if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return false;
+      if (!sub) { const pk = await vapidPub(); if (!pk) return false; sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: u8(pk) }); }
+      const j = sub.toJSON(); if (!j || !j.endpoint || !j.keys) return false;
+      const was = list.find(x => x.endpoint === j.endpoint);
+      if (!was || !was.keys || was.keys.auth !== j.keys.auth || Date.now() - (was.at || 0) > 7 * 864e5) await ref.set({ v: 1, at: Date.now(), items: list.filter(x => x.endpoint !== j.endpoint).concat([{ endpoint: j.endpoint, keys: { p256dh: j.keys.p256dh, auth: j.keys.auth }, at: Date.now() }]).slice(-5) });
+      return true;
+    } catch (e) { return false; }
+  };
+
   /* Орион про рынок (11.11.2026): вопрос → функция orion-ask (новости + цены + Claude). уходят вопрос, начало разговора и портфель только долями в %, без сумм. null — ответить без сети */
   window.mlAsk = async (q, sym, extra, onPart) => {   /* onPart(кусок) — ответ потоком (18.11.2026): Орион начинает говорить, пока «мозг» дописывает остальное */
     const c = client(); if (!c || demo || !uid || navigator.onLine === false) return null;
