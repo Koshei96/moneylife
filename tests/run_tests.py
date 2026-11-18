@@ -158,30 +158,41 @@ def deletion_checks():
     else: fail('SQL: повторный запуск', 'нужен create or replace без drop')
 
 def backup_sql_checks():
-    """Ночной бэкап базы (И3): supabase/backup_docs.sql только добавляет своё и не трогает public.docs,
-    рядом лежит откат; на privacy.html и delete.html честно сказано про срок хранения копий (RU и UK)."""
+    """Ночной бэкап базы (И3): supabase/backup_docs.sql только добавляет своё в схеме moneylife_backup и не трогает
+    public.docs, очистка — отдельной задачей; рядом откат по именам; на privacy.html и delete.html — срок копий (RU и UK)."""
     q = ROOT / 'supabase' / 'backup_docs.sql'
     if not q.exists(): fail('backup_docs.sql', 'нет файла'); return
     sql = re.sub(r'\s+', ' ', re.sub(r'--[^\n]*', '', q.read_text(encoding='utf-8'))).lower()   # без комментариев
-    for name, cond in [('enable row level security', 'alter table backup.docs_snapshots enable row level security' in sql),
-                       ('security definer', 'security definer' in sql),
-                       ("set search_path = ''", "set search_path = ''" in sql),
-                       ('права anon и authenticated отозваны', 'revoke all on schema backup from public, anon, authenticated' in sql
-                            and 'revoke execute on function backup.snapshot_docs() from public, anon, authenticated' in sql),
-                       ('своя задача pg_cron по имени', "cron.schedule('moneylife-backup-docs', '17 0 * * *'" in sql)]:
+    S = 'moneylife_backup'
+    for name, cond in [('enable row level security', f'alter table {S}.docs_snapshots enable row level security' in sql),
+                       ('security definer', sql.count('security definer') == 2),
+                       ("set search_path = ''", sql.count("set search_path = ''") == 2),
+                       ('своя схема moneylife_backup; чужую с тем же именем не трогает',
+                            f'create schema {S};' in sql and 'create schema if not exists' not in sql and 'raise exception' in sql
+                            and not re.search(r'\bbackup\.', sql.replace(f'{S}.', ''))),
+                       ('права anon и authenticated отозваны', f'revoke all on schema {S} from public, anon, authenticated' in sql
+                            and f'revoke execute on function {S}.snapshot_docs() from public, anon, authenticated' in sql
+                            and f'revoke execute on function {S}.prune_docs_snapshots() from public, anon, authenticated' in sql),
+                       ('снимок и очистка — две свои задачи pg_cron', f"cron.schedule('moneylife-backup-docs', '17 0 * * *', $$select {S}.snapshot_docs()$$)" in sql
+                            and f"cron.schedule('moneylife-backup-docs-prune', '47 */6 * * *', $$select {S}.prune_docs_snapshots()$$)" in sql),
+                       ('порог очистки 5 суток 12 часов (копии живут < 7 дней)', "interval '5 days 12 hours'" in sql)]:
         ok(f'backup_docs.sql: {name}') if cond else fail(f'backup_docs.sql: {name}', 'не найдено')
-    bad = [x for x in ['drop table public', 'delete from public', 'update public', 'alter table public', 'truncate', 'drop schema public']
+    bad = [x for x in ['drop table public', 'delete from public', 'update public', 'alter table public', 'truncate', 'drop ']
            if x in sql]
     dels = re.findall(r'delete from ([\w.]+)', sql)
+    jobs = {"'moneylife-backup-docs'", "'moneylife-backup-docs-prune'"}
     unsched = re.findall(r"cron\.unschedule\(([^)]*)\)", sql)
-    if not bad and set(dels) <= {'backup.docs_snapshots'} and set(unsched) <= {"'moneylife-backup-docs'"}:
+    if not bad and set(dels) == {f'{S}.docs_snapshots'} and set(unsched) <= jobs:
         ok('backup_docs.sql: public.docs и чужие задачи pg_cron не меняются (удаляет только старые снимки)')
     else: fail('backup_docs.sql: только добавление', f'найдено {bad} delete {dels} unschedule {unsched}')
     r = ROOT / 'supabase' / 'backup_docs_rollback.sql'
     rs = re.sub(r'\s+', ' ', re.sub(r'--[^\n]*', '', r.read_text(encoding='utf-8'))).lower() if r.exists() else ''
-    if 'drop schema if exists backup cascade' in rs and 'public.' not in rs and set(re.findall(r"cron\.unschedule\(([^)]*)\)", rs)) == {"'moneylife-backup-docs'"}:
-        ok('backup_docs_rollback.sql: откат снимает свою задачу и схему backup, public не трогает')
-    else: fail('backup_docs_rollback.sql', 'нет файла или откат не тот')
+    drops = re.findall(r'drop (\w+) if exists ([\w.()]+)', rs)
+    want = [('function', f'{S}.snapshot_docs()'), ('function', f'{S}.prune_docs_snapshots()'), ('table', f'{S}.docs_snapshots'), ('schema', S)]
+    if (drops == want and len(re.findall(r'\bdrop\b', rs)) == 4 and 'cascade' not in rs and 'public.' not in rs
+            and set(re.findall(r"cron\.unschedule\(([^)]*)\)", rs)) == jobs):
+        ok('backup_docs_rollback.sql: откат по именам (задачи, функции, таблица, схема без cascade), public не трогает')
+    else: fail('backup_docs_rollback.sql', f'нет файла или откат не тот: {drops}')
     for page, words in [('privacy.html', {'ru': 'Резервные копии базы хранятся не дольше 7 дней', 'uk': 'Резервні копії бази зберігаються не довше 7 днів'}),
                         ('delete.html', {'ru': 'Резервные копии базы</b> (на случай сбоя) — хранятся не дольше 7 дней', 'uk': 'Резервні копії бази</b> (на випадок збою) — зберігаються не довше 7 днів'})]:
         arts = articles((ROOT / page).read_text(encoding='utf-8'))
