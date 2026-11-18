@@ -18,12 +18,22 @@
 | Активность | ![](screens/04-aktivnost-dark-390.webp) | ![](screens/04-aktivnost-light-390.webp) |
 | Новая запись («+» → «Купить») | ![](screens/05-novaya-zapis-dark-390.webp) | ![](screens/05-novaya-zapis-light-390.webp) |
 | Настройки | ![](screens/06-nastroyki-dark-390.webp) | ![](screens/06-nastroyki-light-390.webp) |
+| Ролик «MoneyLife за минуту» — обложка | ![](screens/07-rolik-oblozhka-dark-390.webp) | ![](screens/07-rolik-oblozhka-light-390.webp) |
+| Ролик — слайд с субтитрами | ![](screens/07-rolik-slayd-dark-390.webp) | ![](screens/07-rolik-slayd-light-390.webp) |
+| Знакомство (шаг 1 из 4) | ![](screens/08-znakomstvo-dark-390.webp) | ![](screens/08-znakomstvo-light-390.webp) |
+| Шторка монеты | ![](screens/09-moneta-dark-390.webp) | ![](screens/09-moneta-light-390.webp) |
+| Личный план (вопрос 1 из 8) | ![](screens/10-lichnyy-plan-dark-390.webp) | ![](screens/10-lichnyy-plan-light-390.webp) |
+| Знания | ![](screens/11-znaniya-dark-390.webp) | ![](screens/11-znaniya-light-390.webp) |
+| Достижения | ![](screens/12-dostizheniya-dark-390.webp) | ![](screens/12-dostizheniya-light-390.webp) |
+| Итог месяца (история) | ![](screens/13-itog-mesyaca-dark-390.webp) | ![](screens/13-itog-mesyaca-light-390.webp) |
+| Орион говорит — субтитры | ![](screens/14-orion-subtitry-dark-390.webp) | ![](screens/14-orion-subtitry-light-390.webp) |
+| Украинский язык (Главная) | ![](screens/15-ukrainskiy-dark-390.webp) | ![](screens/15-ukrainskiy-light-390.webp) |
 
 Целиком (с прокруткой): [Главная](screens/01-glavnaya-celikom-dark-390.webp) · [Монеты](screens/02-monety-celikom-dark-390.webp) ·
 [Стратегия](screens/03-strategiya-celikom-dark-390.webp) · [Активность](screens/04-aktivnost-celikom-dark-390.webp).
 
-Ещё не в наборе (добавить в `tools/screens.py` на Этапе 2): знакомство, ролик «MoneyLife за минуту», шторка монеты,
-«Сегодня», «Личный план», «Знания», «Достижения», «Итог месяца», ответ Ориона с субтитрами, украинский язык.
+Экраны 07–15 снимаются только на 390 px (обе темы). Ролик и знакомство — на пустом аккаунте имитации, остальное — на демо.
+Ещё не в наборе: окна Ориона («Дела Ориона», «Память»), «Из чего итог», формы «Продать / Пополнить», экран «Новый пароль».
 
 ## 2. Цвета
 
@@ -96,3 +106,5 @@
 - Главная в демо: под прибылью ~70 px пустоты — графика ещё нет (макет `mockups/m5-demo-grafik.webp`).
 - Логотип в шапке — с градиентом (фирменный знак, решает владелец).
 - «Монеты»: в колонке «Цена · 24ч» под ценой прочерк «—» при наличии цен — проверить.
+- Шторка монеты: у лицевой карточки BTC оранжевое свечение — против правила «без свечений» (п. 6). Добавлено в BACKLOG №14.
+- «Личный план» и подсказки — на «ты» («Какой у тебя доход?»), Орион — на «вы». Ждёт решения (BACKLOG №11).
