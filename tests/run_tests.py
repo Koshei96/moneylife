@@ -2127,9 +2127,15 @@ def run_browser():
               out.d14=[s14.done,V(s14,'2026-11-23',true).mode,V(s14,'2026-11-24',true).mode,V(s14,'2026-12-30',true).mode];
               out.junk=[V('мусор','2026-11-10',true).st.n,V({v:1,n:99,read:'да'},'2026-11-10',true).st.n,V({v:2,n:5},'2026-11-10',true).st.n];
               out.twice=R(R({v:1,n:2,read:false},'2026-11-10'),'2026-11-10').n;
+              /* 18.11: новый телефон, а записи уже есть — «Первая запись» засчитана, начинаем с карточки 2 */
+              v=V(null,'2026-11-10',true,true);out.rec=[v.mode,v.st.n,v.st.start,v.st.last];
+              st=R(v.st,'2026-11-10');out.recNext=[V(st,'2026-11-10',true,true).mode,V(st,'2026-11-11',true,true).st.n];
+              out.recOld=V(null,'2026-11-10',false,true).mode;
+              out.recKeep=V({v:1,n:1,read:false,last:'2026-11-09',start:'2026-11-09'},'2026-11-10',true,true).st.n;   /* начатое — не трогаем */
               return out;}""")
             exp = {'first': ['card', 1, '2026-11-10'], 'same': 'read', 'next': ['card', 2], 'skip': ['card', 3], 'back': 'read', 'fwd': ['card', 3],
-                   'unread': 4, 'old': 'invite', 'oldHid': 'off', 'd14': [True, 'done', 'gone', 'gone'], 'junk': [1, 1, 1], 'twice': 2}
+                   'unread': 4, 'old': 'invite', 'oldHid': 'off', 'd14': [True, 'done', 'gone', 'gone'], 'junk': [1, 1, 1], 'twice': 2,
+                   'rec': ['card', 2, '2026-11-10', '2026-11-10'], 'recNext': ['read', 3], 'recOld': 'invite', 'recKeep': 1}
             for k, e in exp.items():
                 ok(f'14 дней, логика: {k} = {e}') if r[k] == e else fail(f'14 дней, логика: {k}', f'{r[k]} вместо {e}')
             # местный день — по часам телефона, не по UTC; переход на зимнее время 25.10 не даёт двух дней
@@ -2251,7 +2257,44 @@ def run_browser():
             gos = sorted({t[5] for t in tx if t[5]})
             miss = pg.evaluate("g=>g.filter(k=>typeof D14_GO[k]!=='function')", gos)
             ok(f'14 дней: у всех кнопок есть существующий экран ({len(gos)} действий)') if not miss else fail('14 дней: кнопки без экрана', str(miss))
-        scenario('14 дней: новичок', {'session': True, 'docs': SEED}, s_d14_new, clock='2026-11-10T08:00:00Z')
+        NEWB = [{'col': 'app', 'id': 'settings', 'data': dict(SEED[0]['data'], onboardedAt='2026-11-10T07:00:00.000Z')}]   # знакомство сегодня, записей нет
+        scenario('14 дней: новичок', {'session': True, 'docs': NEWB}, s_d14_new, clock='2026-11-10T08:00:00Z')
+
+        # И2б (охота 17.11 №4). Новый телефон (ключа ml-14d нет), а записи в базе уже есть — карточка не зовёт «Первая запись»
+        REC = [{'col': 'app', 'id': 'settings', 'data': dict(SEED[0]['data'], onboardedAt='2026-11-08T10:00:00.000Z')}] + SEED[1:]
+        def s_d14_rec(pg, n):
+            wait_app(pg); d14_wait(pg, 'card', 2)
+            st = d14(pg)
+            if 'День 2 из 14' in st['txt'] and 'Первая запись' not in st['txt'] and 'Твои доли' in st['txt']: ok('14 дней, новый телефон с записями: сразу «День 2 из 14», без «Первая запись»')
+            else: fail('14 дней: новый телефон с записями', st['txt'][:160])
+            segs = pg.evaluate("[...document.querySelectorAll('#d14 .d14-seg i')].slice(0,2).map(i=>i.className)")
+            ok('14 дней: шаг 1 отмечен выполненным') if segs == ['on', 'cur'] else fail('14 дней: отметки шагов', str(segs))
+            saved = pg.evaluate(f"JSON.parse(localStorage.getItem({D14K})||'null')")
+            if saved and saved.get('n') == 2 and saved.get('start') == '2026-11-10': ok('14 дней: на телефоне сохранено «карточка 2», старт сегодня')
+            else: fail('14 дней: сохранённое', str(saved))
+            r = pg.evaluate("(()=>{const t=S.tx,o=S.settings.onboardedAt;S.tx=[{type:'start',ts:o,symbol:'BTC',qty:1}];const a=d14Rec();S.tx=[];const b=d14Rec();S.tx=t;return [a,b,d14Rec()]})()")
+            ok('14 дней: остатки из знакомства — не «свои записи», покупки — да') if r == [False, False, True] else fail('14 дней: d14Rec', str(r))
+            pg.evaluate("document.getElementById('d14').scrollIntoView({block:'center'})"); pg.wait_for_timeout(300)
+            for th in ('dark', 'light'):
+                pg.evaluate(f"document.documentElement.setAttribute('data-theme','{th}')"); pg.wait_for_timeout(250)
+                pg.screenshot(path=str(OUT / f'fix-d14-{th}.png'))
+            pg.evaluate("document.documentElement.setAttribute('data-theme','dark');localStorage.setItem('ml-lang','uk'); location.reload()"); wait_app(pg); d14_wait(pg, 'card', 2)
+            tu = d14(pg)['txt']
+            if 'День 2 з 14' in tu and 'Перший запис' not in tu and not re.search('[ыэъё]', tu): ok('14 дней, по-украински: новый телефон с записями — «День 2 з 14»')
+            else: fail('14 дней: новый телефон, украинский', tu[:160])
+            pg.evaluate("document.getElementById('d14').scrollIntoView({block:'center'})"); pg.wait_for_timeout(300)
+            pg.screenshot(path=str(OUT / 'fix-d14-uk.png'))
+            pg.evaluate("localStorage.setItem('ml-lang','ru')")
+        scenario('14 дней: новый телефон, есть записи', {'session': True, 'docs': REC}, s_d14_rec, clock='2026-11-10T08:00:00Z')
+
+        # И2в. давний пользователь (знакомство 21 день назад) на новом телефоне — приглашение, «Начать» → карточка 2
+        def s_d14_vet(pg, n):
+            wait_app(pg); d14_wait(pg, 'invite')
+            st = d14(pg)
+            ok('14 дней: давний пользователь на новом телефоне — приглашение, не «День 1»') if 'Первая запись' not in st['txt'] and 'Начать' in st['txt'] else fail('14 дней: давний на новом телефоне', st['txt'][:160])
+            pg.click('#d14 [data-d14="start"]'); d14_wait(pg, 'card', 2)
+            ok('14 дней: давний с записями — «Начать» → карточка 2') if 'Первая запись' not in d14(pg)['txt'] else fail('14 дней: «Начать» с записями', d14(pg)['txt'][:120])
+        scenario('14 дней: давний на новом телефоне', {'session': True, 'docs': SEED}, s_d14_vet, clock='2026-11-10T08:00:00Z')
 
         # И3. давний аккаунт (нет onboardedAt): строка-приглашение, «Скрыть» держится после перезапуска, переключатель возвращает
         OLD = [{'col': 'app', 'id': 'settings', 'data': {'split': {'BTC': 50, 'ETH': 30, 'ALT': 20}, 'capPct': 20}}] + SEED[1:]
@@ -2273,15 +2316,13 @@ def run_browser():
             else: fail('14 дней: переключатель', pg.get_attribute('#swD14', 'aria-checked'))
             pg.click('#swD14'); pg.wait_for_timeout(200); pg.click('#setSheet [data-close]'); pg.wait_for_timeout(500)
             d14_wait(pg, 'invite'); ok('14 дней: переключатель вернул приглашение')
-            pg.click('#d14 [data-d14="start"]'); d14_wait(pg, 'card', 1); ok('14 дней: «Начать» → карточка 1')
-            pg.click('#d14 [data-d14="go"]'); pg.wait_for_selector('#actSheet.open', timeout=4000)
-            ok('14 дней: «Записать покупку» открывает форму покупки') if pg.is_visible('#buyOne') or pg.is_visible('#buyDca') else fail('14 дней: «Записать покупку»', 'нет формы покупки')
-            pg.click('#actSheet [data-close]'); pg.wait_for_timeout(400)
+            pg.click('#d14 [data-d14="start"]'); d14_wait(pg, 'card', 2); ok('14 дней: «Начать» при записях → карточка 2 (первая запись уже есть)')
+            pg.click('#d14 [data-d14="ok"]'); d14_wait(pg, 'read', 2)
             # крестик в карточке — тоже «Скрыть»; номер сохраняется
-            pg.clock.set_system_time('2026-11-11T09:00:00Z'); d14_tick(pg); d14_wait(pg, 'card', 2)
+            pg.clock.set_system_time('2026-11-11T09:00:00Z'); d14_tick(pg); d14_wait(pg, 'card', 3)
             pg.click('#d14 [data-d14="x"]'); pg.wait_for_timeout(300)
             hid = not d14(pg)['vis']
-            pg.evaluate("d14Hide(false)"); d14_wait(pg, 'card', 2)
+            pg.evaluate("d14Hide(false)"); d14_wait(pg, 'card', 3)
             ok('14 дней: крестик скрывает, возврат — с тем же номером') if hid else fail('14 дней: крестик', 'не скрыл')
             # сломанные данные в ключе — начать сначала (давний: снова приглашение), приложение живо
             pg.evaluate(f"localStorage.setItem({D14K},'{{мусор');renderD14()"); d14_wait(pg, 'invite')
@@ -2297,6 +2338,9 @@ def run_browser():
             ok('14 дней: пока открыто знакомство — карточки нет') if not d14(pg)['vis'] else fail('14 дней: при знакомстве', 'карточка видна')
             pg.click('#obSkip'); pg.wait_for_selector('#ob', state='hidden', timeout=8000)
             d14_wait(pg, 'card', 1, 8000); ok('14 дней: после знакомства («Пропустить») — карточка 1')
+            pg.click('#d14 [data-d14="go"]'); pg.wait_for_selector('#actSheet.open', timeout=4000)
+            ok('14 дней: «Записать покупку» открывает форму покупки') if pg.is_visible('#buyOne') or pg.is_visible('#buyDca') else fail('14 дней: «Записать покупку»', 'нет формы покупки')
+            pg.click('#actSheet [data-close]'); pg.wait_for_timeout(400)
         scenario('14 дней: после знакомства', {'session': True, 'docs': []}, s_d14_ob)
 
         # --- MoneyLife 3.0 (10.11.2026): знак, «Сегодня» со шкалой, «Из чего итог», личный план и знания, цена покупки вручную,
@@ -2958,6 +3002,9 @@ def run_browser():
         GRAPH = """()=>{const hue=""" + HUE + """,t=document.querySelector('.top'),a=getComputedStyle(t,'::after'),ch=document.querySelector('#d14 .d14-h .chip'),cc=ch&&getComputedStyle(ch);
             return {sc:document.body.classList.contains('scrolled'),sp:parseFloat(t.style.getPropertyValue('--sp')||0),tr:a.transform,op:parseFloat(a.opacity),img:a.backgroundImage,bar:hue(a.backgroundColor),
               chip:ch&&ch.textContent.trim(),cimg:cc&&cc.backgroundImage,cbg:cc&&hue(cc.backgroundColor),cfg:cc&&hue(cc.color),csh:cc&&cc.boxShadow}}"""
+        # знакомство «только что»: давнему аккаунту без ключа ml-14d карточка «14 дней» показывает приглашение без метки «День N»
+        import time as _t
+        SEED_D14 = [{'col': 'app', 'id': 'settings', 'data': dict(SEED[0]['data'], onboardedAt=_t.strftime('%Y-%m-%dT%H:%M:%S.000Z', _t.gmtime()))}] + SEED[1:]
         def violet(x): return x['a'] > 0 and x['s'] > 0.2 and 235 <= x['h'] <= 345
         for th in ('dark', 'light'):
             def s_graphite(pg, n, th=th):
@@ -2975,7 +3022,7 @@ def run_browser():
                 pg.evaluate("scrollTo(0,0)"); pg.wait_for_timeout(500)
                 r0 = pg.evaluate(GRAPH)
                 ok(f'«Графит» ({th}): вверху страницы полоски нет') if not r0['sc'] and r0['op'] < 0.05 else fail(f'«Графит» ({th}): полоска вверху', str(r0))
-            scenario(f'Графит — шапка и «14 дней» ({th})', {'session': True, 'docs': SEED}, s_graphite, dsf=1, theme=th)
+            scenario(f'Графит — шапка и «14 дней» ({th})', {'session': True, 'docs': SEED_D14}, s_graphite, dsf=1, theme=th)
 
         # 15.11 «Графит», остатки: шаг «14 дней», полоски и отметки — ровный цвет без градиента (вычисленный background-image);
         #     метки .chip.acc («твой», «советую») — нейтральный фон, акцент только текстом
@@ -3010,7 +3057,7 @@ def run_browser():
                 for tab in ('strategy', 'coins'):
                     pg.click(f'nav.tabs .tab[data-tab="{tab}"]'); pg.wait_for_timeout(900)
                     shot(pg, f'graphite-rest-{tab}-{th}')
-            scenario(f'Графит — остатки градиента ({th})', {'session': True, 'docs': SEED + [{'col': 'app', 'id': 'cycle', 'data': CYC}]}, s_graphite_rest, theme=th)
+            scenario(f'Графит — остатки градиента ({th})', {'session': True, 'docs': SEED_D14 + [{'col': 'app', 'id': 'cycle', 'data': CYC}]}, s_graphite_rest, theme=th)
             def s_graphite_ob(pg, n, th=th):
                 pg.wait_for_selector('#ob', state='visible', timeout=10000); pg.wait_for_timeout(500)
                 pg.click('#obNext'); pg.wait_for_timeout(500)
