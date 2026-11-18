@@ -1583,6 +1583,13 @@ def run_browser():
             pw = pg.evaluate("[Mascot.debug.priceW(64149), Mascot.debug.priceW(110000), Mascot.debug.priceW(2501.4), Mascot.debug.figs('Биткоин — 64 тысячи 149 долларов.').map(x=>x.t), Mascot.debug.spoken('Биткоин — 64 тысячи 149 долларов.')]")
             if pw[0] == '64 тысячи 149 долларов' and pw[1] == '110 тысяч долларов' and pw[2] == '2 тысячи 501 доллар' and pw[3] == ['64 тысячи 149 долларов'] and 'шестьдесят четыре тысячи сто сорок девять долларов' in pw[4]: ok('Орион: цена монеты — до доллара («64 тысячи 149 долларов»), плашка — целиком')
             else: fail('Орион: точная цена', str(pw))
+            # 18.11.2026 (BACKLOG №7): «поставь оповещение DOGE по 12 центов» — «0,12 доллара», а не «0 долларов»; крупные цены — как раньше
+            al = pg.evaluate("""(()=>{const o=MLX.addAlert,got=[];MLX.addAlert=(s,v)=>{got.push(s+':'+v);return {id:'t'+got.length,sym:s,price:v,dir:'up'};};
+              try{const D=Mascot.debug;return [D.reply('поставь оповещение DOGE по 12 центов'), D.act('set_price_alert',{sym:'DOGE',price:0.12}), D.act('set_price_alert',{sym:'BTC',price:64149}), D.act('set_price_alert',{sym:'XRP',price:5}), D.act('set_price_alert',{sym:'XRP',price:2.5}), D.reply('сообщи, когда биткоин будет 12 процентов'), got];}finally{MLX.addAlert=o;}})()""")
+            if ('до отметки 0,12 доллара' in al[0] and al[1] == 'Поставил оповещение: DOGE, 0,12 доллара.' and al[2] == 'Поставил оповещение: BTC, 64 тысячи 149 долларов.'
+                    and al[3] == 'Поставил оповещение: XRP, 5 долларов.' and al[4] == 'Поставил оповещение: XRP, 2,5 доллара.' and al[6][:2] == ['DOGE:0.12', 'DOGE:0.12'] and 'BTC:64149' in al[6] and not any(x.startswith('BTC:0.12') for x in al[6])):
+                ok('Орион: оповещение «DOGE по 12 центов» — ставит 0,12 и говорит «0,12 доллара»; BTC 64149 — «64 тысячи 149 долларов»')
+            else: fail('Орион: цена в ответе об оповещении', str(al))
             fg = pg.evaluate("Mascot.debug.figs('Биткоин — 110 тысяч долларов, за сутки плюс 2 процента. Портфель минус 3%.')")
             if [x['t'] for x in fg] == ['110 тысяч долларов', 'плюс 2 процента', 'минус 3%'] and fg[1]['c'] == 'up' and fg[2]['c'] == 'dn': ok('Орион: цифры из ответа — плашками под текстом (рост зелёным, падение красным)')
             else: fail('Орион: плашки с цифрами', str(fg))

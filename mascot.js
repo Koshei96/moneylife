@@ -885,10 +885,10 @@
     /* «63.000» / «63,000» — разделитель тысяч, если после точки ровно три цифры и целая часть не ноль */
     let alt = null;
     t = t.replace(/\b([1-9]\d{0,2})[.,](\d{3})(?![\d.,])/g, (m, a, b) => { alt = parseFloat(a + '.' + b); return a + b; });
-    const m = t.match(/(\d+(?:[.,]\d+)?)\s*(тысяч[а-я]*|тыс\.?|к(?![а-яё])|k(?![a-z])|миллион[а-я]*|млн\.?)?/);
+    const m = t.match(/(\d+(?:[.,]\d+)?)\s*(тысяч[а-я]*|тыс\.?|к(?![а-яё])|k(?![a-z])|миллион[а-я]*|млн\.?|цент[а-я]*)?/);   /* «по 12 центов» — 0,12 доллара (BACKLOG №7) */
     if (!m) return null;
     let v = parseFloat(m[1].replace(',', '.')); if (!isFinite(v)) return null;
-    if (m[2]) v *= /милл|млн/.test(m[2]) ? 1e6 : 1e3;
+    if (m[2]) v = /цент/.test(m[2]) ? v / 100 : v * (/милл|млн/.test(m[2]) ? 1e6 : 1e3);
     /* сверка с ценой монеты: «биткоин будет 63» почти наверняка значит 63 тысячи; «1.250» у монеты по $1,2 — это 1,25 */
     const p = sym ? coinPrice(sym) : 0;
     if (p > 0) {
@@ -901,7 +901,7 @@
   }
   const qtyW = v => (+v).toLocaleString(LOC, { maximumFractionDigits: v >= 100 ? 0 : v >= 1 ? 3 : 6 });
   function coinPrice(sym) { const S = ST.S || {}, D = ST.D || {}, lv = S.live || {}; return +(lv.prices && lv.prices[sym]) || +(D.prices && D.prices[sym]) || 0; }
-  function priceW(v) { return v >= 10 ? moneyW(v, true) : (v >= 1 ? String(+v.toFixed(2)).replace('.', ',') : String(+v.toPrecision(3)).replace('.', ',')) + ' доллара'; }
+  function priceW(v) { return v >= 10 || (v >= 1 && +v.toFixed(2) % 1 === 0) ? moneyW(v, true) : (v >= 1 ? String(+v.toFixed(2)).replace('.', ',') : String(+v.toPrecision(3)).replace('.', ',')) + ' доллара'; }
   /* просьба поставить оповещение о цене — любыми словами: «сообщи», «напомни», «поставь уведомление», «оповещение», «сигнал» (12.11.2026) */
   function alertQ(t) { return /(сообщи|сповищ|нагадув|скажи,? когда|оповест|оповещ|уведом|напомни|напомин|предупреди|дай знать|сигнал|алерт|будильник)/.test(t); }
   function reply(q) {
@@ -1136,7 +1136,7 @@
       if (!sym || !(price > 0)) return 'Для оповещения нужна монета и цена.';
       let r = null; try { r = A.addAlert ? A.addAlert(sym, price) : null; } catch (e) { r = null; }
       if (!r) return 'Не получилось поставить оповещение.';
-      logAct('Оповещение: ' + sym + ' — $' + price); return typeof r === 'string' ? r : 'Поставил оповещение: ' + sym + ', ' + Math.round(price) + ' долларов.';
+      logAct('Оповещение: ' + sym + ' — $' + price); return typeof r === 'string' ? r : 'Поставил оповещение: ' + sym + ', ' + priceW(price) + '.';   /* «0,12 доллара», а не «0 долларов» (BACKLOG №7) */
     }
     return '';
   }
