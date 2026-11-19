@@ -1548,6 +1548,25 @@ def run_browser():
                     and sw['rem'] == ['Не нашёл напоминание про план.', True]):
                 ok('Орион: короткие слова — целиком: «про долг» не снимает заметку про доллары, «про план» — про платёж, «банк» — не «банан», «газ» — не «газета»; «долг» находит «долги»')
             else: fail('Орион: удаление по короткому слову', str(sw))
+            # ревью Глеба (PR №12, второй круг): после основы длинного слова — только окончание; «почти», «долго» — никогда не совпадение
+            ln = pg.evaluate("""(async()=>{const M=Mascot.debug,T=Mascot.tasks,said=()=>M.state().said,keep=new Set(T.notes().map(x=>x.id)),keepR=new Set(T.rem().map(x=>x.id)),out={neg:{},pos:{}};
+              const NEG=[['почту','почти закончил отчёт'],['карты','купить картошку'],['долги','долгосрочный план'],['банки','заказать банкет'],['налог','наложенный платёж'],['долг','долго ждал перевод']];
+              for(const [,n] of NEG) await M.ask('запиши заметку: '+n);
+              const n0=T.notes().length;
+              for(const [w] of NEG){await M.ask('удали заметку про '+w); out.neg[w]=[said(), T.notes().length===n0];}
+              const w=h=>new Date(Date.now()+h*3600e3).toISOString().slice(0,16), r0=T.rem().filter(x=>!x.done).length;
+              M.act('add_reminder',{text:'составить долгосрочный план',when:w(5)}); await M.ask('отмени напоминание про долги'); out.rem=[said(), T.rem().filter(x=>!x.done).length===r0+1];
+              T.notes().filter(x=>!keep.has(x.id)).forEach(x=>T.delNote(x.id));
+              const POS=[['налоги','заплатить налогов'],['налоги','налоги до 1 мая'],['биржу','проверить комиссию на бирже'],['карты','заблокировать карту monobank'],['долг','вернуть долги'],['почту','сходить на почту']];
+              for(const [q,n] of POS){await M.ask('запиши заметку: '+n); const c=T.notes().length; await M.ask('удали заметку про '+q); out.pos[q+'|'+n]=[said(), T.notes().length===c-1 && !T.notes().some(x=>!keep.has(x.id)&&x.t===n)];}
+              M.act('add_reminder',{text:'зайти на биржу',when:w(6)}); const r1=T.rem().filter(x=>!x.done).length; await M.ask('отмени напоминание про биржу'); out.rem2=[said(), T.rem().filter(x=>!x.done).length===r1-1];
+              T.notes().filter(x=>!keep.has(x.id)).forEach(x=>T.delNote(x.id)); T.rem().filter(x=>!keepR.has(x.id)).forEach(x=>T.delRem(x.id)); return out;})()""")
+            NEG = ['почту', 'карты', 'долги', 'банки', 'налог', 'долг']
+            if (all(ln['neg'].get(k) == [f'Не нашёл заметку про {k}.', True] for k in NEG) and ln['rem'] == ['Не нашёл напоминание про долги.', True]
+                    and len(ln['pos']) == 6 and all(v == ['Удалил: ' + k.split('|')[1] + '.', True] for k, v in ln['pos'].items())
+                    and ln['rem2'] == ['Отменил напоминание: зайти на биржу.', True]):
+                ok('Орион: «про почту» не снимает «почти…», «карты» — «картошку», «долги» — «долгосрочный», «банки» — «банкет», «налог» — «наложенный», «долг» — «долго»; «налоги» — «налогов», «биржу» — «на бирже», «карты» — «карту»')
+            else: fail('Орион: удаление по длинному слову', str(ln))
             # 18.11.2026 (этап 5): утренний брифинг, антипаника, оповещения о цене через сервер
             mb = pg.evaluate("""(()=>{const D=Mascot.debug.state&&window.MSC&&MSC.last?null:null;
               const tot=(window.derive?derive():{}).total||0, inv=(window.derive?derive():{}).invPriced||0;
