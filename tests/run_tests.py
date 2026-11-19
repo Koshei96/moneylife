@@ -1567,6 +1567,25 @@ def run_browser():
                     and ln['rem2'] == ['Отменил напоминание: зайти на биржу.', True]):
                 ok('Орион: «про почту» не снимает «почти…», «карты» — «картошку», «долги» — «долгосрочный», «банки» — «банкет», «налог» — «наложенный», «долг» — «долго»; «налоги» — «налогов», «биржу» — «на бирже», «карты» — «карту»')
             else: fail('Орион: удаление по длинному слову', str(ln))
+            # ревью Глеба (PR №12, третий круг): после основы — только окончание существительного (прилагательное — лишь через «-ов/-ев»); «стало» — не «сталь»; «про» без слова — переспрос
+            l3 = pg.evaluate("""(async()=>{const M=Mascot.debug,T=Mascot.tasks,said=()=>M.state().said,keep=new Set(T.notes().map(x=>x.id)),keepR=new Set(T.rem().map(x=>x.id)),out={neg:{},pos:{}};
+              const NEG=[['долг','долгий звонок брокеру'],['долги','долгая очередь в банке'],['долг','долгое ожидание вывода'],['газ','постричь газон'],['дом','продлить домен'],['сало','записаться в салон'],['рис','снизить риск портфеля'],['сталь','стало лучше']];
+              for(const [,n] of NEG) await M.ask('запиши заметку: '+n);
+              const n0=T.notes().length;
+              for(const [q,n] of NEG){await M.ask('удали заметку про '+q); out.neg[q+'|'+n]=[said(), T.notes().length===n0];}
+              await M.ask('удали заметку про'); out.empty=[said(), T.notes().length===n0];
+              const w=h=>new Date(Date.now()+h*3600e3).toISOString().slice(0,16), r0=T.rem().filter(x=>!x.done).length;
+              M.act('add_reminder',{text:'долгий звонок брокеру',when:w(5)}); await M.ask('отмени напоминание про долги'); out.rem=[said(), T.rem().filter(x=>!x.done).length===r0+1];
+              await M.ask('отмени напоминание про'); out.remEmpty=[said(), T.rem().filter(x=>!x.done).length===r0+1];
+              T.notes().filter(x=>!keep.has(x.id)).forEach(x=>T.delNote(x.id));
+              const POS=[['газ','оплатить газ'],['долги','вернуть долги'],['налоги','заплатить налогов'],['налоги','сверить налоговую декларацию'],['биржу','проверить комиссию на бирже'],['карты','заблокировать карту monobank'],['почту','сходить на почту']];
+              for(const [q,n] of POS){await M.ask('запиши заметку: '+n); const c=T.notes().length; await M.ask('удали заметку про '+q); out.pos[q+'|'+n]=[said(), T.notes().length===c-1 && !T.notes().some(x=>!keep.has(x.id)&&x.t===n)];}
+              T.notes().filter(x=>!keep.has(x.id)).forEach(x=>T.delNote(x.id)); T.rem().filter(x=>!keepR.has(x.id)).forEach(x=>T.delRem(x.id)); return out;})()""")
+            if (len(l3['neg']) == 8 and all(v == [f"Не нашёл заметку про {k.split('|')[0]}.", True] for k, v in l3['neg'].items())
+                    and l3['empty'] == ['Про что удалить заметку?', True] and l3['rem'] == ['Не нашёл напоминание про долги.', True] and l3['remEmpty'] == ['Про что отменить напоминание?', True]
+                    and len(l3['pos']) == 7 and all(v == ['Удалил: ' + k.split('|')[1] + '.', True] for k, v in l3['pos'].items())):
+                ok('Орион: «долг» не снимает «долгий/долгая/долгое…», «газ» — «газон», «дом» — «домен», «сало» — «салон», «рис» — «риск», «сталь» — «стало»; «удали заметку про» без слова — переспрос, ничего не удалено; «газ» находит «оплатить газ»')
+            else: fail('Орион: удаление по теме — окончания', str(l3))
             # 18.11.2026 (этап 5): утренний брифинг, антипаника, оповещения о цене через сервер
             mb = pg.evaluate("""(()=>{const D=Mascot.debug.state&&window.MSC&&MSC.last?null:null;
               const tot=(window.derive?derive():{}).total||0, inv=(window.derive?derive():{}).invPriced||0;
@@ -1749,6 +1768,9 @@ def run_browser():
             ux = pg.evaluate(f"['Не нашёл заметку про отпуск.', 'Не нашёл напоминание про биржу.', 'Отменил напоминание: x.'].map(t=>{M}.lx(t))")
             if ux == ['Не знайшов нотатку про відпустку.', 'Не знайшов нагадування про біржу.', 'Скасував нагадування: x.'] or (all('знайшов' in x or 'Скасував' in x for x in ux) and not re.search('[ыэъё]', ''.join(ux))): ok('Орион по-украински: «Не знайшов нотатку / нагадування про …», «Скасував нагадування»')
             else: fail('Орион по-украински: удаление по теме', str(ux))
+            ux2 = pg.evaluate(f"['Про что удалить заметку?', 'Про что отменить напоминание?'].map(t=>{M}.lx(t))")
+            if ux2 == ['Про що видалити нотатку?', 'Про що скасувати нагадування?']: ok('Орион по-украински: «Про що видалити нотатку?», «Про що скасувати нагадування?»')
+            else: fail('Орион по-украински: переспрос «про що»', str(ux2))
             # 18.11.2026 (BACKLOG №2): «Справи Оріона» — текст, который записал человек, словарь перевода не переписывает
             pg.evaluate(f"{M}.act('add_note', {{text: 'Купить BTC після зарплати'}}); {M}.act('add_reminder', {{text: 'Перевірити портфель и купить эфир', when: new Date(Date.now()+5*3600e3).toISOString().slice(0,16)}})")
             pg.evaluate("closeSheets(); MLX.go('tasks')"); pg.wait_for_timeout(900)
