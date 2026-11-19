@@ -5,7 +5,8 @@
   1. Статика: синтаксис всех JS (файлы и встроенные скрипты index.html), валидность JSON,
      манифест PWA (id, категория, иконки any/maskable, ярлыки), шаблон assetlinks.json,
      что все файлы из списка SHELL в sw.js существуют; страница удаления аккаунта delete.html
-     (RU/UK, ссылка из privacy.html) и SQL-функция supabase/delete_my_account.sql;
+     (RU/UK, ссылка из privacy.html) и SQL-функция supabase/delete_my_account.sql; ночной бэкап supabase/backup_docs.sql
+     (только добавление, RLS, откат рядом, срок копий 7 дней на privacy.html/delete.html);
      публичные страницы: почта поддержки ссылкой mailto, нет заполнителей и TODO, а тексты про кнопку
      «Удалить аккаунт» соответствуют флагу accountDelete в config.js (выключена → «появится»).
   2. Приложение в настоящем браузере (Chromium, экран телефона 390x844) без интернета:
@@ -65,6 +66,7 @@ def static_checks():
     else: fail('sw.js: кэш переходов', 'страницы кладутся в кэш под именем index.html')
     manifest_checks(html)
     deletion_checks()
+    backup_sql_checks()
     signal_checks()
     sw_nav_checks()
 
@@ -154,6 +156,48 @@ def deletion_checks():
     else: fail('SQL: права', f'grant → {grants}')
     if 'create or replace function' in sql and 'drop ' not in sql: ok('SQL: повторный запуск файла безопасен (create or replace, без drop)')
     else: fail('SQL: повторный запуск', 'нужен create or replace без drop')
+
+def backup_sql_checks():
+    """Ночной бэкап базы (И3): supabase/backup_docs.sql только добавляет своё в схеме moneylife_backup и не трогает
+    public.docs, очистка — отдельной задачей; рядом откат по именам; на privacy.html и delete.html — срок копий (RU и UK)."""
+    q = ROOT / 'supabase' / 'backup_docs.sql'
+    if not q.exists(): fail('backup_docs.sql', 'нет файла'); return
+    sql = re.sub(r'\s+', ' ', re.sub(r'--[^\n]*', '', q.read_text(encoding='utf-8'))).lower()   # без комментариев
+    S = 'moneylife_backup'
+    for name, cond in [('enable row level security', f'alter table {S}.docs_snapshots enable row level security' in sql),
+                       ('security definer', sql.count('security definer') == 2),
+                       ("set search_path = ''", sql.count("set search_path = ''") == 2),
+                       ('своя схема moneylife_backup; чужую с тем же именем не трогает',
+                            f'create schema {S};' in sql and 'create schema if not exists' not in sql and 'raise exception' in sql
+                            and not re.search(r'\bbackup\.', sql.replace(f'{S}.', ''))),
+                       ('права anon и authenticated отозваны', f'revoke all on schema {S} from public, anon, authenticated' in sql
+                            and f'revoke execute on function {S}.snapshot_docs() from public, anon, authenticated' in sql
+                            and f'revoke execute on function {S}.prune_docs_snapshots() from public, anon, authenticated' in sql),
+                       ('снимок и очистка — две свои задачи pg_cron', f"cron.schedule('moneylife-backup-docs', '17 0 * * *', $$select {S}.snapshot_docs()$$)" in sql
+                            and f"cron.schedule('moneylife-backup-docs-prune', '47 */6 * * *', $$select {S}.prune_docs_snapshots()$$)" in sql),
+                       ('порог очистки 5 суток 12 часов (копии живут < 7 дней)', "interval '5 days 12 hours'" in sql)]:
+        ok(f'backup_docs.sql: {name}') if cond else fail(f'backup_docs.sql: {name}', 'не найдено')
+    bad = [x for x in ['drop table public', 'delete from public', 'update public', 'alter table public', 'truncate', 'drop ']
+           if x in sql]
+    dels = re.findall(r'delete from ([\w.]+)', sql)
+    jobs = {"'moneylife-backup-docs'", "'moneylife-backup-docs-prune'"}
+    unsched = re.findall(r"cron\.unschedule\(([^)]*)\)", sql)
+    if not bad and set(dels) == {f'{S}.docs_snapshots'} and set(unsched) <= jobs:
+        ok('backup_docs.sql: public.docs и чужие задачи pg_cron не меняются (удаляет только старые снимки)')
+    else: fail('backup_docs.sql: только добавление', f'найдено {bad} delete {dels} unschedule {unsched}')
+    r = ROOT / 'supabase' / 'backup_docs_rollback.sql'
+    rs = re.sub(r'\s+', ' ', re.sub(r'--[^\n]*', '', r.read_text(encoding='utf-8'))).lower() if r.exists() else ''
+    drops = re.findall(r'drop (\w+) if exists ([\w.()]+)', rs)
+    want = [('function', f'{S}.snapshot_docs()'), ('function', f'{S}.prune_docs_snapshots()'), ('table', f'{S}.docs_snapshots'), ('schema', S)]
+    if (drops == want and len(re.findall(r'\bdrop\b', rs)) == 4 and 'cascade' not in rs and 'public.' not in rs
+            and set(re.findall(r"cron\.unschedule\(([^)]*)\)", rs)) == jobs):
+        ok('backup_docs_rollback.sql: откат по именам (задачи, функции, таблица, схема без cascade), public не трогает')
+    else: fail('backup_docs_rollback.sql', f'нет файла или откат не тот: {drops}')
+    for page, words in [('privacy.html', {'ru': 'Резервные копии базы хранятся не дольше 7 дней', 'uk': 'Резервні копії бази зберігаються не довше 7 днів'}),
+                        ('delete.html', {'ru': 'Резервные копии базы</b> (на случай сбоя) — хранятся не дольше 7 дней', 'uk': 'Резервні копії бази</b> (на випадок збою) — зберігаються не довше 7 днів'})]:
+        arts = articles((ROOT / page).read_text(encoding='utf-8'))
+        miss = [l for l, w in words.items() if w not in arts.get(l, '')]
+        ok(f'{page}: срок хранения резервных копий (7 дней) — RU и UK') if not miss else fail(f'{page}: резервные копии', 'нет строки: ' + ', '.join(miss))
 
 SUPPORT_MAIL = 'moneylife.ap@gmail.com'   # почта поддержки — выбрал владелец 02.11.2026
 SUBJECTS = {'ru': 'Удалить аккаунт', 'uk': 'Видалити акаунт'}
