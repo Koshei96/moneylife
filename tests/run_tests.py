@@ -1508,6 +1508,84 @@ def run_browser():
             pg.unroute('**/functions/v1/orion-push')
             if 'Сигналы на телефоне' in rs[1] and 'Сигналы' not in tip and ps[0] is True and ps[1] == ['https://push.example/abc|A']: ok('Уведомления: подписка телефона сохраняется в аккаунте; без уведомлений Орион подсказывает их включить — не чаще раза в 6 часов')
             else: fail('Уведомления: подписка', f'{pon} | {tip} | {ps}')
+            # 18.11.2026 (BACKLOG №1): «удали заметку про X» / «отмени напоминание про X» — снимается ровно одна подходящая запись, без совпадения — ничего
+            try: pg.wait_for_function("()=>!Mascot.debug.state().talking", polling=200, timeout=20000)   # ответы ниже — не в очередь за напоминанием
+            except Exception: pass
+            dn = pg.evaluate("""(async()=>{const M=Mascot.debug,T=Mascot.tasks,said=()=>M.state().said,keep=new Set(T.notes().map(x=>x.id)),keepR=new Set(T.rem().map(x=>x.id));
+              for(const n of ['купить ETH в пятницу','оплатить налоги до 15-го','позвонить брокеру']) await M.ask('запиши заметку: '+n);
+              const n0=T.notes().map(x=>x.t); await M.ask('удали заметку про налоги'); const n1=T.notes().map(x=>x.t), s1=said();
+              await M.ask('удали заметку про отпуск'); const n2=T.notes().map(x=>x.t), s2=said();
+              await M.ask('запиши заметку: временная'); await M.ask('удали заметку'); const n3=T.notes().map(x=>x.t), s3=said();
+              const w=h=>new Date(Date.now()+h*3600e3).toISOString().slice(0,16);
+              M.act('add_reminder',{text:'зайти на биржу и проверить ордера',when:w(5)}); M.act('add_reminder',{text:'купить подарок маме',when:w(6)}); M.act('add_reminder',{text:'полить цветы',when:w(7)});
+              const r0=T.rem().filter(x=>!x.done).map(x=>x.t); await M.ask('отмени напоминание про биржу'); const r1=T.rem().filter(x=>!x.done).map(x=>x.t), s4=said();
+              await M.ask('отмени напоминание про отпуск'); const r2=T.rem().filter(x=>!x.done).map(x=>x.t), s5=said();
+              T.notes().filter(x=>!keep.has(x.id)).forEach(x=>T.delNote(x.id)); T.rem().filter(x=>!keepR.has(x.id)).forEach(x=>T.delRem(x.id));
+              return {n0,n1,s1,n2,s2,n3,s3,r0,r1,s4,r2,s5,after:[T.notes().map(x=>x.t),T.rem().map(x=>x.t)]};})()""")
+            gone = lambda a, b: [x for x in a if x not in b]
+            if (gone(dn['n0'], dn['n1']) == ['оплатить налоги до 15-го'] and len(dn['n1']) == len(dn['n0']) - 1 and 'проверить комиссию на бирже' in dn['n1'] and dn['s1'] == 'Удалил: оплатить налоги до 15-го.'
+                    and dn['n2'] == dn['n1'] and dn['s2'] == 'Не нашёл заметку про отпуск.' and dn['n3'] == dn['n1'] and dn['s3'] == 'Удалил: временная.'
+                    and gone(dn['r0'], dn['r1']) == ['зайти на биржу и проверить ордера'] and len(dn['r1']) == len(dn['r0']) - 1 and 'проверить портфель' in dn['r1'] and 'позвонить в банк' in dn['r1']
+                    and dn['s4'] == 'Отменил напоминание: зайти на биржу и проверить ордера.' and dn['r2'] == dn['r1'] and dn['s5'] == 'Не нашёл напоминание про отпуск.'
+                    and 'проверить комиссию на бирже' in dn['after'][0] and 'позвонить в банк' in dn['after'][1]):
+                ok('Орион: «удали заметку про налоги», «отмени напоминание про биржу» — из трёх снимается ровно одна нужная; нет совпадения — ничего не удалено; без «про» — как раньше')
+            else: fail('Орион: удаление по теме', str(dn))
+            fr = pg.evaluate("""(async()=>{const M=Mascot.debug,T=Mascot.tasks,keep=new Set(T.notes().map(x=>x.id));
+              await M.ask('запиши заметку: налоги за прошлый год'); await M.ask('запиши заметку: купить SOL'); await M.ask('запиши заметку: сверить налоговую декларацию');
+              await M.ask('удали заметку про налоги'); const r=T.notes().filter(x=>!keep.has(x.id)).map(x=>x.t); T.notes().filter(x=>!keep.has(x.id)).forEach(x=>T.delNote(x.id)); return r;})()""")
+            if fr == ['налоги за прошлый год', 'купить SOL']: ok('Орион: подходят несколько заметок — снимает самую свежую («налоговую» по основе слова «налоги»)')
+            else: fail('Орион: удаление самой свежей подходящей', str(fr))
+            # ревью Глеба (PR №12): короткие слова не обрезаются — «про долг» не снимает «долларов», «про план» — не «оплатить платеж», «банк» — не «банан», «газ» — не «газета»
+            sw = pg.evaluate("""(async()=>{const M=Mascot.debug,T=Mascot.tasks,said=()=>M.state().said,keep=new Set(T.notes().map(x=>x.id)),keepR=new Set(T.rem().map(x=>x.id)),out={};
+              for(const n of ['купить на 100 долларов BTC','оплатить платеж за квартиру','купить банан','почитать газету']) await M.ask('запиши заметку: '+n);
+              const n0=T.notes().map(x=>x.t);
+              for(const w of ['долг','план','банк','газ']){await M.ask('удали заметку про '+w); out[w]=[said(), T.notes().length===n0.length];}
+              await M.ask('запиши заметку: вернуть долги Саше'); await M.ask('удали заметку про долг'); out.dolgi=[said(), T.notes().some(x=>x.t==='вернуть долги Саше')];
+              const w=h=>new Date(Date.now()+h*3600e3).toISOString().slice(0,16), r0=T.rem().filter(x=>!x.done).length;
+              M.act('add_reminder',{text:'оплатить платеж за квартиру',when:w(5)}); await M.ask('отмени напоминание про план'); out.rem=[said(), T.rem().filter(x=>!x.done).length===r0+1];
+              T.notes().filter(x=>!keep.has(x.id)).forEach(x=>T.delNote(x.id)); T.rem().filter(x=>!keepR.has(x.id)).forEach(x=>T.delRem(x.id)); return out;})()""")
+            if (all(sw[k] == [f'Не нашёл заметку про {k}.', True] for k in ['долг', 'план', 'банк', 'газ']) and sw['dolgi'] == ['Удалил: вернуть долги Саше.', False]
+                    and sw['rem'] == ['Не нашёл напоминание про план.', True]):
+                ok('Орион: короткие слова — целиком: «про долг» не снимает заметку про доллары, «про план» — про платёж, «банк» — не «банан», «газ» — не «газета»; «долг» находит «долги»')
+            else: fail('Орион: удаление по короткому слову', str(sw))
+            # ревью Глеба (PR №12, второй круг): после основы длинного слова — только окончание; «почти», «долго» — никогда не совпадение
+            ln = pg.evaluate("""(async()=>{const M=Mascot.debug,T=Mascot.tasks,said=()=>M.state().said,keep=new Set(T.notes().map(x=>x.id)),keepR=new Set(T.rem().map(x=>x.id)),out={neg:{},pos:{}};
+              const NEG=[['почту','почти закончил отчёт'],['карты','купить картошку'],['долги','долгосрочный план'],['банки','заказать банкет'],['налог','наложенный платёж'],['долг','долго ждал перевод']];
+              for(const [,n] of NEG) await M.ask('запиши заметку: '+n);
+              const n0=T.notes().length;
+              for(const [w] of NEG){await M.ask('удали заметку про '+w); out.neg[w]=[said(), T.notes().length===n0];}
+              const w=h=>new Date(Date.now()+h*3600e3).toISOString().slice(0,16), r0=T.rem().filter(x=>!x.done).length;
+              M.act('add_reminder',{text:'составить долгосрочный план',when:w(5)}); await M.ask('отмени напоминание про долги'); out.rem=[said(), T.rem().filter(x=>!x.done).length===r0+1];
+              T.notes().filter(x=>!keep.has(x.id)).forEach(x=>T.delNote(x.id));
+              const POS=[['налоги','заплатить налогов'],['налоги','налоги до 1 мая'],['биржу','проверить комиссию на бирже'],['карты','заблокировать карту monobank'],['долг','вернуть долги'],['почту','сходить на почту']];
+              for(const [q,n] of POS){await M.ask('запиши заметку: '+n); const c=T.notes().length; await M.ask('удали заметку про '+q); out.pos[q+'|'+n]=[said(), T.notes().length===c-1 && !T.notes().some(x=>!keep.has(x.id)&&x.t===n)];}
+              M.act('add_reminder',{text:'зайти на биржу',when:w(6)}); const r1=T.rem().filter(x=>!x.done).length; await M.ask('отмени напоминание про биржу'); out.rem2=[said(), T.rem().filter(x=>!x.done).length===r1-1];
+              T.notes().filter(x=>!keep.has(x.id)).forEach(x=>T.delNote(x.id)); T.rem().filter(x=>!keepR.has(x.id)).forEach(x=>T.delRem(x.id)); return out;})()""")
+            NEG = ['почту', 'карты', 'долги', 'банки', 'налог', 'долг']
+            if (all(ln['neg'].get(k) == [f'Не нашёл заметку про {k}.', True] for k in NEG) and ln['rem'] == ['Не нашёл напоминание про долги.', True]
+                    and len(ln['pos']) == 6 and all(v == ['Удалил: ' + k.split('|')[1] + '.', True] for k, v in ln['pos'].items())
+                    and ln['rem2'] == ['Отменил напоминание: зайти на биржу.', True]):
+                ok('Орион: «про почту» не снимает «почти…», «карты» — «картошку», «долги» — «долгосрочный», «банки» — «банкет», «налог» — «наложенный», «долг» — «долго»; «налоги» — «налогов», «биржу» — «на бирже», «карты» — «карту»')
+            else: fail('Орион: удаление по длинному слову', str(ln))
+            # ревью Глеба (PR №12, третий круг): после основы — только окончание существительного (прилагательное — лишь через «-ов/-ев»); «стало» — не «сталь»; «про» без слова — переспрос
+            l3 = pg.evaluate("""(async()=>{const M=Mascot.debug,T=Mascot.tasks,said=()=>M.state().said,keep=new Set(T.notes().map(x=>x.id)),keepR=new Set(T.rem().map(x=>x.id)),out={neg:{},pos:{}};
+              const NEG=[['долг','долгий звонок брокеру'],['долги','долгая очередь в банке'],['долг','долгое ожидание вывода'],['газ','постричь газон'],['дом','продлить домен'],['сало','записаться в салон'],['рис','снизить риск портфеля'],['сталь','стало лучше']];
+              for(const [,n] of NEG) await M.ask('запиши заметку: '+n);
+              const n0=T.notes().length;
+              for(const [q,n] of NEG){await M.ask('удали заметку про '+q); out.neg[q+'|'+n]=[said(), T.notes().length===n0];}
+              await M.ask('удали заметку про'); out.empty=[said(), T.notes().length===n0];
+              const w=h=>new Date(Date.now()+h*3600e3).toISOString().slice(0,16), r0=T.rem().filter(x=>!x.done).length;
+              M.act('add_reminder',{text:'долгий звонок брокеру',when:w(5)}); await M.ask('отмени напоминание про долги'); out.rem=[said(), T.rem().filter(x=>!x.done).length===r0+1];
+              await M.ask('отмени напоминание про'); out.remEmpty=[said(), T.rem().filter(x=>!x.done).length===r0+1];
+              T.notes().filter(x=>!keep.has(x.id)).forEach(x=>T.delNote(x.id));
+              const POS=[['газ','оплатить газ'],['долги','вернуть долги'],['налоги','заплатить налогов'],['налоги','сверить налоговую декларацию'],['биржу','проверить комиссию на бирже'],['карты','заблокировать карту monobank'],['почту','сходить на почту']];
+              for(const [q,n] of POS){await M.ask('запиши заметку: '+n); const c=T.notes().length; await M.ask('удали заметку про '+q); out.pos[q+'|'+n]=[said(), T.notes().length===c-1 && !T.notes().some(x=>!keep.has(x.id)&&x.t===n)];}
+              T.notes().filter(x=>!keep.has(x.id)).forEach(x=>T.delNote(x.id)); T.rem().filter(x=>!keepR.has(x.id)).forEach(x=>T.delRem(x.id)); return out;})()""")
+            if (len(l3['neg']) == 8 and all(v == [f"Не нашёл заметку про {k.split('|')[0]}.", True] for k, v in l3['neg'].items())
+                    and l3['empty'] == ['Про что удалить заметку?', True] and l3['rem'] == ['Не нашёл напоминание про долги.', True] and l3['remEmpty'] == ['Про что отменить напоминание?', True]
+                    and len(l3['pos']) == 7 and all(v == ['Удалил: ' + k.split('|')[1] + '.', True] for k, v in l3['pos'].items())):
+                ok('Орион: «долг» не снимает «долгий/долгая/долгое…», «газ» — «газон», «дом» — «домен», «сало» — «салон», «рис» — «риск», «сталь» — «стало»; «удали заметку про» без слова — переспрос, ничего не удалено; «газ» находит «оплатить газ»')
+            else: fail('Орион: удаление по теме — окончания', str(l3))
             # 18.11.2026 (этап 5): утренний брифинг, антипаника, оповещения о цене через сервер
             mb = pg.evaluate("""(()=>{const D=Mascot.debug.state&&window.MSC&&MSC.last?null:null;
               const tot=(window.derive?derive():{}).total||0, inv=(window.derive?derive():{}).invPriced||0;
@@ -1556,6 +1634,13 @@ def run_browser():
             pw = pg.evaluate("[Mascot.debug.priceW(64149), Mascot.debug.priceW(110000), Mascot.debug.priceW(2501.4), Mascot.debug.figs('Биткоин — 64 тысячи 149 долларов.').map(x=>x.t), Mascot.debug.spoken('Биткоин — 64 тысячи 149 долларов.')]")
             if pw[0] == '64 тысячи 149 долларов' and pw[1] == '110 тысяч долларов' and pw[2] == '2 тысячи 501 доллар' and pw[3] == ['64 тысячи 149 долларов'] and 'шестьдесят четыре тысячи сто сорок девять долларов' in pw[4]: ok('Орион: цена монеты — до доллара («64 тысячи 149 долларов»), плашка — целиком')
             else: fail('Орион: точная цена', str(pw))
+            # 18.11.2026 (BACKLOG №7): «поставь оповещение DOGE по 12 центов» — «0,12 доллара», а не «0 долларов»; крупные цены — как раньше
+            al = pg.evaluate("""(()=>{const o=MLX.addAlert,got=[];MLX.addAlert=(s,v)=>{got.push(s+':'+v);return {id:'t'+got.length,sym:s,price:v,dir:'up'};};
+              try{const D=Mascot.debug;return [D.reply('поставь оповещение DOGE по 12 центов'), D.act('set_price_alert',{sym:'DOGE',price:0.12}), D.act('set_price_alert',{sym:'BTC',price:64149}), D.act('set_price_alert',{sym:'XRP',price:5}), D.act('set_price_alert',{sym:'XRP',price:2.5}), D.reply('сообщи, когда биткоин будет 12 процентов'), got];}finally{MLX.addAlert=o;}})()""")
+            if ('до отметки 0,12 доллара' in al[0] and al[1] == 'Поставил оповещение: DOGE, 0,12 доллара.' and al[2] == 'Поставил оповещение: BTC, 64 тысячи 149 долларов.'
+                    and al[3] == 'Поставил оповещение: XRP, 5 долларов.' and al[4] == 'Поставил оповещение: XRP, 2,5 доллара.' and al[6][:2] == ['DOGE:0.12', 'DOGE:0.12'] and 'BTC:64149' in al[6] and not any(x.startswith('BTC:0.12') for x in al[6])):
+                ok('Орион: оповещение «DOGE по 12 центов» — ставит 0,12 и говорит «0,12 доллара»; BTC 64149 — «64 тысячи 149 долларов»')
+            else: fail('Орион: цена в ответе об оповещении', str(al))
             fg = pg.evaluate("Mascot.debug.figs('Биткоин — 110 тысяч долларов, за сутки плюс 2 процента. Портфель минус 3%.')")
             if [x['t'] for x in fg] == ['110 тысяч долларов', 'плюс 2 процента', 'минус 3%'] and fg[1]['c'] == 'up' and fg[2]['c'] == 'dn': ok('Орион: цифры из ответа — плашками под текстом (рост зелёным, падение красным)')
             else: fail('Орион: плашки с цифрами', str(fg))
@@ -1680,6 +1765,23 @@ def run_browser():
             br = pg.evaluate(f"{M}.lx({M}.brief())"); r1 = pg.evaluate(f"{M}.lx({M}.reply('скільки в мене біткоїна'))")
             if br and not re.search('[ыэъё]', br + r1) and 'біткоїна' in r1: ok('Орион по-украински: сводка и ответ на украинский вопрос')
             else: fail('Орион по-украински: сводка', br[:120] + ' | ' + r1[:120])
+            ux = pg.evaluate(f"['Не нашёл заметку про отпуск.', 'Не нашёл напоминание про биржу.', 'Отменил напоминание: x.'].map(t=>{M}.lx(t))")
+            if ux == ['Не знайшов нотатку про відпустку.', 'Не знайшов нагадування про біржу.', 'Скасував нагадування: x.'] or (all('знайшов' in x or 'Скасував' in x for x in ux) and not re.search('[ыэъё]', ''.join(ux))): ok('Орион по-украински: «Не знайшов нотатку / нагадування про …», «Скасував нагадування»')
+            else: fail('Орион по-украински: удаление по теме', str(ux))
+            ux2 = pg.evaluate(f"['Про что удалить заметку?', 'Про что отменить напоминание?'].map(t=>{M}.lx(t))")
+            if ux2 == ['Про що видалити нотатку?', 'Про що скасувати нагадування?']: ok('Орион по-украински: «Про що видалити нотатку?», «Про що скасувати нагадування?»')
+            else: fail('Орион по-украински: переспрос «про що»', str(ux2))
+            # 18.11.2026 (BACKLOG №2): «Справи Оріона» — текст, который записал человек, словарь перевода не переписывает
+            pg.evaluate(f"{M}.act('add_note', {{text: 'Купить BTC після зарплати'}}); {M}.act('add_reminder', {{text: 'Перевірити портфель и купить эфир', when: new Date(Date.now()+5*3600e3).toISOString().slice(0,16)}})")
+            pg.evaluate("closeSheets(); MLX.go('tasks')"); pg.wait_for_timeout(900)
+            tk = pg.evaluate("""(()=>{const b=document.getElementById('xBody'),nm=[...b.querySelectorAll('.nm')].map(x=>x.textContent),bt=[...b.querySelectorAll('button[data-x="notedel"],button[data-x="remdel"]')];
+              return [document.getElementById('xTitle').textContent, nm, bt.map(x=>x.textContent.trim()), bt.map(x=>x.getAttribute('aria-label'))];})()""")
+            shot(pg, 'uk-dela-oriona')
+            pg.evaluate("closeSheets(); Mascot.tasks.notes().filter(x=>x.t==='Купить BTC після зарплати').forEach(x=>Mascot.tasks.delNote(x.id)); Mascot.tasks.rem().filter(x=>x.t==='Перевірити портфель и купить эфир').forEach(x=>Mascot.tasks.delRem(x.id))"); pg.wait_for_timeout(300)
+            if (tk[0] == 'Справи Оріона' and 'Купить BTC після зарплати' in tk[1] and 'Перевірити портфель и купить эфир' in tk[1] and 'Видалити' in tk[2] and 'Скасувати' in tk[2]
+                    and 'Видалити: Купить BTC після зарплати' in tk[3] and 'Скасувати: Перевірити портфель и купить эфир' in tk[3]):
+                ok('украинский: «Справи Оріона» — заметка «Купить BTC після зарплати» и напоминание показаны ровно как записаны, кнопки — по-украински')
+            else: fail('украинский: «Справи Оріона» портят текст человека', str(tk))
             pg.evaluate("window.__askX=null; window.mlAsk=async(q,s,x)=>{window.__askX=x;return {text:'Схоже, біткоїн зростає через новини про ETF.'};}")
             pg.evaluate(f"{M}.ask('чому біткоїн росте')"); pg.wait_for_timeout(1200)
             lang = pg.evaluate("window.__askX&&window.__askX.lang"); said = pg.evaluate(f"{M}.state().said")

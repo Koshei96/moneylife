@@ -885,10 +885,10 @@
     /* «63.000» / «63,000» — разделитель тысяч, если после точки ровно три цифры и целая часть не ноль */
     let alt = null;
     t = t.replace(/\b([1-9]\d{0,2})[.,](\d{3})(?![\d.,])/g, (m, a, b) => { alt = parseFloat(a + '.' + b); return a + b; });
-    const m = t.match(/(\d+(?:[.,]\d+)?)\s*(тысяч[а-я]*|тыс\.?|к(?![а-яё])|k(?![a-z])|миллион[а-я]*|млн\.?)?/);
+    const m = t.match(/(\d+(?:[.,]\d+)?)\s*(тысяч[а-я]*|тыс\.?|к(?![а-яё])|k(?![a-z])|миллион[а-я]*|млн\.?|цент[а-я]*)?/);   /* «по 12 центов» — 0,12 доллара (BACKLOG №7) */
     if (!m) return null;
     let v = parseFloat(m[1].replace(',', '.')); if (!isFinite(v)) return null;
-    if (m[2]) v *= /милл|млн/.test(m[2]) ? 1e6 : 1e3;
+    if (m[2]) v = /цент/.test(m[2]) ? v / 100 : v * (/милл|млн/.test(m[2]) ? 1e6 : 1e3);
     /* сверка с ценой монеты: «биткоин будет 63» почти наверняка значит 63 тысячи; «1.250» у монеты по $1,2 — это 1,25 */
     const p = sym ? coinPrice(sym) : 0;
     if (p > 0) {
@@ -901,7 +901,7 @@
   }
   const qtyW = v => (+v).toLocaleString(LOC, { maximumFractionDigits: v >= 100 ? 0 : v >= 1 ? 3 : 6 });
   function coinPrice(sym) { const S = ST.S || {}, D = ST.D || {}, lv = S.live || {}; return +(lv.prices && lv.prices[sym]) || +(D.prices && D.prices[sym]) || 0; }
-  function priceW(v) { return v >= 10 ? moneyW(v, true) : (v >= 1 ? String(+v.toFixed(2)).replace('.', ',') : String(+v.toPrecision(3)).replace('.', ',')) + ' доллара'; }
+  function priceW(v) { return v >= 10 || (v >= 1 && +v.toFixed(2) % 1 === 0) ? moneyW(v, true) : (v >= 1 ? String(+v.toFixed(2)).replace('.', ',') : String(+v.toPrecision(3)).replace('.', ',')) + ' доллара'; }
   /* просьба поставить оповещение о цене — любыми словами: «сообщи», «напомни», «поставь уведомление», «оповещение», «сигнал» (12.11.2026) */
   function alertQ(t) { return /(сообщи|сповищ|нагадув|скажи,? когда|оповест|оповещ|уведом|напомни|напомин|предупреди|дай знать|сигнал|алерт|будильник)/.test(t); }
   function reply(q) {
@@ -1136,13 +1136,35 @@
       if (!sym || !(price > 0)) return 'Для оповещения нужна монета и цена.';
       let r = null; try { r = A.addAlert ? A.addAlert(sym, price) : null; } catch (e) { r = null; }
       if (!r) return 'Не получилось поставить оповещение.';
-      logAct('Оповещение: ' + sym + ' — $' + price); return typeof r === 'string' ? r : 'Поставил оповещение: ' + sym + ', ' + Math.round(price) + ' долларов.';
+      logAct('Оповещение: ' + sym + ' — $' + price); return typeof r === 'string' ? r : 'Поставил оповещение: ' + sym + ', ' + priceW(price) + '.';   /* «0,12 доллара», а не «0 долларов» (BACKLOG №7) */
     }
     return '';
   }
   const REM_Q = /(напомни|напомин|нагадай|нагадаю)/, REM_T = /(завтра|сегодня|послезавтра|утром|вечером|дн[её]м|ночью|через|в\s+\d{1,2}(:\d\d)?(?![\d.,])|час|понедельн|вторник|сред[уау]|четверг|пятниц|суббот|воскресен|числа|январ|феврал|март|апрел|ма[йя]|июн|июл|август|сентябр|октябр|ноябр|декабр)/, PRICE_T = /(будет|станет|достигнет|упад|вырастет|подним|опуст|дойд|цена|курс|по\s+\d|долл|\$)/;
   const remQ = t => REM_Q.test(t) && REM_T.test(t) && !PRICE_T.test(t);
   const buyQ = t => /(запиши|внеси|добавь|запиши мне|занеси)\s+(мою\s+|мне\s+)?(покупк|что (я )?купил|что (я )?докупил)|^(я\s+)?(купил|докупил|прикупил)\s/.test(t);   /* «запиши покупку…», «я купил…» — цифры разбирает «мозг», сохраняет человек */
+  /* «…про налоги»: значимые слова после «про» и их основы (короткие — целиком, длинные — без окончания), чтобы «биржу» нашла «на бирже» (18.11.2026, BACKLOG №1) */
+  const ABOUT_STOP = /^(и|в|во|на|с|со|по|для|что|это|эту|этот|эти|мою|мой|мои|мое|ту|тот|те|к|ко|о|об|за|из|у|от|до|не|же|ли|бы|а|но|или|где|как|мне|меня)$/, WSPLIT = /[^a-zа-яіїєґ0-9]+/;
+  function aboutQ(t, q) {
+    if (/(?:^|\s)про[\s.,!?…]*$/.test(t)) return { raw: '', stems: [] };   /* «удали заметку про» — оборванная речь: переспросим, ничего не снимаем */
+    const m = t.match(/(?:^|\s)про\s+(.+)$/); if (!m) return null;
+    const w = m[1].split(WSPLIT).filter(x => x && !ABOUT_STOP.test(x));
+    const rq = String(q || '').match(/(?:^|\s)про\s+(.+)$/i), raw = ((rq && rq[1]) || m[1]).replace(/[\s.,!?…]+$/, '').trim();
+    /* слово до 4 букв — целиком; длиннее — без известного окончания («налоги» → «налог»); прилагательное на «-ов/-ев» («налоговую» → «налогов») — и у заметки ждём прилагательное; «решение» — существительное: «решени» + «я» */
+    return { raw, stems: w.map(x => { if (x.length <= 4) return { s: x, adj: false }; const cut = e => x.length - e.length >= 3 && x.endsWith(e), ea = ABOUT_END_ADJ.find(e => cut(e) && /(ов|ев)$/.test(x.slice(0, -e.length))), e = ea || ABOUT_END_N.find(cut) || ''; return { s: x.slice(0, x.length - e.length), adj: !!ea }; }) };
+  }
+  /* хвост слова заметки после основы — только окончание существительного, «-ов/-ев» + окончание прилагательного («налоговую», «биржевой») или ничего;
+     окончание прилагательного сразу после основы не берём: «долги» — не «долгий звонок», «газ» — не «газон», «дом» — не «домен», «карты» — не «картошку» (ревью Глеба, PR №12; і, ї, є — украинские) */
+  const ABOUT_END_N = ['ами', 'ями', 'ой', 'ей', 'ам', 'ям', 'ах', 'ях', 'ом', 'ем', 'ов', 'ев', 'а', 'я', 'у', 'ю', 'ы', 'и', 'е', 'о', 'ь', 'і', 'ї', 'є'],
+    ABOUT_END_ADJ = ['ого', 'его', 'ому', 'ему', 'ыми', 'ими', 'ая', 'яя', 'ое', 'ее', 'ые', 'ие', 'ий', 'ый', 'ую', 'юю', 'ых', 'их', 'ым', 'им', 'ой', 'ей', 'ом', 'ем'],
+    ABOUT_ADJ = '(?:ый|ий|ой|ая|яя|ое|ее|ые|ие|ую|юю|ого|его|ому|ему|ым|им|ых|их|ыми|ими|ом|ем)',
+    ABOUT_TAIL = new RegExp('^(?:' + ABOUT_END_N.join('|') + '|(?:ов|ев)' + ABOUT_ADJ + ')?$'), ABOUT_TAIL_ADJ = new RegExp('^' + ABOUT_ADJ + '?$'),
+    ABOUT_NEVER = /^(почти|долго|стало)$/;   /* слова, совпадающие с формой другого («почти» — как «почта», «долго» — как «долг», «стало» — как «сталь»): никогда не считаем совпадением */
+  function aboutPick(list, ab) {   /* подходят все основы; из подходящих — самая свежая; нет подходящих — null */
+    if (!ab.stems.length) return null;
+    const hit = list.filter(x => { const w = norm(x.t).split(WSPLIT).filter(y => !ABOUT_NEVER.test(y)); return ab.stems.every(st => w.some(y => y.indexOf(st.s) === 0 && (st.adj ? ABOUT_TAIL_ADJ : ABOUT_TAIL).test(y.slice(st.s.length)))); });
+    return hit.reduce((b, x) => (!b || (+x.at || 0) >= (+b.at || 0) ? x : b), null);   /* при равном времени — записанная позже */
+  }
   /* команды телефона: без сервера и без затрат */
   function taskCmd(t, q) {
     if (/^(открой|покажи|давай|відкрий)\s+(этот\s+|мне\s+)?урок$|^давай урок$/.test(t.trim()) && ST.lessonOffer && now() - ST.lessonOffer.at < 1800 && window.MLX && MLX.lesson) {
@@ -1156,11 +1178,24 @@
       if (!TASK.notes.length) return 'Заметок пока нет. Скажите «запиши заметку…».';
       return 'Последние заметки: ' + TASK.notes.slice(-3).reverse().map(x => x.t).join('; ') + '.';
     }
-    if (/^удали\s+(последнюю\s+)?заметку/.test(t)) { const x = TASK.notes.pop(); if (!x) return 'Заметок нет.'; taskSave('notes'); logAct('Удалил заметку: ' + x.t); return 'Удалил: ' + x.t + '.'; }
+    if (/^удали\s+(последнюю\s+)?заметку/.test(t)) {
+      const ab = aboutQ(t, q);
+      if (ab) {   /* «удали заметку про налоги» — снимаем самую свежую из тех, где есть эти слова; нет такой — ничего не трогаем */
+        if (!ab.stems.length) return 'Про что удалить заметку?';
+        const x = aboutPick(TASK.notes, ab); if (!x) return 'Не нашёл заметку про ' + ab.raw + '.';
+        TASK.notes = TASK.notes.filter(y => y !== x); taskSave('notes'); logAct('Удалил заметку: ' + x.t); return 'Удалил: ' + x.t + '.';
+      }
+      const x = TASK.notes.pop(); if (!x) return 'Заметок нет.'; taskSave('notes'); logAct('Удалил заметку: ' + x.t); return 'Удалил: ' + x.t + '.';
+    }
     if (/^(какие|что)\s+(у меня\s+)?напоминани|^мои напоминани/.test(t)) {
       const L = TASK.rem.filter(x => !x.done).sort((a, b) => a.when - b.when);
       if (!L.length) return 'Напоминаний нет.';
       return L.slice(0, 3).map(x => whenW(x.when) + ' — ' + x.t).join('; ') + '.';
+    }
+    if (/^(отмени|удали|убери)\s+(все\s+)?напоминани/.test(t) && aboutQ(t, q)) {   /* «отмени напоминание про биржу» — только подходящее, самое свежее */
+      const ab = aboutQ(t, q); if (!ab.stems.length) return 'Про что отменить напоминание?';
+      const x = aboutPick(TASK.rem.filter(y => !y.done), ab); if (!x) return 'Не нашёл напоминание про ' + ab.raw + '.';
+      TASK.rem = TASK.rem.filter(y => y !== x); taskSave('rem'); logAct('Отменил напоминание: ' + x.t); return 'Отменил напоминание: ' + x.t + '.';
     }
     if (/^(отмени|удали|убери)\s+(все\s+)?напоминани/.test(t)) { const n = TASK.rem.filter(x => !x.done).length; TASK.rem = TASK.rem.filter(x => x.done); taskSave('rem'); logAct('Отменил напоминания: ' + n); return n ? 'Отменил.' : 'Напоминаний и так нет.'; }
     return '';
