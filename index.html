@@ -11,7 +11,7 @@ addEventListener('error',function(e){if(e&&e.message)add(e.message,(e.filename||
 addEventListener('unhandledrejection',function(e){var r=e&&e.reason;add(r&&(r.message||r)||'отклонённое обещание','promise');});
 window.mlErrLog=function(){try{return JSON.parse(localStorage.getItem(K)||'[]');}catch(e){return [];}};window.mlErrAdd=add;})();
 </script>
-<script src="i18n.js?v=20261124110000"></script>
+<script src="i18n.js?v=20261124210000"></script>
 <title>MoneyLife</title>
 <meta name="theme-color" content="#06040e">
 <script>/* тема до отрисовки: «Авто» — как в телефоне, иначе выбор из настроек */
@@ -1748,9 +1748,9 @@ document.querySelectorAll('nav.tabs .tab').forEach(b=>{const v=b.querySelector('
 
 <div class="toast" id="toast" role="status"><span id="toastMsg"></span><button type="button" id="toastBtn" hidden></button></div>
 
-<script src="config.js?v=20261124110000"></script>
+<script src="config.js?v=20261124210000"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="shim.js?v=20261124110000"></script>
+<script src="shim.js?v=20261124210000"></script>
 <script>
 /* ===== основа ===== */
 const $=id=>document.getElementById(id);
@@ -2024,9 +2024,19 @@ function timelines(){const tl={},inv=[],cb={},cq={},q={};let tot=0;
   return {tl,inv};}
 function at(arr,t,key){let lo=0,hi=arr.length-1,ans=-1;while(lo<=hi){const m=(lo+hi)>>1;if(arr[m].t<=t){ans=m;lo=m+1;}else hi=m-1;}return ans<0?0:arr[ans][key||'q'];}
 function priceAt(s,t){if(!s||!s.length)return null;let lo=0,hi=s.length-1;if(t<=s[0].t)return s[0].v;if(t>=s[hi].t)return s[hi].v;while(hi-lo>1){const m=(lo+hi)>>1;if(s[m].t<=t)lo=m;else hi=m;}return Math.abs(s[lo].t-t)<=Math.abs(s[hi].t-t)?s[lo].v:s[hi].v;}
-const MK={},mkPend={};
-function fetchMarket(id,days){const k=id+'|'+days;if(MK[k])return Promise.resolve(MK[k]);if(!mcp)return Promise.resolve(null);if(mkPend[k])return mkPend[k];
-  mkPend[k]=mcp.callTool('CoinGecko','get-coin-market-chart',{id,days},{cache:{staleTime:3600000,gcTime:86400000}}).then(r=>{const d=(r&&r.payload)||{};if(Array.isArray(d.prices)&&d.prices.length>1){const n=d.prices.length,st=+d.startTs,en=+d.endTs;MK[k]=d.prices.map((v,i)=>({t:st+(en-st)*i/(n-1),v:+v}));}return MK[k]||null;}).catch(()=>null).finally(()=>{delete mkPend[k];});
+/* история цены: сохранённая копия рисуется сразу, свежая приходит в фоне (r.fresh) — тогда график перерисовывается,
+   если данные изменились и он ещё на экране. mkOld — показана старая копия, свежую получить не удалось (спросим снова при открытии) */
+const MK={},mkPend={},mkFresh={},mkOld={};
+function mkSeries(r){const d=(r&&r.payload)||{};if(!Array.isArray(d.prices)||d.prices.length<2)return null;const n=d.prices.length,st=+d.startTs,en=+d.endTs;return d.prices.map((v,i)=>({t:st+(en-st)*i/(n-1),v:+v}));}
+const mkSame=(a,b)=>!!a&&!!b&&a.length===b.length&&a.every((p,i)=>p.t===b[i].t&&p.v===b[i].v);
+function mkUpdated(id,days){
+  if(cvSym&&cvRange===days&&cgMap()[cvSym]===id&&$('coinSheet').classList.contains('open')){$('cvNote').textContent='';renderCoinChart();}
+  if((id==='bitcoin'||id==='ethereum')&&gRange===days)renderGrowth();}
+function fetchMarket(id,days,warm){const k=id+'|'+days;if(MK[k]&&(!mkOld[k]||warm||mkFresh[k]))return Promise.resolve(MK[k]);if(!mcp)return Promise.resolve(MK[k]||null);if(mkPend[k])return mkPend[k];
+  mkPend[k]=mcp.callTool('CoinGecko','get-coin-market-chart',warm?{id,days,warm:true}:{id,days},{cache:{staleTime:3600000,gcTime:86400000}}).then(r=>{const s=mkSeries(r);if(s&&!mkSame(s,MK[k]))MK[k]=s;
+    if(r&&r.fresh&&typeof r.fresh.then==='function'){mkOld[k]=1;mkFresh[k]=r.fresh.then(n=>{const f=mkSeries(n);if(!f)return;delete mkOld[k];if(mkSame(f,MK[k]))return;MK[k]=f;mkUpdated(id,days);}).catch(()=>{}).finally(()=>{delete mkFresh[k];});}
+    else if(s)delete mkOld[k];
+    return MK[k]||null;}).catch(()=>MK[k]||null).finally(()=>{delete mkPend[k];});
   return mkPend[k];}
 
 /* ===== универсальный график с ведением пальцем ===== */
@@ -2499,13 +2509,21 @@ function renderCoinChart(){const sym=cvSym;if(!sym)return;$('cvRanges').innerHTM
   cvReadSet(null);}
 function loadCoinChart(){const sym=cvSym,id=cgMap()[sym],r=cvRange;$('cvNote').textContent='';
   if(!id){$('cvNote').textContent='Для этой монеты нет данных CoinGecko — показаны цены твоих сделок.';return;}
-  if(MK[id+'|'+r]){cvPrefetch();return;}if(!mcp){$('cvNote').textContent='История цены недоступна — показаны цены твоих сделок.';return;}
+  if(MK[id+'|'+r]){if(mkOld[id+'|'+r])fetchMarket(id,r);cvPrefetch();return;}if(!mcp){$('cvNote').textContent='История цены недоступна — показаны цены твоих сделок.';return;}
   $('cvNote').textContent='Загружаю историю цены…';
   fetchMarket(id,r).then(s=>{if(cvSym!==sym||cvRange!==r)return;$('cvNote').textContent=s?'':'История цены не загрузилась — показаны цены твоих сделок.';renderCoinChart();if(s)cvPrefetch();});}
 /* заранее подгружаем графики соседних монет, чтобы свайп открывал их сразу */
 let cvPfT=[];
 function cvPrefetch(){if(!mcp)return;cvPfT.forEach(clearTimeout);cvPfT=[];const l=coinOrder(),i=l.indexOf(cvSym),r=cvRange,m=cgMap();if(i<0)return;
   [1,-1].forEach((d,k)=>{const s=l[i+d],id=s&&m[s];if(id&&!MK[id+'|'+r])cvPfT.push(setTimeout(()=>{if(cvRange===r&&$('coinSheet').classList.contains('open'))fetchMarket(id,r);},600+k*900));});}
+/* через ~3 с после запуска тихо кладём в кэш графики монет портфеля (период по умолчанию) — шторка откроется сразу.
+   По одной монете с паузой, не больше 10, только при сети и только через биржи; сбои — молча, без сообщений */
+const CV_WARM_MAX=10;let cvWarmOn=false;
+function cvWarm(){if(cvWarmOn||!mcp)return;if(!S.ready){setTimeout(cvWarm,1500);return;}
+  if(navigator.onLine===false){addEventListener('online',()=>setTimeout(cvWarm,3000),{once:true});return;}
+  cvWarmOn=true;const m=cgMap(),days='365',ids=[...new Set(derive().syms.map(s=>m[s]).filter(Boolean))].filter(id=>!MK[id+'|'+days]).slice(0,CV_WARM_MAX);
+  (async()=>{for(const id of ids){if(navigator.onLine===false)break;const k=id+'|'+days;if(MK[k]||mkPend[k])continue;
+    try{await fetchMarket(id,days,true);await mkFresh[k];}catch(e){}await new Promise(r=>setTimeout(r,600));}})();}
 $('cvRanges').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;cvRange=b.dataset.r;drawn.cv=0;play('tick');renderCoinChart();loadCoinChart();});
 /* вернулись в приложение — догружаем график, если он не успел загрузиться */
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&cvSym&&$('coinSheet').classList.contains('open'))loadCoinChart();});
@@ -2868,7 +2886,7 @@ let obShown=false;
 function obCheck(){if(obShown||!obNeed())return;obShown=true;OB.cur=P.cur||'USD';$('ob').hidden=false;OB.dir='fwd';obDraw();introFirst();}
 /* обучающий ролик «MoneyLife за минуту» (intro.js, 17.11.2026): один раз для нового пользователя — поверх знакомства, последняя кнопка ведёт в него;
    пересмотреть — «Настройки» → «Отображение». Модуль грузится только когда нужен; отметка «показан» — ml-intro на телефоне */
-function introLoad(cb){if(window.MLIntro)return cb(window.MLIntro);const s=document.createElement('script');s.src='intro.js?v=20261124110000';s.onload=()=>cb(window.MLIntro||null);s.onerror=()=>cb(null);document.head.appendChild(s);}
+function introLoad(cb){if(window.MLIntro)return cb(window.MLIntro);const s=document.createElement('script');s.src='intro.js?v=20261124210000';s.onload=()=>cb(window.MLIntro||null);s.onerror=()=>cb(null);document.head.appendChild(s);}
 function introSeen(){try{return !!localStorage.getItem('ml-intro');}catch(e){return true;}}
 function introFirst(){if(introSeen()||window.mlDemo)return;introLoad(M=>{if(!M||$('ob').hidden||M.seen())return;M.open({mode:'first',voiceOff:P.msVoice===false,onClose:()=>{setTimeout(()=>{const b=$('obNext');if(b&&!$('ob').hidden)try{b.focus();}catch(e){}},400);}});});}
 function introReplay(){introLoad(M=>{if(!M){toast('Ролик не загрузился — проверь интернет');return;}closeSheets();try{if(window.Mascot&&Mascot.hush)Mascot.hush();}catch(e){}setTimeout(()=>M.open({mode:'replay',voiceOff:P.msVoice===false}),250);});}
@@ -3145,7 +3163,7 @@ function msLoad(){if(MSC.loading||MSC.failed)return;MSC.loading=true;
         set('oUsd',+x.usd);set('oPrice',+x.price);set('oQty',+x.qty);$('oSym').dispatchEvent(new Event('input',{bubbles:true}));}
       return{ok:true};}
   }catch(e){}return{ok:false};};
-  const boot=()=>add('mascot.js?v=20261124110000',()=>{try{if(window.Mascot&&window.Mascot.init({host:$('mascot'),app:{buzz,askName:()=>{if(window.MLX&&MLX.askName)MLX.askName();},addAlert:(y,v)=>window.MLX&&MLX.addAlert?MLX.addAlert(y,v):null,voice:(t,x)=>window.mlVoice?window.mlVoice(t,x):null,ask:(q,y,x,p)=>window.mlAsk?window.mlAsk(q,y,x,p):null,act:(k,x)=>mlVoiceAct(k,x),news:y=>window.mlNews?window.mlNews(y):null,pushOn:()=>window.MLX&&MLX.pushOn?MLX.pushOn():true,pushRefresh:()=>{try{if(window.MLX&&MLX.pushRefresh)MLX.pushRefresh();}catch(e){}},docSave:(n,v)=>{try{if(db&&window.mlUser&&!window.mlDemo)db.doc('app/'+n).set({v:1,at:Date.now(),items:v});}catch(e){}},docLoad:async n=>{try{if(!db||!window.mlUser)return null;const d=await db.doc('app/'+n).get();return d&&d.exists?((d.data()||{}).items||[]):[];}catch(e){return null;}},notify:(t,b)=>{try{if(document.hidden&&window.Notification&&Notification.permission==='granted')new Notification(t,{body:b,icon:'icon-192.png'});}catch(e){}},memSave:m=>{try{if(db&&window.mlUser&&!window.mlDemo)db.doc('app/orion-mem').set({v:1,at:Date.now(),items:m});}catch(e){}},memLoad:async()=>{try{if(!db||!window.mlUser)return null;const d=await db.doc('app/orion-mem').get();return d&&d.exists?((d.data()||{}).items||[]):[];}catch(e){return null;}}}})&&MSC.last&&$('ob').hidden&&!document.getElementById('mlAuth'))window.Mascot.sync(msPayload(MSC.last));}catch(e){}});
+  const boot=()=>add('mascot.js?v=20261124210000',()=>{try{if(window.Mascot&&window.Mascot.init({host:$('mascot'),app:{buzz,askName:()=>{if(window.MLX&&MLX.askName)MLX.askName();},addAlert:(y,v)=>window.MLX&&MLX.addAlert?MLX.addAlert(y,v):null,voice:(t,x)=>window.mlVoice?window.mlVoice(t,x):null,ask:(q,y,x,p)=>window.mlAsk?window.mlAsk(q,y,x,p):null,act:(k,x)=>mlVoiceAct(k,x),news:y=>window.mlNews?window.mlNews(y):null,pushOn:()=>window.MLX&&MLX.pushOn?MLX.pushOn():true,pushRefresh:()=>{try{if(window.MLX&&MLX.pushRefresh)MLX.pushRefresh();}catch(e){}},docSave:(n,v)=>{try{if(db&&window.mlUser&&!window.mlDemo)db.doc('app/'+n).set({v:1,at:Date.now(),items:v});}catch(e){}},docLoad:async n=>{try{if(!db||!window.mlUser)return null;const d=await db.doc('app/'+n).get();return d&&d.exists?((d.data()||{}).items||[]):[];}catch(e){return null;}},notify:(t,b)=>{try{if(document.hidden&&window.Notification&&Notification.permission==='granted')new Notification(t,{body:b,icon:'icon-192.png'});}catch(e){}},memSave:m=>{try{if(db&&window.mlUser&&!window.mlDemo)db.doc('app/orion-mem').set({v:1,at:Date.now(),items:m});}catch(e){}},memLoad:async()=>{try{if(!db||!window.mlUser)return null;const d=await db.doc('app/orion-mem').get();return d&&d.exists?((d.data()||{}).items||[]):[];}catch(e){return null;}}}})&&MSC.last&&$('ob').hidden&&!document.getElementById('mlAuth'))window.Mascot.sync(msPayload(MSC.last));}catch(e){}});
   setTimeout(boot,300);}
 function render(){const D=derive();renderHeader();renderHome(D);renderGrowth();renderCoins(D);renderStrategy(D);renderActivity();renderD14();renderInst();if(window.MLX)try{MLX.render(D);}catch(e){console.error(e);}earnNudge();if(cvSym&&$('coinSheet').classList.contains('open'))renderCoinView();}
 document.body.classList.add('loading');
@@ -3153,7 +3171,7 @@ const startTab=(location.hash||'').slice(1);if(['coins','strategy','activity'].i
 /* ярлык с главного экрана, когда приложение уже открыто: меняется только #хэш — переключаем вкладку (show() пишет хэш через replaceState, hashchange от этого не бывает — цикла нет) */
 window.addEventListener('hashchange',()=>{const t=(location.hash||'').slice(1);if(['home','coins','strategy','activity'].includes(t)&&t!==curTab)show(t);});
 render();requestAnimationFrame(inkMove);setTimeout(inkMove,600);
-(async()=>{try{mcp=await use('mcp');}catch(e){mcp=null;}if(mcp){startLive();loadGrowth();}})();
+(async()=>{try{mcp=await use('mcp');}catch(e){mcp=null;}if(mcp){startLive();loadGrowth();setTimeout(cvWarm,3000);}})();
 (async()=>{try{db=await use('db');}catch(e){db=null;}
   if(!db){document.body.classList.remove('loading');S.ready=true;$('offline').hidden=false;render();return;}
   const fail=()=>{$('offline').hidden=false;if(!S.ready){S.ready=true;document.body.classList.remove('loading');render();}};
@@ -3230,9 +3248,9 @@ render();requestAnimationFrame(inkMove);setTimeout(inkMove,600);
     sy=null;swipe=null;pull=0;armed=false;},{passive:true});
 })();
 </script>
-<script src="plus.js?v=20261124110000"></script>
-<script src="wins.js?v=20261124110000"></script>
-<script src="folds.js?v=20261124110000"></script>
+<script src="plus.js?v=20261124210000"></script>
+<script src="wins.js?v=20261124210000"></script>
+<script src="folds.js?v=20261124210000"></script>
 <script>
 /* ===== 12.11.2026: ползунок «Купить», смахнуть запись влево с «рассыпанием» монеты ===== */
 (function(){
