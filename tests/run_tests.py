@@ -1126,6 +1126,99 @@ def run_browser():
                 shot(pg, f'stage1-empty-{th}')
             scenario(f'Монеты: пустая вкладка ({th})', {'session': True, 'docs': [SEED[0]]}, s_coins_empty, theme=th)
 
+        # --- Н2 (24.11.2026): график монеты — сохранённая копия сразу, свежие данные в фоне; заранее подгрузка через 3 с.
+        #     Сеть имитируется в странице: свечи Binance для BTC/ETH отвечают с задержкой; все запросы истории цены считаются.
+        def chart_net(delay, seed=None):
+            s = """(()=>{const real=window.fetch.bind(window),T0=performance.now(),D=%d,now=Date.now();window.__chReq=[];
+              /* свежие свечи: 365 дней, цена закрытия 100000 + 50·день (другие числа, чем в копии) */
+              const KL=Array.from({length:365},(_,i)=>{const t=now-(364-i)*864e5;return [t,0,0,0,String(100000+50*i),0,t+864e5-1];});
+              window.fetch=(u,o)=>{const s=String(u&&u.url||u);
+                if(/klines|candlesticks|market_chart/.test(s)){window.__chReq.push({u:s,t:performance.now()-T0});
+                  if(/klines\\?symbol=(BTC|ETH)USDT/.test(s))return new Promise(r=>setTimeout(()=>r(new Response(JSON.stringify(KL),{status:200,headers:{'content-type':'application/json'}})),D));}
+                return real(u,o);};
+              %s})();""" % (delay, seed or '')
+            return s
+        # копия: 120 точек 90000…90119, сохранена 7 ч назад (год: срок 6 ч) и 2 ч назад (3 месяца: срок 1 ч)
+        CH_SEED = """try{const now=Date.now(),cp=(days,age)=>{const end=now-age,st=end-days*864e5;
+            localStorage.setItem('cg3:ch:bitcoin|'+days,JSON.stringify({body:{prices:Array.from({length:120},(_,i)=>90000+i),startTs:st,endTs:end,src:'binance'},at:end}));};
+          cp('365',7*3600e3);cp('90',2*3600e3);}catch(e){}"""
+        OPEN_MS = """async(js)=>{const t=performance.now();eval(js);
+            while(!document.querySelector('#cvChart svg path.main')&&performance.now()-t<5000)await new Promise(r=>setTimeout(r,4));
+            return Math.round(performance.now()-t)}"""
+        def s_chart_swr(pg, n):
+            pg.add_init_script(chart_net(1200, CH_SEED)); pg.reload(wait_until='load'); wait_app(pg)
+            pg.wait_for_function("S.ready&&S.live.prices.BTC>0", polling=100, timeout=10000)
+            ms1 = pg.evaluate(OPEN_MS, "openCoin('BTC')")
+            st1 = pg.evaluate("[MK['bitcoin|365']&&MK['bitcoin|365'].slice(-1)[0].v,document.getElementById('cvNote').textContent]")
+            print(f'    замер: шторка BTC, «1Г», копия 7 ч, сеть 1,2 с — график через {ms1} мс')
+            if ms1 <= 300 and st1[0] == 90119 and not st1[1]: ok(f'Н2: график монеты из копии старше срока — {ms1} мс ≤ 300, без «Загружаю…»')
+            else: fail('Н2: график монеты из копии', f'{ms1} мс, {st1}')
+            d1 = pg.evaluate("document.querySelector('#cvChart path.main').getAttribute('d')")
+            pg.wait_for_timeout(1700)
+            st2 = pg.evaluate("""[MK['bitcoin|365'].slice(-1)[0].v,document.querySelector('#cvChart path.main').getAttribute('d'),
+                JSON.parse(localStorage.getItem('cg3:ch:bitcoin|365')).at>Date.now()-60000,__chReq.filter(r=>/BTCUSDT&interval=1d/.test(r.u)).length,
+                document.querySelectorAll('#cvChart svg').length,document.getElementById('cvNote').textContent]""")
+            if st2[0] == 100000 + 50 * 364 and st2[1] != d1 and st2[2] and st2[3] == 1 and st2[4] == 1 and not st2[5]:
+                ok('Н2: свежие данные пришли в фоне — график перерисован на месте, копия обновлена, запрос один')
+            else: fail('Н2: фоновое обновление графика', str([st2[0], st2[1] != d1] + st2[2:]))
+            # 3 месяца: копия 2 ч (срок 1 ч) — тоже сразу; ушли на «1Г» до ответа сети — свежие данные «3М» не перерисовывают «1Г»
+            ms2 = pg.evaluate(OPEN_MS.replace("!document.querySelector('#cvChart svg path.main')", "!(document.querySelector('#cvChart svg path.main')&&cvRange==='90'&&MK['bitcoin|90'])"),
+                              "document.querySelector('#cvRanges [data-r=\"90\"]').click()")
+            print(f'    замер: тот же график, «3М», копия 2 ч — {ms2} мс')
+            d90 = pg.evaluate("document.querySelector('#cvChart path.main').getAttribute('d')")
+            pg.evaluate("document.querySelector('#cvRanges [data-r=\"365\"]').click()"); pg.wait_for_timeout(50)
+            d365 = pg.evaluate("document.querySelector('#cvChart path.main').getAttribute('d')")
+            pg.wait_for_timeout(1700)
+            st3 = pg.evaluate("[cvRange,document.querySelector('#cvChart path.main').getAttribute('d'),MK['bitcoin|90'].slice(-1)[0].v]")
+            if ms2 <= 300 and d90 != d365 and st3[0] == '365' and st3[1] == d365 and st3[2] == 100000 + 50 * 364:
+                ok(f'Н2: «3М» из копии за {ms2} мс; свежие «3М» пришли после ухода на «1Г» — легли в кэш, «1Г» не перерисован')
+            else: fail('Н2: период сменили до ответа сети', f'{ms2} мс, {st3[0]}, {st3[1] == d365}, {st3[2]}')
+            # закрыли и открыли снова — из памяти, в сеть не ходит
+            pg.evaluate("closeSheets()"); pg.wait_for_timeout(400)
+            ms3 = pg.evaluate(OPEN_MS, "openCoin('BTC')"); pg.wait_for_timeout(300)
+            k = pg.evaluate("__chReq.filter(r=>/BTCUSDT&interval=1d/.test(r.u)).length")
+            ok(f'Н2: повторное открытие — {ms3} мс, без нового запроса') if ms3 <= 300 and k == 1 else fail('Н2: повторное открытие', f'{ms3} мс, запросов {k}')
+        scenario('Н2: график монеты — копия сразу, обновление в фоне', {'session': True, 'docs': SEED}, s_chart_swr)
+
+        def s_chart_nocopy(pg, n):
+            # нет копии и нет сети (свечи и CoinGecko недоступны) — как раньше: понятное сообщение, цены сделок
+            wait_app(pg); pg.evaluate("openCoin('BTC')"); pg.wait_for_timeout(200)
+            a = pg.inner_text('#cvNote')
+            pg.wait_for_function("document.getElementById('cvNote').textContent.includes('не загрузилась')", polling=200, timeout=60000)
+            b = pg.inner_text('#cvNote')
+            ok('Н2: без копии и без сети — «Загружаю…», затем «История цены не загрузилась»') if 'Загружаю' in a and 'не загрузилась' in b and not pg.locator('#cvChart path.main').count() else fail('Н2: без копии и сети', f'{a!r} → {b!r}')
+        scenario('Н2: график монеты — нет копии и нет сети', {'session': True, 'docs': SEED}, s_chart_nocopy)
+
+        def s_chart_warm(pg, n):
+            pg.add_init_script(chart_net(300)); pg.reload(wait_until='load'); wait_app(pg)
+            pg.wait_for_timeout(6500)
+            r = pg.evaluate("""[__chReq.filter(r=>/interval=1d|days=365/.test(r.u)).map(r=>[r.u.replace(/^.*symbol=|&.*$/g,''),Math.round(r.t)]),
+                !!MK['bitcoin|365'],!!MK['ethereum|365'],!!localStorage.getItem('cg3:ch:bitcoin|365'),!!localStorage.getItem('cg3:ch:ethereum|365')]""")
+            reqs = r[0]; syms = [x[0] for x in reqs]
+            if sorted(syms) == ['BTCUSDT', 'ETHUSDT'] and reqs[0][1] >= 2500 and reqs[1][1] - reqs[0][1] >= 300 and all(r[1:]):
+                ok(f'Н2: через ~3 с графики монет портфеля в кэше — по одной ({reqs[0][1]} и {reqs[1][1]} мс от запуска)')
+            else: fail('Н2: заранее подгрузка графиков', str(r))
+            ms = pg.evaluate(OPEN_MS, "openCoin('ETH')"); pg.wait_for_timeout(300)
+            pg.evaluate("closeSheets()"); pg.evaluate("cvWarm();cvWarmOn=false;cvWarm()"); pg.wait_for_timeout(1500)
+            k = pg.evaluate("__chReq.filter(r=>/interval=1d|days=365/.test(r.u)).length")
+            ok(f'Н2: после подгрузки шторка ETH — {ms} мс; повторная подгрузка запросы не дублирует') if ms <= 300 and k == 2 else fail('Н2: дубли запросов', f'{ms} мс, запросов {k}')
+        scenario('Н2: заранее подгрузка графиков', {'session': True, 'docs': SEED}, s_chart_warm)
+
+        def s_chart_warm_none(pg, n):
+            pg.add_init_script(chart_net(300)); pg.reload(wait_until='load'); wait_app(pg)
+            pg.wait_for_timeout(6000)
+            r = pg.evaluate("[__chReq.filter(r=>/interval=1d|days=365|candlesticks/.test(r.u)).length,cvWarmOn,S.ready]")
+            ok('Н2: монет нет — заранее подгрузка в сеть не ходит') if r[0] == 0 and r[2] else fail('Н2: подгрузка без монет', str(r))
+        scenario('Н2: заранее подгрузка — монет нет', {'session': True, 'docs': [SEED[0]]}, s_chart_warm_none)
+
+        def s_chart_warm_off(pg, n):
+            # телефон без сети: navigator.onLine = false (страница и имитация базы — локальные)
+            pg.add_init_script(chart_net(300, "Object.defineProperty(Navigator.prototype,'onLine',{configurable:true,get:()=>false});"))
+            pg.reload(wait_until='load'); wait_app(pg); pg.wait_for_timeout(6000)
+            r = pg.evaluate("[__chReq.filter(r=>/interval=1d|days=365/.test(r.u)).length,navigator.onLine]")
+            ok('Н2: без сети заранее подгрузка не запускается') if r == [0, False] else fail('Н2: подгрузка без сети', str(r))
+        scenario('Н2: заранее подгрузка — нет сети', {'session': True, 'docs': SEED}, s_chart_warm_off)
+
         # --- Г. запись покупки через форму (если форма доступна)
         def s_buy(pg, n):
             wait_app(pg)
