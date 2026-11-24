@@ -1589,11 +1589,14 @@ def run_browser():
               b=mine(); await M.ask('удали заметку про налоги'); q=said(); await M.ask('не надо'); out.no2=[b,q,said(),mine()];
               b=mine(); await M.ask('удали заметку про налоги'); q=said(); M.pendAge(21); await M.ask('да'); out.wait=[b,q,mine(),M.pendDel()];
               b=mine(); await M.ask('удали заметку про налоги'); M.pendAge(21); await M.ask('удали'); out.wait2=[b,mine()];
+              b=mine(); await M.ask('удали заметку про налоги'); M.pendAge(21); await M.ask('удали заметку'); out.wait3=[b,mine(),said()];
+              b=mine(); await M.ask('удали заметку про налоги'); M.pendAge(90); await M.ask('да'); out.wait4=[b,mine()];
               b=mine(); await M.ask('да'); out.yes0=[b,mine(),M.pendDel()];
               b=mine(); await M.ask('удали заметку про налоги'); await M.ask('какие у меня заметки'); const s6=said(); await M.ask('да'); out.other=[b,mine(),s6,M.pendDel()];
               b=mine(); await M.ask('удали заметку про налоги'); q=said(); M.pendAge(18); await M.ask('давай'); out.late=[b,q,said(),mine()];
               M.act('add_reminder',{text:'позвонить брокеру про комиссию',when:w(5)}); M.act('add_reminder',{text:'BTC стал дороже — проверить ступени',when:w(6)});
               let r=act(); await M.ask('отмени напоминание про сталь'); q=said(); await M.ask('ні'); out.rn=[r,q,said(),act()];
+              r=act(); await M.ask('отмени напоминание про сталь'); M.pendAge(21); await M.ask('отмени напоминание'); out.rlate=[r,act(),said()];
               r=act(); await M.ask('отмени напоминание про брокера'); q=said(); await M.ask('да, отмени'); out.ry=[r,q,said(),act()];
               T.notes().filter(x=>!keep.has(x.id)).forEach(x=>T.delNote(x.id)); T.rem().filter(x=>!keepR.has(x.id)).forEach(x=>T.delRem(x.id)); return out;})()""")
             askm = lambda q: (re.match(r'^(?:Удалить заметку|Отменить напоминание) «(.+)»\? Скажите «да» или «нет»\.$', q or '') or [None, None])[1]
@@ -1609,6 +1612,9 @@ def run_browser():
             wt = cf['wait']
             if not (wt[1].startswith('Удалить заметку «оплатить налоги') and wt[2] == wt[0] and wt[3] is None): cbad.append(('20 с молчания, потом «да»', wt))
             if cf['wait2'][1] != cf['wait2'][0]: cbad.append(('20 с молчания, потом «удали»', cf['wait2']))
+            if not (cf['wait3'][1] == cf['wait3'][0] and cf['wait3'][2].startswith('Я уже не жду ответа')): cbad.append(('21 с, потом «удали заметку» — последняя не снята', cf['wait3']))
+            if cf['wait4'][1] != cf['wait4'][0]: cbad.append(('90 с, потом «да»', cf['wait4']))
+            if not (cf['rlate'][1] == cf['rlate'][0] and len(cf['rlate'][1]) >= 2 and cf['rlate'][2].startswith('Я уже не жду ответа')): cbad.append(('21 с, потом «отмени напоминание» — все напоминания целы', cf['rlate']))
             if not (cf['yes0'][1] == cf['yes0'][0] and cf['yes0'][2] is None): cbad.append(('«да» без вопроса', cf['yes0']))
             ot = cf['other']
             if not (ot[1] == ot[0] and ot[2].startswith('Последние заметки') and ot[3] is None): cbad.append(('другой вопрос, потом «да»', ot))

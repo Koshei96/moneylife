@@ -1174,14 +1174,15 @@
   /* «удали заметку / отмени напоминание про X» — с переспросом (24.11.2026, BACKLOG №1, решение директора после 4 кругов ревью PR №12).
      Поиск выше только выбирает кандидата: Орион называет запись и ждёт «да» 20 секунд. Ожидание — в ST.pendDel (вид, id записи, время), не в базе.
      «Да» — удаляется ровно эта запись по id (без повторного поиска); «нет», тишина, другой вопрос — ничего не удаляется. */
-  const DEL_WAIT = 20;
+  const DEL_WAIT = 20, DEL_LATE = 120;   /* после 20 с «да» не удаляет; до 2 мин опоздавшее «да»/«удали заметку» тоже ничего не снимает (ревью Глеба 24.11) */
+  const delNow = () => Date.now() / 1000;   /* настоящее время: performance.now() на части телефонов стоит во сне */
   const DEL_YES = /^\s*(?:да|ага|угу|так|конечно|давай|удали|удаляй|отмени|отменяй|видали|видаляй|скасуй|подтверждаю)(?:[\s,.!?]+(?:да|так|давай|удали|удаляй|отмени|видали|скасуй|конечно|пожалуйста|будь|ласка|ее|е|его|ии|його|заметку|нотатку|напоминание|нагадування))*[\s,.!?]*$/,
     DEL_NO = /^\s*(?:нет|не|ни|ні|оставь\S*|залиш\S*|стоп|отбой)(?=[\s,.!?]|$)/;
   let tcRaw = false;   /* ответ команды уже на языке человека — словарь перевода его не трогает (в нём текст заметки) */
   const delName = s => { s = String(s || '').replace(/\s+/g, ' ').trim(); if (s.length <= 60) return s; const c = s.slice(0, 59).replace(/[\s,.;:—-]+\S*$/, ''); return (c.length >= 20 ? c : s.slice(0, 59)) + '…'; };
   function delAsk(kind, x) {
-    const pd = ST.pendDel = { kind, id: x.id, t: x.t, at: now() }, nm = delName(x.t); ST.pendingMemo = null;
-    clearTimeout(ST.pendDelT); ST.pendDelT = setTimeout(() => { if (ST.pendDel === pd) ST.pendDel = null; }, DEL_WAIT * 1000 + 500);
+    const pd = ST.pendDel = { kind, id: x.id, t: x.t, at: delNow() }, nm = delName(x.t); ST.pendingMemo = null;
+    clearTimeout(ST.pendDelT); ST.pendDelT = setTimeout(() => { if (ST.pendDel === pd) ST.pendDel = null; }, DEL_LATE * 1000 + 500);
     tcRaw = true;
     return kind === 'notes' ? (UK ? 'Видалити нотатку «' + nm + '»? Скажіть «так» або «ні».' : 'Удалить заметку «' + nm + '»? Скажите «да» или «нет».')
       : (UK ? 'Скасувати нагадування «' + nm + '»? Скажіть «так» або «ні».' : 'Отменить напоминание «' + nm + '»? Скажите «да» или «нет».');
@@ -1236,9 +1237,12 @@
     const toBrain = A.ask && t.trim() && (remQ(t) || buyQ(t) || (!(alertQ(t) && sure) && (marketQ(t) || !sure || follow)));   /* «напомни завтра в 9…» — разбирает «мозг» (дата и время) */
     if (ST.pendDel) {   /* ответ на «Удалить заметку «…»?» — только в течение 20 секунд; всё, кроме «да», ничего не удаляет */
       const pd = ST.pendDel; ST.pendDel = null; clearTimeout(ST.pendDelT);
-      if (now() - pd.at <= DEL_WAIT) {
+      const age = delNow() - pd.at;
+      if (age <= DEL_WAIT) {
         if (DEL_YES.test(t)) { speak(delDo(pd), { pri: 2, raw: true }); return; }
         if (DEL_NO.test(t) || !t.trim()) { speak(UK ? 'Добре, залишив.' : 'Хорошо, оставил.', { pri: 2, raw: true }); return; }
+      } else if (age <= DEL_LATE && DEL_YES.test(t)) {   /* опоздавший ответ: «отмени напоминание» не снимает все, «удали заметку» — не последнюю */
+        speak(UK ? 'Я вже не чекаю відповіді — нічого не видаляв. Скажіть знову: «видали нотатку про …».' : 'Я уже не жду ответа — ничего не удалял. Скажите снова: «удали заметку про …».', { pri: 2, raw: true }); return;
       }
     }
     if (ST.pendingMemo && now() - ST.pendingMemo.at < 60) {   /* ответ на «Запомнить: …?» */
