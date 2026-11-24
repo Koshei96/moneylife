@@ -67,6 +67,7 @@ def static_checks():
     manifest_checks(html)
     deletion_checks()
     backup_sql_checks()
+    client_errors_sql_checks()
     signal_checks()
     sw_nav_checks()
 
@@ -198,6 +199,54 @@ def backup_sql_checks():
         arts = articles((ROOT / page).read_text(encoding='utf-8'))
         miss = [l for l, w in words.items() if w not in arts.get(l, '')]
         ok(f'{page}: срок хранения резервных копий (7 дней) — RU и UK') if not miss else fail(f'{page}: резервные копии', 'нет строки: ' + ', '.join(miss))
+
+def client_errors_sql_checks():
+    """Мониторинг ошибок (И4, 24.11.2026): supabase/client_errors.sql только добавляет public.client_errors (RLS без политик,
+    без user_id/почты/IP) и функцию public.log_client_error (security definer, search_path = '', лимит в сутки, срок < 30 дней);
+    откат рядом — только наши объекты по имени; на privacy.html — строка RU и UK с теми же обещаниями."""
+    q = ROOT / 'supabase' / 'client_errors.sql'
+    if not q.exists(): fail('client_errors.sql', 'нет файла'); return
+    sql = re.sub(r'\s+', ' ', re.sub(r'--[^\n]*', '', q.read_text(encoding='utf-8'))).lower()   # без комментариев
+    T, F = 'public.client_errors', 'public.log_client_error'
+    tbl = re.search(r'create table if not exists public\.client_errors \((.*?)\);', sql)
+    cols = re.findall(r'(?:^|, )(\w+) ', tbl.group(1).strip()) if tbl else []
+    for name, cond in [('enable row level security', f'alter table {T} enable row level security' in sql),
+                       ('нет политик (create policy) — читать и писать напрямую нельзя', 'create policy' not in sql and 'alter policy' not in sql),
+                       ('права на таблицу у anon и authenticated отозваны', f'revoke all on table {T} from public, anon, authenticated' in sql),
+                       ('столбцы только id, ts, msg, src, ver, lang — без user_id, почты и IP', cols == ['id', 'ts', 'msg', 'src', 'ver', 'lang']
+                            and not re.search(r'user_id|owner|auth\.uid|inet|\bip\b|\bemail\b(?!>)', sql)),
+                       ('ограничения длины 200 / 80 / 20 / 5', all(x in sql for x in ['char_length(msg) between 1 and 200', 'char_length(src) <= 80', 'char_length(ver) <= 20', 'char_length(lang) <= 5'])),
+                       ('security definer и search_path у обеих функций', sql.count('security definer') == 2 and sql.count("set search_path = ''") == 2),
+                       ('запись: execute только у anon и authenticated', f'revoke execute on function {F}(text, text, text, text) from public, anon, authenticated' in sql
+                            and f'grant execute on function {F}(text, text, text, text) to anon, authenticated' in sql
+                            and 'revoke execute on function public.prune_client_errors() from public, anon, authenticated' in sql
+                            and 'grant execute on function public.prune_client_errors' not in sql),
+                       ('защита от засорения: не больше 2000 строк за сутки', "interval '1 day'" in sql and 'if n >= 2000 then return;' in sql),
+                       ('обезличивание и на сервере: цифры → #, почта → <email>', "'[0-9]', '#', 'g'" in sql and "'<email>'" in sql),
+                       ('срок < 30 дней: порог 29 суток 12 часов в функции и задаче pg_cron каждые 6 часов', sql.count("interval '29 days 12 hours'") == 2
+                            and "cron.schedule('moneylife-client-errors-prune', '37 */6 * * *', $$select public.prune_client_errors()$$)" in sql),
+                       ('чужие объекты с тем же именем — стоп с ошибкой', sql.count('raise exception') == 2)]:
+        ok(f'client_errors.sql: {name}') if cond else fail(f'client_errors.sql: {name}', 'не найдено')
+    bad = [x for x in ['drop ', 'truncate', 'alter table public.docs', 'update public', 'public.docs', 'create or replace function public.doc', 'delete_my_account'] if x in sql]
+    dels = set(re.findall(r'delete from ([\w.]+)', sql))
+    unsched = set(re.findall(r"cron\.unschedule\(([^)]*)\)", sql))
+    if not bad and dels == {T} and unsched <= {"'moneylife-client-errors-prune'"}: ok('client_errors.sql: только добавление — нет drop, чужие таблицы, функции и задачи pg_cron не меняются')
+    else: fail('client_errors.sql: только добавление', f'найдено {bad} delete {dels} unschedule {unsched}')
+    r = ROOT / 'supabase' / 'client_errors_rollback.sql'
+    rs = re.sub(r'\s+', ' ', re.sub(r'--[^\n]*', '', r.read_text(encoding='utf-8'))).lower() if r.exists() else ''
+    drops = re.findall(r'drop (\w+) if exists ([\w.]+(?:\([^)]*\))?)', rs)
+    want = [('function', f'{F}(text, text, text, text)'), ('function', 'public.prune_client_errors()'), ('table', T)]
+    if (drops == want and len(re.findall(r'\bdrop\b', rs)) == 3 and 'cascade' not in rs and 'docs' not in rs
+            and set(re.findall(r"cron\.unschedule\(([^)]*)\)", rs)) == {"'moneylife-client-errors-prune'"}):
+        ok('client_errors_rollback.sql: полный откат по именам (задача, 2 функции, таблица; без cascade), остальное не трогает')
+    else: fail('client_errors_rollback.sql', f'нет файла или откат не тот: {drops}')
+    html = (ROOT / 'index.html').read_text(encoding='utf-8')
+    ok('index.html и shim.js: приложение вызывает именно public.log_client_error') if "c.rpc('log_client_error', p)" in (ROOT / 'shim.js').read_text(encoding='utf-8') and 'mlErrRpc' in html else fail('вызов log_client_error', 'нет в shim.js/index.html')
+    arts = articles((ROOT / 'privacy.html').read_text(encoding='utf-8'))
+    words = {'ru': 'сообщения о технических сбоях (без сумм, имён и почты) автоматически сохраняются у нас до 30 дней',
+             'uk': 'повідомлення про технічні збої (без сум, імен і пошти) автоматично зберігаються в нас до 30 днів'}
+    miss = [l for l, w in words.items() if w not in arts.get(l, '')]
+    ok('privacy.html: сбои приложения хранятся до 30 дней, без сумм, имён и почты — RU и UK') if not miss else fail('privacy.html: сбои приложения', 'нет строки: ' + ', '.join(miss))
 
 SUPPORT_MAIL = 'moneylife.ap@gmail.com'   # почта поддержки — выбрал владелец 02.11.2026
 SUBJECTS = {'ru': 'Удалить аккаунт', 'uk': 'Видалити акаунт'}
@@ -3156,6 +3205,87 @@ def run_browser():
                 return {first:c.classList.contains('first'),sub:document.querySelector('#mlAuth .mla-sub').textContent,cur:document.querySelectorAll('.mla-curtain').length,logo:!!document.querySelector('.mla-logo use')}}""")
             ok('3.0: вход при «уменьшить движение» — экран меняется сразу, без шторки; знак на месте') if not a['first'] and a['sub'] == 'Новый аккаунт' and a['cur'] == 0 and a['logo'] else fail('3.0: вход без анимаций', str(a))
         scenario('3.0: вход, уменьшить движение', {'session': False, 'docs': []}, s_v3_auth_calm, motion='reduce')
+
+        # --- И4 (24.11.2026): мониторинг ошибок — сбой JS уходит в имитацию базы вызовом rpc('log_client_error') обезличенным.
+        #     Сбой вызываем событием error/unhandledrejection (тот же путь, что у настоящего): брошенное исключение провалило бы
+        #     проверку «без ошибок в консоли» самого сценария.
+        ERRCALLS = "(()=>(window.__mlCalls||[]).filter(c=>c.op==='rpc:log_client_error').map(c=>c.a))()"
+        def fire(pg, msg, file='plus.js', line=321):
+            pg.evaluate("([m,f,l])=>dispatchEvent(new ErrorEvent('error',{message:m,filename:location.origin+'/'+f+'?v=20990101000000',lineno:l}))", [msg, file, line])
+        SECRET = 'TypeError: Сумма 12345.67 для "Мой кошелёк" и \'Ledger Nano\' не сошлась, почта tester@example.com, «Заметка про BTC» 0.005 `abc`'
+        def s_err_one(pg, n):
+            wait_app(pg)
+            if not pg.evaluate("typeof window.mlErrRpc==='function'"): raise AssertionError('shim.js не подключил window.mlErrRpc')
+            fire(pg, SECRET); pg.wait_for_timeout(400)
+            c = pg.evaluate(ERRCALLS)
+            want = 'TypeError: Сумма #####.## для <…> и <…> не сошлась, почта <email>, <…> #.### `abc`'
+            ver = re.search(r"const V='ml-(\d{14})'", (ROOT / 'sw.js').read_text(encoding='utf-8')).group(1)
+            if (len(c) == 1 and c[0]['p_msg'] == want and c[0]['p_src'] == 'plus.js:321' and c[0]['p_ver'] == ver and c[0]['p_lang'] == 'ru'
+                    and not re.search(r'\d|кошел|Ledger|tester|Заметка', c[0]['p_msg'])):
+                ok('ошибки: сбой → ровно один вызов log_client_error, текст обезличен (цифры → #, кавычки → <…>, почта → <email>), файл:строка, сборка, язык')
+            else: fail('ошибки: один обезличенный вызов', str(c)[:400])
+            loc = pg.evaluate("mlErrLog().slice(-1)[0]")
+            ok('ошибки: журнал на телефоне для «Сообщить об ошибке» работает как раньше') if loc and loc['m'] == SECRET[:240] else fail('ошибки: журнал ml-err', str(loc)[:200])
+            fire(pg, 'TypeError: Failed to fetch'); fire(pg, 'ResizeObserver loop limit exceeded')
+            pg.evaluate("dispatchEvent(new ErrorEvent('error',{}))")   # ошибка загрузки картинки/скрипта — без текста
+            pg.wait_for_timeout(300)
+            k = len(pg.evaluate(ERRCALLS))
+            ok('ошибки: обрывы сети, шум ResizeObserver и пустые события не отправляются') if k == 1 else fail('ошибки: лишние отправки', f'{k} вызовов')
+            pg.evaluate("dispatchEvent(new PromiseRejectionEvent('unhandledrejection',{promise:Promise.resolve(),reason:new Error('Не найден \"секретный\" ключ 42')}))")
+            pg.wait_for_timeout(300)
+            c = pg.evaluate(ERRCALLS)
+            ok('ошибки: отклонённое обещание тоже уходит, обезличенным') if len(c) == 2 and c[1]['p_msg'] == 'Не найден <…> ключ ##' and c[1]['p_src'] == 'promise' else fail('ошибки: unhandledrejection', str(c)[-300:])
+            pg.evaluate("window.__keep=window.mlErrRpc;window.mlErrRpc=undefined")   # как до загрузки shim.js: сбой ждёт в очереди
+            fire(pg, 'ReferenceError: early is not defined', 'index.html', 9); pg.wait_for_timeout(200)
+            a = len(pg.evaluate(ERRCALLS)); pg.evaluate("window.mlErrRpc=window.__keep;mlErrFlush()"); pg.wait_for_timeout(300)
+            c = pg.evaluate(ERRCALLS)
+            ok('ошибки: сбой до загрузки shim.js ждёт в очереди и уходит после') if a == 2 and len(c) == 3 and c[2]['p_msg'] == 'ReferenceError: early is not defined' else fail('ошибки: очередь до shim.js', f'{a} → {c[-1:]}')
+            pg.screenshot(path=str(OUT / 'err-monitor-one.png'))
+        scenario('Мониторинг ошибок — один обезличенный вызов', {'session': True, 'docs': SEED}, s_err_one)
+
+        def s_err_limit(pg, n):
+            wait_app(pg)
+            for _ in range(10): fire(pg, 'TypeError: x is null at "renderTotal" 77')
+            pg.wait_for_timeout(400)
+            a = len(pg.evaluate(ERRCALLS))
+            ok('ошибки: 10 одинаковых сбоев → 1 вызов') if a == 1 else fail('ошибки: 10 одинаковых', f'{a} вызовов')
+            for i in range(20): fire(pg, f'TypeError: сбой модуля {chr(65 + i)}{chr(97 + i)}', 'wins.js', 10 + i)
+            pg.wait_for_timeout(500)
+            c = pg.evaluate(ERRCALLS)
+            ok(f'ошибки: 20 разных сбоев → всего {len(c)} вызовов за сессию (не больше 5)') if len(c) == 5 and len({x['p_msg'] for x in c}) == 5 else fail('ошибки: лимит 5 за сессию', f'{len(c)} вызовов')
+            pg.reload(wait_until='load'); wait_app(pg); pg.wait_for_timeout(500)
+            fire(pg, 'TypeError: после перезагрузки'); pg.wait_for_timeout(300)
+            k = len(pg.evaluate(ERRCALLS))
+            ok('ошибки: после перезагрузки вкладки лимит сессии сохраняется (0 новых вызовов)') if k == 0 else fail('ошибки: лимит после перезагрузки', f'{k} вызовов')
+        scenario('Мониторинг ошибок — без повторов, не больше 5', {'session': True, 'docs': SEED}, s_err_limit)
+
+        for mode in ('error', 'reject', 'throw'):
+            def s_err_down(pg, n, mode=mode):
+                wait_app(pg)
+                fire(pg, 'TypeError: база недоступна'); fire(pg, 'TypeError: вторая ошибка', 'shim.js', 5)
+                pg.wait_for_timeout(600)
+                k = len(pg.evaluate(ERRCALLS))
+                pg.click('nav.tabs .tab[data-tab="activity"]'); pg.wait_for_timeout(600)
+                pg.click('nav.tabs .tab[data-tab="home"]'); wait_app(pg)
+                vis = pg.evaluate("!document.querySelector('.view:not([hidden])')?.closest('[hidden]')")
+                ok(f'ошибки: база отвечает «{mode}» — приложение работает, без повторных попыток ({k} вызова)') if k == 2 and vis else fail(f'ошибки: база «{mode}»', f'{k} вызовов, экран {vis}')
+            scenario(f'Мониторинг ошибок — база недоступна ({mode})', {'session': True, 'docs': SEED, 'errLogFail': mode}, s_err_down)
+
+        def s_err_offline(pg, n):
+            wait_app(pg)
+            pg.context.set_offline(True); pg.wait_for_timeout(300)
+            fire(pg, 'TypeError: нет сети'); pg.wait_for_timeout(400)
+            k = len(pg.evaluate(ERRCALLS)); pg.context.set_offline(False)
+            ok('ошибки: без сети ничего не отправляется и приложение не падает') if k == 0 and pg.evaluate("!!document.querySelector('nav.tabs')") else fail('ошибки: без сети', f'{k} вызовов')
+        scenario('Мониторинг ошибок — без сети', {'session': True, 'docs': SEED}, s_err_offline)
+
+        def s_err_demo(pg, n):
+            pg.wait_for_selector('#mlaDemo', state='visible', timeout=8000)
+            pg.click('#mlaDemo'); wait_app(pg); pg.wait_for_timeout(800)
+            fire(pg, 'TypeError: в демо'); pg.wait_for_timeout(400)
+            k = len(pg.evaluate(ERRCALLS))
+            ok('ошибки: в демо-режиме в базу не отправляются') if k == 0 and pg.evaluate("window.mlDemo===true") else fail('ошибки: демо', f'{k} вызовов')
+        scenario('Мониторинг ошибок — демо', {'session': False, 'docs': []}, s_err_demo)
 
         browser.close()
     srv.shutdown()

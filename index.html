@@ -4,14 +4,29 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,interactive-widget=resizes-content">
 <script>
-/* журнал ошибок (12.11.2026): последние 20 сбоев — только на телефоне, без личных данных; уходят разработчику, только если человек сам нажмёт «Сообщить об ошибке» */
-(function(){var K='ml-err',noise=/ResizeObserver loop|Script error\.?$|extension:\/\//;
-function add(m,src){try{m=String(m||'').slice(0,240);if(!m||noise.test(m)||noise.test(src||''))return;var a=JSON.parse(localStorage.getItem(K)||'[]');a.push({t:new Date().toISOString().slice(0,19),m:m,s:String(src||'').replace(/^.*\//,'').slice(0,80)});localStorage.setItem(K,JSON.stringify(a.slice(-20)));}catch(e){}}
+/* журнал ошибок (12.11.2026): последние 20 сбоев — только на телефоне, без личных данных; полный текст уходит разработчику, только если человек сам нажмёт «Сообщить об ошибке» (обезличенный — автоматически, см. ниже) */
+/* мониторинг сбоев (И4, 24.11.2026): новая ошибка ещё и уходит в базу (public.log_client_error, supabase/client_errors.sql) —
+   только обезличенный текст: почта → <email>, ссылки → <url>, всё в кавычках длиннее 3 знаков → <…>, длинные токены → <…>, все цифры → #;
+   плюс файл:строка, метка сборки и язык. Без id, почты, сумм. Не больше 5 за сессию вкладки, одна и та же — один раз; сбои сети не шлём;
+   в демо не шлём; без сети или при ошибке базы — молча, без повторов. Вызов делает shim.js (window.mlErrRpc), до его загрузки — очередь. */
+(function(){var K='ml-err',noise=/ResizeObserver loop|Script error\.?$|extension:\/\//,net=/Failed to fetch|NetworkError|Load failed|AbortError|aborted|ERR_[A-Z_]+|ChunkLoadError|timeout/i,MAX=5,q=[],S={n:0,k:[]};
+try{var s0=JSON.parse(sessionStorage.getItem('ml-err-sent')||'null');if(s0&&s0.k)S=s0;}catch(e){}
+function clean(m){return String(m||'').slice(0,600).replace(/[^\s<>"'`@]+@[^\s<>"'`@]+\.[A-Za-z]{2,}/g,'<email>').replace(/\b(?:https?|wss?|file|blob|data):[^\s"'`)]+/g,'<url>')
+  .replace(/"[^"]{4,}"/g,'<…>').replace(/'[^']{4,}'/g,'<…>').replace(/`[^`]{4,}`/g,'<…>').replace(/«[^»]{4,}»/g,'<…>').replace(/“[^”]{4,}”/g,'<…>')
+  .replace(/[A-Za-z0-9_-]{32,}/g,'<…>').replace(/\d/g,'#').slice(0,200).trim();}
+function send(m,src){try{if(S.n>=MAX||window.mlDemo||net.test(m))return;var r=window.mlErrRpc;if(!r){if(q.length<20)q.push([m,src]);return;}
+  var t=clean(m),p=String(src||'').replace(/\?[^:]*/,'').replace(/[^\w.:-]/g,'').slice(0,80),k=t+'|'+p;if(!t||S.k.indexOf(k)>=0)return;
+  S.n++;S.k.push(k);try{sessionStorage.setItem('ml-err-sent',JSON.stringify(S));}catch(e){}
+  if(navigator.onLine===false)return;
+  var sv=document.querySelector('script[src*="shim.js?v="]'),v=sv&&/[?&]v=(\w+)/.exec(sv.getAttribute('src')),l=document.documentElement.lang;try{l=localStorage.getItem('ml-lang')||l;}catch(e){}
+  var x=r({p_msg:t,p_src:p||null,p_ver:v?v[1].slice(0,20):null,p_lang:/^[a-z]{2}$/.test(l||'')?l:null});if(x&&typeof x.then==='function')x.then(null,function(){});}catch(e){}}
+window.mlErrFlush=function(){var a=q;q=[];for(var i=0;i<a.length;i++)send(a[i][0],a[i][1]);};window.mlErrClean=clean;
+function add(m,src){m=String(m||'').slice(0,240);if(!m||noise.test(m)||noise.test(src||''))return;try{var a=JSON.parse(localStorage.getItem(K)||'[]');a.push({t:new Date().toISOString().slice(0,19),m:m,s:String(src||'').replace(/^.*\//,'').slice(0,80)});localStorage.setItem(K,JSON.stringify(a.slice(-20)));}catch(e){}send(m,String(src||'').replace(/^.*\//,''));}
 addEventListener('error',function(e){if(e&&e.message)add(e.message,(e.filename||'')+':'+(e.lineno||0));},true);
 addEventListener('unhandledrejection',function(e){var r=e&&e.reason;add(r&&(r.message||r)||'отклонённое обещание','promise');});
 window.mlErrLog=function(){try{return JSON.parse(localStorage.getItem(K)||'[]');}catch(e){return [];}};window.mlErrAdd=add;})();
 </script>
-<script src="i18n.js?v=20261118124900"></script>
+<script src="i18n.js?v=20261124025500"></script>
 <title>MoneyLife</title>
 <meta name="theme-color" content="#06040e">
 <script>/* тема до отрисовки: «Авто» — как в телефоне, иначе выбор из настроек */
@@ -1748,9 +1763,9 @@ document.querySelectorAll('nav.tabs .tab').forEach(b=>{const v=b.querySelector('
 
 <div class="toast" id="toast" role="status"><span id="toastMsg"></span><button type="button" id="toastBtn" hidden></button></div>
 
-<script src="config.js?v=20261118124900"></script>
+<script src="config.js?v=20261124025500"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="shim.js?v=20261118124900"></script>
+<script src="shim.js?v=20261124025500"></script>
 <script>
 /* ===== основа ===== */
 const $=id=>document.getElementById(id);
@@ -2868,7 +2883,7 @@ let obShown=false;
 function obCheck(){if(obShown||!obNeed())return;obShown=true;OB.cur=P.cur||'USD';$('ob').hidden=false;OB.dir='fwd';obDraw();introFirst();}
 /* обучающий ролик «MoneyLife за минуту» (intro.js, 17.11.2026): один раз для нового пользователя — поверх знакомства, последняя кнопка ведёт в него;
    пересмотреть — «Настройки» → «Отображение». Модуль грузится только когда нужен; отметка «показан» — ml-intro на телефоне */
-function introLoad(cb){if(window.MLIntro)return cb(window.MLIntro);const s=document.createElement('script');s.src='intro.js?v=20261118124900';s.onload=()=>cb(window.MLIntro||null);s.onerror=()=>cb(null);document.head.appendChild(s);}
+function introLoad(cb){if(window.MLIntro)return cb(window.MLIntro);const s=document.createElement('script');s.src='intro.js?v=20261124025500';s.onload=()=>cb(window.MLIntro||null);s.onerror=()=>cb(null);document.head.appendChild(s);}
 function introSeen(){try{return !!localStorage.getItem('ml-intro');}catch(e){return true;}}
 function introFirst(){if(introSeen()||window.mlDemo)return;introLoad(M=>{if(!M||$('ob').hidden||M.seen())return;M.open({mode:'first',voiceOff:P.msVoice===false,onClose:()=>{setTimeout(()=>{const b=$('obNext');if(b&&!$('ob').hidden)try{b.focus();}catch(e){}},400);}});});}
 function introReplay(){introLoad(M=>{if(!M){toast('Ролик не загрузился — проверь интернет');return;}closeSheets();try{if(window.Mascot&&Mascot.hush)Mascot.hush();}catch(e){}setTimeout(()=>M.open({mode:'replay',voiceOff:P.msVoice===false}),250);});}
@@ -3145,7 +3160,7 @@ function msLoad(){if(MSC.loading||MSC.failed)return;MSC.loading=true;
         set('oUsd',+x.usd);set('oPrice',+x.price);set('oQty',+x.qty);$('oSym').dispatchEvent(new Event('input',{bubbles:true}));}
       return{ok:true};}
   }catch(e){}return{ok:false};};
-  const boot=()=>add('mascot.js?v=20261118124900',()=>{try{if(window.Mascot&&window.Mascot.init({host:$('mascot'),app:{buzz,askName:()=>{if(window.MLX&&MLX.askName)MLX.askName();},addAlert:(y,v)=>window.MLX&&MLX.addAlert?MLX.addAlert(y,v):null,voice:(t,x)=>window.mlVoice?window.mlVoice(t,x):null,ask:(q,y,x,p)=>window.mlAsk?window.mlAsk(q,y,x,p):null,act:(k,x)=>mlVoiceAct(k,x),news:y=>window.mlNews?window.mlNews(y):null,pushOn:()=>window.MLX&&MLX.pushOn?MLX.pushOn():true,pushRefresh:()=>{try{if(window.MLX&&MLX.pushRefresh)MLX.pushRefresh();}catch(e){}},docSave:(n,v)=>{try{if(db&&window.mlUser&&!window.mlDemo)db.doc('app/'+n).set({v:1,at:Date.now(),items:v});}catch(e){}},docLoad:async n=>{try{if(!db||!window.mlUser)return null;const d=await db.doc('app/'+n).get();return d&&d.exists?((d.data()||{}).items||[]):[];}catch(e){return null;}},notify:(t,b)=>{try{if(document.hidden&&window.Notification&&Notification.permission==='granted')new Notification(t,{body:b,icon:'icon-192.png'});}catch(e){}},memSave:m=>{try{if(db&&window.mlUser&&!window.mlDemo)db.doc('app/orion-mem').set({v:1,at:Date.now(),items:m});}catch(e){}},memLoad:async()=>{try{if(!db||!window.mlUser)return null;const d=await db.doc('app/orion-mem').get();return d&&d.exists?((d.data()||{}).items||[]):[];}catch(e){return null;}}}})&&MSC.last&&$('ob').hidden&&!document.getElementById('mlAuth'))window.Mascot.sync(msPayload(MSC.last));}catch(e){}});
+  const boot=()=>add('mascot.js?v=20261124025500',()=>{try{if(window.Mascot&&window.Mascot.init({host:$('mascot'),app:{buzz,askName:()=>{if(window.MLX&&MLX.askName)MLX.askName();},addAlert:(y,v)=>window.MLX&&MLX.addAlert?MLX.addAlert(y,v):null,voice:(t,x)=>window.mlVoice?window.mlVoice(t,x):null,ask:(q,y,x,p)=>window.mlAsk?window.mlAsk(q,y,x,p):null,act:(k,x)=>mlVoiceAct(k,x),news:y=>window.mlNews?window.mlNews(y):null,pushOn:()=>window.MLX&&MLX.pushOn?MLX.pushOn():true,pushRefresh:()=>{try{if(window.MLX&&MLX.pushRefresh)MLX.pushRefresh();}catch(e){}},docSave:(n,v)=>{try{if(db&&window.mlUser&&!window.mlDemo)db.doc('app/'+n).set({v:1,at:Date.now(),items:v});}catch(e){}},docLoad:async n=>{try{if(!db||!window.mlUser)return null;const d=await db.doc('app/'+n).get();return d&&d.exists?((d.data()||{}).items||[]):[];}catch(e){return null;}},notify:(t,b)=>{try{if(document.hidden&&window.Notification&&Notification.permission==='granted')new Notification(t,{body:b,icon:'icon-192.png'});}catch(e){}},memSave:m=>{try{if(db&&window.mlUser&&!window.mlDemo)db.doc('app/orion-mem').set({v:1,at:Date.now(),items:m});}catch(e){}},memLoad:async()=>{try{if(!db||!window.mlUser)return null;const d=await db.doc('app/orion-mem').get();return d&&d.exists?((d.data()||{}).items||[]):[];}catch(e){return null;}}}})&&MSC.last&&$('ob').hidden&&!document.getElementById('mlAuth'))window.Mascot.sync(msPayload(MSC.last));}catch(e){}});
   setTimeout(boot,300);}
 function render(){const D=derive();renderHeader();renderHome(D);renderGrowth();renderCoins(D);renderStrategy(D);renderActivity();renderD14();renderInst();if(window.MLX)try{MLX.render(D);}catch(e){console.error(e);}earnNudge();if(cvSym&&$('coinSheet').classList.contains('open'))renderCoinView();}
 document.body.classList.add('loading');
@@ -3230,9 +3245,9 @@ render();requestAnimationFrame(inkMove);setTimeout(inkMove,600);
     sy=null;swipe=null;pull=0;armed=false;},{passive:true});
 })();
 </script>
-<script src="plus.js?v=20261118124900"></script>
-<script src="wins.js?v=20261118124900"></script>
-<script src="folds.js?v=20261118124900"></script>
+<script src="plus.js?v=20261124025500"></script>
+<script src="wins.js?v=20261124025500"></script>
+<script src="folds.js?v=20261124025500"></script>
 <script>
 /* ===== 12.11.2026: ползунок «Купить», смахнуть запись влево с «рассыпанием» монеты ===== */
 (function(){
