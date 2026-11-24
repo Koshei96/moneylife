@@ -2018,6 +2018,69 @@ def run_browser():
             else: fail('складки: запоминание', str(st2))
         scenario('Складки', {'session': True, 'docs': SEED}, s_folds)
 
+        # --- ширина складок (24.11.2026, жалоба владельца, BACKLOG Н3): у .fold-b не было ширины колонки — сетка растягивалась
+        #     под содержимое (лента 19 месяцев «Плана альткоинов» = 2272 px), лента не листалась, правое и текст под ней обрезались
+        ALT_SYMS = ['ARB', 'FET', 'AAVE', 'LINK', 'IMX', 'FIL', 'ONDO', 'DOGE', 'XRP', 'OP', 'RNDR', 'UNI', 'PYTH', 'SAND', 'AR', 'MKR', 'SHIB', 'XLM', 'TIA']
+        ALT_KEYS = [f'2026-{m:02d}' for m in range(6, 13)] + [f'2027-{m:02d}' for m in range(1, 13)]
+        ALTPLAN = [{'col': 'app', 'id': 'altplan', 'data': {'approved': True,
+                    'months': {k: {'sym': s, 'theme': 'Тема ' + s} for k, s in zip(ALT_KEYS, ALT_SYMS)},
+                    'note': 'Тестовый план: одна монета в месяц, сумма — доля альткоинов из DCA. Длинная строка пояснения, чтобы проверить перенос под лентой.'}}]
+        FOLD_W = """(()=>{const vw=innerWidth,bad=[];
+            for(const f of document.querySelectorAll('.fold')){const fr=f.getBoundingClientRect();if(!fr.width)continue;
+              for(const e of [f,f.querySelector(':scope>.fold-b'),f.querySelector(':scope>.fold-b>.fold-in')]){if(!e)continue;const r=e.getBoundingClientRect();
+                if(r.width&&(r.left<-0.5||r.right>vw+0.5||r.width>fr.width+0.5))bad.push(f.dataset.fkey+'.'+e.className.split(' ')[0]+'='+Math.round(r.width));}}
+            return {bad,n:document.querySelectorAll('.fold').length,doc:document.documentElement.scrollWidth,vw}})()"""
+        for fw in (360, 390):
+            def s_fold_width(pg, n, fw=fw):
+                pg.set_viewport_size({'width': fw, 'height': 844}); wait_app(pg); pg.wait_for_timeout(800)
+                bad, seen = [], 0
+                for tab in ('home', 'coins', 'strategy', 'activity', 'settings'):
+                    if tab == 'settings': pg.evaluate("openSettings()")
+                    else: pg.evaluate(f"closeSheets();show('{tab}')")
+                    pg.wait_for_timeout(900)
+                    r = pg.evaluate(FOLD_W); seen += r['n']
+                    bad += [f'{tab}: {x}' for x in r['bad']] + ([f'{tab}: страница {r["doc"]} px'] if r['doc'] > r['vw'] else [])
+                if not bad and seen: ok(f'складки: ни одна не шире экрана ({fw} px, вкладки и настройки, складки раскрыты)')
+                else: fail(f'складки: ширина на {fw} px', '; '.join(bad)[:500] or 'складок не найдено')
+            scenario(f'Складки: ширина {fw} px', {'session': True, 'docs': SEED + ALTPLAN}, s_fold_width, clock='2026-11-24T10:00:00Z')
+
+            def s_alt_scroll(pg, n, fw=fw):
+                pg.set_viewport_size({'width': fw, 'height': 844}); wait_app(pg)
+                pg.evaluate("show('strategy')"); pg.wait_for_timeout(900)
+                pg.evaluate("mlFolds.open('altplan',true)"); pg.wait_for_timeout(900)
+                pg.evaluate("document.getElementById('planCard').scrollIntoView({block:'center'})"); pg.wait_for_timeout(500)
+                G = """(()=>{const b=document.getElementById('planMonths'),c=document.getElementById('planCard'),t=document.getElementById('planNote'),
+                    cur=b.querySelector('.mo.cur'),R=e=>e.getBoundingClientRect(),br=R(b),cr=R(c),tr=R(t),ur=cur?R(cur):null;
+                    return {n:b.children.length,cw:b.clientWidth,sw:b.scrollWidth,sl:b.scrollLeft,bl:br.left,brr:br.right,cl:cr.left,crr:cr.right,vw:innerWidth,
+                      cur:cur?cur.textContent:'',ul:ur?ur.left:-1,ur:ur?ur.right:-1,tl:tr.left,tr:tr.right,tw:t.clientWidth,tsw:t.scrollWidth,txt:t.textContent}})()"""
+                a = pg.evaluate(G)
+                # 1) лента внутри карточки и экрана, и при этом шире видимой области — есть что листать
+                if a['n'] == 19 and a['cl'] - 0.5 <= a['bl'] and a['brr'] <= min(a['crr'], a['vw']) + 0.5 and a['sw'] > a['cw'] + 300:
+                    ok(f'план альткоинов ({fw} px): 19 месяцев, лента в пределах карточки ({a["cw"]} px), содержимое шире ({a["sw"]} px)')
+                else: fail(f'план альткоинов ({fw} px): ширина ленты', str({k: a[k] for k in ('n', 'cw', 'sw', 'bl', 'brr', 'cl', 'crr', 'vw')}))
+                # 2) карточка текущего месяца (ноябрь 2026) видна сразу — лента сама подкручена к ней
+                if 'FIL' in a['cur'] and a['ul'] >= a['bl'] - 0.5 and a['ur'] <= a['brr'] + 0.5 and a['sl'] > 0:
+                    ok(f'план альткоинов ({fw} px): текущий месяц (FIL) виден сразу, лента подкручена к нему')
+                else: fail(f'план альткоинов ({fw} px): текущий месяц', str({k: a[k] for k in ('cur', 'ul', 'ur', 'bl', 'brr', 'sl')}))
+                # 3) пальцем/колесом лента листается: в начало (июнь) и до конца (декабрь 2027)
+                pg.evaluate("document.getElementById('planMonths').scrollLeft=0"); pg.wait_for_timeout(200)
+                box = pg.evaluate("(()=>{const r=document.getElementById('planMonths').getBoundingClientRect();return [r.left+r.width/2,r.top+r.height/2]})()")
+                pg.mouse.move(box[0], box[1]); pg.mouse.wheel(260, 0); pg.wait_for_timeout(700)
+                s1 = pg.evaluate("document.getElementById('planMonths').scrollLeft")
+                pg.evaluate("(()=>{const b=document.getElementById('planMonths');b.style.scrollSnapType='none';b.scrollLeft=b.scrollWidth})()"); pg.wait_for_timeout(300)
+                e = pg.evaluate("""(()=>{const b=document.getElementById('planMonths'),l=b.lastElementChild,br=b.getBoundingClientRect(),lr=l.getBoundingClientRect();
+                    b.style.scrollSnapType='';return {sl:b.scrollLeft,max:b.scrollWidth-b.clientWidth,lr:lr.right,brr:br.right,ll:lr.left,last:l.textContent}})()""")
+                if s1 > 0 and e['sl'] > 0 and abs(e['sl'] - e['max']) <= 1 and e['ll'] >= 0 and e['lr'] <= e['brr'] + 0.5 and 'TIA' in e['last']:
+                    ok(f'план альткоинов ({fw} px): лента листается (колесо → {round(s1)} px), последний месяц (TIA, дек 2027) доступен')
+                else: fail(f'план альткоинов ({fw} px): прокрутка', f'колесо {s1}, конец {e}')
+                # 4) текст под лентой — в карточке, с переносом, не обрезан справа
+                if a['tl'] >= a['cl'] - 0.5 and a['tr'] <= min(a['crr'], a['vw']) + 0.5 and a['tsw'] <= a['tw'] + 1 and 'Альткоин месяца сейчас: FIL' in a['txt']:
+                    ok(f'план альткоинов ({fw} px): текст под лентой целиком в карточке')
+                else: fail(f'план альткоинов ({fw} px): текст под лентой', str({k: a[k] for k in ('tl', 'tr', 'tw', 'tsw', 'cl', 'crr')}))
+                pg.evaluate("scrollPlan()"); pg.wait_for_timeout(300)
+                shot(pg, f'alt-plan-{fw}')
+            scenario(f'План альткоинов: прокрутка {fw} px', {'session': True, 'docs': SEED + ALTPLAN}, s_alt_scroll, clock='2026-11-24T10:00:00Z')
+
         # --- панель вкладок (12.11.2026): у активной вкладки значок поднимается в круге, подпись видна только у неё
         def s_orb(pg, n):
             pg.click('[data-tab="coins"]'); pg.wait_for_timeout(1000)
