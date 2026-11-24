@@ -1609,7 +1609,10 @@ def run_browser():
               z=both(); await M.ask('удали заметку про сталь'); await M.ask('какие у меня заметки'); await M.ask('удали заметку'); out.g4=[z,both(),said()];
               z=both(); await M.ask('отмени напоминание про сталь'); await M.ask('какие у меня напоминания'); await M.ask('отмени напоминание'); out.g5=[z,both(),said()];
               z=both(); await M.ask('отмени напоминание про сталь'); await M.ask('скасуй'); out.g6=[z,both(),said()];
-              await M.ask('удали заметку про сталь'); await M.ask('нет'); await M.ask('запиши заметку: временная2'); z=mine(); await M.ask('удали заметку'); out.g7=[z,mine(),said()];
+              z=both(); await M.ask('удали заметку про сталь'); await M.ask('не понял'); await M.ask('удали заметку'); out.g8=[z,both(),said()];
+              z=both(); await M.ask('удали заметку про сталь'); await M.ask('не слышу, повтори'); await M.ask('удали последнюю заметку'); out.g9=[z,both(),said()];
+              z=both(); await M.ask('удали заметку про сталь'); await M.ask('нет'); await M.ask('удали заметку'); out.g10=[z,both(),said()];
+              await M.ask('удали заметку про сталь'); await M.ask('нет, не удаляй'); M.pendAge(121); await M.ask('запиши заметку: временная2'); z=mine(); await M.ask('удали заметку'); out.g7=[z,mine(),said()];
               T.notes().filter(x=>!keep.has(x.id)).forEach(x=>T.delNote(x.id)); T.rem().filter(x=>!keepR.has(x.id)).forEach(x=>T.delRem(x.id)); return out;})()""")
             askm = lambda q: (re.match(r'^(?:Удалить заметку|Отменить напоминание) «(.+)»\? Скажите «да» или «нет»\.$', q or '') or [None, None])[1]
             p = cf['p']; named = askm(p[1])
@@ -1640,6 +1643,8 @@ def run_browser():
             if not (ry[1] == 'Отменить напоминание «позвонить брокеру про комиссию»? Скажите «да» или «нет».' and ry[2] == 'Отменил напоминание: «позвонить брокеру про комиссию».' and gone(ry[0], ry[3]) == ['позвонить брокеру про комиссию'] and len(ry[3]) == len(ry[0]) - 1): cbad.append(('напоминание+да', ry))
             for k in ('g1', 'g2', 'g3', 'g4', 'g5'):
                 if cf[k][1] != cf[k][0] or not cf[k][0][0] or not cf[k][0][1]: cbad.append((k + ': ничего не должно быть снято', cf[k]))
+            for k in ('g8', 'g9', 'g10'):
+                if cf[k][1] != cf[k][0] or not str(cf[k][2]).startswith('Я уже не жду ответа'): cbad.append((k + ': «не понял» / «нет», потом «голая» команда — ничего не снято', cf[k]))
             for k in ('g2', 'g3', 'g4', 'g5'):
                 if not str(cf[k][2]).startswith('Я уже не жду ответа'): cbad.append((k + ': нет «Я уже не жду ответа»', cf[k][2]))
             g6 = cf['g6']
