@@ -264,11 +264,11 @@
   const hostFail = {};
   const hostUp = h => !hostFail[h] || Date.now() >= hostFail[h].until;
   function hostBad(h) { const f = hostFail[h] || (hostFail[h] = { n: 0, until: 0 }); if (++f.n >= 3) { f.until = Date.now() + 60000; f.n = 0; } }
-  /* null — такой пары на бирже нет; исключение — сбой сети или сервера */
-  async function exJson(host, path) {
+  /* null — такой пары на бирже нет; исключение — сбой сети или сервера; quiet — фоновая подгрузка: её сбой не в счёт */
+  async function exJson(host, path, quiet) {
     if (!hostUp(host)) throw new Error('пропуск ' + host);
     let r;
-    try { r = await fetchT(host + path, 10000); } catch (e) { hostBad(host); throw e; }
+    try { r = await fetchT(host + path, 10000); } catch (e) { if (!quiet) hostBad(host); throw e; }
     delete hostFail[host];
     if (r.status === 400 || r.status === 404) return null;
     if (!r.ok) throw new Error('HTTP ' + r.status);
@@ -279,22 +279,32 @@
   const missed = k => miss[k] && Date.now() - miss[k] < 7 * 864e5;
   const setMiss = k => { miss[k] = Date.now(); try { localStorage.setItem('exMiss', JSON.stringify(miss)); } catch (e) {} };
 
-  /* кэш в памяти и на телефоне; staleOk — при сбое отдать прошлые данные */
-  function cached(key, ttl, load, staleOk) {
+  /* кэш в памяти и на телефоне; staleOk — при сбое отдать прошлые данные;
+     swr — устаревшую копию отдать сразу ({…копия, fresh}), а свежие данные загрузить в фоне: fresh — обещание
+     новой записи или null (сеть не ответила — остаётся копия) */
+  function cached(key, ttl, load, staleOk, swr) {
     const now = Date.now();
     let m = mem.get(key);
     if (!m) { try { m = JSON.parse(localStorage.getItem(LS + key) || 'null'); if (m) mem.set(key, m); } catch (e) {} }
     if (m && now - m.at < ttl) return Promise.resolve(m);
-    if (inflight.has(key)) return inflight.get(key);
-    const p = Promise.resolve().then(load).then(body => {
-      const rec = { body, at: Date.now() };
-      mem.set(key, rec);
-      try { localStorage.setItem(LS + key, JSON.stringify(rec)); } catch (e) {}
-      return rec;
-    }, err => { if (staleOk && m) return m; throw err; })
-      .finally(() => inflight.delete(key));
-    inflight.set(key, p);
-    return p;
+    const net = () => {
+      if (inflight.has(key)) return inflight.get(key);
+      const p = Promise.resolve().then(load).then(body => {
+        const rec = { body, at: Date.now() };
+        mem.set(key, rec);
+        try { localStorage.setItem(LS + key, JSON.stringify(rec)); } catch (e) {}
+        return rec;
+      }, err => { if (staleOk && m) return m; throw err; })
+        .finally(() => inflight.delete(key));
+      inflight.set(key, p);
+      return p;
+    };
+    if (swr && m) {
+      const old = m;
+      const fresh = net().then(r => (r && r !== old && r.at !== old.at ? r : null), () => null);
+      return Promise.resolve({ body: old.body, at: old.at, fresh });
+    }
+    return net();
   }
 
   /* тикер монеты: из ответа CoinGecko, а если его не было — из списка монет самого приложения */
@@ -332,11 +342,11 @@
   const BN_PLAN = { '1': ['15m', 96], '7': ['1h', 168], '14': ['2h', 168], '30': ['6h', 120], '90': ['12h', 180], '180': ['1d', 180], '365': ['1d', 365], 'max': ['1w', 1000] };
   const GT_PLAN = { '1': ['15m', 96], '7': ['1h', 168], '14': ['4h', 84], '30': ['4h', 180], '90': ['8h', 270], '180': ['1d', 180], '365': ['1d', 365], 'max': ['7d', 1000] };
   const planFor = (P, days) => P[days] || ['1d', Math.max(2, Math.min(1000, Math.round(+days) || 365))];
-  async function binanceChart(id, sym, days) {
+  async function binanceChart(id, sym, days, quiet) {
     const [iv, lim] = planFor(BN_PLAN, days);
     for (const h of BN) {
       let k;
-      try { k = await exJson(h, '/api/v3/klines?symbol=' + sym + 'USDT&interval=' + iv + '&limit=' + lim); } catch (e) { continue; }
+      try { k = await exJson(h, '/api/v3/klines?symbol=' + sym + 'USDT&interval=' + iv + '&limit=' + lim, quiet); } catch (e) { continue; }
       if (k === null) { setMiss('bn:' + sym); return null; }
       if (!Array.isArray(k) || k.length < 2) return null;
       const v = verdict(id, +k[k.length - 1][4]);
@@ -346,10 +356,10 @@
     }
     return null;
   }
-  async function gateChart(id, sym, days) {
+  async function gateChart(id, sym, days, quiet) {
     const [iv, lim] = planFor(GT_PLAN, days);
     let k;
-    try { k = await exJson(GT, '/spot/candlesticks?currency_pair=' + sym + '_USDT&interval=' + iv + '&limit=' + lim); } catch (e) { return null; }
+    try { k = await exJson(GT, '/spot/candlesticks?currency_pair=' + sym + '_USDT&interval=' + iv + '&limit=' + lim, quiet); } catch (e) { return null; }
     if (k === null) { setMiss('gt:' + sym); return null; }
     if (!Array.isArray(k) || k.length < 2) return null;
     const v = verdict(id, +k[k.length - 1][2]);
@@ -357,11 +367,11 @@
     if (v !== true) return null;
     return pack(thin(k.map(x => [+x[0] * 1000, +x[2]])), Date.now(), 'gate');
   }
-  async function exchangeChart(id, days) {
+  async function exchangeChart(id, days, quiet) {
     const sym = exSym(id);
     if (!sym || NOT_EX.has(sym)) return null;
-    if (!missed('bn:' + sym)) { const r = await binanceChart(id, sym, days); if (r) return r; }
-    if (!missed('gt:' + sym)) { const r = await gateChart(id, sym, days); if (r) return r; }
+    if (!missed('bn:' + sym)) { const r = await binanceChart(id, sym, days, quiet); if (r) return r; }
+    if (!missed('gt:' + sym)) { const r = await gateChart(id, sym, days, quiet); if (r) return r; }
     return null;
   }
   async function coingeckoChart(id, days) {
@@ -371,11 +381,20 @@
     if (p.length < 2) { const e = new Error('Нет истории цены'); e.code = 'tool_error'; throw e; }
     return pack(p, p[p.length - 1][0], 'coingecko');
   }
+  /* история цены: копия младше часа (6 ч для года и «всё») — без сети; копия старше — сразу, а свежая догружается
+     в фоне (fresh: обещание нового ответа или null). warm — заранее после запуска: только биржи и без учёта сбоев,
+     чтобы не тратить лимит CoinGecko и не вставать в очередь перед текущими ценами */
   async function chart(input) {
-    const id = String(input.id || ''), days = String(input.days || '365');
+    const id = String(input.id || ''), days = String(input.days || '365'), key = 'ch:' + id + '|' + days;
     const ttl = days === '365' || days === 'max' ? 6 * 3600000 : 3600000;   /* текущая цена всё равно дорисовывается вживую */
-    const { body, at } = await cached('ch:' + id + '|' + days, ttl, async () => (await exchangeChart(id, days)) || coingeckoChart(id, days), true);
-    return { payload: body, cache: { storedAt: at } };
+    const full = async () => (await exchangeChart(id, days)) || coingeckoChart(id, days);
+    const light = async () => { const r = await exchangeChart(id, days, true); if (r) return r; const e = new Error('Нет на биржах'); e.code = 'warm_skip'; throw e; };
+    let rec;
+    try { rec = await cached(key, ttl, input.warm ? light : full, true, true); }
+    catch (e) { if (input.warm || e.code !== 'warm_skip') throw e; rec = await cached(key, ttl, full, true, true); }   /* попали на фоновую подгрузку без CoinGecko — спрашиваем как обычно */
+    const out = { payload: rec.body, cache: { storedAt: rec.at } };
+    if (rec.fresh) out.fresh = rec.fresh.then(r => (r ? { payload: r.body, cache: { storedAt: r.at } } : null));
+    return out;
   }
 
   /* текущие цены с бирж — когда CoinGecko не отвечает (без мини-графиков за 7 дней) */
