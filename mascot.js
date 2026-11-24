@@ -841,7 +841,7 @@
   const NAME_N = { BTC: 'Биткоин', ETH: 'Эфир', SOL: 'Солана', XRP: 'Рипл', DOGE: 'Доги', TON: 'Тон', ADA: 'Кардано' };
   /* украинский вопрос → русские основы слов, по которым Орион понимает вопрос на телефоне */
   const UKQ = [['скільки', 'сколько'], ['в мене', 'у меня'], ['у мене', 'у меня'], ['мене', 'меня'], ['моїх', 'моих'], ['мої', 'мои'], ['мій', 'мой'], ['мого', 'моего'], ['чи є', 'есть ли'],
-    ['повідом', 'сообщи'], ['нагадай', 'напомни'], ['попередь', 'предупреди'], ['дай знати', 'дай знать'], ['сповіст', 'оповест'], ['коли', 'когда'], ['якщо', 'если'], ['буде', 'будет'],
+    ['видали останню нотатку', 'удали последнюю заметку'], ['видали нотатку', 'удали заметку'], ['скасуй нагадування', 'отмени напоминание'], ['видали нагадування', 'удали напоминание'], ['повідом', 'сообщи'], ['нагадай', 'напомни'], ['попередь', 'предупреди'], ['дай знати', 'дай знать'], ['сповіст', 'оповест'], ['коли', 'когда'], ['якщо', 'если'], ['буде', 'будет'],
     ['тижн', 'недел'], ['тиждень', 'неделя'], ['серія', 'серия'], ['серії', 'серии'], ['поспіль', 'подряд'], ['сходинк', 'ступен'], ['сходин', 'ступен'], ['сходами', 'лестницей'], ['сходах', 'лестнице'], ['сходів', 'лестницы'], ['сходи', 'лестница'], ['що з', 'что с'], ['що зі', 'что с'],
     ['просідан', 'просадк'], ['докупівл', 'докупк'], ['місяц', 'месяц'], ['місяць', 'месяц'], ['жадібн', 'жадн'], ['настр', 'настроени'], ['усього', 'всего'], ['всього', 'всего'], ['грошей', 'денег'],
     ['підсумок', 'итог'], ['підсумк', 'итог'], ['дякую', 'спасибо'], ['хто ти', 'кто ты'], ['що ти вмієш', 'что ты умеешь'], ['що вмієш', 'что умеешь'], ['допомож', 'помоги'], ['допомог', 'помощ'],
@@ -1171,6 +1171,28 @@
     const hit = list.filter(x => { const w = norm(x.t).split(WSPLIT).filter(y => !ABOUT_NEVER.test(y)); return ab.stems.every(st => w.some(y => y.indexOf(st.s) === 0 && (st.adj ? ABOUT_TAIL_ADJ : st.o ? ABOUT_TAIL_O : ABOUT_TAIL).test(y.slice(st.s.length)))); });
     return hit.reduce((b, x) => (!b || (+x.at || 0) >= (+b.at || 0) ? x : b), null);   /* при равном времени — записанная позже */
   }
+  /* «удали заметку / отмени напоминание про X» — с переспросом (24.11.2026, BACKLOG №1, решение директора после 4 кругов ревью PR №12).
+     Поиск выше только выбирает кандидата: Орион называет запись и ждёт «да» 20 секунд. Ожидание — в ST.pendDel (вид, id записи, время), не в базе.
+     «Да» — удаляется ровно эта запись по id (без повторного поиска); «нет», тишина, другой вопрос — ничего не удаляется. */
+  const DEL_WAIT = 20;
+  const DEL_YES = /^\s*(?:да|ага|угу|так|конечно|давай|удали|удаляй|отмени|отменяй|видали|видаляй|скасуй|подтверждаю)(?:[\s,.!?]+(?:да|так|давай|удали|удаляй|отмени|видали|скасуй|конечно|пожалуйста|будь|ласка|ее|е|его|ии|його|заметку|нотатку|напоминание|нагадування))*[\s,.!?]*$/,
+    DEL_NO = /^\s*(?:нет|не|ни|ні|оставь\S*|залиш\S*|стоп|отбой)(?=[\s,.!?]|$)/;
+  let tcRaw = false;   /* ответ команды уже на языке человека — словарь перевода его не трогает (в нём текст заметки) */
+  const delName = s => { s = String(s || '').replace(/\s+/g, ' ').trim(); if (s.length <= 60) return s; const c = s.slice(0, 59).replace(/[\s,.;:—-]+\S*$/, ''); return (c.length >= 20 ? c : s.slice(0, 59)) + '…'; };
+  function delAsk(kind, x) {
+    const pd = ST.pendDel = { kind, id: x.id, t: x.t, at: now() }, nm = delName(x.t); ST.pendingMemo = null;
+    clearTimeout(ST.pendDelT); ST.pendDelT = setTimeout(() => { if (ST.pendDel === pd) ST.pendDel = null; }, DEL_WAIT * 1000 + 500);
+    tcRaw = true;
+    return kind === 'notes' ? (UK ? 'Видалити нотатку «' + nm + '»? Скажіть «так» або «ні».' : 'Удалить заметку «' + nm + '»? Скажите «да» или «нет».')
+      : (UK ? 'Скасувати нагадування «' + nm + '»? Скажіть «так» або «ні».' : 'Отменить напоминание «' + nm + '»? Скажите «да» или «нет».');
+  }
+  function delDo(pd) {   /* ровно одна запись — та, которую назвал Орион */
+    const L = TASK[pd.kind] || [], i = pd.id ? L.findIndex(y => y && y.id === pd.id) : -1, nm = delName(pd.t);
+    if (i < 0) return UK ? 'Цього запису вже немає — нічого не видаляв.' : 'Этой записи уже нет — ничего не удалял.';
+    const x = L[i]; TASK[pd.kind] = L.filter((y, j) => j !== i); taskSave(pd.kind);
+    if (pd.kind === 'notes') { logAct('Удалил заметку: ' + x.t); return (UK ? 'Видалив: «' : 'Удалил: «') + nm + '».'; }
+    logAct('Отменил напоминание: ' + x.t); return (UK ? 'Скасував нагадування: «' : 'Отменил напоминание: «') + nm + '».';
+  }
   /* команды телефона: без сервера и без затрат */
   function taskCmd(t, q) {
     if (/^(открой|покажи|давай|відкрий)\s+(этот\s+|мне\s+)?урок$|^давай урок$/.test(t.trim()) && ST.lessonOffer && now() - ST.lessonOffer.at < 1800 && window.MLX && MLX.lesson) {
@@ -1186,10 +1208,10 @@
     }
     if (/^удали\s+(последнюю\s+)?заметку/.test(t)) {
       const ab = aboutQ(t, q);
-      if (ab) {   /* «удали заметку про налоги» — снимаем самую свежую из тех, где есть эти слова; нет такой — ничего не трогаем */
+      if (ab) {   /* «удали заметку про налоги» — самая свежая из тех, где есть эти слова, — Орион её называет и ждёт «да»; нет такой — ничего не трогаем */
         if (!ab.stems.length) return 'Про что удалить заметку?';
         const x = aboutPick(TASK.notes, ab); if (!x) return 'Не нашёл заметку про ' + ab.raw + '.';
-        TASK.notes = TASK.notes.filter(y => y !== x); taskSave('notes'); logAct('Удалил заметку: ' + x.t); return 'Удалил: ' + x.t + '.';
+        return delAsk('notes', x);
       }
       const x = TASK.notes.pop(); if (!x) return 'Заметок нет.'; taskSave('notes'); logAct('Удалил заметку: ' + x.t); return 'Удалил: ' + x.t + '.';
     }
@@ -1198,10 +1220,10 @@
       if (!L.length) return 'Напоминаний нет.';
       return L.slice(0, 3).map(x => whenW(x.when) + ' — ' + x.t).join('; ') + '.';
     }
-    if (/^(отмени|удали|убери)\s+(все\s+)?напоминани/.test(t) && aboutQ(t, q)) {   /* «отмени напоминание про биржу» — только подходящее, самое свежее */
+    if (/^(отмени|удали|убери)\s+(все\s+)?напоминани/.test(t) && aboutQ(t, q)) {   /* «отмени напоминание про биржу» — только подходящее, самое свежее, и только после «да» */
       const ab = aboutQ(t, q); if (!ab.stems.length) return 'Про что отменить напоминание?';
       const x = aboutPick(TASK.rem.filter(y => !y.done), ab); if (!x) return 'Не нашёл напоминание про ' + ab.raw + '.';
-      TASK.rem = TASK.rem.filter(y => y !== x); taskSave('rem'); logAct('Отменил напоминание: ' + x.t); return 'Отменил напоминание: ' + x.t + '.';
+      return delAsk('rem', x);
     }
     if (/^(отмени|удали|убери)\s+(все\s+)?напоминани/.test(t)) { const n = TASK.rem.filter(x => !x.done).length; TASK.rem = TASK.rem.filter(x => x.done); taskSave('rem'); logAct('Отменил напоминания: ' + n); return n ? 'Отменил.' : 'Напоминаний и так нет.'; }
     return '';
@@ -1212,6 +1234,13 @@
     const sure = local && local.indexOf(UNK) !== 0 && !/^Не расслышал/.test(local);
     const follow = ST.lastBrain && now() - ST.lastBrain < 120 && (/^\s*(а|и|ну|тогда|а\s+если)(?=[\s,?!.]|$)/.test(t) || t.trim().split(/\s+/).length <= 3) && !/(у меня|мои |мой |сколько у)/.test(t);   /* переспрос: «а эфир?», «а почему?» */
     const toBrain = A.ask && t.trim() && (remQ(t) || buyQ(t) || (!(alertQ(t) && sure) && (marketQ(t) || !sure || follow)));   /* «напомни завтра в 9…» — разбирает «мозг» (дата и время) */
+    if (ST.pendDel) {   /* ответ на «Удалить заметку «…»?» — только в течение 20 секунд; всё, кроме «да», ничего не удаляет */
+      const pd = ST.pendDel; ST.pendDel = null; clearTimeout(ST.pendDelT);
+      if (now() - pd.at <= DEL_WAIT) {
+        if (DEL_YES.test(t)) { speak(delDo(pd), { pri: 2, raw: true }); return; }
+        if (DEL_NO.test(t) || !t.trim()) { speak(UK ? 'Добре, залишив.' : 'Хорошо, оставил.', { pri: 2, raw: true }); return; }
+      }
+    }
     if (ST.pendingMemo && now() - ST.pendingMemo.at < 60) {   /* ответ на «Запомнить: …?» */
       const pm = ST.pendingMemo; ST.pendingMemo = null;
       if (YES.test(t)) { const okm = memAdd(pm.t); speak(okm ? 'Запомнил.' : 'Это я не запоминаю.', { pri: 2 }); return; }
@@ -1219,8 +1248,8 @@
     }
     const mc = memCmd(t, q);
     if (mc) { speak(mc, { pri: 2, follow: byVoice }); return; }
-    const tc = taskCmd(t, q);
-    if (tc) { speak(tc, { pri: 2, follow: byVoice && !/^Открываю/.test(tc) }); return; }
+    tcRaw = false; const tc = taskCmd(t, q);
+    if (tc) { speak(tc, { pri: 2, follow: byVoice && !/^Открываю/.test(tc), raw: tcRaw }); return; }
     const fu = localFollow(t);
     if (fu) { remember(q, fu, PRIV.test(fu)); speak(fu, { pri: 2, follow: byVoice }); return; }
     if (!toBrain) {
@@ -1582,7 +1611,9 @@
       brief: () => brief(),
       reply: q => reply(q),
       event: (n, d) => trigger(n, d, true),
-      due: () => newsDue()
+      due: () => newsDue(),
+      pendDel: () => (ST.pendDel ? { kind: ST.pendDel.kind, id: ST.pendDel.id, t: ST.pendDel.t } : null),
+      pendAge: sec => { if (ST.pendDel) ST.pendDel.at -= sec; }   /* проверка «молчание 20 с» без настоящего ожидания */
     }
   };
 })();
