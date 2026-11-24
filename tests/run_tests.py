@@ -1601,6 +1601,15 @@ def run_browser():
               r=act(); await M.ask('отмени напоминание про сталь'); M.pendAge(21); await M.ask('отмени напоминания'); out.rmn=[r,act(),said()];
               b=mine(); await M.ask('удали заметку про сталь'); await M.ask('удали последнюю заметку'); out.wlast=[b,mine(),said()];
               r=act(); await M.ask('отмени напоминание про брокера'); q=said(); await M.ask('да, отмени'); out.ry=[r,q,said(),act()];
+              // ревью Глеба 24.11, круг 3: «отмени» на вопрос про заметку, ответ с названием записи другого вида, другой вопрос между вопросом и «голой» командой
+              const both=()=>[mine(),act()];
+              let z=both(); await M.ask('удали заметку про сталь'); await M.ask('отмени'); out.g1=[z,both()];
+              z=both(); await M.ask('удали заметку про сталь'); await M.ask('отмени напоминание'); out.g2=[z,both(),said()];
+              z=both(); await M.ask('отмени напоминание про сталь'); await M.ask('удали заметку'); out.g3=[z,both(),said()];
+              z=both(); await M.ask('удали заметку про сталь'); await M.ask('какие у меня заметки'); await M.ask('удали заметку'); out.g4=[z,both(),said()];
+              z=both(); await M.ask('отмени напоминание про сталь'); await M.ask('какие у меня напоминания'); await M.ask('отмени напоминание'); out.g5=[z,both(),said()];
+              z=both(); await M.ask('отмени напоминание про сталь'); await M.ask('скасуй'); out.g6=[z,both(),said()];
+              await M.ask('удали заметку про сталь'); await M.ask('нет'); await M.ask('запиши заметку: временная2'); z=mine(); await M.ask('удали заметку'); out.g7=[z,mine(),said()];
               T.notes().filter(x=>!keep.has(x.id)).forEach(x=>T.delNote(x.id)); T.rem().filter(x=>!keepR.has(x.id)).forEach(x=>T.delRem(x.id)); return out;})()""")
             askm = lambda q: (re.match(r'^(?:Удалить заметку|Отменить напоминание) «(.+)»\? Скажите «да» или «нет»\.$', q or '') or [None, None])[1]
             p = cf['p']; named = askm(p[1])
@@ -1629,6 +1638,14 @@ def run_browser():
             if not (rn[1] == 'Отменить напоминание «BTC стал дороже — проверить ступени»? Скажите «да» или «нет».' and rn[2] == 'Хорошо, оставил.' and rn[3] == rn[0]): cbad.append(('напоминание+ні', rn))
             ry = cf['ry']
             if not (ry[1] == 'Отменить напоминание «позвонить брокеру про комиссию»? Скажите «да» или «нет».' and ry[2] == 'Отменил напоминание: «позвонить брокеру про комиссию».' and gone(ry[0], ry[3]) == ['позвонить брокеру про комиссию'] and len(ry[3]) == len(ry[0]) - 1): cbad.append(('напоминание+да', ry))
+            for k in ('g1', 'g2', 'g3', 'g4', 'g5'):
+                if cf[k][1] != cf[k][0] or not cf[k][0][0] or not cf[k][0][1]: cbad.append((k + ': ничего не должно быть снято', cf[k]))
+            for k in ('g2', 'g3', 'g4', 'g5'):
+                if not str(cf[k][2]).startswith('Я уже не жду ответа'): cbad.append((k + ': нет «Я уже не жду ответа»', cf[k][2]))
+            g6 = cf['g6']
+            if not (g6[2] == 'Отменил напоминание: «BTC стал дороже — проверить ступени».' and gone(g6[0][1], g6[1][1]) == ['BTC стал дороже — проверить ступени'] and g6[1][0] == g6[0][0]): cbad.append(('напоминание+«скасуй» — снято ровно одно', g6))
+            g7 = cf['g7']
+            if not (g7[2] == 'Удалил: временная2.' and gone(g7[0], g7[1]) == ['временная2']): cbad.append(('после «нет» «удали заметку» — как раньше', g7))
             if not cbad: ok('Орион: «удали заметку про прибыль» → «Удалить заметку «…»?» → «да» — снята ровно названная, остальные целы; «про сталь» назвал «BTC стал дороже» → «нет» — цела; «нет», «не надо», 20 с молчания, другой вопрос, «да» без вопроса — ничего не удалено; напоминания — так же')
             else: fail('Орион: удаление с переспросом', str(cbad)[:1500])
             fr = pg.evaluate("""(async()=>{const M=Mascot.debug,T=Mascot.tasks,keep=new Set(T.notes().map(x=>x.id));
