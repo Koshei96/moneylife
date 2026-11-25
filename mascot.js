@@ -1084,8 +1084,8 @@
     try { if (window.MLX && MLX.tasksRow) MLX.tasksRow(); } catch (e) {}
   }
   function logAct(t, how) { TASK.log.push({ at: Date.now(), t: String(t).slice(0, 160), how: how || 'голос' }); if (TASK.log.length > 50) TASK.log = TASK.log.slice(-50); taskSave('log'); }
-  function noteAdd(t) { t = String(t || '').replace(/\s+/g, ' ').trim().replace(/^[,:—-]\s*/, ''); if (!t) return false; TASK.notes.push({ id: uid(), at: Date.now(), t: t.slice(0, 300) }); if (TASK.notes.length > 100) TASK.notes = TASK.notes.slice(-100); taskSave('notes'); return true; }
-  function remAdd(t, when) { TASK.rem.push({ id: uid(), at: Date.now(), when, t: String(t).slice(0, 200), done: false }); TASK.rem = TASK.rem.filter(x => !x.done || Date.now() - x.when < 7 * 864e5).slice(-50); taskSave('rem'); }
+  function noteAdd(t) { t = String(t || '').replace(/\s+/g, ' ').trim().replace(/^[,:—-]\s*/, ''); if (!t) return false; TASK.notes.push({ id: uid(), at: Date.now(), t: t.slice(0, 300) }); if (ST.delMiss) ST.delMiss.notes = 0; if (TASK.notes.length > 100) TASK.notes = TASK.notes.slice(-100); taskSave('notes'); return true; }
+  function remAdd(t, when) { TASK.rem.push({ id: uid(), at: Date.now(), when, t: String(t).slice(0, 200), done: false }); if (ST.delMiss) ST.delMiss.rem = 0; TASK.rem = TASK.rem.filter(x => !x.done || Date.now() - x.when < 7 * 864e5).slice(-50); taskSave('rem'); }
   const pad2 = n => String(n).padStart(2, '0');
   const MON_G = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
   function whenW(ms) {
@@ -1161,14 +1161,16 @@
   const buyQ = t => /(запиши|внеси|добавь|запиши мне|занеси)\s+(мою\s+|мне\s+)?(покупк|что (я )?купил|что (я )?докупил)|^(я\s+)?(купил|докупил|прикупил)\s/.test(t);   /* «запиши покупку…», «я купил…» — цифры разбирает «мозг», сохраняет человек */
   /* «…про налоги»: значимые слова после «про» и их основы (короткие — целиком, длинные — без окончания), чтобы «биржу» нашла «на бирже» (18.11.2026, BACKLOG №1) */
   const ABOUT_STOP = /^(и|в|во|на|с|со|по|для|что|это|эту|этот|эти|мою|мой|мои|мое|ту|тот|те|к|ко|о|об|за|из|у|от|до|не|же|ли|бы|а|но|или|где|как|мне|меня)$/, WSPLIT = /[^a-zа-яіїєґ0-9]+/;
+  /* О.2 (25.11.2026): «о налогах», «об отпуске», «насчёт банка», укр. «щодо / стосовно податків» — как «про» */
+  const ABOUT_PREP = '(?:^|\\s)(про|о|об|обо|насч[её]т|щодо|стосовно)', ABOUT_CUT = new RegExp(ABOUT_PREP + '[\\s.,!?…]*$'), ABOUT_RE = new RegExp(ABOUT_PREP + '\\s+(.+)$'), ABOUT_RE_I = new RegExp(ABOUT_PREP + '\\s+(.+)$', 'i');
   function aboutQ(t, q) {
-    if (/(?:^|\s)про[\s.,!?…]*$/.test(t)) return { raw: '', stems: [] };   /* «удали заметку про» — оборванная речь: переспросим, ничего не снимаем */
-    const m = t.match(/(?:^|\s)про\s+(.+)$/); if (!m) return null;
-    const w = m[1].split(WSPLIT).filter(x => x && !ABOUT_STOP.test(x));
-    const rq = String(q || '').match(/(?:^|\s)про\s+(.+)$/i), raw = ((rq && rq[1]) || m[1]).replace(/[\s.,!?…]+$/, '').trim();
+    if (ABOUT_CUT.test(t)) return { raw: '', stems: [] };   /* «удали заметку про» — оборванная речь: переспросим, ничего не снимаем */
+    const m = t.match(ABOUT_RE); if (!m) return null;
+    const w = m[2].split(WSPLIT).filter(x => x && !ABOUT_STOP.test(x));
+    const rq = String(q || '').match(ABOUT_RE_I), raw = ((rq && rq[2]) || m[2]).replace(/[\s.,!?…]+$/, '').trim(), prep = rq && rq[2] ? rq[1].toLowerCase() : m[1];
     /* слово до 4 букв — целиком; длиннее — без известного окончания («налоги» → «налог», «карту» → «карт»); «налоговую» (прилагательное на «-ов/-ев») → «налогов» + ждём у заметки тоже прилагательное;
        «золото» (оканчивается на «о») — у заметки допускаем и «о»; «решение» — существительное: «решени» + «я» */
-    return { raw, stems: w.map(x => { if (x.length <= 4) return { s: x, adj: false, o: false }; const cut = e => x.length - e.length >= 3 && x.endsWith(e), ea = ABOUT_END_ADJ.find(e => cut(e) && /(ов|ев)$/.test(x.slice(0, -e.length))), e = ea || ABOUT_END_N.find(cut) || ''; return { s: x.slice(0, x.length - e.length), adj: !!ea, o: !ea && e === 'о' }; }) };
+    return { raw, prep, stems: w.map(x => { if (x.length <= 4) return { s: x, adj: false, o: false }; const cut = e => x.length - e.length >= 3 && x.endsWith(e), ea = ABOUT_END_ADJ.find(e => cut(e) && /(ов|ев)$/.test(x.slice(0, -e.length))), e = ea || ABOUT_END_N.find(cut) || ''; return { s: x.slice(0, x.length - e.length), adj: !!ea, o: !ea && e === 'о' }; }) };
   }
   /* Совпадение — то же слово в другой форме, а не однокоренное (ревью PR №12, круги 1–3). Запрос-существительное: хвост слова заметки после основы —
      только окончание, которое бывает у существительного и НЕ бывает у прилагательного (или ничего). Поэтому «ключи» — не «ключевые уровни», «фонд» — не «фондовый»,
@@ -1218,6 +1220,11 @@
     logAct('Отменил напоминание: ' + x.t); return (UK ? 'Скасував нагадування: «' : 'Отменил напоминание: «') + nm + '».';
   }
   const delGuarded = () => !!ST.delGuard && delNow() - ST.delGuard <= DEL_LATE;
+  /* О.3 (25.11.2026): после «Не нашёл заметку про …» / «Про что…?» 2 минуты «голая» команда удаления не снимает последнюю (все) сразу — Орион называет запись и ждёт «да».
+     Новая запись того же вида снимает защиту: «удали заметку» сразу после «запиши заметку» — про только что записанную.
+     Заметки и напоминания — отдельно: промах по напоминанию не снимает защиту после промаха по заметке (ревью Глеба, PR №23 круг 2) */
+  const delMiss = kind => { ST.delMiss = ST.delMiss || { notes: 0, rem: 0 }; ST.delMiss[kind] = delNow(); }, delMissed = kind => !!(ST.delMiss && ST.delMiss[kind]) && delNow() - ST.delMiss[kind] <= DEL_LATE,
+    delMissOff = kind => { if (ST.delMiss) ST.delMiss[kind] = 0; };
   const delGuardSay = () => { tcRaw = true; return UK ? 'Я вже не чекаю відповіді — нічого не видаляв. Скажіть знову: «видали нотатку про …».' : 'Я уже не жду ответа — ничего не удалял. Скажите снова: «удали заметку про …».'; };
   /* команды телефона: без сервера и без затрат */
   function taskCmd(t, q) {
@@ -1235,11 +1242,12 @@
     if (/^удали\s+(последнюю\s+)?заметку/.test(t)) {
       const ab = aboutQ(t, q);
       if (ab) {   /* «удали заметку про налоги» — самая свежая из тех, где есть эти слова, — Орион её называет и ждёт «да»; нет такой — ничего не трогаем */
-        if (!ab.stems.length) return 'Про что удалить заметку?';
-        const x = aboutPick(TASK.notes, ab); if (!x) return 'Не нашёл заметку про ' + ab.raw + '.';
-        return delAsk('notes', x);
+        if (!ab.stems.length) { delMiss('notes'); return 'Про что удалить заметку?'; }
+        const x = aboutPick(TASK.notes, ab); if (!x) { delMiss('notes'); if (UK) { tcRaw = true; return /^(про|щодо|стосовно)$/.test(ab.prep) ? 'Не знайшов нотатку ' + ab.prep + ' ' + ab.raw + '.' : 'Не знайшов такої нотатки.'; } return 'Не нашёл заметку ' + ab.prep + ' ' + ab.raw + '.'; }   /* по-украински: «про/щодо/стосовно» — как сказал человек; после «о/об/насчёт» слово не повторяем (падеж) */
+        delMissOff('notes'); return delAsk('notes', x);
       }
       if (delGuarded()) return delGuardSay();
+      if (delMissed('notes')) { delMissOff('notes'); const x = TASK.notes[TASK.notes.length - 1]; if (!x) return 'Заметок нет.'; return delAsk('notes', x); }
       const x = TASK.notes.pop(); if (!x) return 'Заметок нет.'; taskSave('notes'); logAct('Удалил заметку: ' + x.t); return 'Удалил: ' + x.t + '.';
     }
     if (/^(какие|что)\s+(у меня\s+)?напоминани|^мои напоминани/.test(t)) {
@@ -1248,11 +1256,16 @@
       return L.slice(0, 3).map(x => whenW(x.when) + ' — ' + x.t).join('; ') + '.';
     }
     if (/^(отмени|удали|убери)\s+(все\s+)?напоминани/.test(t) && aboutQ(t, q)) {   /* «отмени напоминание про биржу» — только подходящее, самое свежее, и только после «да» */
-      const ab = aboutQ(t, q); if (!ab.stems.length) return 'Про что отменить напоминание?';
-      const x = aboutPick(TASK.rem.filter(y => !y.done), ab); if (!x) return 'Не нашёл напоминание про ' + ab.raw + '.';
-      return delAsk('rem', x);
+      const ab = aboutQ(t, q); if (!ab.stems.length) { delMiss('rem'); return 'Про что отменить напоминание?'; }
+      const x = aboutPick(TASK.rem.filter(y => !y.done), ab); if (!x) { delMiss('rem'); if (UK) { tcRaw = true; return /^(про|щодо|стосовно)$/.test(ab.prep) ? 'Не знайшов нагадування ' + ab.prep + ' ' + ab.raw + '.' : 'Не знайшов такого нагадування.'; } return 'Не нашёл напоминание ' + ab.prep + ' ' + ab.raw + '.'; }
+      delMissOff('rem'); return delAsk('rem', x);
     }
     if (/^(отмени|удали|убери)\s+(все\s+)?напоминани/.test(t) && delGuarded()) return delGuardSay();
+    if (/^(отмени|удали|убери)\s+(все\s+)?напоминани/.test(t) && delMissed('rem')) {   /* О.3: одно — называем и ждём «да»; несколько — все не снимаем */
+      delMissOff('rem'); const L = TASK.rem.filter(x => !x.done); if (L.length === 1) return delAsk('rem', L[0]);
+      if (!L.length) return 'Напоминаний и так нет.';
+      tcRaw = true; return UK ? 'Усі нагадування не скасовую. Скажіть: «скасуй нагадування про …».' : 'Все напоминания не отменяю. Скажите: «отмени напоминание про …».';
+    }
     if (/^(отмени|удали|убери)\s+(все\s+)?напоминани/.test(t)) { const n = TASK.rem.filter(x => !x.done).length; TASK.rem = TASK.rem.filter(x => x.done); taskSave('rem'); logAct('Отменил напоминания: ' + n); return n ? 'Отменил.' : 'Напоминаний и так нет.'; }
     return '';
   }
@@ -1325,6 +1338,7 @@
     const part = (sq(acc).replace(/\s*ПАМ['’ʼ]?ЯТЬ:.*$/, '').match(/^[\s\S]*[.!?…]["»”')]*(?=\s|$)/) || [''])[0].trim(), broke = UK ? 'Зв\u2019язок перервався.' : 'Связь прервалась.';
     if (first) { const rest = part.indexOf(first) === 0 ? part.slice(first.length).trim() : ''; remember(q, part || first); sayLong(nameFill(rest ? rest + ' ' + broke : broke), {}, true); return; }
     if (part) { remember(q, part); ST.lastBrain = now(); sayLong(nameFill(part) + ' ' + broke, {}); return; }
+    if (r && r.error === 'cut') { speak(broke, { pri: 2, raw: true }); return; }   /* Н4.2: оборвался вызов инструмента — сервер его не отдал, ничего не исполняем */
     if (buyQ(t) && !(r && ASK_ERR[r.error])) { speak(doAct('record_purchase', { sym: sym || '' }) + (sym ? '' : ' Монету и цифры впишите сами.'), { pri: 2 }); return; }   /* без связи — просто открываем форму покупки */
     if (remQ(t) && !(r && ASK_ERR[r.error])) { speak('Сейчас нет связи — не могу разобрать время напоминания. Попробуйте чуть позже.', { pri: 2 }); return; }
     const msg = (r && ASK_ERR[r.error]) || (sure ? local : (sym && coinPrice(sym) ? reply(NAME_N[sym] || sym) + ' ' : '') + 'Сейчас не могу связаться с сервером — попробуйте чуть позже.');
@@ -1614,7 +1628,7 @@
     ui.hit.addEventListener('click', () => { if (lp) { lp = false; return; } tapped(); });
     ui.cap = document.createElement('button'); ui.cap.type = 'button'; ui.cap.className = 'or-cap'; ui.cap.setAttribute('aria-live', 'polite'); ui.cap.setAttribute('translate', 'no');   /* субтитры переводит сам Орион (ответы «мозга» уже на нужном языке) */
     ui.cap.innerHTML = '<i aria-hidden="true"></i><b>' + Lx('Орион') + '</b><span></span><em aria-hidden="true"></em>'; ui.capT = ui.cap.querySelector('span'); ui.capN = ui.cap.querySelector('em');
-    ui.cap.addEventListener('click', () => { ST.askGen = (ST.askGen || 0) + 1; stopVoice(); ui.cap.classList.remove('on'); });   /* «стоп» — и хвост ответа «мозга», что ещё в пути, тоже не звучит (Н4) */
+    ui.cap.addEventListener('click', () => { ST.askGen = (ST.askGen || 0) + 1; TTS.q = []; stopVoice(); ui.cap.classList.remove('on'); });   /* Н4.1: и в паузу между кусками (~90 мс, TTS.cur пуст) очередь не договаривается */   /* «стоп» — и хвост ответа «мозга», что ещё в пути, тоже не звучит (Н4) */
     document.body.appendChild(ui.cap);
     window.addEventListener('resize', () => { fit(); wake(); });
     if (window.IntersectionObserver) new IntersectionObserver(es => { inView = es[0].isIntersecting; if (inView) wake(); }).observe(host);
@@ -1651,7 +1665,7 @@
       event: (n, d) => trigger(n, d, true),
       due: () => newsDue(),
       pendDel: () => (ST.pendDel ? { kind: ST.pendDel.kind, id: ST.pendDel.id, t: ST.pendDel.t } : null),
-      pendAge: sec => { if (ST.pendDel) ST.pendDel.at -= sec; if (ST.delGuard) ST.delGuard -= sec; }   /* проверка «молчание 20 с» без настоящего ожидания */
+      pendAge: sec => { if (ST.pendDel) ST.pendDel.at -= sec; if (ST.delGuard) ST.delGuard -= sec; if (ST.delMiss) { if (ST.delMiss.notes) ST.delMiss.notes -= sec; if (ST.delMiss.rem) ST.delMiss.rem -= sec; } }   /* проверка «молчание 20 с» без настоящего ожидания */
     }
   };
 })();
