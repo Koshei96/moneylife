@@ -1176,13 +1176,14 @@
   /* О.5 (25.11.2026, правило Глеба): слова после «заметку / напоминание» без связки — «удали заметку по налогам», «отмени напоминание на завтра / позвонить маме» —
      это цель, а не «последнюю / все». Сразу ничего не снимаем: одна подходящая — называем и ждём «да», ни одной — «Не нашёл…», несколько — спрашиваем какую.
      «все / всі / последнюю / останню» (и их формы) — не цель: команда работает как раньше. null — слов после команды нет */
-  const TAIL_OK = /^(все|всех|вси|всі|последн\S*|останн\S*|пожалуйста|будь|ласка|орион|оріон)$/;   /* вежливые хвосты — не цель (Глеб, 25.11) */
-  function tailQ(t, q, re) {
+  const TAIL_OK = /^(все|всех|вси|всі|последн\S*|останн\S*|пожалуйста|будь|ласка|орион|оріон)$/, TAIL_REM = /^(все|всех|вси|всі|пожалуйста|будь|ласка|орион|оріон)$/;   /* вежливые хвосты — не цель (Глеб, 25.11) */
+  function tailQ(t, q, re, ok) {   /* ok — слова, которые не цель (для напоминаний «последнее» — цель: «все» снимать нельзя, Глеб 25.11) */
+    ok = ok || TAIL_OK;
     const m = t.match(re); if (!m) return null;
     const w = t.slice(m[0].length).split(WSPLIT).filter(Boolean);
-    if (!w.length || w.every(x => TAIL_OK.test(x))) return null;
+    if (!w.length || w.every(x => ok.test(x))) return null;
     const rq = String(q || '').match(/(?:заметк|напоминан|нотатк|нагадуван)\S*[\s,.:;!?…—-]+(.+)$/i), raw = ((rq && rq[1]) || w.join(' ')).replace(/[\s.,!?…]+$/, '').trim();
-    return { raw, prep: ABOUT_STOP.test(w[0]) ? w[0] : '', stems: aboutStems(w.filter(x => !ABOUT_STOP.test(x) && !TAIL_OK.test(x))) };
+    return { raw, prep: ABOUT_STOP.test(w[0]) ? w[0] : '', stems: aboutStems(w.filter(x => !ABOUT_STOP.test(x) && !ok.test(x))) };
   }
   function tailDel(kind, list, tq) {   /* кандидаты по словам после команды; удаления здесь нет — только вопрос */
     const N = kind === 'notes';
@@ -1289,7 +1290,7 @@
       const x = aboutPick(TASK.rem.filter(y => !y.done), ab); if (!x) { delMiss('rem'); if (UK) { tcRaw = true; return /^(про|щодо|стосовно)$/.test(ab.prep) ? 'Не знайшов нагадування ' + ab.prep + ' ' + ab.raw + '.' : 'Не знайшов такого нагадування.'; } return 'Не нашёл напоминание ' + ab.prep + ' ' + ab.raw + '.'; }
       delMissOff('rem'); return delAsk('rem', x);
     }
-    const tr = tailQ(t, q, /^(отмени|удали|убери)\s+(все\s+)?напоминани\S*/); if (tr) return tailDel('rem', TASK.rem.filter(y => !y.done), tr);   /* О.5: «отмени напоминание на завтра / позвонить маме» */
+    const tr = tailQ(t, q, /^(отмени|удали|убери)\s+(все\s+)?напоминани\S*/, TAIL_REM); if (tr) return tailDel('rem', TASK.rem.filter(y => !y.done), tr);   /* О.5: «отмени напоминание на завтра / позвонить маме» */
     if (/^(отмени|удали|убери)\s+(все\s+)?напоминани/.test(t) && delGuarded()) return delGuardSay();
     if (/^(отмени|удали|убери)\s+(все\s+)?напоминани/.test(t) && delMissed('rem')) {   /* О.3: одно — называем и ждём «да»; несколько — все не снимаем */
       delMissOff('rem'); const L = TASK.rem.filter(x => !x.done); if (L.length === 1) return delAsk('rem', L[0]);
