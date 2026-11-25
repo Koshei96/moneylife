@@ -1084,8 +1084,8 @@
     try { if (window.MLX && MLX.tasksRow) MLX.tasksRow(); } catch (e) {}
   }
   function logAct(t, how) { TASK.log.push({ at: Date.now(), t: String(t).slice(0, 160), how: how || 'голос' }); if (TASK.log.length > 50) TASK.log = TASK.log.slice(-50); taskSave('log'); }
-  function noteAdd(t) { t = String(t || '').replace(/\s+/g, ' ').trim().replace(/^[,:—-]\s*/, ''); if (!t) return false; TASK.notes.push({ id: uid(), at: Date.now(), t: t.slice(0, 300) }); if (ST.delMiss && ST.delMiss.kind === 'notes') ST.delMiss = null; if (TASK.notes.length > 100) TASK.notes = TASK.notes.slice(-100); taskSave('notes'); return true; }
-  function remAdd(t, when) { TASK.rem.push({ id: uid(), at: Date.now(), when, t: String(t).slice(0, 200), done: false }); if (ST.delMiss && ST.delMiss.kind === 'rem') ST.delMiss = null; TASK.rem = TASK.rem.filter(x => !x.done || Date.now() - x.when < 7 * 864e5).slice(-50); taskSave('rem'); }
+  function noteAdd(t) { t = String(t || '').replace(/\s+/g, ' ').trim().replace(/^[,:—-]\s*/, ''); if (!t) return false; TASK.notes.push({ id: uid(), at: Date.now(), t: t.slice(0, 300) }); if (ST.delMiss) ST.delMiss.notes = 0; if (TASK.notes.length > 100) TASK.notes = TASK.notes.slice(-100); taskSave('notes'); return true; }
+  function remAdd(t, when) { TASK.rem.push({ id: uid(), at: Date.now(), when, t: String(t).slice(0, 200), done: false }); if (ST.delMiss) ST.delMiss.rem = 0; TASK.rem = TASK.rem.filter(x => !x.done || Date.now() - x.when < 7 * 864e5).slice(-50); taskSave('rem'); }
   const pad2 = n => String(n).padStart(2, '0');
   const MON_G = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
   function whenW(ms) {
@@ -1221,8 +1221,10 @@
   }
   const delGuarded = () => !!ST.delGuard && delNow() - ST.delGuard <= DEL_LATE;
   /* О.3 (25.11.2026): после «Не нашёл заметку про …» / «Про что…?» 2 минуты «голая» команда удаления не снимает последнюю (все) сразу — Орион называет запись и ждёт «да».
-     Новая запись того же вида снимает защиту: «удали заметку» сразу после «запиши заметку» — про только что записанную */
-  const delMiss = kind => { ST.delMiss = { kind, at: delNow() }; }, delMissed = kind => !!ST.delMiss && ST.delMiss.kind === kind && delNow() - ST.delMiss.at <= DEL_LATE;
+     Новая запись того же вида снимает защиту: «удали заметку» сразу после «запиши заметку» — про только что записанную.
+     Заметки и напоминания — отдельно: промах по напоминанию не снимает защиту после промаха по заметке (ревью Глеба, PR №23 круг 2) */
+  const delMiss = kind => { ST.delMiss = ST.delMiss || { notes: 0, rem: 0 }; ST.delMiss[kind] = delNow(); }, delMissed = kind => !!(ST.delMiss && ST.delMiss[kind]) && delNow() - ST.delMiss[kind] <= DEL_LATE,
+    delMissOff = kind => { if (ST.delMiss) ST.delMiss[kind] = 0; };
   const delGuardSay = () => { tcRaw = true; return UK ? 'Я вже не чекаю відповіді — нічого не видаляв. Скажіть знову: «видали нотатку про …».' : 'Я уже не жду ответа — ничего не удалял. Скажите снова: «удали заметку про …».'; };
   /* команды телефона: без сервера и без затрат */
   function taskCmd(t, q) {
@@ -1241,11 +1243,11 @@
       const ab = aboutQ(t, q);
       if (ab) {   /* «удали заметку про налоги» — самая свежая из тех, где есть эти слова, — Орион её называет и ждёт «да»; нет такой — ничего не трогаем */
         if (!ab.stems.length) { delMiss('notes'); return 'Про что удалить заметку?'; }
-        const x = aboutPick(TASK.notes, ab); if (!x) { delMiss('notes'); return 'Не нашёл заметку ' + ab.prep + ' ' + ab.raw + '.'; }
-        ST.delMiss = null; return delAsk('notes', x);
+        const x = aboutPick(TASK.notes, ab); if (!x) { delMiss('notes'); if (UK) { tcRaw = true; return 'Не знайшов нотатку про ' + ab.raw + '.'; } return 'Не нашёл заметку ' + ab.prep + ' ' + ab.raw + '.'; }   /* по-украински предлог всегда «про» */
+        delMissOff('notes'); return delAsk('notes', x);
       }
       if (delGuarded()) return delGuardSay();
-      if (delMissed('notes')) { ST.delMiss = null; const x = TASK.notes[TASK.notes.length - 1]; if (!x) return 'Заметок нет.'; return delAsk('notes', x); }
+      if (delMissed('notes')) { delMissOff('notes'); const x = TASK.notes[TASK.notes.length - 1]; if (!x) return 'Заметок нет.'; return delAsk('notes', x); }
       const x = TASK.notes.pop(); if (!x) return 'Заметок нет.'; taskSave('notes'); logAct('Удалил заметку: ' + x.t); return 'Удалил: ' + x.t + '.';
     }
     if (/^(какие|что)\s+(у меня\s+)?напоминани|^мои напоминани/.test(t)) {
@@ -1255,12 +1257,12 @@
     }
     if (/^(отмени|удали|убери)\s+(все\s+)?напоминани/.test(t) && aboutQ(t, q)) {   /* «отмени напоминание про биржу» — только подходящее, самое свежее, и только после «да» */
       const ab = aboutQ(t, q); if (!ab.stems.length) { delMiss('rem'); return 'Про что отменить напоминание?'; }
-      const x = aboutPick(TASK.rem.filter(y => !y.done), ab); if (!x) { delMiss('rem'); return 'Не нашёл напоминание ' + ab.prep + ' ' + ab.raw + '.'; }
-      ST.delMiss = null; return delAsk('rem', x);
+      const x = aboutPick(TASK.rem.filter(y => !y.done), ab); if (!x) { delMiss('rem'); if (UK) { tcRaw = true; return 'Не знайшов нагадування про ' + ab.raw + '.'; } return 'Не нашёл напоминание ' + ab.prep + ' ' + ab.raw + '.'; }
+      delMissOff('rem'); return delAsk('rem', x);
     }
     if (/^(отмени|удали|убери)\s+(все\s+)?напоминани/.test(t) && delGuarded()) return delGuardSay();
     if (/^(отмени|удали|убери)\s+(все\s+)?напоминани/.test(t) && delMissed('rem')) {   /* О.3: одно — называем и ждём «да»; несколько — все не снимаем */
-      ST.delMiss = null; const L = TASK.rem.filter(x => !x.done); if (L.length === 1) return delAsk('rem', L[0]);
+      delMissOff('rem'); const L = TASK.rem.filter(x => !x.done); if (L.length === 1) return delAsk('rem', L[0]);
       if (!L.length) return 'Напоминаний и так нет.';
       tcRaw = true; return UK ? 'Усі нагадування не скасовую. Скажіть: «скасуй нагадування про …».' : 'Все напоминания не отменяю. Скажите: «отмени напоминание про …».';
     }
@@ -1663,7 +1665,7 @@
       event: (n, d) => trigger(n, d, true),
       due: () => newsDue(),
       pendDel: () => (ST.pendDel ? { kind: ST.pendDel.kind, id: ST.pendDel.id, t: ST.pendDel.t } : null),
-      pendAge: sec => { if (ST.pendDel) ST.pendDel.at -= sec; if (ST.delGuard) ST.delGuard -= sec; if (ST.delMiss) ST.delMiss.at -= sec; }   /* проверка «молчание 20 с» без настоящего ожидания */
+      pendAge: sec => { if (ST.pendDel) ST.pendDel.at -= sec; if (ST.delGuard) ST.delGuard -= sec; if (ST.delMiss) { if (ST.delMiss.notes) ST.delMiss.notes -= sec; if (ST.delMiss.rem) ST.delMiss.rem -= sec; } }   /* проверка «молчание 20 с» без настоящего ожидания */
     }
   };
 })();
