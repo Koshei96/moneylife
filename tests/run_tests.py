@@ -69,6 +69,31 @@ def static_checks():
     backup_sql_checks()
     signal_checks()
     sw_nav_checks()
+    orion_cut_checks()
+
+def orion_cut_checks():
+    """Н4 (25.11.2026): обрезка ответа Ориона в supabase/functions/orion-ask/index.ts — кусок cut:begin…cut:end запускается в node
+    (типы TypeScript убираются): 900 знаков — целиком; 2000 — по концу предложения ≤ 1500; поток кусками — text() ровно то, что ушло."""
+    name = 'orion-ask: длинный ответ режется по концу предложения, не посреди слова (и в потоке)'
+    try:
+        src = (ROOT / 'supabase' / 'functions' / 'orion-ask' / 'index.ts').read_text(encoding='utf-8')
+        m = re.search(r'/\* cut:begin \*/(.*?)/\* cut:end \*/', src, re.S)
+        if not m: fail(name, 'нет куска cut:begin…cut:end'); return
+        code = re.sub(r':\s*(?:string|number|boolean)\b', '', m.group(1))
+        js = code + r"""
+const w='Биткоин растёт на притоке денег в биржевые фонды, пишет Cointelegraph. ',mk=n=>{let s='';while(s.length<n)s+=w;return s.slice(0,n);};
+const a=mk(899).trim()+'.',b=mk(2000),noend='слово '.repeat(400),o={};
+o.a=cutText(a)===a;const rb=cutText(b);o.bl=rb.length<=1500&&rb.length>1400;o.be=/Cointelegraph\.$/.test(rb)&&b.indexOf(rb)===0;
+const c=streamCut();let sent='';for(let i=0;i<b.length;i+=7)sent+=c.push(b.slice(i,i+7));sent+=c.end();o.s=sent.replace(/\s+/g,' ').trim()===c.text()&&c.text()===rb;
+const c2=streamCut();let s2='';for(let i=0;i<a.length;i+=5)s2+=c2.push(a.slice(i,i+5));s2+=c2.end();o.s2=s2===a&&c2.text()===a;
+const rn=cutText(noend);o.n=rn.length<=1500&&/ слово…$/.test(rn);o.m=cutText('Цена 3.5 тысячи. Хорошо.',12)==='Цена 3.5…'&&cutText('Да. Нет.',100)==='Да. Нет.';
+console.log(JSON.stringify(o));"""
+        out = subprocess.run(['node', '-e', js], capture_output=True, text=True, timeout=30)
+        got = json.loads(out.stdout.strip() or 'null')
+        if got and all(got.values()) and len(got) == 7: ok(name)
+        else: fail(name, (out.stdout + out.stderr)[:300])
+    except Exception as e: fail(name, str(e)[:200])
+    ok('orion-ask: ключ кэша поднят до v11 (старые обрезанные ответы не отдаются)') if "sha256('v11|'" in src else fail('orion-ask: ключ кэша', 'не v11')
 
 def sw_nav_checks():
     """Открытие приложения при ошибке сервера (13.11.2026). В тест-браузере service worker выключен (service_workers='block'),
@@ -1522,6 +1547,29 @@ def run_browser():
             if sb and sb[0].get('stream') is True and S1 in log and S2 in log and log.index(S1) < log.index(S2) and la == S1 + ' ' + S2 and hh and hh[-1]['a'] == S1 + ' ' + S2:
                 ok('Орион: ответ «мозга» потоком — первое предложение звучит сразу, остальное следом; в памяти разговора ответ целиком')
             else: fail('Орион: поток ответа', f'{sb[:1]} | {log} | {la}')
+            # Н4 (25.11.2026): связь оборвалась после первого куска (done не пришёл) — Орион договаривает и честно говорит «Связь прервалась.», а не замолкает
+            pg.evaluate("document.querySelector('.or-cap') && document.querySelector('.or-cap').click()")
+            def fb_(route):
+                route.fulfill(status=200, headers={'content-type': 'application/x-ndjson; charset=utf-8', 'access-control-allow-origin': '*'}, body='\n'.join(json.dumps(x, ensure_ascii=False) for x in [{'t': S1 + ' '}, {'t': 'Пишет Cointele'}]) + '\n')
+            pg.unroute('**/functions/v1/orion-ask'); pg.route('**/functions/v1/orion-ask', fb_)
+            pg.evaluate("Mascot.debug.ask('Что с рынком сегодня?')")
+            try: pg.wait_for_function("()=>Mascot.debug.sayLog().includes('Связь прервалась.')", polling=200, timeout=15000)
+            except Exception: pass
+            lb = pg.evaluate("Mascot.debug.sayLog()")
+            if S1 in lb and 'Связь прервалась.' in lb and lb.index(S1) < lb.index('Связь прервалась.') and not any('Cointele' in x and 'Cointelegraph' not in x for x in lb):
+                ok('Орион: связь оборвалась посреди ответа — договаривает целое и говорит «Связь прервалась.», обрывка слова нет')
+            else: fail('Орион: обрыв потока', str(lb))
+            pg.unroute('**/functions/v1/orion-ask'); pg.route('**/functions/v1/orion-ask', fs)
+            # Н4: продолжение ответа в очереди старше 40 с не выбрасывается; обычная устаревшая фраза — выбрасывается, как раньше
+            pg.evaluate("document.querySelector('.or-cap') && document.querySelector('.or-cap').click()")
+            qa = pg.evaluate("(()=>{const d=Mascot.debug;d.say('Первая фраза ответа.');d.sayLow('Старая обычная фраза.');d.sayMore('Продолжение ответа.');const n=d.qAge(50);d.next();return n})()")
+            pg.wait_for_timeout(400)
+            q1 = pg.evaluate("Mascot.debug.state().said")
+            pg.evaluate("Mascot.debug.next()"); pg.wait_for_timeout(1000)
+            q2 = pg.evaluate("Mascot.debug.state().said")
+            if qa == 2 and q1 == 'Продолжение ответа.' and q2 == 'Продолжение ответа.': ok('Орион: продолжение ответа старше 40 с звучит; устаревшая обычная фраза — нет')
+            else: fail('Орион: очередь продолжений', f'{qa} | {q1} | {q2}')
+            pg.evaluate("document.querySelector('.or-cap') && document.querySelector('.or-cap').click()")
             # 18.11.2026: переспросы к ответу телефона — «а биткоин?», «а в гривнах?» — считаются на телефоне, без сервера; имя подставляется вместо метки
             pg.evaluate("document.querySelector('.or-cap') && document.querySelector('.or-cap').click()")
             n0 = len(sb)

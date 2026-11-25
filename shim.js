@@ -689,7 +689,7 @@
     const c = client(); if (!c || demo || !uid || navigator.onLine === false) return null;
     let ses = null; try { ses = (await c.auth.getSession()).data.session; } catch (e) {}
     if (!ses) return null;
-    const ctl = typeof AbortController !== 'undefined' ? new AbortController() : null, t = setTimeout(() => { try { ctl && ctl.abort(); } catch (e) {} }, 25000);
+    const ctl = typeof AbortController !== 'undefined' ? new AbortController() : null, t = setTimeout(() => { try { ctl && ctl.abort(); } catch (e) {} }, 45000);   /* Н4 (25.11.2026): длинный ответ (до 1500 знаков) потоком идёт дольше 25 с */
     try {
       const r = await fetch(CFG.supabaseUrl.replace(/\/$/, '') + '/functions/v1/orion-ask', { method: 'POST', signal: ctl ? ctl.signal : undefined,
         headers: { Authorization: 'Bearer ' + ses.access_token, apikey: CFG.supabaseKey, 'content-type': 'application/json' }, body: JSON.stringify(Object.assign({ q, sym: sym || '' }, extra || {}, onPart ? { stream: true } : {})) });
