@@ -70,6 +70,88 @@ def static_checks():
     client_errors_sql_checks()
     signal_checks()
     sw_nav_checks()
+    orion_cut_checks()
+    orion_tool_cut_checks()
+
+def orion_cut_checks():
+    """Н4 (25.11.2026): обрезка ответа Ориона в supabase/functions/orion-ask/index.ts — кусок cut:begin…cut:end запускается в node
+    (типы TypeScript убираются): 900 знаков — целиком; 2000 — по концу предложения ≤ 1500; поток кусками — text() ровно то, что ушло."""
+    name = 'orion-ask: длинный ответ режется по концу предложения, не посреди слова (и в потоке)'
+    try:
+        src = (ROOT / 'supabase' / 'functions' / 'orion-ask' / 'index.ts').read_text(encoding='utf-8')
+        m = re.search(r'/\* cut:begin \*/(.*?)/\* cut:end \*/', src, re.S)
+        if not m: fail(name, 'нет куска cut:begin…cut:end'); return
+        code = re.sub(r':\s*(?:string|number|boolean|unknown|Ev|Put|Rd)\b', '', m.group(1))
+        js = code + r"""
+const w='Биткоин растёт на притоке денег в биржевые фонды, пишет Cointelegraph. ',mk=n=>{let s='';while(s.length<n)s+=w;return s.slice(0,n);};
+const a=mk(899).trim()+'.',b=mk(2000),noend='слово '.repeat(400),o={};
+o.a=cutText(a)===a;const rb=cutText(b);o.bl=rb.length<=1500&&rb.length>1400;o.be=/Cointelegraph\.$/.test(rb)&&b.indexOf(rb)===0;
+const c=streamCut();let sent='';for(let i=0;i<b.length;i+=7)sent+=c.push(b.slice(i,i+7));sent+=c.end();o.s=sent.replace(/\s+/g,' ').trim()===c.text()&&c.text()===rb;
+const c2=streamCut();let s2='';for(let i=0;i<a.length;i+=5)s2+=c2.push(a.slice(i,i+5));s2+=c2.end();o.s2=s2===a&&c2.text()===a;
+const rn=cutText(noend);o.n=rn.length<=1500&&/ слово…$/.test(rn);o.m=cutText('Цена 3.5 тысячи. Хорошо.',12)==='Цена 3.5…'&&cutText('Да. Нет.',100)==='Да. Нет.';
+const rm=cutText(b+'\nПАМЯТЬ: копит на квартиру');o.memo=rm.endsWith('Cointelegraph. ПАМЯТЬ: копит на квартиру')&&rm.length<=1500+40;
+const sse=(evs,fail)=>{const L=evs.map(e=>'event: x\ndata: '+JSON.stringify(e)+'\n\n');let i=0;const en=new TextEncoder();return{read:async()=>{if(i<L.length)return{done:false,value:en.encode(L[i++])};if(fail)throw new TypeError('network');return{done:true}}}};
+const td=t=>({type:'content_block_delta',delta:{type:'text_delta',text:t}}),stop={type:'message_delta',delta:{stop_reason:'end_turn'}};
+const run=async(evs,fail)=>{const p=[];const r=await pumpReply(sse(evs,fail),x=>p.push(x));return{r,p}};
+(async()=>{
+const S1='Если коротко — по новостям, рынок растёт на притоке денег в биржевые фонды. ';
+let x=await run([td(S1),td('Пишет Cointelegraph.'),stop]);o.okDone=x.r.kind==='done'&&x.r.text===(S1+'Пишет Cointelegraph.').trim()&&x.p.map(z=>z.t).join('').trim()===x.r.text;
+x=await run([td(S1),td('Пишет Cointele')],true);o.brokeNet=x.r.kind==='broke'&&x.p.length>0&&x.p.every(z=>z.t&&!z.done&&!z.error);
+x=await run([td(S1),td('Пишет Cointele'),{type:'error',error:{type:'overloaded_error'}}]);o.brokeEv=x.r.kind==='broke';
+x=await run([td(S1),td('Пишет Cointele')]);o.brokeNoStop=x.r.kind==='broke';
+x=await run([{type:'content_block_start',content_block:{type:'tool_use',name:'add_note'}},{type:'content_block_delta',delta:{type:'input_json_delta',partial_json:'{"text":"x"}'}},{type:'message_delta',delta:{stop_reason:'tool_use'}}]);o.act=x.r.kind==='act'&&x.r.tName==='add_note';
+console.log(JSON.stringify(o));})();"""
+        out = subprocess.run(['node', '-e', js], capture_output=True, text=True, timeout=30)
+        got = json.loads(out.stdout.strip() or 'null')
+        if got and all(got.values()) and len(got) == 13: ok(name)
+        else: fail(name, (out.stdout + out.stderr)[:300])
+        # обрыв потока Anthropic: ответ {error}, без done, без записи в кэш и без счётчика (ветка kind === 'broke' — до save)
+        st = src[src.index('pumpReply(rd, put)'):src.index('cache-control')]
+        bb = re.search(r"if \(kind === 'broke'\) \{(.*?)\n        \}", st, re.S)
+        if bb and "put({ error: 'llm' })" in bb.group(1) and 'return' in bb.group(1) and 'save(' not in bb.group(1) and 'done' not in bb.group(1) and st.index("kind === 'broke'") < st.index('await save(res)'):
+            ok('orion-ask: поток Anthropic оборвался («Cointele», событие error, нет stop_reason) — ответ {error}, без done, в кэш не пишется')
+        else: fail('orion-ask: обрыв потока Anthropic', 'нет ветки broke до save')
+    except Exception as e: fail(name, str(e)[:200])
+    ok('orion-ask: ключ кэша поднят до v11 (старые обрезанные ответы не отдаются)') if "sha256('v11|'" in src else fail('orion-ask: ключ кэша', 'не v11')
+
+def orion_tool_cut_checks():
+    """Н4.2 (25.11.2026, Глеб): обрыв потока посреди вызова инструмента. pumpReply из orion-ask запускается в node: действие отдаётся,
+    только если поток дошёл до stop_reason «tool_use» и JSON входа разобрался в объект; неполный JSON, обрыв сети, событие error, max_tokens — kind 'broke'
+    (раньше неполный JSON превращался в input={} и действие всё равно исполнялось). Ответ клиенту при этом — {error:'cut'}, без done."""
+    name = 'orion-ask: оборванный вызов инструмента (неполный JSON, обрыв сети, error, max_tokens) — действие не отдаётся; целый — отдаётся с разобранным входом'
+    try:
+        src = (ROOT / 'supabase' / 'functions' / 'orion-ask' / 'index.ts').read_text(encoding='utf-8')
+        m = re.search(r'/\* cut:begin \*/(.*?)/\* cut:end \*/', src, re.S)
+        if not m: fail(name, 'нет куска cut:begin…cut:end'); return
+        code = re.sub(r':\s*(?:string|number|boolean|unknown|Ev|Put|Rd)\b', '', m.group(1))
+        js = code + r"""
+const sse=(evs,fail)=>{const L=evs.map(e=>'event: x\ndata: '+JSON.stringify(e)+'\n\n');let i=0;const en=new TextEncoder();return{read:async()=>{if(i<L.length)return{done:false,value:en.encode(L[i++])};if(fail)throw new TypeError('network');return{done:true}}}};
+const run=async(evs,fail)=>{const p=[];const r=await pumpReply(sse(evs,fail),x=>p.push(x));return{r,p}};
+const st={type:'content_block_start',content_block:{type:'tool_use',name:'add_note'}},js=j=>({type:'content_block_delta',delta:{type:'input_json_delta',partial_json:j}}),
+  bs={type:'content_block_stop'},tu={type:'message_delta',delta:{stop_reason:'tool_use'}},o={};
+(async()=>{
+let x=await run([st,js('{"text":"оплатить нал')]);o.halfEnd=x.r.kind==='broke'&&!x.r.input;
+x=await run([st,js('{"text":"оплатить нал')],true);o.halfNet=x.r.kind==='broke'&&!x.r.input;
+x=await run([st,js('{"text":"оплатить нал'),{type:'error',error:{type:'overloaded_error'}}]);o.halfErr=x.r.kind==='broke';
+x=await run([st,js('{"text":"оплатить нал'),bs,{type:'message_delta',delta:{stop_reason:'max_tokens'}}]);o.maxTok=x.r.kind==='broke';
+x=await run([st,js('{"text":"x"}'),bs],true);o.noStop=x.r.kind==='broke';
+x=await run([st,js('{"text":"x"}'),bs,{type:'error',error:{type:'overloaded_error'}}]);o.errAfter=x.r.kind==='broke';
+x=await run([st,js('[1,2]'),bs,tu]);o.notObj=x.r.kind==='broke';
+x=await run([st,js('{"text":'),js('"оплатить налоги"}'),bs,tu]);o.whole=x.r.kind==='act'&&x.r.tName==='add_note'&&!!x.r.input&&x.r.input.text==='оплатить налоги';
+x=await run([st,bs,tu]);o.empty=x.r.kind==='act'&&!!x.r.input&&Object.keys(x.r.input).length===0;
+console.log(JSON.stringify(o));})();"""
+        out = subprocess.run(['node', '-e', js], capture_output=True, text=True, timeout=30)
+        got = json.loads(out.stdout.strip() or 'null')
+        if got and all(got.values()) and len(got) == 9: ok(name)
+        else: fail(name, (out.stdout + out.stderr)[:300])
+        st = src[src.index('pumpReply(rd, put)'):src.index('cache-control')]
+        bb = re.search(r"if \(kind === 'broke'\) \{(.*?)\n        \}", st, re.S)
+        if ("if (kind === 'act')" in st and 'JSON.parse' not in st and bb and "if (tName) put({ error: 'cut' })" in bb.group(1) and 'done' not in bb.group(1)
+                and st.index("kind === 'act'") < st.index("kind === 'broke'") and "if (tu && out.stop_reason !== 'tool_use') return json({ error: 'cut' }, 502);" in src
+                and src.index("out.stop_reason !== 'tool_use'") < src.index('act: { name: tu.name')):
+            ok("orion-ask: оборванный инструмент — клиенту {error:'cut'} без done (и без потока при max_tokens); вход берётся только разобранный в pumpReply")
+        else: fail('orion-ask: оборванный инструмент', "нет ветки {error:'cut'} или вход разбирается мимо pumpReply")
+    except Exception as e: fail(name, str(e)[:200])
 
 def sw_nav_checks():
     """Открытие приложения при ошибке сервера (13.11.2026). В тест-браузере service worker выключен (service_workers='block'),
@@ -1175,6 +1257,99 @@ def run_browser():
                 shot(pg, f'stage1-empty-{th}')
             scenario(f'Монеты: пустая вкладка ({th})', {'session': True, 'docs': [SEED[0]]}, s_coins_empty, theme=th)
 
+        # --- Н2 (24.11.2026): график монеты — сохранённая копия сразу, свежие данные в фоне; заранее подгрузка через 3 с.
+        #     Сеть имитируется в странице: свечи Binance для BTC/ETH отвечают с задержкой; все запросы истории цены считаются.
+        def chart_net(delay, seed=None):
+            s = """(()=>{const real=window.fetch.bind(window),T0=performance.now(),D=%d,now=Date.now();window.__chReq=[];
+              /* свежие свечи: 365 дней, цена закрытия 100000 + 50·день (другие числа, чем в копии) */
+              const KL=Array.from({length:365},(_,i)=>{const t=now-(364-i)*864e5;return [t,0,0,0,String(100000+50*i),0,t+864e5-1];});
+              window.fetch=(u,o)=>{const s=String(u&&u.url||u);
+                if(/klines|candlesticks|market_chart/.test(s)){window.__chReq.push({u:s,t:performance.now()-T0});
+                  if(/klines\\?symbol=(BTC|ETH)USDT/.test(s))return new Promise(r=>setTimeout(()=>r(new Response(JSON.stringify(KL),{status:200,headers:{'content-type':'application/json'}})),D));}
+                return real(u,o);};
+              %s})();""" % (delay, seed or '')
+            return s
+        # копия: 120 точек 90000…90119, сохранена 7 ч назад (год: срок 6 ч) и 2 ч назад (3 месяца: срок 1 ч)
+        CH_SEED = """try{const now=Date.now(),cp=(days,age)=>{const end=now-age,st=end-days*864e5;
+            localStorage.setItem('cg3:ch:bitcoin|'+days,JSON.stringify({body:{prices:Array.from({length:120},(_,i)=>90000+i),startTs:st,endTs:end,src:'binance'},at:end}));};
+          cp('365',7*3600e3);cp('90',2*3600e3);}catch(e){}"""
+        OPEN_MS = """async(js)=>{const t=performance.now();eval(js);
+            while(!document.querySelector('#cvChart svg path.main')&&performance.now()-t<5000)await new Promise(r=>setTimeout(r,4));
+            return Math.round(performance.now()-t)}"""
+        def s_chart_swr(pg, n):
+            pg.add_init_script(chart_net(1200, CH_SEED)); pg.reload(wait_until='load'); wait_app(pg)
+            pg.wait_for_function("S.ready&&S.live.prices.BTC>0", polling=100, timeout=10000)
+            ms1 = pg.evaluate(OPEN_MS, "openCoin('BTC')")
+            st1 = pg.evaluate("[MK['bitcoin|365']&&MK['bitcoin|365'].slice(-1)[0].v,document.getElementById('cvNote').textContent]")
+            print(f'    замер: шторка BTC, «1Г», копия 7 ч, сеть 1,2 с — график через {ms1} мс')
+            if ms1 <= 300 and st1[0] == 90119 and not st1[1]: ok(f'Н2: график монеты из копии старше срока — {ms1} мс ≤ 300, без «Загружаю…»')
+            else: fail('Н2: график монеты из копии', f'{ms1} мс, {st1}')
+            d1 = pg.evaluate("document.querySelector('#cvChart path.main').getAttribute('d')")
+            pg.wait_for_timeout(1700)
+            st2 = pg.evaluate("""[MK['bitcoin|365'].slice(-1)[0].v,document.querySelector('#cvChart path.main').getAttribute('d'),
+                JSON.parse(localStorage.getItem('cg3:ch:bitcoin|365')).at>Date.now()-60000,__chReq.filter(r=>/BTCUSDT&interval=1d/.test(r.u)).length,
+                document.querySelectorAll('#cvChart svg').length,document.getElementById('cvNote').textContent]""")
+            if st2[0] == 100000 + 50 * 364 and st2[1] != d1 and st2[2] and st2[3] == 1 and st2[4] == 1 and not st2[5]:
+                ok('Н2: свежие данные пришли в фоне — график перерисован на месте, копия обновлена, запрос один')
+            else: fail('Н2: фоновое обновление графика', str([st2[0], st2[1] != d1] + st2[2:]))
+            # 3 месяца: копия 2 ч (срок 1 ч) — тоже сразу; ушли на «1Г» до ответа сети — свежие данные «3М» не перерисовывают «1Г»
+            ms2 = pg.evaluate(OPEN_MS.replace("!document.querySelector('#cvChart svg path.main')", "!(document.querySelector('#cvChart svg path.main')&&cvRange==='90'&&MK['bitcoin|90'])"),
+                              "document.querySelector('#cvRanges [data-r=\"90\"]').click()")
+            print(f'    замер: тот же график, «3М», копия 2 ч — {ms2} мс')
+            d90 = pg.evaluate("document.querySelector('#cvChart path.main').getAttribute('d')")
+            pg.evaluate("document.querySelector('#cvRanges [data-r=\"365\"]').click()"); pg.wait_for_timeout(50)
+            d365 = pg.evaluate("document.querySelector('#cvChart path.main').getAttribute('d')")
+            pg.wait_for_timeout(1700)
+            st3 = pg.evaluate("[cvRange,document.querySelector('#cvChart path.main').getAttribute('d'),MK['bitcoin|90'].slice(-1)[0].v]")
+            if ms2 <= 300 and d90 != d365 and st3[0] == '365' and st3[1] == d365 and st3[2] == 100000 + 50 * 364:
+                ok(f'Н2: «3М» из копии за {ms2} мс; свежие «3М» пришли после ухода на «1Г» — легли в кэш, «1Г» не перерисован')
+            else: fail('Н2: период сменили до ответа сети', f'{ms2} мс, {st3[0]}, {st3[1] == d365}, {st3[2]}')
+            # закрыли и открыли снова — из памяти, в сеть не ходит
+            pg.evaluate("closeSheets()"); pg.wait_for_timeout(400)
+            ms3 = pg.evaluate(OPEN_MS, "openCoin('BTC')"); pg.wait_for_timeout(300)
+            k = pg.evaluate("__chReq.filter(r=>/BTCUSDT&interval=1d/.test(r.u)).length")
+            ok(f'Н2: повторное открытие — {ms3} мс, без нового запроса') if ms3 <= 300 and k == 1 else fail('Н2: повторное открытие', f'{ms3} мс, запросов {k}')
+        scenario('Н2: график монеты — копия сразу, обновление в фоне', {'session': True, 'docs': SEED}, s_chart_swr)
+
+        def s_chart_nocopy(pg, n):
+            # нет копии и нет сети (свечи и CoinGecko недоступны) — как раньше: понятное сообщение, цены сделок
+            wait_app(pg); pg.evaluate("openCoin('BTC')"); pg.wait_for_timeout(200)
+            a = pg.inner_text('#cvNote')
+            pg.wait_for_function("document.getElementById('cvNote').textContent.includes('не загрузилась')", polling=200, timeout=60000)
+            b = pg.inner_text('#cvNote')
+            ok('Н2: без копии и без сети — «Загружаю…», затем «История цены не загрузилась»') if 'Загружаю' in a and 'не загрузилась' in b and not pg.locator('#cvChart path.main').count() else fail('Н2: без копии и сети', f'{a!r} → {b!r}')
+        scenario('Н2: график монеты — нет копии и нет сети', {'session': True, 'docs': SEED}, s_chart_nocopy)
+
+        def s_chart_warm(pg, n):
+            pg.add_init_script(chart_net(300)); pg.reload(wait_until='load'); wait_app(pg)
+            pg.wait_for_timeout(6500)
+            r = pg.evaluate("""[__chReq.filter(r=>/interval=1d|days=365/.test(r.u)).map(r=>[r.u.replace(/^.*symbol=|&.*$/g,''),Math.round(r.t)]),
+                !!MK['bitcoin|365'],!!MK['ethereum|365'],!!localStorage.getItem('cg3:ch:bitcoin|365'),!!localStorage.getItem('cg3:ch:ethereum|365')]""")
+            reqs = r[0]; syms = [x[0] for x in reqs]
+            if sorted(syms) == ['BTCUSDT', 'ETHUSDT'] and reqs[0][1] >= 2500 and reqs[1][1] - reqs[0][1] >= 300 and all(r[1:]):
+                ok(f'Н2: через ~3 с графики монет портфеля в кэше — по одной ({reqs[0][1]} и {reqs[1][1]} мс от запуска)')
+            else: fail('Н2: заранее подгрузка графиков', str(r))
+            ms = pg.evaluate(OPEN_MS, "openCoin('ETH')"); pg.wait_for_timeout(300)
+            pg.evaluate("closeSheets()"); pg.evaluate("cvWarm();cvWarmOn=false;cvWarm()"); pg.wait_for_timeout(1500)
+            k = pg.evaluate("__chReq.filter(r=>/interval=1d|days=365/.test(r.u)).length")
+            ok(f'Н2: после подгрузки шторка ETH — {ms} мс; повторная подгрузка запросы не дублирует') if ms <= 300 and k == 2 else fail('Н2: дубли запросов', f'{ms} мс, запросов {k}')
+        scenario('Н2: заранее подгрузка графиков', {'session': True, 'docs': SEED}, s_chart_warm)
+
+        def s_chart_warm_none(pg, n):
+            pg.add_init_script(chart_net(300)); pg.reload(wait_until='load'); wait_app(pg)
+            pg.wait_for_timeout(6000)
+            r = pg.evaluate("[__chReq.filter(r=>/interval=1d|days=365|candlesticks/.test(r.u)).length,cvWarmOn,S.ready]")
+            ok('Н2: монет нет — заранее подгрузка в сеть не ходит') if r[0] == 0 and r[2] else fail('Н2: подгрузка без монет', str(r))
+        scenario('Н2: заранее подгрузка — монет нет', {'session': True, 'docs': [SEED[0]]}, s_chart_warm_none)
+
+        def s_chart_warm_off(pg, n):
+            # телефон без сети: navigator.onLine = false (страница и имитация базы — локальные)
+            pg.add_init_script(chart_net(300, "Object.defineProperty(Navigator.prototype,'onLine',{configurable:true,get:()=>false});"))
+            pg.reload(wait_until='load'); wait_app(pg); pg.wait_for_timeout(6000)
+            r = pg.evaluate("[__chReq.filter(r=>/interval=1d|days=365/.test(r.u)).length,navigator.onLine]")
+            ok('Н2: без сети заранее подгрузка не запускается') if r == [0, False] else fail('Н2: подгрузка без сети', str(r))
+        scenario('Н2: заранее подгрузка — нет сети', {'session': True, 'docs': SEED}, s_chart_warm_off)
+
         # --- Г. запись покупки через форму (если форма доступна)
         def s_buy(pg, n):
             wait_app(pg)
@@ -1478,6 +1653,84 @@ def run_browser():
             if sb and sb[0].get('stream') is True and S1 in log and S2 in log and log.index(S1) < log.index(S2) and la == S1 + ' ' + S2 and hh and hh[-1]['a'] == S1 + ' ' + S2:
                 ok('Орион: ответ «мозга» потоком — первое предложение звучит сразу, остальное следом; в памяти разговора ответ целиком')
             else: fail('Орион: поток ответа', f'{sb[:1]} | {log} | {la}')
+            # Н4 (25.11.2026): связь оборвалась после первого куска (done не пришёл) — Орион договаривает и честно говорит «Связь прервалась.», а не замолкает
+            pg.evaluate("document.querySelector('.or-cap') && document.querySelector('.or-cap').click()")
+            def fb_(route):
+                route.fulfill(status=200, headers={'content-type': 'application/x-ndjson; charset=utf-8', 'access-control-allow-origin': '*'}, body='\n'.join(json.dumps(x, ensure_ascii=False) for x in [{'t': S1 + ' '}, {'t': 'Пишет Cointele'}]) + '\n')
+            pg.unroute('**/functions/v1/orion-ask'); pg.route('**/functions/v1/orion-ask', fb_)
+            pg.evaluate("Mascot.debug.ask('Что с рынком сегодня?')")
+            try: pg.wait_for_function("()=>Mascot.debug.sayLog().includes('Связь прервалась.')", polling=200, timeout=15000)
+            except Exception: pass
+            lb = pg.evaluate("Mascot.debug.sayLog()")
+            if S1 in lb and 'Связь прервалась.' in lb and lb.index(S1) < lb.index('Связь прервалась.') and not any('Cointele' in x and 'Cointelegraph' not in x for x in lb):
+                ok('Орион: связь оборвалась посреди ответа — договаривает целое и говорит «Связь прервалась.», обрывка слова нет')
+            else: fail('Орион: обрыв потока', str(lb))
+            pg.unroute('**/functions/v1/orion-ask'); pg.route('**/functions/v1/orion-ask', fs)
+            # Н4: продолжение ответа в очереди старше 40 с не выбрасывается; обычная устаревшая фраза — выбрасывается, как раньше
+            pg.evaluate("document.querySelector('.or-cap') && document.querySelector('.or-cap').click()")
+            qa = pg.evaluate("(()=>{const d=Mascot.debug;d.say('Первая фраза ответа.');d.sayLow('Старая обычная фраза.');d.sayMore('Продолжение ответа.');const n=d.qAge(50);d.next();return n})()")
+            pg.wait_for_timeout(400)
+            q1 = pg.evaluate("Mascot.debug.state().said")
+            pg.evaluate("Mascot.debug.next()"); pg.wait_for_timeout(1000)
+            q2 = pg.evaluate("Mascot.debug.state().said")
+            if qa == 2 and q1 == 'Продолжение ответа.' and q2 == 'Продолжение ответа.': ok('Орион: продолжение ответа старше 40 с звучит; устаревшая обычная фраза — нет')
+            else: fail('Орион: очередь продолжений', f'{qa} | {q1} | {q2}')
+            pg.evaluate("document.querySelector('.or-cap') && document.querySelector('.or-cap').click()")
+            # Н4 (круг 3, Глеб): «стоп» нажатием на субтитр посреди ответа — ни хвост, ни «Связь прервалась.» потом не звучат (и при {text}, и при {error})
+            stop_bad = []
+            for fin in ({'text': S1 + ' Хвост ответа, который уже не нужен.', 'sources': []}, {'error': 'llm'}):
+                pg.evaluate("document.querySelector('.or-cap') && document.querySelector('.or-cap').click()")
+                pg.evaluate("s=>{window.__mlAskOrig=window.__mlAskOrig||window.mlAsk;window.mlAsk=(q,y,x,onPart)=>new Promise(res=>{window.__mlRel=res;setTimeout(()=>{onPart(s+' ');onPart('Пишет Cointele');},50);});Mascot.debug.ask('Почему растёт рынок сегодня?')}", S1)
+                try: pg.wait_for_function("t=>{const l=Mascot.debug.sayLog();return l[l.length-1]===t}", arg=S1, polling=100, timeout=8000)
+                except Exception: pass
+                pg.evaluate("document.querySelector('.or-cap').click()"); pg.wait_for_timeout(200)
+                pg.evaluate("v=>window.__mlRel&&window.__mlRel(v)", fin); pg.wait_for_timeout(1500)
+                ls_ = pg.evaluate("Mascot.debug.sayLog()")
+                if not ls_ or ls_[-1] != S1 or any('Хвост' in x for x in ls_): stop_bad.append(str(ls_[-3:]))
+            pg.evaluate("window.mlAsk=window.__mlAskOrig||window.mlAsk")
+            cs35 = pg.evaluate("Mascot.debug.chunks('Цена 3.5 тысячи долларов. Дальше спокойно.')")
+            if not stop_bad and cs35 == ['Цена 3.5 тысячи долларов. Дальше спокойно.']: ok('Орион: «стоп» посреди ответа — хвост и «Связь прервалась.» не звучат; «3.5» не режется на куски')
+            else: fail('Орион: стоп посреди ответа', f'{stop_bad} | {cs35}')
+            # Н4.1 (25.11.2026, Глеб): нажатие на субтитр в паузу между кусками длинного ответа (~90 мс, текущей фразы нет) — следующий кусок не звучит, очередь пуста
+            pg.evaluate("document.querySelector('.or-cap') && document.querySelector('.or-cap').click()"); pg.wait_for_timeout(300)
+            PW = 'Кардано держится у прошлогодних уровней, а покупатели осторожничают перед отчётами фондов. Рипл стоит на месте третью неделю подряд. '
+            PT = (PW * 6).strip()
+            gap = pg.evaluate("t=>{const d=Mascot.debug;d.sayLong(t);const c=d.chunks(t),a=d.state().said,n=d.qTexts().length;d.next();const g=!d.state().talking;document.querySelector('.or-cap').click();return {c,a,n,g,q:d.qTexts().length}}", PT)
+            pg.wait_for_timeout(800)
+            gl = pg.evaluate("Mascot.debug.sayLog()")
+            if len(gap['c']) >= 2 and gap['a'] == gap['c'][0] and gap['n'] >= 1 and gap['g'] and gap['q'] == 0 and gap['c'][1] not in gl:
+                ok('Орион: нажатие на субтитр в паузу между кусками ответа — очередь очищена, следующий кусок не звучит')
+            else: fail('Орион: нажатие в паузу между кусками', f"{gap} | {gl[-3:]}")
+            # Н4.2 (25.11.2026, Глеб): оборвался вызов инструмента — сервер отдаёт {error:'cut'}: Орион ничего не исполняет и честно говорит «Связь прервалась.»
+            pg.evaluate("document.querySelector('.or-cap') && document.querySelector('.or-cap').click()"); pg.wait_for_timeout(300)
+            def fcut(route):
+                route.fulfill(status=200, headers={'content-type': 'application/x-ndjson; charset=utf-8', 'access-control-allow-origin': '*'}, body=json.dumps({'error': 'cut'}) + '\n')
+            pg.unroute('**/functions/v1/orion-ask'); pg.route('**/functions/v1/orion-ask', fcut)
+            c0 = pg.evaluate("[Mascot.tasks.notes().length, Mascot.tasks.rem().length, document.getElementById('actSheet').classList.contains('open'), Mascot.debug.sayLog().length]")
+            pg.evaluate("Mascot.debug.ask('Что думаешь про рынок на этой неделе?')")
+            try: pg.wait_for_function("()=>{const l=Mascot.debug.sayLog();return l[l.length-1]==='Связь прервалась.'}", polling=200, timeout=15000)
+            except Exception: pass
+            pg.wait_for_timeout(500)
+            c1 = pg.evaluate("[Mascot.tasks.notes().length, Mascot.tasks.rem().length, document.getElementById('actSheet').classList.contains('open'), Mascot.debug.sayLog()]")
+            pg.unroute('**/functions/v1/orion-ask'); pg.route('**/functions/v1/orion-ask', fs)
+            if c1[:3] == c0[:3] and c1[3] and c1[3][-1] == 'Связь прервалась.' and not any('не могу связаться' in x for x in c1[3][-3:]):
+                ok("Орион: вызов инструмента оборвался ({error:'cut'}) — действие не исполнено, звучит «Связь прервалась.»")
+            else: fail('Орион: оборванный вызов инструмента', f'{c0[:3]} → {c1[:3]} | {c1[3][-3:]}')
+            # Н4 (круг 2, Вера): длинный ответ ~1400 знаков — кусками ≤ 400 знаков по целым предложениям, субтитр не вылезает за верх экрана 390×844
+            pg.set_viewport_size({'width': 390, 'height': 844}); pg.wait_for_timeout(300)
+            LW = 'Биткоин растёт на притоке денег в биржевые фонды, пишет Cointelegraph. Эфир держится рядом с прошлой неделей, а Солана немного отстаёт. '
+            LT = (LW * 12)[:1440].rsplit('.', 1)[0] + '.'
+            lg = pg.evaluate("t=>{const d=Mascot.debug;d.sayLong(t);const r=document.querySelector('.or-cap').getBoundingClientRect();return {said:d.state().said,q:d.qTexts(),ch:d.chunks(t)}}", LT)
+            pg.wait_for_timeout(300)
+            top1 = pg.evaluate("Math.round(document.querySelector('.or-cap').getBoundingClientRect().top)")
+            pg.evaluate("document.querySelector('.or-cap').click()"); pg.wait_for_timeout(300)
+            pg.evaluate("t=>Mascot.debug.say(t)", LT); pg.wait_for_timeout(300)
+            top2 = pg.evaluate("Math.round(document.querySelector('.or-cap').getBoundingClientRect().top)")
+            pg.evaluate("document.querySelector('.or-cap').click()"); pg.wait_for_timeout(300)
+            parts = [lg['said']] + lg['q']
+            if len(lg['ch']) >= 4 and max(len(x) for x in lg['ch']) <= 400 and ' '.join(lg['ch']) == LT and all(re.search(r'[.!?…]$', x) for x in lg['ch']) and parts[:len(lg['ch'])] == lg['ch'] and top1 >= 0 and top2 >= 0:
+                ok(f'Орион: длинный ответ ({len(LT)} знаков) — {len(lg["ch"])} кусков ≤ 400 знаков по целым предложениям; субтитр в экране 390×844 (верх {top1} px, без деления — {top2} px)')
+            else: fail('Орион: длинный ответ кусками', f'{[len(x) for x in lg["ch"]]} | {[len(x) for x in parts]} | top {top1} / {top2}')
             # 18.11.2026: переспросы к ответу телефона — «а биткоин?», «а в гривнах?» — считаются на телефоне, без сервера; имя подставляется вместо метки
             pg.evaluate("document.querySelector('.or-cap') && document.querySelector('.or-cap').click()")
             n0 = len(sb)
@@ -1601,6 +1854,254 @@ def run_browser():
             pg.unroute('**/functions/v1/orion-push')
             if 'Сигналы на телефоне' in rs[1] and 'Сигналы' not in tip and ps[0] is True and ps[1] == ['https://push.example/abc|A']: ok('Уведомления: подписка телефона сохраняется в аккаунте; без уведомлений Орион подсказывает их включить — не чаще раза в 6 часов')
             else: fail('Уведомления: подписка', f'{pon} | {tip} | {ps}')
+            # 18.11.2026 (BACKLOG №1): «удали заметку про X» / «отмени напоминание про X» — снимается ровно одна подходящая запись, без совпадения — ничего.
+            # 24.11.2026 (решение директора после 4 кругов ревью PR №12): Орион сначала называет запись и спрашивает «Удалить …? Скажите «да» или «нет».» — удаляет только после «да»
+            try: pg.wait_for_function("()=>!Mascot.debug.state().talking", polling=200, timeout=20000)   # ответы ниже — не в очередь за напоминанием
+            except Exception: pass
+            dn = pg.evaluate("""(async()=>{const M=Mascot.debug,T=Mascot.tasks,said=()=>M.state().said,keep=new Set(T.notes().map(x=>x.id)),keepR=new Set(T.rem().map(x=>x.id));
+              for(const n of ['купить ETH в пятницу','оплатить налоги до 15-го','позвонить брокеру']) await M.ask('запиши заметку: '+n);
+              const n0=T.notes().map(x=>x.t); await M.ask('удали заметку про налоги'); const a1=T.notes().map(x=>x.t), q1=said(); await M.ask('да'); const n1=T.notes().map(x=>x.t), s1=said();
+              await M.ask('удали заметку про отпуск'); const n2=T.notes().map(x=>x.t), s2=said(), p2=M.pendDel();
+              await M.ask('запиши заметку: временная'); await M.ask('удали заметку'); const n3=T.notes().map(x=>x.t), s3=said();
+              const w=h=>new Date(Date.now()+h*3600e3).toISOString().slice(0,16);
+              M.act('add_reminder',{text:'зайти на биржу и проверить ордера',when:w(5)}); M.act('add_reminder',{text:'купить подарок маме',when:w(6)}); M.act('add_reminder',{text:'полить цветы',when:w(7)});
+              const r0=T.rem().filter(x=>!x.done).map(x=>x.t); await M.ask('отмени напоминание про биржу'); const ra=T.rem().filter(x=>!x.done).map(x=>x.t), q4=said(); await M.ask('да'); const r1=T.rem().filter(x=>!x.done).map(x=>x.t), s4=said();
+              await M.ask('отмени напоминание про отпуск'); const r2=T.rem().filter(x=>!x.done).map(x=>x.t), s5=said();
+              T.notes().filter(x=>!keep.has(x.id)).forEach(x=>T.delNote(x.id)); T.rem().filter(x=>!keepR.has(x.id)).forEach(x=>T.delRem(x.id));
+              return {n0,a1,q1,n1,s1,n2,s2,p2,n3,s3,r0,ra,q4,r1,s4,r2,s5,after:[T.notes().map(x=>x.t),T.rem().map(x=>x.t)]};})()""")
+            gone = lambda a, b: [x for x in a if x not in b]
+            if (dn['a1'] == dn['n0'] and dn['q1'] == 'Удалить заметку «оплатить налоги до 15-го»? Скажите «да» или «нет».'
+                    and gone(dn['n0'], dn['n1']) == ['оплатить налоги до 15-го'] and len(dn['n1']) == len(dn['n0']) - 1 and 'проверить комиссию на бирже' in dn['n1'] and dn['s1'] == 'Удалил: «оплатить налоги до 15-го».'
+                    and dn['n2'] == dn['n1'] and dn['s2'] == 'Не нашёл заметку про отпуск.' and dn['p2'] is None and dn['n3'] == dn['n1'] and dn['s3'] == 'Удалил: временная.'
+                    and dn['ra'] == dn['r0'] and dn['q4'] == 'Отменить напоминание «зайти на биржу и проверить ордера»? Скажите «да» или «нет».'
+                    and gone(dn['r0'], dn['r1']) == ['зайти на биржу и проверить ордера'] and len(dn['r1']) == len(dn['r0']) - 1 and 'проверить портфель' in dn['r1'] and 'позвонить в банк' in dn['r1']
+                    and dn['s4'] == 'Отменил напоминание: «зайти на биржу и проверить ордера».' and dn['r2'] == dn['r1'] and dn['s5'] == 'Не нашёл напоминание про отпуск.'
+                    and 'проверить комиссию на бирже' in dn['after'][0] and 'позвонить в банк' in dn['after'][1]):
+                ok('Орион: «удали заметку про налоги», «отмени напоминание про биржу» — Орион называет запись и ждёт «да», после «да» из трёх снята ровно одна нужная; нет совпадения — ничего не удалено; без «про» — как раньше')
+            else: fail('Орион: удаление по теме', str(dn))
+            # 24.11.2026 (BACKLOG №1, решение директора): «про X» только выбирает кандидата. «да» в течение 20 с — снимается ровно названная запись по id;
+            # «нет», молчание 20 с, другой вопрос, «да» без вопроса — ничего не удалено. «Чужие» случаи из ревью («про прибыль» → «прибыл ли перевод», «про сталь» → «стал дороже»)
+            cf = pg.evaluate("""(async()=>{const M=Mascot.debug,T=Mascot.tasks,said=()=>M.state().said,keep=new Set(T.notes().map(x=>x.id)),keepR=new Set(T.rem().map(x=>x.id)),out={};
+              const mine=()=>T.notes().filter(x=>!keep.has(x.id)).map(x=>x.t), act=()=>T.rem().filter(x=>!x.done&&!keepR.has(x.id)).map(x=>x.t), w=h=>new Date(Date.now()+h*3600e3).toISOString().slice(0,16);
+              for(const n of ['прибыл ли перевод от Саши','BTC стал дороже','купить банки огурцов','зафиксировать прибыль по SOL']) await M.ask('запиши заметку: '+n);
+              let b=mine(); await M.ask('удали заметку про прибыль'); let q=said(), mid=mine(), pd=M.pendDel(); await M.ask('да'); out.p=[b,q,mid,said(),mine(),pd&&pd.t];
+              b=mine(); await M.ask('удали заметку про сталь'); q=said(); mid=mine(); await M.ask('нет'); out.stal=[b,q,mid,said(),mine(),M.pendDel()];
+              await M.ask('запиши заметку: оплатить налоги до 15-го');
+              b=mine(); await M.ask('удали заметку про налоги'); q=said(); await M.ask('нет'); out.no=[b,q,said(),mine(),M.pendDel()];
+              b=mine(); await M.ask('удали заметку про налоги'); q=said(); await M.ask('не надо'); out.no2=[b,q,said(),mine()];
+              b=mine(); await M.ask('удали заметку про налоги'); q=said(); M.pendAge(21); await M.ask('да'); out.wait=[b,q,mine(),M.pendDel()];
+              b=mine(); await M.ask('удали заметку про налоги'); M.pendAge(21); await M.ask('удали'); out.wait2=[b,mine()];
+              b=mine(); await M.ask('удали заметку про налоги'); M.pendAge(21); await M.ask('удали заметку'); out.wait3=[b,mine(),said()];
+              b=mine(); await M.ask('удали заметку про налоги'); M.pendAge(90); await M.ask('да'); out.wait4=[b,mine()];
+              b=mine(); await M.ask('да'); out.yes0=[b,mine(),M.pendDel()];
+              b=mine(); await M.ask('удали заметку про налоги'); await M.ask('какие у меня заметки'); const s6=said(); await M.ask('да'); out.other=[b,mine(),s6,M.pendDel()];
+              b=mine(); await M.ask('удали заметку про налоги'); q=said(); M.pendAge(18); await M.ask('давай'); out.late=[b,q,said(),mine()];
+              M.act('add_reminder',{text:'позвонить брокеру про комиссию',when:w(5)}); M.act('add_reminder',{text:'BTC стал дороже — проверить ступени',when:w(6)});
+              let r=act(); await M.ask('отмени напоминание про сталь'); q=said(); await M.ask('ні'); out.rn=[r,q,said(),act()];
+              r=act(); await M.ask('отмени напоминание про сталь'); M.pendAge(21); await M.ask('отмени напоминание'); out.rlate=[r,act(),said()];
+              r=act(); await M.ask('отмени напоминание про сталь'); await M.ask('убери напоминание'); out.rub=[r,act(),said()];
+              r=act(); await M.ask('отмени напоминание про сталь'); M.pendAge(21); await M.ask('отмени напоминания'); out.rmn=[r,act(),said()];
+              b=mine(); await M.ask('удали заметку про сталь'); await M.ask('удали последнюю заметку'); out.wlast=[b,mine(),said()];
+              r=act(); await M.ask('отмени напоминание про брокера'); q=said(); await M.ask('да, отмени'); out.ry=[r,q,said(),act()];
+              // ревью Глеба 24.11, круг 3: «отмени» на вопрос про заметку, ответ с названием записи другого вида, другой вопрос между вопросом и «голой» командой
+              const both=()=>[mine(),act()];
+              let z=both(); await M.ask('удали заметку про сталь'); await M.ask('отмени'); out.g1=[z,both()];
+              z=both(); await M.ask('удали заметку про сталь'); await M.ask('отмени напоминание'); out.g2=[z,both(),said()];
+              z=both(); await M.ask('отмени напоминание про сталь'); await M.ask('удали заметку'); out.g3=[z,both(),said()];
+              z=both(); await M.ask('удали заметку про сталь'); await M.ask('какие у меня заметки'); await M.ask('удали заметку'); out.g4=[z,both(),said()];
+              z=both(); await M.ask('отмени напоминание про сталь'); await M.ask('какие у меня напоминания'); await M.ask('отмени напоминание'); out.g5=[z,both(),said()];
+              z=both(); await M.ask('отмени напоминание про сталь'); await M.ask('скасуй'); out.g6=[z,both(),said()];
+              z=both(); await M.ask('удали заметку про сталь'); await M.ask('не понял'); await M.ask('удали заметку'); out.g8=[z,both(),said()];
+              z=both(); await M.ask('удали заметку про сталь'); await M.ask('не слышу, повтори'); await M.ask('удали последнюю заметку'); out.g9=[z,both(),said()];
+              z=both(); await M.ask('удали заметку про сталь'); await M.ask('нет'); await M.ask('удали заметку'); out.g10=[z,both(),said()];
+              await M.ask('удали заметку про сталь'); await M.ask('нет, не удаляй'); M.pendAge(121); await M.ask('запиши заметку: временная2'); z=mine(); await M.ask('удали заметку'); out.g7=[z,mine(),said()];
+              T.notes().filter(x=>!keep.has(x.id)).forEach(x=>T.delNote(x.id)); T.rem().filter(x=>!keepR.has(x.id)).forEach(x=>T.delRem(x.id)); return out;})()""")
+            askm = lambda q: (re.match(r'^(?:Удалить заметку|Отменить напоминание) «(.+)»\? Скажите «да» или «нет»\.$', q or '') or [None, None])[1]
+            p = cf['p']; named = askm(p[1])
+            cbad = []
+            if not (named and p[2] == p[0] and p[5] == named and gone(p[0], p[4]) == [named] and len(p[4]) == len(p[0]) - 1 and p[3] == f'Удалил: «{named}».'): cbad.append(('прибыль+да', p))
+            if named != 'зафиксировать прибыль по SOL': cbad.append(('прибыль: назван не тот кандидат', named))
+            st = cf['stal']
+            if not (st[1] == 'Удалить заметку «BTC стал дороже»? Скажите «да» или «нет».' and st[2] == st[0] and st[3] == 'Хорошо, оставил.' and st[4] == st[0] and st[5] is None): cbad.append(('сталь+нет', st))
+            no = cf['no']
+            if not (no[1] == 'Удалить заметку «оплатить налоги до 15-го»? Скажите «да» или «нет».' and no[2] == 'Хорошо, оставил.' and no[3] == no[0] and no[4] is None): cbad.append(('налоги+нет', no))
+            if not (cf['no2'][2] == 'Хорошо, оставил.' and cf['no2'][3] == cf['no2'][0]): cbad.append(('налоги+не надо', cf['no2']))
+            wt = cf['wait']
+            if not (wt[1].startswith('Удалить заметку «оплатить налоги') and wt[2] == wt[0] and wt[3] is None): cbad.append(('20 с молчания, потом «да»', wt))
+            if cf['wait2'][1] != cf['wait2'][0]: cbad.append(('20 с молчания, потом «удали»', cf['wait2']))
+            if not (cf['wait3'][1] == cf['wait3'][0] and cf['wait3'][2].startswith('Я уже не жду ответа')): cbad.append(('21 с, потом «удали заметку» — последняя не снята', cf['wait3']))
+            if cf['wait4'][1] != cf['wait4'][0]: cbad.append(('90 с, потом «да»', cf['wait4']))
+            for k, nm in (('rub', 'сразу «убери напоминание»'), ('rmn', '21 с, потом «отмени напоминания»'), ('wlast', 'сразу «удали последнюю заметку»')):
+                if not (cf[k][1] == cf[k][0] and cf[k][2].startswith('Я уже не жду ответа')): cbad.append((nm + ' — ничего не снято', cf[k]))
+            if not (cf['rlate'][1] == cf['rlate'][0] and len(cf['rlate'][1]) >= 2 and cf['rlate'][2].startswith('Я уже не жду ответа')): cbad.append(('21 с, потом «отмени напоминание» — все напоминания целы', cf['rlate']))
+            if not (cf['yes0'][1] == cf['yes0'][0] and cf['yes0'][2] is None): cbad.append(('«да» без вопроса', cf['yes0']))
+            ot = cf['other']
+            if not (ot[1] == ot[0] and ot[2].startswith('Последние заметки') and ot[3] is None): cbad.append(('другой вопрос, потом «да»', ot))
+            lt = cf['late']
+            if not (lt[2] == 'Удалил: «оплатить налоги до 15-го».' and gone(lt[0], lt[3]) == ['оплатить налоги до 15-го'] and len(lt[3]) == len(lt[0]) - 1): cbad.append(('«давай» через 18 с', lt))
+            rn = cf['rn']
+            if not (rn[1] == 'Отменить напоминание «BTC стал дороже — проверить ступени»? Скажите «да» или «нет».' and rn[2] == 'Хорошо, оставил.' and rn[3] == rn[0]): cbad.append(('напоминание+ні', rn))
+            ry = cf['ry']
+            if not (ry[1] == 'Отменить напоминание «позвонить брокеру про комиссию»? Скажите «да» или «нет».' and ry[2] == 'Отменил напоминание: «позвонить брокеру про комиссию».' and gone(ry[0], ry[3]) == ['позвонить брокеру про комиссию'] and len(ry[3]) == len(ry[0]) - 1): cbad.append(('напоминание+да', ry))
+            for k in ('g1', 'g2', 'g3', 'g4', 'g5'):
+                if cf[k][1] != cf[k][0] or not cf[k][0][0] or not cf[k][0][1]: cbad.append((k + ': ничего не должно быть снято', cf[k]))
+            for k in ('g8', 'g9', 'g10'):
+                if cf[k][1] != cf[k][0] or not str(cf[k][2]).startswith('Я уже не жду ответа'): cbad.append((k + ': «не понял» / «нет», потом «голая» команда — ничего не снято', cf[k]))
+            for k in ('g2', 'g3', 'g4', 'g5'):
+                if not str(cf[k][2]).startswith('Я уже не жду ответа'): cbad.append((k + ': нет «Я уже не жду ответа»', cf[k][2]))
+            g6 = cf['g6']
+            if not (g6[2] == 'Отменил напоминание: «BTC стал дороже — проверить ступени».' and gone(g6[0][1], g6[1][1]) == ['BTC стал дороже — проверить ступени'] and g6[1][0] == g6[0][0]): cbad.append(('напоминание+«скасуй» — снято ровно одно', g6))
+            g7 = cf['g7']
+            if not (g7[2] == 'Удалил: временная2.' and gone(g7[0], g7[1]) == ['временная2']): cbad.append(('после «нет» «удали заметку» — как раньше', g7))
+            if not cbad: ok('Орион: «удали заметку про прибыль» → «Удалить заметку «…»?» → «да» — снята ровно названная, остальные целы; «про сталь» назвал «BTC стал дороже» → «нет» — цела; «нет», «не надо», 20 с молчания, другой вопрос, «да» без вопроса — ничего не удалено; напоминания — так же')
+            else: fail('Орион: удаление с переспросом', str(cbad)[:1500])
+            fr = pg.evaluate("""(async()=>{const M=Mascot.debug,T=Mascot.tasks,keep=new Set(T.notes().map(x=>x.id));
+              for(const n of ['налоги за прошлый год','сверить налоговую декларацию','купить SOL','заплатить налог за квартиру']) await M.ask('запиши заметку: '+n);
+              await M.ask('удали заметку про налоги'); const q=M.state().said; await M.ask('да'); const r=T.notes().filter(x=>!keep.has(x.id)).map(x=>x.t); T.notes().filter(x=>!keep.has(x.id)).forEach(x=>T.delNote(x.id)); return [q,r];})()""")
+            if fr == ['Удалить заметку «заплатить налог за квартиру»? Скажите «да» или «нет».', ['налоги за прошлый год', 'сверить налоговую декларацию', 'купить SOL']]: ok('Орион: подходят несколько заметок — называет и после «да» снимает самую свежую («налог» по слову «налоги»), «налоговую декларацию» не трогает')
+            else: fail('Орион: удаление самой свежей подходящей', str(fr))
+            # ревью Глеба (PR №12): короткие слова не обрезаются — «про долг» не снимает «долларов», «про план» — не «оплатить платеж», «банк» — не «банан», «газ» — не «газета»
+            sw = pg.evaluate("""(async()=>{const M=Mascot.debug,T=Mascot.tasks,said=()=>M.state().said,keep=new Set(T.notes().map(x=>x.id)),keepR=new Set(T.rem().map(x=>x.id)),out={};
+              for(const n of ['купить на 100 долларов BTC','оплатить платеж за квартиру','купить банан','почитать газету']) await M.ask('запиши заметку: '+n);
+              const n0=T.notes().map(x=>x.t);
+              for(const w of ['долг','план','банк','газ']){await M.ask('удали заметку про '+w); out[w]=[said(), T.notes().length===n0.length];}
+              await M.ask('запиши заметку: вернуть долги Саше'); await M.ask('удали заметку про долг'); const qd=said(), kd=T.notes().some(x=>x.t==='вернуть долги Саше'); await M.ask('да'); out.dolgi=[qd, kd, said(), T.notes().some(x=>x.t==='вернуть долги Саше')];
+              const w=h=>new Date(Date.now()+h*3600e3).toISOString().slice(0,16), r0=T.rem().filter(x=>!x.done).length;
+              M.act('add_reminder',{text:'оплатить платеж за квартиру',when:w(5)}); await M.ask('отмени напоминание про план'); out.rem=[said(), T.rem().filter(x=>!x.done).length===r0+1];
+              T.notes().filter(x=>!keep.has(x.id)).forEach(x=>T.delNote(x.id)); T.rem().filter(x=>!keepR.has(x.id)).forEach(x=>T.delRem(x.id)); return out;})()""")
+            if (all(sw[k] == [f'Не нашёл заметку про {k}.', True] for k in ['долг', 'план', 'банк', 'газ']) and sw['dolgi'] == ['Удалить заметку «вернуть долги Саше»? Скажите «да» или «нет».', True, 'Удалил: «вернуть долги Саше».', False]
+                    and sw['rem'] == ['Не нашёл напоминание про план.', True]):
+                ok('Орион: короткие слова — целиком: «про долг» не снимает заметку про доллары, «про план» — про платёж, «банк» — не «банан», «газ» — не «газета»; «долг» находит «долги»')
+            else: fail('Орион: удаление по короткому слову', str(sw))
+            # ревью Глеба (PR №12, второй круг): после основы длинного слова — только окончание; «почти», «долго» — никогда не совпадение
+            ln = pg.evaluate("""(async()=>{const M=Mascot.debug,T=Mascot.tasks,said=()=>M.state().said,keep=new Set(T.notes().map(x=>x.id)),keepR=new Set(T.rem().map(x=>x.id)),out={neg:{},pos:{}};
+              const NEG=[['почту','почти закончил отчёт'],['карты','купить картошку'],['долги','долгосрочный план'],['банки','заказать банкет'],['налог','наложенный платёж'],['долг','долго ждал перевод']];
+              for(const [,n] of NEG) await M.ask('запиши заметку: '+n);
+              const n0=T.notes().length;
+              for(const [w] of NEG){await M.ask('удали заметку про '+w); out.neg[w]=[said(), T.notes().length===n0];}
+              const w=h=>new Date(Date.now()+h*3600e3).toISOString().slice(0,16), r0=T.rem().filter(x=>!x.done).length;
+              M.act('add_reminder',{text:'составить долгосрочный план',when:w(5)}); await M.ask('отмени напоминание про долги'); out.rem=[said(), T.rem().filter(x=>!x.done).length===r0+1];
+              T.notes().filter(x=>!keep.has(x.id)).forEach(x=>T.delNote(x.id));
+              const POS=[['налоги','заплатить налогов'],['налоги','налоги до 1 мая'],['биржу','проверить комиссию на бирже'],['карты','заблокировать карту monobank'],['долг','вернуть долги'],['почту','сходить на почту']];
+              for(const [q,n] of POS){await M.ask('запиши заметку: '+n); const c=T.notes().length; await M.ask('удали заметку про '+q); const a=said(), k=T.notes().length===c; await M.ask('да'); out.pos[q+'|'+n]=[a, k, said(), T.notes().length===c-1 && !T.notes().some(x=>!keep.has(x.id)&&x.t===n)];}
+              M.act('add_reminder',{text:'зайти на биржу',when:w(6)}); const r1=T.rem().filter(x=>!x.done).length; await M.ask('отмени напоминание про биржу'); const qa=said(), ka=T.rem().filter(x=>!x.done).length===r1; await M.ask('да'); out.rem2=[qa, ka, said(), T.rem().filter(x=>!x.done).length===r1-1];
+              T.notes().filter(x=>!keep.has(x.id)).forEach(x=>T.delNote(x.id)); T.rem().filter(x=>!keepR.has(x.id)).forEach(x=>T.delRem(x.id)); return out;})()""")
+            NEG = ['почту', 'карты', 'долги', 'банки', 'налог', 'долг']
+            if (all(ln['neg'].get(k) == [f'Не нашёл заметку про {k}.', True] for k in NEG) and ln['rem'] == ['Не нашёл напоминание про долги.', True]
+                    and len(ln['pos']) == 6 and all(v == [f"Удалить заметку «{k.split('|')[1]}»? Скажите «да» или «нет».", True, f"Удалил: «{k.split('|')[1]}».", True] for k, v in ln['pos'].items())
+                    and ln['rem2'] == ['Отменить напоминание «зайти на биржу»? Скажите «да» или «нет».', True, 'Отменил напоминание: «зайти на биржу».', True]):
+                ok('Орион: «про почту» не снимает «почти…», «карты» — «картошку», «долги» — «долгосрочный», «банки» — «банкет», «налог» — «наложенный», «долг» — «долго»; «налоги» — «налогов», «биржу» — «на бирже», «карты» — «карту»')
+            else: fail('Орион: удаление по длинному слову', str(ln))
+            # ревью Глеба (PR №12, третий круг): после основы — только окончание существительного (прилагательное — лишь через «-ов/-ев»); «стало» — не «сталь»; «про» без слова — переспрос
+            l3 = pg.evaluate("""(async()=>{const M=Mascot.debug,T=Mascot.tasks,said=()=>M.state().said,keep=new Set(T.notes().map(x=>x.id)),keepR=new Set(T.rem().map(x=>x.id)),out={neg:{},pos:{}};
+              const NEG=[['долг','долгий звонок брокеру'],['долги','долгая очередь в банке'],['долг','долгое ожидание вывода'],['газ','постричь газон'],['дом','продлить домен'],['сало','записаться в салон'],['рис','снизить риск портфеля'],['сталь','стало лучше']];
+              for(const [,n] of NEG) await M.ask('запиши заметку: '+n);
+              const n0=T.notes().length;
+              for(const [q,n] of NEG){await M.ask('удали заметку про '+q); out.neg[q+'|'+n]=[said(), T.notes().length===n0];}
+              await M.ask('удали заметку про'); out.empty=[said(), T.notes().length===n0];
+              const w=h=>new Date(Date.now()+h*3600e3).toISOString().slice(0,16), r0=T.rem().filter(x=>!x.done).length;
+              M.act('add_reminder',{text:'долгий звонок брокеру',when:w(5)}); await M.ask('отмени напоминание про долги'); out.rem=[said(), T.rem().filter(x=>!x.done).length===r0+1];
+              await M.ask('отмени напоминание про'); out.remEmpty=[said(), T.rem().filter(x=>!x.done).length===r0+1];
+              T.notes().filter(x=>!keep.has(x.id)).forEach(x=>T.delNote(x.id));
+              const POS=[['газ','оплатить газ'],['долги','вернуть долги'],['налоги','заплатить налогов'],['налоговую','сверить налоговую декларацию'],['биржу','проверить комиссию на бирже'],['карты','заблокировать карту monobank'],['почту','сходить на почту']];
+              for(const [q,n] of POS){await M.ask('запиши заметку: '+n); const c=T.notes().length; await M.ask('удали заметку про '+q); const a=said(), k=T.notes().length===c; await M.ask('да'); out.pos[q+'|'+n]=[a, k, said(), T.notes().length===c-1 && !T.notes().some(x=>!keep.has(x.id)&&x.t===n)];}
+              T.notes().filter(x=>!keep.has(x.id)).forEach(x=>T.delNote(x.id)); T.rem().filter(x=>!keepR.has(x.id)).forEach(x=>T.delRem(x.id)); return out;})()""")
+            if (len(l3['neg']) == 8 and all(v == [f"Не нашёл заметку про {k.split('|')[0]}.", True] for k, v in l3['neg'].items())
+                    and l3['empty'] == ['Про что удалить заметку?', True] and l3['rem'] == ['Не нашёл напоминание про долги.', True] and l3['remEmpty'] == ['Про что отменить напоминание?', True]
+                    and len(l3['pos']) == 7 and all(v == [f"Удалить заметку «{k.split('|')[1]}»? Скажите «да» или «нет».", True, f"Удалил: «{k.split('|')[1]}».", True] for k, v in l3['pos'].items())):
+                ok('Орион: «долг» не снимает «долгий/долгая/долгое…», «газ» — «газон», «дом» — «домен», «сало» — «салон», «рис» — «риск», «сталь» — «стало»; «удали заметку про» без слова — переспрос, ничего не удалено; «газ» находит «оплатить газ»')
+            else: fail('Орион: удаление по теме — окончания', str(l3))
+            # О.2 (25.11.2026, Глеб): «о налогах», «об отпуске», «насчёт банка», укр. «щодо / стосовно» — как «про»: Орион называет нужную запись и ждёт «да»;
+            # нет совпадения — ничего не удалено (раньше без «про» удалялась последняя заметка / снимались ВСЕ напоминания)
+            o2 = pg.evaluate("""(async()=>{const M=Mascot.debug,T=Mascot.tasks,said=()=>M.state().said,keep=new Set(T.notes().map(x=>x.id)),keepR=new Set(T.rem().map(x=>x.id)),out={n:{},r:{}};
+              const clean=()=>{T.notes().filter(x=>!keep.has(x.id)).forEach(x=>T.delNote(x.id)); T.rem().filter(x=>!keepR.has(x.id)).forEach(x=>T.delRem(x.id));};
+              const mine=()=>T.notes().filter(x=>!keep.has(x.id)).map(x=>x.t), act=()=>T.rem().filter(x=>!x.done).map(x=>x.t), w=h=>new Date(Date.now()+h*3600e3).toISOString().slice(0,16);
+              const NC=[['удали заметку о налогах','оплатить налоги до 15-го'],['удали заметку об отпуске','взять отпуск в марте'],['удали заметку насчёт налогов','оплатить налоги до 15-го'],['удали заметку насчет отпуска','взять отпуск в марте'],
+                ['удали заметку щодо податків','сплата податків за рік'],['удали заметку стосовно податків','сплата податків за рік'],['Удали заметку О налогах.','оплатить налоги до 15-го']];
+              for(const [q,n] of NC){for(const x of ['купить ETH в пятницу','оплатить налоги до 15-го','взять отпуск в марте','сплата податків за рік','позвонить брокеру']) await M.ask('запиши заметку: '+x);
+                const b=mine(); await M.ask(q); const a=said(), mid=mine(); await M.ask('да'); out.n[q]=[a, mid.length===b.length, said(), JSON.stringify(b.filter(x=>!mine().includes(x)))===JSON.stringify([n]) && mine().length===b.length-1]; clean();}
+              for(const x of ['купить ETH в пятницу','позвонить брокеру']) await M.ask('запиши заметку: '+x);
+              let b=mine(); await M.ask('удали заметку о машине'); out.nmiss=[said(), JSON.stringify(mine())===JSON.stringify(b), M.pendDel()];
+              b=mine(); await M.ask('удали заметку насчёт отпуска'); out.nmiss2=[said(), JSON.stringify(mine())===JSON.stringify(b)];
+              b=mine(); await M.ask('удали заметку о'); out.ncut=[said(), JSON.stringify(mine())===JSON.stringify(b)];
+              clean(); M.pendAge(200);
+              const RC=[['отмени напоминание насчёт банка','позвонить в банк насчёт карты'],['отмени напоминание о цветах','полить цветы'],['отмени напоминание щодо податків','сплата податків'],['отмени напоминание стосовно цветов','полить цветы']];
+              for(const [q,n] of RC){for(const x of ['позвонить в банк насчёт карты','полить цветы','сплата податків']) M.act('add_reminder',{text:x,when:w(5)});
+                const r=act(); await M.ask(q); const a=said(), mid=act(); await M.ask('да'); const r2=act(); out.r[q]=[a, mid.length===r.length, said(), r2.length===r.length-1 && r.filter(x=>x===n).length-r2.filter(x=>x===n).length===1]; clean();}
+              for(const x of ['позвонить в банк насчёт карты','полить цветы']) M.act('add_reminder',{text:x,when:w(5)});
+              let r=act(); await M.ask('отмени напоминание насчёт отпуска'); out.rmiss=[said(), act().length===r.length, act().length>=2, M.pendDel()];
+              r=act(); await M.ask('отмени напоминание о'); out.rcut=[said(), act().length===r.length];
+              clean(); M.pendAge(200); return out;})()""")
+            o2bad = []
+            for q, v in o2['n'].items():
+                n = 'сплата податків за рік' if ('щодо' in q or 'стосовно' in q) else ('взять отпуск в марте' if 'отпуск' in q else 'оплатить налоги до 15-го')
+                if v != [f'Удалить заметку «{n}»? Скажите «да» или «нет».', True, f'Удалил: «{n}».', True]: o2bad.append((q, v))
+            for q, v in o2['r'].items():
+                n = 'позвонить в банк насчёт карты' if 'банка' in q else ('сплата податків' if 'щодо' in q else 'полить цветы')
+                if v != [f'Отменить напоминание «{n}»? Скажите «да» или «нет».', True, f'Отменил напоминание: «{n}».', True]: o2bad.append((q, v))
+            if len(o2['n']) != 7 or len(o2['r']) != 4: o2bad.append(('число случаев', len(o2['n']), len(o2['r'])))
+            if o2['nmiss'] != ['Не нашёл заметку о машине.', True, None]: o2bad.append(('нет совпадения «о машине»', o2['nmiss']))
+            if o2['nmiss2'] != ['Не нашёл заметку насчёт отпуска.', True]: o2bad.append(('нет совпадения «насчёт отпуска»', o2['nmiss2']))
+            if o2['ncut'] != ['Про что удалить заметку?', True]: o2bad.append(('«удали заметку о» без слова', o2['ncut']))
+            if o2['rmiss'] != ['Не нашёл напоминание насчёт отпуска.', True, True, None]: o2bad.append(('напоминание «насчёт отпуска» — все целы', o2['rmiss']))
+            if o2['rcut'] != ['Про что отменить напоминание?', True]: o2bad.append(('«отмени напоминание о» без слова', o2['rcut']))
+            if not o2bad: ok('Орион: «удали заметку о налогах / об отпуске / насчёт …», «щодо / стосовно …», «отмени напоминание насчёт банка / о цветах» — как «про»: называет нужную, после «да» снята ровно она; нет совпадения — ничего не удалено, напоминания все целы')
+            else: fail('Орион: удаление по теме с «о / об / насчёт / щодо / стосовно»', str(o2bad)[:1500])
+            # О.3 (25.11.2026, Глеб): после «Не нашёл заметку про …» / «Про что…?» «голая» «удали заметку» не удаляет последнюю сразу — Орион называет её и ждёт «да»;
+            # «отмени напоминания» после «Не нашёл напоминание…» все не снимает. Защита — 2 минуты по времени; после них — как раньше
+            o3 = pg.evaluate("""(async()=>{const M=Mascot.debug,T=Mascot.tasks,said=()=>M.state().said,keep=new Set(T.notes().map(x=>x.id)),keepR=new Set(T.rem().map(x=>x.id)),out={};
+              const clean=()=>{T.notes().filter(x=>!keep.has(x.id)).forEach(x=>T.delNote(x.id)); T.rem().filter(x=>!keepR.has(x.id)).forEach(x=>T.delRem(x.id));};
+              const mine=()=>T.notes().filter(x=>!keep.has(x.id)).map(x=>x.t), act=()=>T.rem().filter(x=>!x.done).map(x=>x.t), w=h=>new Date(Date.now()+h*3600e3).toISOString().slice(0,16);
+              M.pendAge(200);
+              for(const x of ['купить ETH в пятницу','позвонить брокеру','сверить ступени','продлить домен']) await M.ask('запиши заметку: '+x);
+              let b=mine(); await M.ask('удали заметку про отпуск'); const s0=said(); await M.ask('удали заметку'); let q=said(), mid=mine(); await M.ask('да'); out.miss=[s0,q,JSON.stringify(mid)===JSON.stringify(b),said(),JSON.stringify(b.filter(x=>!mine().includes(x)))];
+              b=mine(); await M.ask('удали заметку про'); const s1=said(); await M.ask('удали заметку'); q=said(); mid=mine(); await M.ask('да'); out.empty=[s1,q,JSON.stringify(mid)===JSON.stringify(b),said(),JSON.stringify(b.filter(x=>!mine().includes(x)))];
+              b=mine(); await M.ask('удали заметку про отпуск'); await M.ask('удали последнюю заметку'); q=said(); await M.ask('нет'); out.last=[q,said(),JSON.stringify(mine())===JSON.stringify(b)];
+              M.pendAge(121);
+              b=mine(); await M.ask('удали заметку о машине'); M.pendAge(121); await M.ask('удали заметку'); out.late=[said(),JSON.stringify(b.filter(x=>!mine().includes(x)))];
+              clean(); M.pendAge(200);
+              for(const x of ['позвонить в банк насчёт карты','полить цветы']) M.act('add_reminder',{text:x,when:w(5)});
+              let r=act(); await M.ask('отмени напоминание про отпуск'); await M.ask('отмени напоминания'); out.rall=[said(),JSON.stringify(act())===JSON.stringify(r),r.length>=2];
+              r=act(); await M.ask('отмени напоминание про отпуск'); await M.ask('убери напоминание'); out.rall2=[said(),JSON.stringify(act())===JSON.stringify(r)];
+              clean(); M.pendAge(200);
+              // круг 2 (Глеб): промах по напоминанию не снимает защиту после промаха по заметке — и наоборот
+              for(const x of ['купить ETH в пятницу','позвонить брокеру']) await M.ask('запиши заметку: '+x);
+              for(const x of ['полить цветы','купить подарок маме']) M.act('add_reminder',{text:x,when:w(5)});
+              b=mine(); r=act(); await M.ask('удали заметку о даче'); await M.ask('отмени напоминание о даче'); await M.ask('удали заметку'); q=said(); const pk=(M.pendDel()||{}).kind; await M.ask('нет'); out.mix=[q,pk,said(),JSON.stringify(mine())===JSON.stringify(b),JSON.stringify(act())===JSON.stringify(r)];
+              M.pendAge(200); b=mine(); r=act(); await M.ask('отмени напоминание о даче'); await M.ask('удали заметку о даче'); await M.ask('отмени напоминания'); out.mix2=[said(),JSON.stringify(mine())===JSON.stringify(b),JSON.stringify(act())===JSON.stringify(r)];
+              clean(); M.pendAge(200); return out;})()""")
+            o3bad = []
+            if o3['miss'] != ['Не нашёл заметку про отпуск.', 'Удалить заметку «продлить домен»? Скажите «да» или «нет».', True, 'Удалил: «продлить домен».', '["продлить домен"]']: o3bad.append(('«Не нашёл» → «удали заметку» → переспрос → «да»', o3['miss']))
+            if o3['empty'] != ['Про что удалить заметку?', 'Удалить заметку «сверить ступени»? Скажите «да» или «нет».', True, 'Удалил: «сверить ступени».', '["сверить ступени"]']: o3bad.append(('«Про что…?» → «удали заметку» → переспрос → «да»', o3['empty']))
+            if o3['last'] != ['Удалить заметку «позвонить брокеру»? Скажите «да» или «нет».', 'Хорошо, оставил.', True]: o3bad.append(('«Не нашёл» → «удали последнюю заметку» → «нет» — цела', o3['last']))
+            if o3['late'] != ['Удалил: позвонить брокеру.', '["позвонить брокеру"]']: o3bad.append(('через 2 минуты — как раньше', o3['late']))
+            if o3['rall'] != ['Все напоминания не отменяю. Скажите: «отмени напоминание про …».', True, True]: o3bad.append(('«Не нашёл напоминание» → «отмени напоминания» — все целы', o3['rall']))
+            if o3['rall2'] != ['Все напоминания не отменяю. Скажите: «отмени напоминание про …».', True]: o3bad.append(('«Не нашёл напоминание» → «убери напоминание» — все целы', o3['rall2']))
+            if o3['mix'] != ['Удалить заметку «позвонить брокеру»? Скажите «да» или «нет».', 'notes', 'Хорошо, оставил.', True, True]: o3bad.append(('промах по заметке, затем по напоминанию → «удали заметку» — переспрос, ничего не снято', o3['mix']))
+            if o3['mix2'] != ['Все напоминания не отменяю. Скажите: «отмени напоминание про …».', True, True]: o3bad.append(('промах по напоминанию, затем по заметке → «отмени напоминания» — все целы', o3['mix2']))
+            if not o3bad: ok('Орион: после «Не нашёл заметку про …» / «Про что…?» «удали заметку» не удаляет последнюю сразу — называет её и ждёт «да»; «отмени напоминания» все не снимает; через 2 минуты — как раньше')
+            else: fail('Орион: защита после «Не нашёл…»', str(o3bad)[:1500])
+            # ревью PR №12, круг 4 (24.11.2026; урок 19.11 — набор пар сразу): совпадение — то же слово в другой форме существительного, а не однокоренное.
+            # Запрос-существительное не находит прилагательное («ключи» — не «ключевые», «фонд» — не «фондовый», «налоги» — не «налоговую»); «-ой/-ом» не берём («долгой», «дорогой»).
+            # Каждая пара — отдельно: заметка записана, «удали заметку про …», заметка на месте и ответ «Не нашёл…»; затем убираем её, чтобы пары не мешали друг другу.
+            # 24.11 (переспрос): «чужая» пара — нет вопроса, и даже следом сказанное «да» её не снимает; «нужная» — Орион называет именно её, до «да» цела, после «да» снята.
+            P4 = {'neg': [["почту", "почти закончил отчёт"], ["карты", "купить картошку"], ["долги", "составить долгосрочный план"], ["банки", "заказать банкет"], ["налог", "наложенный платёж"], ["долг", "долгий звонок брокеру"], ["газ", "постричь газон"], ["дом", "продлить домен"], ["сало", "записаться в салон"], ["ключи", "ключевые уровни BTC: 60 и 72"], ["фонд", "фондовый рынок"], ["ключ", "ключевая ставка"], ["налоги", "сверить налоговую декларацию"], ["долг", "после долгой паузы позвонить"], ["дорогу", "дорогой подарок маме"], ["золото", "золотой браслет"], ["банк", "купить банку краски"], ["рис", "снизить риск портфеля"], ["сталь", "стало лучше"], ["долги", "долгая очередь в банке"], ["план", "оплатить платёж"], ["банк", "купить бананы"], ["газ", "купить газету"], ["кредит", "кредитная карта на 50 дней"], ["счёт", "поменять счётчик воды"], ["рынок", "рыночная цена SOL"], ["курс", "курсовая разница"], ["мир", "мирный договор"], ["пароль", "пар в бане"], ["кот", "котировки BTC"], ["доход", "доходный дом"], ["долг", "разговор о долгом проекте"], ["дом", "поехать домой"], ["ключи", "ключевой момент недели"], ["фонд", "фондовая биржа"], ["налоги", "налоговая проверка"], ["налоговую", "заплатить налогов"], ["карту", "картина в гостиной"], ["банки", "купить банку огурцов"], ["почту", "почтальон принёс"], ["ключі", "ключові рівні BTC"], ["вклад", "закрыть вкладку"], ["акции", "акционерное собрание"], ["цель", "целый день отдыха"], ["долги", "надолго уехать"], ["пол", "вспахать поле"], ["дом", "работать дома"]],
+                  'pos': [["налоги", "заплатить налог"], ["ключи", "ключ от сейфа"], ["карта", "пополнить карту"], ["биржа", "сравнить комиссии биржи"], ["налоги", "налоги до 1 мая"], ["биржу", "проверить комиссию на бирже"], ["карты", "заблокировать карту monobank"], ["долг", "вернуть долги Саше"], ["почту", "сходить на почту"], ["газ", "оплатить газ"], ["налоги", "заплатить налогов"], ["ключи", "сделать дубликат ключей"], ["банк", "позвонить в банк"], ["банки", "сравнить банки"], ["кредит", "закрыть кредиты"], ["налоговую", "сверить налоговую декларацию"], ["золото", "продать золото"], ["ключі", "ключі від сейфа"], ["отчёт", "отчёт за ноябрь"], ["депозит", "открыть депозит в банке"]],
+                  'remn': [["ключи", "проверить ключевые уровни"], ["фонд", "почитать про фондовый рынок"], ["долг", "долгий звонок брокеру"], ["карты", "купить картошку"]],
+                  'remp': [["ключи", "забрать ключи у мастера"], ["налоги", "заплатить налог за квартиру"]]}
+            l4 = pg.evaluate("""(async(P)=>{const M=Mascot.debug,T=Mascot.tasks,said=()=>M.state().said,keep=new Set(T.notes().map(x=>x.id)),keepR=new Set(T.rem().map(x=>x.id)),out={neg:[],pos:[],remn:[],remp:[]};
+              const clean=()=>{T.notes().filter(x=>!keep.has(x.id)).forEach(x=>T.delNote(x.id)); T.rem().filter(x=>!keepR.has(x.id)).forEach(x=>T.delRem(x.id));};
+              const w=h=>new Date(Date.now()+h*3600e3).toISOString().slice(0,16), act=()=>T.rem().filter(x=>!x.done);
+              for(const [q,n] of P.neg){await M.ask('запиши заметку: '+n); const c=T.notes().length; await M.ask('удали заметку про '+q); const a=said(), pd=M.pendDel(); await M.ask('да'); out.neg.push([q,n,a,pd===null && T.notes().length===c && T.notes().some(x=>x.t===n)]); clean();}
+              for(const [q,n] of P.pos){await M.ask('запиши заметку: '+n); const c=T.notes().length; await M.ask('удали заметку про '+q); const a=said(), k=T.notes().length===c && T.notes().some(x=>x.t===n); await M.ask('да'); out.pos.push([q,n,a,k,said(),T.notes().length===c-1 && !T.notes().some(x=>!keep.has(x.id)&&x.t===n)]); clean();}
+              for(const [q,n] of P.remn){M.act('add_reminder',{text:n,when:w(5)}); const c=act().length; await M.ask('отмени напоминание про '+q); const a=said(), pd=M.pendDel(); await M.ask('да'); out.remn.push([q,n,a,pd===null && act().length===c && act().some(x=>x.t===n)]); clean();}
+              for(const [q,n] of P.remp){M.act('add_reminder',{text:n,when:w(5)}); const c=act().length; await M.ask('отмени напоминание про '+q); const a=said(), k=act().length===c; await M.ask('да'); out.remp.push([q,n,a,k,said(),act().length===c-1 && !act().some(x=>!keepR.has(x.id)&&x.t===n)]); clean();}
+              return out;})""", P4)
+            bad4 = ([x for x in l4['neg'] if x[2:] != [f'Не нашёл заметку про {x[0]}.', True]] + [x for x in l4['pos'] if x[2:] != [f'Удалить заметку «{x[1]}»? Скажите «да» или «нет».', True, f'Удалил: «{x[1]}».', True]]
+                    + [x for x in l4['remn'] if x[2:] != [f'Не нашёл напоминание про {x[0]}.', True]] + [x for x in l4['remp'] if x[2:] != [f'Отменить напоминание «{x[1]}»? Скажите «да» или «нет».', True, f'Отменил напоминание: «{x[1]}».', True]])
+            if [len(l4[k]) for k in ('neg', 'pos', 'remn', 'remp')] == [len(P4[k]) for k in ('neg', 'pos', 'remn', 'remp')] and len(P4['neg']) >= 30 and len(P4['pos']) >= 10 and not bad4:
+                ok(f"Орион: {len(P4['neg'])} чужих заметок не снимаются и после «да» («ключи» — не «ключевые уровни», «фонд» — не «фондовый», «долг» — не «долгой паузы», «дорогу» — не «дорогой подарок», украинские «ключові»), {len(P4['pos'])} нужных — Орион называет именно их и снимает только после «да» («налоги» — «налог», «ключи» — «ключ», «карта» — «карту», «ключі»); напоминания — так же")
+            else: fail('Орион: удаление по теме — набор пар (круг 4)', str(bad4 or l4))
             # 18.11.2026 (этап 5): утренний брифинг, антипаника, оповещения о цене через сервер
             mb = pg.evaluate("""(()=>{const D=Mascot.debug.state&&window.MSC&&MSC.last?null:null;
               const tot=(window.derive?derive():{}).total||0, inv=(window.derive?derive():{}).invPriced||0;
@@ -1649,6 +2150,13 @@ def run_browser():
             pw = pg.evaluate("[Mascot.debug.priceW(64149), Mascot.debug.priceW(110000), Mascot.debug.priceW(2501.4), Mascot.debug.figs('Биткоин — 64 тысячи 149 долларов.').map(x=>x.t), Mascot.debug.spoken('Биткоин — 64 тысячи 149 долларов.')]")
             if pw[0] == '64 тысячи 149 долларов' and pw[1] == '110 тысяч долларов' and pw[2] == '2 тысячи 501 доллар' and pw[3] == ['64 тысячи 149 долларов'] and 'шестьдесят четыре тысячи сто сорок девять долларов' in pw[4]: ok('Орион: цена монеты — до доллара («64 тысячи 149 долларов»), плашка — целиком')
             else: fail('Орион: точная цена', str(pw))
+            # 18.11.2026 (BACKLOG №7): «поставь оповещение DOGE по 12 центов» — «0,12 доллара», а не «0 долларов»; крупные цены — как раньше
+            al = pg.evaluate("""(()=>{const o=MLX.addAlert,got=[];MLX.addAlert=(s,v)=>{got.push(s+':'+v);return {id:'t'+got.length,sym:s,price:v,dir:'up'};};
+              try{const D=Mascot.debug;return [D.reply('поставь оповещение DOGE по 12 центов'), D.act('set_price_alert',{sym:'DOGE',price:0.12}), D.act('set_price_alert',{sym:'BTC',price:64149}), D.act('set_price_alert',{sym:'XRP',price:5}), D.act('set_price_alert',{sym:'XRP',price:2.5}), D.reply('сообщи, когда биткоин будет 12 процентов'), got];}finally{MLX.addAlert=o;}})()""")
+            if ('до отметки 0,12 доллара' in al[0] and al[1] == 'Поставил оповещение: DOGE, 0,12 доллара.' and al[2] == 'Поставил оповещение: BTC, 64 тысячи 149 долларов.'
+                    and al[3] == 'Поставил оповещение: XRP, 5 долларов.' and al[4] == 'Поставил оповещение: XRP, 2,5 доллара.' and al[6][:2] == ['DOGE:0.12', 'DOGE:0.12'] and 'BTC:64149' in al[6] and not any(x.startswith('BTC:0.12') for x in al[6])):
+                ok('Орион: оповещение «DOGE по 12 центов» — ставит 0,12 и говорит «0,12 доллара»; BTC 64149 — «64 тысячи 149 долларов»')
+            else: fail('Орион: цена в ответе об оповещении', str(al))
             fg = pg.evaluate("Mascot.debug.figs('Биткоин — 110 тысяч долларов, за сутки плюс 2 процента. Портфель минус 3%.')")
             if [x['t'] for x in fg] == ['110 тысяч долларов', 'плюс 2 процента', 'минус 3%'] and fg[1]['c'] == 'up' and fg[2]['c'] == 'dn': ok('Орион: цифры из ответа — плашками под текстом (рост зелёным, падение красным)')
             else: fail('Орион: плашки с цифрами', str(fg))
@@ -1773,6 +2281,56 @@ def run_browser():
             br = pg.evaluate(f"{M}.lx({M}.brief())"); r1 = pg.evaluate(f"{M}.lx({M}.reply('скільки в мене біткоїна'))")
             if br and not re.search('[ыэъё]', br + r1) and 'біткоїна' in r1: ok('Орион по-украински: сводка и ответ на украинский вопрос')
             else: fail('Орион по-украински: сводка', br[:120] + ' | ' + r1[:120])
+            ux = pg.evaluate(f"['Не нашёл заметку про отпуск.', 'Не нашёл напоминание про биржу.', 'Отменил напоминание: x.'].map(t=>{M}.lx(t))")
+            if ux == ['Не знайшов нотатку про відпустку.', 'Не знайшов нагадування про біржу.', 'Скасував нагадування: x.'] or (all('знайшов' in x or 'Скасував' in x for x in ux) and not re.search('[ыэъё]', ''.join(ux))): ok('Орион по-украински: «Не знайшов нотатку / нагадування про …», «Скасував нагадування»')
+            else: fail('Орион по-украински: удаление по теме', str(ux))
+            ux2 = pg.evaluate(f"['Про что удалить заметку?', 'Про что отменить напоминание?'].map(t=>{M}.lx(t))")
+            if ux2 == ['Про що видалити нотатку?', 'Про що скасувати нагадування?']: ok('Орион по-украински: «Про що видалити нотатку?», «Про що скасувати нагадування?»')
+            else: fail('Орион по-украински: переспрос «про що»', str(ux2))
+            # 24.11.2026 (BACKLOG №1): по-украински — переспрос «Видалити нотатку «…»? Скажіть «так» або «ні».», «так» — снимает ровно её, «ні» — ничего; текст заметки словарь не трогает
+            uy = pg.evaluate(f"""(async()=>{{const M={M},T=Mascot.tasks,said=()=>M.state().said,keep=new Set(T.notes().map(x=>x.id)),keepR=new Set(T.rem().map(x=>x.id)),out={{}};
+              const mine=()=>T.notes().filter(x=>!keep.has(x.id)).map(x=>x.t), act=()=>T.rem().filter(x=>!x.done&&!keepR.has(x.id)).map(x=>x.t);
+              for(const n of ['сплатити податки до 15-го','купить ETH и SOL']) await M.ask('запиши нотатку: '+n);
+              let b=mine(); await M.ask('видали нотатку про податки'); let q=said(), mid=mine(); await M.ask('так'); out.yes=[b,q,mid,said(),mine()];
+              b=mine(); await M.ask('видали нотатку про ETH'); q=said(); await M.ask('ні'); out.no=[b,q,said(),mine()];
+              M.act('add_reminder',{{text:'зателефонувати брокеру',when:new Date(Date.now()+5*3600e3).toISOString().slice(0,16)}});
+              let r=act(); await M.ask('скасуй нагадування про брокера'); q=said(); await M.ask('так, скасуй'); out.rem=[r,q,said(),act()];
+              T.notes().filter(x=>!keep.has(x.id)).forEach(x=>T.delNote(x.id)); T.rem().filter(x=>!keepR.has(x.id)).forEach(x=>T.delRem(x.id)); return out;}})()""")
+            uyb = []
+            y = uy['yes']
+            if not (y[1] == 'Видалити нотатку «сплатити податки до 15-го»? Скажіть «так» або «ні».' and y[2] == y[0] and y[3] == 'Видалив: «сплатити податки до 15-го».' and y[4] == ['купить ETH и SOL']): uyb.append(('так', y))
+            y = uy['no']
+            if not (y[1] == 'Видалити нотатку «купить ETH и SOL»? Скажіть «так» або «ні».' and y[2] == 'Добре, залишив.' and y[3] == y[0]): uyb.append(('ні', y))
+            y = uy['rem']
+            if not (y[1] == 'Скасувати нагадування «зателефонувати брокеру»? Скажіть «так» або «ні».' and y[2] == 'Скасував нагадування: «зателефонувати брокеру».' and [x for x in y[0] if x not in y[3]] == ['зателефонувати брокеру']): uyb.append(('нагадування', y))
+            if not uyb: ok('Орион по-украински: «видали нотатку про податки» → «Видалити нотатку «…»? Скажіть «так» або «ні».» → «так» — снята ровно она; «ні» — «Добре, залишив.»; напоминание — «скасуй …» → «так»; текст «купить ETH и SOL» не переведён')
+            else: fail('Орион по-украински: удаление с переспросом', str(uyb)[:1200])
+            # PR №23 круг 3 (Вера): по-украински промахи — «щодо / стосовно …» повторяем как сказано, после «о / насчёт» — «Не знайшов такої нотатки / такого нагадування» (без чужого падежа), без русских слов;
+            # «Все напоминания не отменяю» и «Напоминаний и так нет.» — тоже по-украински
+            um = pg.evaluate(f"""(async()=>{{const M={M},T=Mascot.tasks,said=()=>M.state().said,keep=new Set(T.notes().map(x=>x.id)),keepR=new Set(T.rem().map(x=>x.id)),out=[];
+              M.pendAge(200); for(const n of ['купити ETH у пʼятницю']) await M.ask('запиши нотатку: '+n);
+              for(const n of ['полити квіти','купити подарунок']) M.act('add_reminder',{{text:n,when:new Date(Date.now()+5*3600e3).toISOString().slice(0,16)}});
+              for(const q of ['видали нотатку щодо машини','видали нотатку стосовно відпустки','видали нотатку о машині','видали нотатку насчёт дачі','скасуй нагадування щодо відпустки','скасуй нагадування стосовно машини','скасуй нагадування о дачі']){{await M.ask(q); out.push([q,said()]);}}
+              await M.ask('скасуй нагадування'); out.push(['скасуй нагадування',said()]);
+              out.push(['lx',M.lx('Напоминаний и так нет.')]);
+              T.notes().filter(x=>!keep.has(x.id)).forEach(x=>T.delNote(x.id)); T.rem().filter(x=>!keepR.has(x.id)).forEach(x=>T.delRem(x.id)); M.pendAge(200); return out;}})()""")
+            EXP = ['Не знайшов нотатку щодо машини.', 'Не знайшов нотатку стосовно відпустки.', 'Не знайшов такої нотатки.', 'Не знайшов такої нотатки.',
+                   'Не знайшов нагадування щодо відпустки.', 'Не знайшов нагадування стосовно машини.', 'Не знайшов такого нагадування.',
+                   'Усі нагадування не скасовую. Скажіть: «скасуй нагадування про …».', 'Нагадувань і так немає.']
+            if [x[1] for x in um] == EXP and not re.search('[ыэъё]|Не нашёл|заметк|напоминан', ''.join(x[1] for x in um)):
+                ok('Орион по-украински: промахи «щодо / стосовно …» — как сказано, «о / насчёт …» — «Не знайшов такої нотатки / такого нагадування»; «Усі нагадування не скасовую», «Нагадувань і так немає.» — без русских слов')
+            else: fail('Орион по-украински: промахи с другими предлогами', str(um)[:1200])
+            # 18.11.2026 (BACKLOG №2): «Справи Оріона» — текст, который записал человек, словарь перевода не переписывает
+            pg.evaluate(f"{M}.act('add_note', {{text: 'Купить BTC після зарплати'}}); {M}.act('add_reminder', {{text: 'Перевірити портфель и купить эфир', when: new Date(Date.now()+5*3600e3).toISOString().slice(0,16)}})")
+            pg.evaluate("closeSheets(); MLX.go('tasks')"); pg.wait_for_timeout(900)
+            tk = pg.evaluate("""(()=>{const b=document.getElementById('xBody'),nm=[...b.querySelectorAll('.nm')].map(x=>x.textContent),bt=[...b.querySelectorAll('button[data-x="notedel"],button[data-x="remdel"]')];
+              return [document.getElementById('xTitle').textContent, nm, bt.map(x=>x.textContent.trim()), bt.map(x=>x.getAttribute('aria-label'))];})()""")
+            shot(pg, 'uk-dela-oriona')
+            pg.evaluate("closeSheets(); Mascot.tasks.notes().filter(x=>x.t==='Купить BTC після зарплати').forEach(x=>Mascot.tasks.delNote(x.id)); Mascot.tasks.rem().filter(x=>x.t==='Перевірити портфель и купить эфир').forEach(x=>Mascot.tasks.delRem(x.id))"); pg.wait_for_timeout(300)
+            if (tk[0] == 'Справи Оріона' and 'Купить BTC після зарплати' in tk[1] and 'Перевірити портфель и купить эфир' in tk[1] and 'Видалити' in tk[2] and 'Скасувати' in tk[2]
+                    and 'Видалити: Купить BTC після зарплати' in tk[3] and 'Скасувати: Перевірити портфель и купить эфир' in tk[3]):
+                ok('украинский: «Справи Оріона» — заметка «Купить BTC після зарплати» и напоминание показаны ровно как записаны, кнопки — по-украински')
+            else: fail('украинский: «Справи Оріона» портят текст человека', str(tk))
             pg.evaluate("window.__askX=null; window.mlAsk=async(q,s,x)=>{window.__askX=x;return {text:'Схоже, біткоїн зростає через новини про ETF.'};}")
             pg.evaluate(f"{M}.ask('чому біткоїн росте')"); pg.wait_for_timeout(1200)
             lang = pg.evaluate("window.__askX&&window.__askX.lang"); said = pg.evaluate(f"{M}.state().said")
@@ -1873,6 +2431,69 @@ def run_browser():
             if st2.get('market') and st2.get('edit') and not st2.get('view'): ok('складки: открытые разделы запоминаются после перезапуска')
             else: fail('складки: запоминание', str(st2))
         scenario('Складки', {'session': True, 'docs': SEED}, s_folds)
+
+        # --- ширина складок (24.11.2026, жалоба владельца, BACKLOG Н3): у .fold-b не было ширины колонки — сетка растягивалась
+        #     под содержимое (лента 19 месяцев «Плана альткоинов» = 2272 px), лента не листалась, правое и текст под ней обрезались
+        ALT_SYMS = ['ARB', 'FET', 'AAVE', 'LINK', 'IMX', 'FIL', 'ONDO', 'DOGE', 'XRP', 'OP', 'RNDR', 'UNI', 'PYTH', 'SAND', 'AR', 'MKR', 'SHIB', 'XLM', 'TIA']
+        ALT_KEYS = [f'2026-{m:02d}' for m in range(6, 13)] + [f'2027-{m:02d}' for m in range(1, 13)]
+        ALTPLAN = [{'col': 'app', 'id': 'altplan', 'data': {'approved': True,
+                    'months': {k: {'sym': s, 'theme': 'Тема ' + s} for k, s in zip(ALT_KEYS, ALT_SYMS)},
+                    'note': 'Тестовый план: одна монета в месяц, сумма — доля альткоинов из DCA. Длинная строка пояснения, чтобы проверить перенос под лентой.'}}]
+        FOLD_W = """(()=>{const vw=innerWidth,bad=[];
+            for(const f of document.querySelectorAll('.fold')){const fr=f.getBoundingClientRect();if(!fr.width)continue;
+              for(const e of [f,f.querySelector(':scope>.fold-b'),f.querySelector(':scope>.fold-b>.fold-in')]){if(!e)continue;const r=e.getBoundingClientRect();
+                if(r.width&&(r.left<-0.5||r.right>vw+0.5||r.width>fr.width+0.5))bad.push(f.dataset.fkey+'.'+e.className.split(' ')[0]+'='+Math.round(r.width));}}
+            return {bad,n:document.querySelectorAll('.fold').length,doc:document.documentElement.scrollWidth,vw}})()"""
+        for fw in (360, 390):
+            def s_fold_width(pg, n, fw=fw):
+                pg.set_viewport_size({'width': fw, 'height': 844}); wait_app(pg); pg.wait_for_timeout(800)
+                bad, seen = [], 0
+                for tab in ('home', 'coins', 'strategy', 'activity', 'settings'):
+                    if tab == 'settings': pg.evaluate("openSettings()")
+                    else: pg.evaluate(f"closeSheets();show('{tab}')")
+                    pg.wait_for_timeout(900)
+                    r = pg.evaluate(FOLD_W); seen += r['n']
+                    bad += [f'{tab}: {x}' for x in r['bad']] + ([f'{tab}: страница {r["doc"]} px'] if r['doc'] > r['vw'] else [])
+                if not bad and seen: ok(f'складки: ни одна не шире экрана ({fw} px, вкладки и настройки, складки раскрыты)')
+                else: fail(f'складки: ширина на {fw} px', '; '.join(bad)[:500] or 'складок не найдено')
+            scenario(f'Складки: ширина {fw} px', {'session': True, 'docs': SEED + ALTPLAN}, s_fold_width, clock='2026-11-24T10:00:00Z')
+
+            def s_alt_scroll(pg, n, fw=fw):
+                pg.set_viewport_size({'width': fw, 'height': 844}); wait_app(pg)
+                pg.evaluate("show('strategy')"); pg.wait_for_timeout(900)
+                pg.evaluate("mlFolds.open('altplan',true)"); pg.wait_for_timeout(900)
+                pg.evaluate("document.getElementById('planCard').scrollIntoView({block:'center'})"); pg.wait_for_timeout(500)
+                G = """(()=>{const b=document.getElementById('planMonths'),c=document.getElementById('planCard'),t=document.getElementById('planNote'),
+                    cur=b.querySelector('.mo.cur'),R=e=>e.getBoundingClientRect(),br=R(b),cr=R(c),tr=R(t),ur=cur?R(cur):null;
+                    return {n:b.children.length,cw:b.clientWidth,sw:b.scrollWidth,sl:b.scrollLeft,bl:br.left,brr:br.right,cl:cr.left,crr:cr.right,vw:innerWidth,
+                      cur:cur?cur.textContent:'',ul:ur?ur.left:-1,ur:ur?ur.right:-1,tl:tr.left,tr:tr.right,tw:t.clientWidth,tsw:t.scrollWidth,txt:t.textContent}})()"""
+                a = pg.evaluate(G)
+                # 1) лента внутри карточки и экрана, и при этом шире видимой области — есть что листать
+                if a['n'] == 19 and a['cl'] - 0.5 <= a['bl'] and a['brr'] <= min(a['crr'], a['vw']) + 0.5 and a['sw'] > a['cw'] + 300:
+                    ok(f'план альткоинов ({fw} px): 19 месяцев, лента в пределах карточки ({a["cw"]} px), содержимое шире ({a["sw"]} px)')
+                else: fail(f'план альткоинов ({fw} px): ширина ленты', str({k: a[k] for k in ('n', 'cw', 'sw', 'bl', 'brr', 'cl', 'crr', 'vw')}))
+                # 2) карточка текущего месяца (ноябрь 2026) видна сразу — лента сама подкручена к ней
+                if 'FIL' in a['cur'] and a['ul'] >= a['bl'] - 0.5 and a['ur'] <= a['brr'] + 0.5 and a['sl'] > 0:
+                    ok(f'план альткоинов ({fw} px): текущий месяц (FIL) виден сразу, лента подкручена к нему')
+                else: fail(f'план альткоинов ({fw} px): текущий месяц', str({k: a[k] for k in ('cur', 'ul', 'ur', 'bl', 'brr', 'sl')}))
+                # 3) пальцем/колесом лента листается: в начало (июнь) и до конца (декабрь 2027)
+                pg.evaluate("document.getElementById('planMonths').scrollLeft=0"); pg.wait_for_timeout(200)
+                box = pg.evaluate("(()=>{const r=document.getElementById('planMonths').getBoundingClientRect();return [r.left+r.width/2,r.top+r.height/2]})()")
+                pg.mouse.move(box[0], box[1]); pg.mouse.wheel(260, 0); pg.wait_for_timeout(700)
+                s1 = pg.evaluate("document.getElementById('planMonths').scrollLeft")
+                pg.evaluate("(()=>{const b=document.getElementById('planMonths');b.style.scrollSnapType='none';b.scrollLeft=b.scrollWidth})()"); pg.wait_for_timeout(300)
+                e = pg.evaluate("""(()=>{const b=document.getElementById('planMonths'),l=b.lastElementChild,br=b.getBoundingClientRect(),lr=l.getBoundingClientRect();
+                    b.style.scrollSnapType='';return {sl:b.scrollLeft,max:b.scrollWidth-b.clientWidth,lr:lr.right,brr:br.right,ll:lr.left,last:l.textContent}})()""")
+                if s1 > 0 and e['sl'] > 0 and abs(e['sl'] - e['max']) <= 1 and e['ll'] >= 0 and e['lr'] <= e['brr'] + 0.5 and 'TIA' in e['last']:
+                    ok(f'план альткоинов ({fw} px): лента листается (колесо → {round(s1)} px), последний месяц (TIA, дек 2027) доступен')
+                else: fail(f'план альткоинов ({fw} px): прокрутка', f'колесо {s1}, конец {e}')
+                # 4) текст под лентой — в карточке, с переносом, не обрезан справа
+                if a['tl'] >= a['cl'] - 0.5 and a['tr'] <= min(a['crr'], a['vw']) + 0.5 and a['tsw'] <= a['tw'] + 1 and 'Альткоин месяца сейчас: FIL' in a['txt']:
+                    ok(f'план альткоинов ({fw} px): текст под лентой целиком в карточке')
+                else: fail(f'план альткоинов ({fw} px): текст под лентой', str({k: a[k] for k in ('tl', 'tr', 'tw', 'tsw', 'cl', 'crr')}))
+                pg.evaluate("scrollPlan()"); pg.wait_for_timeout(300)
+                shot(pg, f'alt-plan-{fw}')
+            scenario(f'План альткоинов: прокрутка {fw} px', {'session': True, 'docs': SEED + ALTPLAN}, s_alt_scroll, clock='2026-11-24T10:00:00Z')
 
         # --- панель вкладок (12.11.2026): у активной вкладки значок поднимается в круге, подпись видна только у неё
         def s_orb(pg, n):

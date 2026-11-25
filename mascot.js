@@ -33,7 +33,7 @@
 .or-cap.talk i{animation:orPulse 1.1s ease-in-out infinite}
 .or-cap.listen i{animation:orPulse .6s ease-in-out infinite;box-shadow:0 0 0 6px color-mix(in srgb,var(--oc,#8b7dff) 25%,transparent),0 0 18px var(--oc,#8b7dff)}
 .or-cap b{font-size:12px;font-weight:600;letter-spacing:.02em;color:var(--mute,#a3a3ae)}
-.or-cap span{font-size:14.5px;line-height:1.45;overflow-wrap:anywhere}
+.or-cap span{font-size:14.5px;line-height:1.45;overflow-wrap:anywhere;max-height:calc(100dvh - 300px);overflow-y:auto;overscroll-behavior:contain}
 .or-cap em{grid-column:2;display:flex;flex-wrap:wrap;gap:6px;font-style:normal}.or-cap em:empty{display:none}.or-cap em u{text-decoration:none;font-size:12.5px;font-weight:700;padding:3px 9px;border-radius:999px;background:color-mix(in srgb,var(--oc,#8b7dff) 16%,transparent);color:var(--fg,#fff)}.or-cap em u.up{color:#4fd18b}.or-cap em u.dn{color:#ff7a7a}
 .or-cap:focus-visible{outline:2px solid var(--fg,#fff);outline-offset:2px}
 @keyframes orPulse{50%{transform:scale(1.12)}}
@@ -191,7 +191,7 @@
     if (TTS.cur !== cur) return; TTS.cur = null; clearInterval(TTS.sim); clearTimeout(TTS.guard); TTS.sim = 0; capDone(cur, quick); wake();
     if (quick) { TTS.q = []; return; }   /* остановили рукой — очередь не договариваем */
     if (cur.follow && AUTO && SRC && !document.hidden) { setTimeout(() => { if (!TTS.cur && !ST.rec) listen({ follow: true }); }, 450); return; }   /* разговор: после ответа слушаем следующий вопрос */
-    setTimeout(() => { if (TTS.cur) return; let x; while ((x = TTS.q.shift()) && now() - x.at > 40) {} if (x) speak(x.text, Object.assign({}, x.o, { queue: false })); }, TTS.q[0] && TTS.q[0].fast ? 90 : 700);   /* продолжение ответа — без паузы */
+    setTimeout(() => { if (TTS.cur) return; let x; while ((x = TTS.q.shift()) && !x.fast && now() - x.at > 40) {} if (x) speak(x.text, Object.assign({}, x.o, { queue: false })); }, TTS.q[0] && TTS.q[0].fast ? 90 : 700);   /* продолжение ответа — без паузы; устаревшие (старше 40 с) выбрасываем, кроме продолжений ответа (Н4) */
   }
   function stopVoice() {
     const c = TTS.cur; if (!c) return;
@@ -203,7 +203,7 @@
   function silent(cur) {
     if (TTS.cur !== cur) return;
     clearInterval(TTS.sim);
-    const dur = Math.min(16, 1.4 + cur.text.split(/\s+/).length * 0.38);
+    const dur = Math.min(22, 1.4 + cur.text.split(/\s+/).length * 0.38);
     TTS.sim = setInterval(() => { TTS.beat = now(); }, 300);
     TTS.guard = setTimeout(() => finish(cur), dur * 1000);
   }
@@ -297,10 +297,26 @@
   const premiumOK = () => !!(ST.sound && A.voice && !document.hidden && navigator.onLine !== false && now() > VO.off && (ST.forcePremium || !navigator.webdriver));
   /* фраза → части (18.11.2026). Обычно до 350 знаков — целиком одним запросом, чтобы интонация не «перезапускалась»; длиннее — две половины.
      live — ответ в разговоре: по предложениям (первое отдельно), чтобы первый звук пришёл быстро — Eleven v4 озвучивает фразу 3–5 с, длинную дольше */
+  /* Н4 (25.11.2026): длинный ответ «мозга» (до 1500 знаков) — кусками по целым предложениям ≤ 380 знаков: субтитр помещается на экран,
+     голос не получает 1000+ знаков за раз. Каждый кусок — отдельная фраза в очереди продолжений; live/follow — только у последнего */
+  const CHUNK = 380;
+  function chunks(t, max) {
+    max = max || CHUNK; const out = [];
+    for (let x of String(t || '').replace(/([.!?…]["»”')]*)\s+/g, '$1\u0001').split('\u0001').map(z => z.trim()).filter(Boolean)) {   /* конец предложения — только перед пробелом или концом строки: «3.5» не режем; без lookbehind — старый Safari < 16.4 его не знает */
+      while (x.length > max) { let k = x.lastIndexOf(' ', max); if (k < max / 2) k = max; out.push(x.slice(0, k).trim()); x = x.slice(k).trim(); }
+      const L = out.length - 1; if (L >= 0 && out[L].length + 1 + x.length <= max) out[L] += ' ' + x; else if (x) out.push(x);
+    }
+    return out;
+  }
+  function sayLong(text, o, append) {
+    const cs = chunks(text); if (!cs.length) return;
+    if (cs.length > 1) voPrefetch(cs[0], true);
+    cs.forEach((c, i) => { const last = i === cs.length - 1; speak(c, Object.assign({ pri: 2, raw: true }, last ? o : {}, { append: !!append || i > 0 })); });
+  }
   function splitParts(t, live) {
     t = String(t || '').trim();
     const ss = (t.match(/[^.!?…]+[.!?…]+["»]?|[^.!?…]+$/g) || [t]).map(z => z.trim()).filter(Boolean);
-    if (live) { const out = []; for (const x of ss) { if (out.length > 1 && (out[out.length - 1].length < 40 || out.length >= 4)) out[out.length - 1] += ' ' + x; else out.push(x); } return out.length ? out : [t]; }
+    if (live) { const out = []; for (const x of ss) { if (out.length > 1 && (out[out.length - 1].length < 40 || out.length >= 4) && out[out.length - 1].length + x.length < CHUNK) out[out.length - 1] += ' ' + x; else out.push(x); } return out.length ? out : [t]; }   /* склейка — не длиннее куска (Н4) */
     if (t.length <= 350) return [t];
     let a = '', i = 0; while (i < ss.length - 1 && (a + ' ' + ss[i]).length <= t.length / 2 + 40) a = (a ? a + ' ' : '') + ss[i++];
     if (!a) a = ss[i++];
@@ -841,7 +857,7 @@
   const NAME_N = { BTC: 'Биткоин', ETH: 'Эфир', SOL: 'Солана', XRP: 'Рипл', DOGE: 'Доги', TON: 'Тон', ADA: 'Кардано' };
   /* украинский вопрос → русские основы слов, по которым Орион понимает вопрос на телефоне */
   const UKQ = [['скільки', 'сколько'], ['в мене', 'у меня'], ['у мене', 'у меня'], ['мене', 'меня'], ['моїх', 'моих'], ['мої', 'мои'], ['мій', 'мой'], ['мого', 'моего'], ['чи є', 'есть ли'],
-    ['повідом', 'сообщи'], ['нагадай', 'напомни'], ['попередь', 'предупреди'], ['дай знати', 'дай знать'], ['сповіст', 'оповест'], ['коли', 'когда'], ['якщо', 'если'], ['буде', 'будет'],
+    ['видали останню нотатку', 'удали последнюю заметку'], ['видали нотатку', 'удали заметку'], ['скасуй нагадування', 'отмени напоминание'], ['видали нагадування', 'удали напоминание'], ['повідом', 'сообщи'], ['нагадай', 'напомни'], ['попередь', 'предупреди'], ['дай знати', 'дай знать'], ['сповіст', 'оповест'], ['коли', 'когда'], ['якщо', 'если'], ['буде', 'будет'],
     ['тижн', 'недел'], ['тиждень', 'неделя'], ['серія', 'серия'], ['серії', 'серии'], ['поспіль', 'подряд'], ['сходинк', 'ступен'], ['сходин', 'ступен'], ['сходами', 'лестницей'], ['сходах', 'лестнице'], ['сходів', 'лестницы'], ['сходи', 'лестница'], ['що з', 'что с'], ['що зі', 'что с'],
     ['просідан', 'просадк'], ['докупівл', 'докупк'], ['місяц', 'месяц'], ['місяць', 'месяц'], ['жадібн', 'жадн'], ['настр', 'настроени'], ['усього', 'всего'], ['всього', 'всего'], ['грошей', 'денег'],
     ['підсумок', 'итог'], ['підсумк', 'итог'], ['дякую', 'спасибо'], ['хто ти', 'кто ты'], ['що ти вмієш', 'что ты умеешь'], ['що вмієш', 'что умеешь'], ['допомож', 'помоги'], ['допомог', 'помощ'],
@@ -885,10 +901,10 @@
     /* «63.000» / «63,000» — разделитель тысяч, если после точки ровно три цифры и целая часть не ноль */
     let alt = null;
     t = t.replace(/\b([1-9]\d{0,2})[.,](\d{3})(?![\d.,])/g, (m, a, b) => { alt = parseFloat(a + '.' + b); return a + b; });
-    const m = t.match(/(\d+(?:[.,]\d+)?)\s*(тысяч[а-я]*|тыс\.?|к(?![а-яё])|k(?![a-z])|миллион[а-я]*|млн\.?)?/);
+    const m = t.match(/(\d+(?:[.,]\d+)?)\s*(тысяч[а-я]*|тыс\.?|к(?![а-яё])|k(?![a-z])|миллион[а-я]*|млн\.?|цент[а-я]*)?/);   /* «по 12 центов» — 0,12 доллара (BACKLOG №7) */
     if (!m) return null;
     let v = parseFloat(m[1].replace(',', '.')); if (!isFinite(v)) return null;
-    if (m[2]) v *= /милл|млн/.test(m[2]) ? 1e6 : 1e3;
+    if (m[2]) v = /цент/.test(m[2]) ? v / 100 : v * (/милл|млн/.test(m[2]) ? 1e6 : 1e3);
     /* сверка с ценой монеты: «биткоин будет 63» почти наверняка значит 63 тысячи; «1.250» у монеты по $1,2 — это 1,25 */
     const p = sym ? coinPrice(sym) : 0;
     if (p > 0) {
@@ -901,7 +917,7 @@
   }
   const qtyW = v => (+v).toLocaleString(LOC, { maximumFractionDigits: v >= 100 ? 0 : v >= 1 ? 3 : 6 });
   function coinPrice(sym) { const S = ST.S || {}, D = ST.D || {}, lv = S.live || {}; return +(lv.prices && lv.prices[sym]) || +(D.prices && D.prices[sym]) || 0; }
-  function priceW(v) { return v >= 10 ? moneyW(v, true) : (v >= 1 ? String(+v.toFixed(2)).replace('.', ',') : String(+v.toPrecision(3)).replace('.', ',')) + ' доллара'; }
+  function priceW(v) { return v >= 10 || (v >= 1 && +v.toFixed(2) % 1 === 0) ? moneyW(v, true) : (v >= 1 ? String(+v.toFixed(2)).replace('.', ',') : String(+v.toPrecision(3)).replace('.', ',')) + ' доллара'; }
   /* просьба поставить оповещение о цене — любыми словами: «сообщи», «напомни», «поставь уведомление», «оповещение», «сигнал» (12.11.2026) */
   function alertQ(t) { return /(сообщи|сповищ|нагадув|скажи,? когда|оповест|оповещ|уведом|напомни|напомин|предупреди|дай знать|сигнал|алерт|будильник)/.test(t); }
   function reply(q) {
@@ -1068,8 +1084,8 @@
     try { if (window.MLX && MLX.tasksRow) MLX.tasksRow(); } catch (e) {}
   }
   function logAct(t, how) { TASK.log.push({ at: Date.now(), t: String(t).slice(0, 160), how: how || 'голос' }); if (TASK.log.length > 50) TASK.log = TASK.log.slice(-50); taskSave('log'); }
-  function noteAdd(t) { t = String(t || '').replace(/\s+/g, ' ').trim().replace(/^[,:—-]\s*/, ''); if (!t) return false; TASK.notes.push({ id: uid(), at: Date.now(), t: t.slice(0, 300) }); if (TASK.notes.length > 100) TASK.notes = TASK.notes.slice(-100); taskSave('notes'); return true; }
-  function remAdd(t, when) { TASK.rem.push({ id: uid(), at: Date.now(), when, t: String(t).slice(0, 200), done: false }); TASK.rem = TASK.rem.filter(x => !x.done || Date.now() - x.when < 7 * 864e5).slice(-50); taskSave('rem'); }
+  function noteAdd(t) { t = String(t || '').replace(/\s+/g, ' ').trim().replace(/^[,:—-]\s*/, ''); if (!t) return false; TASK.notes.push({ id: uid(), at: Date.now(), t: t.slice(0, 300) }); if (ST.delMiss) ST.delMiss.notes = 0; if (TASK.notes.length > 100) TASK.notes = TASK.notes.slice(-100); taskSave('notes'); return true; }
+  function remAdd(t, when) { TASK.rem.push({ id: uid(), at: Date.now(), when, t: String(t).slice(0, 200), done: false }); if (ST.delMiss) ST.delMiss.rem = 0; TASK.rem = TASK.rem.filter(x => !x.done || Date.now() - x.when < 7 * 864e5).slice(-50); taskSave('rem'); }
   const pad2 = n => String(n).padStart(2, '0');
   const MON_G = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
   function whenW(ms) {
@@ -1136,13 +1152,80 @@
       if (!sym || !(price > 0)) return 'Для оповещения нужна монета и цена.';
       let r = null; try { r = A.addAlert ? A.addAlert(sym, price) : null; } catch (e) { r = null; }
       if (!r) return 'Не получилось поставить оповещение.';
-      logAct('Оповещение: ' + sym + ' — $' + price); return typeof r === 'string' ? r : 'Поставил оповещение: ' + sym + ', ' + Math.round(price) + ' долларов.';
+      logAct('Оповещение: ' + sym + ' — $' + price); return typeof r === 'string' ? r : 'Поставил оповещение: ' + sym + ', ' + priceW(price) + '.';   /* «0,12 доллара», а не «0 долларов» (BACKLOG №7) */
     }
     return '';
   }
   const REM_Q = /(напомни|напомин|нагадай|нагадаю)/, REM_T = /(завтра|сегодня|послезавтра|утром|вечером|дн[её]м|ночью|через|в\s+\d{1,2}(:\d\d)?(?![\d.,])|час|понедельн|вторник|сред[уау]|четверг|пятниц|суббот|воскресен|числа|январ|феврал|март|апрел|ма[йя]|июн|июл|август|сентябр|октябр|ноябр|декабр)/, PRICE_T = /(будет|станет|достигнет|упад|вырастет|подним|опуст|дойд|цена|курс|по\s+\d|долл|\$)/;
   const remQ = t => REM_Q.test(t) && REM_T.test(t) && !PRICE_T.test(t);
   const buyQ = t => /(запиши|внеси|добавь|запиши мне|занеси)\s+(мою\s+|мне\s+)?(покупк|что (я )?купил|что (я )?докупил)|^(я\s+)?(купил|докупил|прикупил)\s/.test(t);   /* «запиши покупку…», «я купил…» — цифры разбирает «мозг», сохраняет человек */
+  /* «…про налоги»: значимые слова после «про» и их основы (короткие — целиком, длинные — без окончания), чтобы «биржу» нашла «на бирже» (18.11.2026, BACKLOG №1) */
+  const ABOUT_STOP = /^(и|в|во|на|с|со|по|для|что|это|эту|этот|эти|мою|мой|мои|мое|ту|тот|те|к|ко|о|об|за|из|у|от|до|не|же|ли|бы|а|но|или|где|как|мне|меня)$/, WSPLIT = /[^a-zа-яіїєґ0-9]+/;
+  /* О.2 (25.11.2026): «о налогах», «об отпуске», «насчёт банка», укр. «щодо / стосовно податків» — как «про» */
+  const ABOUT_PREP = '(?:^|\\s)(про|о|об|обо|насч[её]т|щодо|стосовно)', ABOUT_CUT = new RegExp(ABOUT_PREP + '[\\s.,!?…]*$'), ABOUT_RE = new RegExp(ABOUT_PREP + '\\s+(.+)$'), ABOUT_RE_I = new RegExp(ABOUT_PREP + '\\s+(.+)$', 'i');
+  function aboutQ(t, q) {
+    if (ABOUT_CUT.test(t)) return { raw: '', stems: [] };   /* «удали заметку про» — оборванная речь: переспросим, ничего не снимаем */
+    const m = t.match(ABOUT_RE); if (!m) return null;
+    const w = m[2].split(WSPLIT).filter(x => x && !ABOUT_STOP.test(x));
+    const rq = String(q || '').match(ABOUT_RE_I), raw = ((rq && rq[2]) || m[2]).replace(/[\s.,!?…]+$/, '').trim(), prep = rq && rq[2] ? rq[1].toLowerCase() : m[1];
+    /* слово до 4 букв — целиком; длиннее — без известного окончания («налоги» → «налог», «карту» → «карт»); «налоговую» (прилагательное на «-ов/-ев») → «налогов» + ждём у заметки тоже прилагательное;
+       «золото» (оканчивается на «о») — у заметки допускаем и «о»; «решение» — существительное: «решени» + «я» */
+    return { raw, prep, stems: w.map(x => { if (x.length <= 4) return { s: x, adj: false, o: false }; const cut = e => x.length - e.length >= 3 && x.endsWith(e), ea = ABOUT_END_ADJ.find(e => cut(e) && /(ов|ев)$/.test(x.slice(0, -e.length))), e = ea || ABOUT_END_N.find(cut) || ''; return { s: x.slice(0, x.length - e.length), adj: !!ea, o: !ea && e === 'о' }; }) };
+  }
+  /* Совпадение — то же слово в другой форме, а не однокоренное (ревью PR №12, круги 1–3). Запрос-существительное: хвост слова заметки после основы —
+     только окончание, которое бывает у существительного и НЕ бывает у прилагательного (или ничего). Поэтому «ключи» — не «ключевые уровни», «фонд» — не «фондовый»,
+     «долг» — не «долгий / о долгой / о долгом», «газ» — не «газон», «дом» — не «домен / домой», «карты» — не «картошку», «налоги» — не «налоговую».
+     Окончания творительного «-ой/-ом/-ем/-ою» совпадают с прилагательным («дорогой», «золотой») — их не берём: «оплатить картой» по «про карту» не снимется, Орион переспросит.
+     Запрос-прилагательное («налоговую») — у заметки только прилагательное той же основы. і, ї, ів — украинские формы (без «є/ою/ові» — они и у прилагательных). */
+  const ABOUT_END_N = ['ами', 'ями', 'ой', 'ей', 'ам', 'ям', 'ах', 'ях', 'ом', 'ем', 'ов', 'ев', 'а', 'я', 'у', 'ю', 'ы', 'и', 'е', 'о', 'ь', 'і', 'ї', 'є'],
+    ABOUT_END_ADJ = ['ого', 'его', 'ому', 'ему', 'ыми', 'ими', 'ая', 'яя', 'ое', 'ее', 'ые', 'ие', 'ий', 'ый', 'ую', 'юю', 'ых', 'их', 'ым', 'им', 'ой', 'ей', 'ом', 'ем'],
+    ABOUT_ADJ = '(?:ый|ий|ой|ая|яя|ое|ее|ые|ие|ую|юю|ого|его|ому|ему|ым|им|ых|их|ыми|ими|ом|ем)',
+    ABOUT_NOUN = '(?:а|я|у|ю|ы|и|е|ь|ов|ев|ей|ам|ям|ами|ями|ах|ях|і|ї|ів)',
+    ABOUT_TAIL = new RegExp('^' + ABOUT_NOUN + '?$'), ABOUT_TAIL_O = new RegExp('^(?:' + ABOUT_NOUN.slice(3, -1) + '|о)?$'), ABOUT_TAIL_ADJ = new RegExp('^' + ABOUT_ADJ + '$'),
+    /* формы, совпадающие с другим словом: «почти» — как «почта», «долго» — «долг», «стало» — «сталь», «банку / банка / банке» — и банк, и стеклянная банка, «поле» — не «пол», «пара» — не «пар», «дома» — и «у себя дома»: никогда не считаем совпадением */
+    ABOUT_NEVER = /^(почти|долго|стало|банку|банка|банке|поле|пара|паре|дома)$/;
+  function aboutPick(list, ab) {   /* подходят все основы; из подходящих — самая свежая; нет подходящих — null */
+    if (!ab.stems.length) return null;
+    const hit = list.filter(x => { const w = norm(x.t).split(WSPLIT).filter(y => !ABOUT_NEVER.test(y)); return ab.stems.every(st => w.some(y => y.indexOf(st.s) === 0 && (st.adj ? ABOUT_TAIL_ADJ : st.o ? ABOUT_TAIL_O : ABOUT_TAIL).test(y.slice(st.s.length)))); });
+    return hit.reduce((b, x) => (!b || (+x.at || 0) >= (+b.at || 0) ? x : b), null);   /* при равном времени — записанная позже */
+  }
+  /* «удали заметку / отмени напоминание про X» — с переспросом (24.11.2026, BACKLOG №1, решение директора после 4 кругов ревью PR №12).
+     Поиск выше только выбирает кандидата: Орион называет запись и ждёт «да» 20 секунд. Ожидание — в ST.pendDel (вид, id записи, время), не в базе.
+     «Да» — удаляется ровно эта запись по id (без повторного поиска); «нет», тишина, другой вопрос — ничего не удаляется. */
+  const DEL_WAIT = 20, DEL_LATE = 120;   /* после 20 с «да» не удаляет; до 2 мин опоздавшее «да»/«удали заметку» тоже ничего не снимает (ревью Глеба 24.11) */
+  const delNow = () => Date.now() / 1000;   /* настоящее время: performance.now() на части телефонов стоит во сне */
+  /* «да» на вопрос: «отмени», «скасуй» — только про напоминание; названия записей («заметку», «напоминание») не подтверждают — иначе
+     «отмени» на «Удалить заметку?» и «отмени напоминание» на вопрос про заметку удаляли запись не того вида (ревью Глеба 24.11, круг 3) */
+  const DEL_YES_N = /^\s*(?:да|ага|угу|так|конечно|давай|удали|удаляй|видали|видаляй|подтверждаю)(?:[\s,.!?]+(?:да|так|давай|удали|удаляй|видали|конечно|пожалуйста|будь|ласка|ее|е|его|ии|її|його))*[\s,.!?]*$/,
+    DEL_YES_R = /^\s*(?:да|ага|угу|так|конечно|давай|удали|удаляй|отмени|отменяй|видали|видаляй|скасуй|скасовуй|подтверждаю)(?:[\s,.!?]+(?:да|так|давай|удали|удаляй|отмени|видали|скасуй|конечно|пожалуйста|будь|ласка|ее|е|его|ии|її|його))*[\s,.!?]*$/,
+    DEL_YES = { test: t => DEL_YES_R.test(t) },   /* «похоже на да» вообще — только чтобы не принять опоздавшее «да» за команду */
+    delYes = (t, kind) => (kind === 'notes' ? DEL_YES_N : DEL_YES_R).test(t),
+    /* «нет» — только явный ответ целиком: «не понял», «не слышу, повтори» — не ответ (ревью Глеба 24.11, круг 4) */
+    DEL_NO = /^\s*(?:(?:нет|ні|ни|не)(?:[\s,.!?]+(?:нет|ні|не|надо|нужно|треба|потрібно|удаляй|видаляй|стоит|варто|отменяй|скасовуй|оставь\S*|залиш\S*|спасибо|дякую))*|оставь\S*|залиш\S*|стоп|отбой|отмена)[\s,.!?]*$/;
+  let tcRaw = false;   /* ответ команды уже на языке человека — словарь перевода его не трогает (в нём текст заметки) */
+  const delName = s => { s = String(s || '').replace(/\s+/g, ' ').trim(); if (s.length <= 60) return s; const c = s.slice(0, 59).replace(/[\s,.;:—-]+\S*$/, ''); return (c.length >= 20 ? c : s.slice(0, 59)) + '…'; };
+  function delAsk(kind, x) {
+    const pd = ST.pendDel = { kind, id: x.id, t: x.t, at: delNow() }, nm = delName(x.t); ST.pendingMemo = null;
+    ST.delGuard = pd.at;   /* 2 минуты после вопроса «голые» команды удаления ничего не снимают — даже если между ними был другой вопрос */
+    clearTimeout(ST.pendDelT); ST.pendDelT = setTimeout(() => { if (ST.pendDel === pd) ST.pendDel = null; }, DEL_LATE * 1000 + 500);
+    tcRaw = true;
+    return kind === 'notes' ? (UK ? 'Видалити нотатку «' + nm + '»? Скажіть «так» або «ні».' : 'Удалить заметку «' + nm + '»? Скажите «да» или «нет».')
+      : (UK ? 'Скасувати нагадування «' + nm + '»? Скажіть «так» або «ні».' : 'Отменить напоминание «' + nm + '»? Скажите «да» или «нет».');
+  }
+  function delDo(pd) {   /* ровно одна запись — та, которую назвал Орион */
+    const L = TASK[pd.kind] || [], i = pd.id ? L.findIndex(y => y && y.id === pd.id) : -1, nm = delName(pd.t);
+    if (i < 0) return UK ? 'Цього запису вже немає — нічого не видаляв.' : 'Этой записи уже нет — ничего не удалял.';
+    const x = L[i]; TASK[pd.kind] = L.filter((y, j) => j !== i); taskSave(pd.kind);
+    if (pd.kind === 'notes') { logAct('Удалил заметку: ' + x.t); return (UK ? 'Видалив: «' : 'Удалил: «') + nm + '».'; }
+    logAct('Отменил напоминание: ' + x.t); return (UK ? 'Скасував нагадування: «' : 'Отменил напоминание: «') + nm + '».';
+  }
+  const delGuarded = () => !!ST.delGuard && delNow() - ST.delGuard <= DEL_LATE;
+  /* О.3 (25.11.2026): после «Не нашёл заметку про …» / «Про что…?» 2 минуты «голая» команда удаления не снимает последнюю (все) сразу — Орион называет запись и ждёт «да».
+     Новая запись того же вида снимает защиту: «удали заметку» сразу после «запиши заметку» — про только что записанную.
+     Заметки и напоминания — отдельно: промах по напоминанию не снимает защиту после промаха по заметке (ревью Глеба, PR №23 круг 2) */
+  const delMiss = kind => { ST.delMiss = ST.delMiss || { notes: 0, rem: 0 }; ST.delMiss[kind] = delNow(); }, delMissed = kind => !!(ST.delMiss && ST.delMiss[kind]) && delNow() - ST.delMiss[kind] <= DEL_LATE,
+    delMissOff = kind => { if (ST.delMiss) ST.delMiss[kind] = 0; };
+  const delGuardSay = () => { tcRaw = true; return UK ? 'Я вже не чекаю відповіді — нічого не видаляв. Скажіть знову: «видали нотатку про …».' : 'Я уже не жду ответа — ничего не удалял. Скажите снова: «удали заметку про …».'; };
   /* команды телефона: без сервера и без затрат */
   function taskCmd(t, q) {
     if (/^(открой|покажи|давай|відкрий)\s+(этот\s+|мне\s+)?урок$|^давай урок$/.test(t.trim()) && ST.lessonOffer && now() - ST.lessonOffer.at < 1800 && window.MLX && MLX.lesson) {
@@ -1156,11 +1239,32 @@
       if (!TASK.notes.length) return 'Заметок пока нет. Скажите «запиши заметку…».';
       return 'Последние заметки: ' + TASK.notes.slice(-3).reverse().map(x => x.t).join('; ') + '.';
     }
-    if (/^удали\s+(последнюю\s+)?заметку/.test(t)) { const x = TASK.notes.pop(); if (!x) return 'Заметок нет.'; taskSave('notes'); logAct('Удалил заметку: ' + x.t); return 'Удалил: ' + x.t + '.'; }
+    if (/^удали\s+(последнюю\s+)?заметку/.test(t)) {
+      const ab = aboutQ(t, q);
+      if (ab) {   /* «удали заметку про налоги» — самая свежая из тех, где есть эти слова, — Орион её называет и ждёт «да»; нет такой — ничего не трогаем */
+        if (!ab.stems.length) { delMiss('notes'); return 'Про что удалить заметку?'; }
+        const x = aboutPick(TASK.notes, ab); if (!x) { delMiss('notes'); if (UK) { tcRaw = true; return /^(про|щодо|стосовно)$/.test(ab.prep) ? 'Не знайшов нотатку ' + ab.prep + ' ' + ab.raw + '.' : 'Не знайшов такої нотатки.'; } return 'Не нашёл заметку ' + ab.prep + ' ' + ab.raw + '.'; }   /* по-украински: «про/щодо/стосовно» — как сказал человек; после «о/об/насчёт» слово не повторяем (падеж) */
+        delMissOff('notes'); return delAsk('notes', x);
+      }
+      if (delGuarded()) return delGuardSay();
+      if (delMissed('notes')) { delMissOff('notes'); const x = TASK.notes[TASK.notes.length - 1]; if (!x) return 'Заметок нет.'; return delAsk('notes', x); }
+      const x = TASK.notes.pop(); if (!x) return 'Заметок нет.'; taskSave('notes'); logAct('Удалил заметку: ' + x.t); return 'Удалил: ' + x.t + '.';
+    }
     if (/^(какие|что)\s+(у меня\s+)?напоминани|^мои напоминани/.test(t)) {
       const L = TASK.rem.filter(x => !x.done).sort((a, b) => a.when - b.when);
       if (!L.length) return 'Напоминаний нет.';
       return L.slice(0, 3).map(x => whenW(x.when) + ' — ' + x.t).join('; ') + '.';
+    }
+    if (/^(отмени|удали|убери)\s+(все\s+)?напоминани/.test(t) && aboutQ(t, q)) {   /* «отмени напоминание про биржу» — только подходящее, самое свежее, и только после «да» */
+      const ab = aboutQ(t, q); if (!ab.stems.length) { delMiss('rem'); return 'Про что отменить напоминание?'; }
+      const x = aboutPick(TASK.rem.filter(y => !y.done), ab); if (!x) { delMiss('rem'); if (UK) { tcRaw = true; return /^(про|щодо|стосовно)$/.test(ab.prep) ? 'Не знайшов нагадування ' + ab.prep + ' ' + ab.raw + '.' : 'Не знайшов такого нагадування.'; } return 'Не нашёл напоминание ' + ab.prep + ' ' + ab.raw + '.'; }
+      delMissOff('rem'); return delAsk('rem', x);
+    }
+    if (/^(отмени|удали|убери)\s+(все\s+)?напоминани/.test(t) && delGuarded()) return delGuardSay();
+    if (/^(отмени|удали|убери)\s+(все\s+)?напоминани/.test(t) && delMissed('rem')) {   /* О.3: одно — называем и ждём «да»; несколько — все не снимаем */
+      delMissOff('rem'); const L = TASK.rem.filter(x => !x.done); if (L.length === 1) return delAsk('rem', L[0]);
+      if (!L.length) return 'Напоминаний и так нет.';
+      tcRaw = true; return UK ? 'Усі нагадування не скасовую. Скажіть: «скасуй нагадування про …».' : 'Все напоминания не отменяю. Скажите: «отмени напоминание про …».';
     }
     if (/^(отмени|удали|убери)\s+(все\s+)?напоминани/.test(t)) { const n = TASK.rem.filter(x => !x.done).length; TASK.rem = TASK.rem.filter(x => x.done); taskSave('rem'); logAct('Отменил напоминания: ' + n); return n ? 'Отменил.' : 'Напоминаний и так нет.'; }
     return '';
@@ -1171,6 +1275,20 @@
     const sure = local && local.indexOf(UNK) !== 0 && !/^Не расслышал/.test(local);
     const follow = ST.lastBrain && now() - ST.lastBrain < 120 && (/^\s*(а|и|ну|тогда|а\s+если)(?=[\s,?!.]|$)/.test(t) || t.trim().split(/\s+/).length <= 3) && !/(у меня|мои |мой |сколько у)/.test(t);   /* переспрос: «а эфир?», «а почему?» */
     const toBrain = A.ask && t.trim() && (remQ(t) || buyQ(t) || (!(alertQ(t) && sure) && (marketQ(t) || !sure || follow)));   /* «напомни завтра в 9…» — разбирает «мозг» (дата и время) */
+    if (ST.pendDel) {   /* ответ на «Удалить заметку «…»?» — только в течение 20 секунд; всё, кроме «да», ничего не удаляет */
+      const pd = ST.pendDel; ST.pendDel = null; clearTimeout(ST.pendDelT);
+      const age = delNow() - pd.at;
+      /* «убери напоминание», «отмени напоминания», «удали последнюю заметку» без «про» в ответ на вопрос — не команда «снять все / последнюю» (ревью Глеба 24.11, круг 2) */
+      if (age <= DEL_LATE && !DEL_YES.test(t) && /^\s*(?:отмени|удали|убери|сотри|видали|скасуй|прибери)\s+(?:все\s+|всі\s+)?(?:последн\S*\s+|останн\S*\s+)?(?:заметк|напоминан|нотатк|нагадуван)/.test(t) && !aboutQ(t, q)) {
+        speak(UK ? 'Я вже не чекаю відповіді — нічого не видаляв. Скажіть знову: «видали нотатку про …».' : 'Я уже не жду ответа — ничего не удалял. Скажите снова: «удали заметку про …».', { pri: 2, raw: true }); return;
+      }
+      if (age <= DEL_WAIT) {
+        if (delYes(t, pd.kind)) { ST.delGuard = 0; speak(delDo(pd), { pri: 2, raw: true }); return; }
+        if (DEL_NO.test(t) || !t.trim()) { speak(UK ? 'Добре, залишив.' : 'Хорошо, оставил.', { pri: 2, raw: true }); return; }
+      } else if (age <= DEL_LATE && DEL_YES.test(t)) {   /* опоздавший ответ: «отмени напоминание» не снимает все, «удали заметку» — не последнюю */
+        speak(UK ? 'Я вже не чекаю відповіді — нічого не видаляв. Скажіть знову: «видали нотатку про …».' : 'Я уже не жду ответа — ничего не удалял. Скажите снова: «удали заметку про …».', { pri: 2, raw: true }); return;
+      }
+    }
     if (ST.pendingMemo && now() - ST.pendingMemo.at < 60) {   /* ответ на «Запомнить: …?» */
       const pm = ST.pendingMemo; ST.pendingMemo = null;
       if (YES.test(t)) { const okm = memAdd(pm.t); speak(okm ? 'Запомнил.' : 'Это я не запоминаю.', { pri: 2 }); return; }
@@ -1178,8 +1296,8 @@
     }
     const mc = memCmd(t, q);
     if (mc) { speak(mc, { pri: 2, follow: byVoice }); return; }
-    const tc = taskCmd(t, q);
-    if (tc) { speak(tc, { pri: 2, follow: byVoice && !/^Открываю/.test(tc) }); return; }
+    tcRaw = false; const tc = taskCmd(t, q);
+    if (tc) { speak(tc, { pri: 2, follow: byVoice && !/^Открываю/.test(tc), raw: tcRaw }); return; }
     const fu = localFollow(t);
     if (fu) { remember(q, fu, PRIV.test(fu)); speak(fu, { pri: 2, follow: byVoice }); return; }
     if (!toBrain) {
@@ -1212,11 +1330,15 @@
       const full = sq(r.text);
       const memo = MEM.on && ms.memo && memSafe(ms.memo) && !MEM.items.some(x => String(x.t).toLowerCase() === ms.memo.toLowerCase()) ? ms.memo : '';
       if (memo) setTimeout(() => { if (gen !== ST.askGen) return; ST.pendingMemo = { t: memo, at: now() }; speak((UK ? 'Запам\u2019ятати: ' : 'Запомнить: ') + memo + '?', { pri: 2, raw: true, append: true, follow: true }); }, 0);
-      if (first && full.indexOf(first) === 0) { const rest = full.slice(first.length).trim(); if (rest) { const rf = nameFill(rest); voPrefetch(rf, true); speak(rf, { pri: 2, follow: byVoice && !memo, raw: true, append: true, live: true }); } else if (byVoice && !memo && TTS.cur && TTS.cur.text === nameFill(first)) TTS.cur.follow = true; return; }
-      if (!first) speak(nameFill(r.text), { pri: 2, follow: byVoice && !memo, raw: true, live: true });
+      if (first && full.indexOf(first) === 0) { const rest = full.slice(first.length).trim(); if (rest) { const rf = nameFill(rest); voPrefetch(chunks(rf)[0], true); sayLong(rf, { follow: byVoice && !memo, live: true }, true); } else if (byVoice && !memo && TTS.cur && TTS.cur.text === nameFill(first)) TTS.cur.follow = true; return; }
+      if (!first) sayLong(nameFill(r.text), { follow: byVoice && !memo, live: true });
       return;
     }
-    if (first) return;   /* начало ответа уже прозвучало — обрыв связи не озвучиваем */
+    /* Н4 (25.11.2026): связь оборвалась посреди ответа — договариваем пришедшие целые предложения и честно говорим, что связь прервалась */
+    const part = (sq(acc).replace(/\s*ПАМ['’ʼ]?ЯТЬ:.*$/, '').match(/^[\s\S]*[.!?…]["»”')]*(?=\s|$)/) || [''])[0].trim(), broke = UK ? 'Зв\u2019язок перервався.' : 'Связь прервалась.';
+    if (first) { const rest = part.indexOf(first) === 0 ? part.slice(first.length).trim() : ''; remember(q, part || first); sayLong(nameFill(rest ? rest + ' ' + broke : broke), {}, true); return; }
+    if (part) { remember(q, part); ST.lastBrain = now(); sayLong(nameFill(part) + ' ' + broke, {}); return; }
+    if (r && r.error === 'cut') { speak(broke, { pri: 2, raw: true }); return; }   /* Н4.2: оборвался вызов инструмента — сервер его не отдал, ничего не исполняем */
     if (buyQ(t) && !(r && ASK_ERR[r.error])) { speak(doAct('record_purchase', { sym: sym || '' }) + (sym ? '' : ' Монету и цифры впишите сами.'), { pri: 2 }); return; }   /* без связи — просто открываем форму покупки */
     if (remQ(t) && !(r && ASK_ERR[r.error])) { speak('Сейчас нет связи — не могу разобрать время напоминания. Попробуйте чуть позже.', { pri: 2 }); return; }
     const msg = (r && ASK_ERR[r.error]) || (sure ? local : (sym && coinPrice(sym) ? reply(NAME_N[sym] || sym) + ' ' : '') + 'Сейчас не могу связаться с сервером — попробуйте чуть позже.');
@@ -1506,7 +1628,7 @@
     ui.hit.addEventListener('click', () => { if (lp) { lp = false; return; } tapped(); });
     ui.cap = document.createElement('button'); ui.cap.type = 'button'; ui.cap.className = 'or-cap'; ui.cap.setAttribute('aria-live', 'polite'); ui.cap.setAttribute('translate', 'no');   /* субтитры переводит сам Орион (ответы «мозга» уже на нужном языке) */
     ui.cap.innerHTML = '<i aria-hidden="true"></i><b>' + Lx('Орион') + '</b><span></span><em aria-hidden="true"></em>'; ui.capT = ui.cap.querySelector('span'); ui.capN = ui.cap.querySelector('em');
-    ui.cap.addEventListener('click', () => { stopVoice(); ui.cap.classList.remove('on'); });
+    ui.cap.addEventListener('click', () => { ST.askGen = (ST.askGen || 0) + 1; TTS.q = []; stopVoice(); ui.cap.classList.remove('on'); });   /* Н4.1: и в паузу между кусками (~90 мс, TTS.cur пуст) очередь не договаривается */   /* «стоп» — и хвост ответа «мозга», что ещё в пути, тоже не звучит (Н4) */
     document.body.appendChild(ui.cap);
     window.addEventListener('resize', () => { fit(); wake(); });
     if (window.IntersectionObserver) new IntersectionObserver(es => { inView = es[0].isIntersecting; if (inView) wake(); }).observe(host);
@@ -1520,7 +1642,7 @@
 
   window.Mascot = {
     init, sync, number, greet,
-    hush: () => { TTS.q = []; stopVoice(); },
+    hush: () => { ST.askGen = (ST.askGen || 0) + 1; TTS.q = []; stopVoice(); },
     tasks: { notes: () => TASK.notes.slice(), rem: () => TASK.rem.slice(), log: () => TASK.log.slice(), delNote: id => { TASK.notes = TASK.notes.filter(x => x.id !== id); taskSave('notes'); }, delRem: id => { TASK.rem = TASK.rem.filter(x => x.id !== id); taskSave('rem'); }, when: ms => whenW(ms) },
     mem: { list: () => MEM.items.slice(), del: id => memDel(id), clear: () => memClear(), on: v => { if (v != null) memSetOn(v); return MEM.on; } },   /* замолчать сразу (перед обучающим роликом) */
     ask: q => answer(q), listen: () => listen(),
@@ -1536,12 +1658,14 @@
       lx: t => Lx(t),
       ask: q => answer(q), lastAsk: () => ST.lastAsk || null, ctx: () => brainCtx(), hist: () => ST.hist || [],
       mood: m => { if (ST.forceHour == null) ST.forceHour = 12; ST.pct = { calm: 0, up: 3, rocket: 9, down: -3, crash: -9 }[m]; ST.go = m === 'hunter'; if (m === 'offline') { ST.offline = true; ST.offSince = now() - 120; } else ST.offline = false; ST.lastInput = now(); wake(); },
-      say: t => speak(t, { pri: 2 }), sayLog: () => ST.sayLog || [], nameFill: t => nameFill(t), memo: t => memoSplit(t), memSafe: t => memSafe(t), act: (n, x) => doAct(n, x), calm: () => calmText(), priceW: v => priceW(v), figs: t => figs(t), weekDue: () => weekDue(), headline: v => { ST.headline = v; }, lessonPick: () => lessonPick(ST.D), ceilText: o => ceilText(o), lessonOffer: v => { ST.lessonOffer = v ? { id: v, at: now() } : null; }, calmDue: () => calmDue(), brief2: o => brief(o), snapPrev: v => { ST.snapPrev = v; }, remTick: () => remTick(), remDue: (t, ago) => remAdd(t, Date.now() - (ago || 1000)), remQ: t => remQ(t), split: (t, live) => splitParts(t, live), stress: t => stressRu(t),
+      say: t => speak(t, { pri: 2 }), sayMore: t => speak(t, { pri: 2, raw: true, append: true }), sayLong: t => sayLong(t, {}), chunks: t => chunks(t), qTexts: () => TTS.q.map(x => x.text), sayLow: t => speak(t, {}), qAge: sec => { TTS.q.forEach(x => { x.at -= sec; }); return TTS.q.length; }, next: () => { if (TTS.cur) finish(TTS.cur); }, sayLog: () => ST.sayLog || [], nameFill: t => nameFill(t), memo: t => memoSplit(t), memSafe: t => memSafe(t), act: (n, x) => doAct(n, x), calm: () => calmText(), priceW: v => priceW(v), figs: t => figs(t), weekDue: () => weekDue(), headline: v => { ST.headline = v; }, lessonPick: () => lessonPick(ST.D), ceilText: o => ceilText(o), lessonOffer: v => { ST.lessonOffer = v ? { id: v, at: now() } : null; }, calmDue: () => calmDue(), brief2: o => brief(o), snapPrev: v => { ST.snapPrev = v; }, remTick: () => remTick(), remDue: (t, ago) => remAdd(t, Date.now() - (ago || 1000)), remQ: t => remQ(t), split: (t, live) => splitParts(t, live), stress: t => stressRu(t),
       tap: () => tapped(),
       brief: () => brief(),
       reply: q => reply(q),
       event: (n, d) => trigger(n, d, true),
-      due: () => newsDue()
+      due: () => newsDue(),
+      pendDel: () => (ST.pendDel ? { kind: ST.pendDel.kind, id: ST.pendDel.id, t: ST.pendDel.t } : null),
+      pendAge: sec => { if (ST.pendDel) ST.pendDel.at -= sec; if (ST.delGuard) ST.delGuard -= sec; if (ST.delMiss) { if (ST.delMiss.notes) ST.delMiss.notes -= sec; if (ST.delMiss.rem) ST.delMiss.rem -= sec; } }   /* проверка «молчание 20 с» без настоящего ожидания */
     }
   };
 })();
