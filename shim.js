@@ -711,6 +711,11 @@
     } catch (e) { return null; } finally { clearTimeout(t); }
   };
 
+  /* мониторинг сбоев (И4, 24.11.2026): журнал ошибок в начале index.html шлёт сюда уже обезличенный текст;
+     запись — только функцией public.log_client_error (supabase/client_errors.sql), без id и почты. В демо не шлём. */
+  window.mlErrRpc = p => { const c = client(); if (!c || demo) return null; return c.rpc('log_client_error', p); };
+  try { if (window.mlErrFlush) window.mlErrFlush(); } catch (e) {}
+
   window.mlDeleteAccount = async () => {
     const c = client(); if (!c || !uid) throw new Error('not signed in');
     if (navigator.onLine === false) { const e = new Error('offline'); e.code = 'offline'; throw e; }
