@@ -4,9 +4,24 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,interactive-widget=resizes-content">
 <script>
-/* журнал ошибок (12.11.2026): последние 20 сбоев — только на телефоне, без личных данных; уходят разработчику, только если человек сам нажмёт «Сообщить об ошибке» */
-(function(){var K='ml-err',noise=/ResizeObserver loop|Script error\.?$|extension:\/\//;
-function add(m,src){try{m=String(m||'').slice(0,240);if(!m||noise.test(m)||noise.test(src||''))return;var a=JSON.parse(localStorage.getItem(K)||'[]');a.push({t:new Date().toISOString().slice(0,19),m:m,s:String(src||'').replace(/^.*\//,'').slice(0,80)});localStorage.setItem(K,JSON.stringify(a.slice(-20)));}catch(e){}}
+/* журнал ошибок (12.11.2026): последние 20 сбоев — только на телефоне, без личных данных; полный текст уходит разработчику, только если человек сам нажмёт «Сообщить об ошибке» (обезличенный — автоматически, см. ниже) */
+/* мониторинг сбоев (И4, 24.11.2026): новая ошибка ещё и уходит в базу (public.log_client_error, supabase/client_errors.sql) —
+   только обезличенный текст: почта → <email>, ссылки → <url>, всё в кавычках длиннее 3 знаков → <…>, длинные токены → <…>, все цифры → #;
+   плюс файл:строка, метка сборки и язык. Без id, почты, сумм. Не больше 5 за сессию вкладки, одна и та же — один раз; сбои сети не шлём;
+   в демо не шлём; без сети или при ошибке базы — молча, без повторов. Вызов делает shim.js (window.mlErrRpc), до его загрузки — очередь. */
+(function(){var K='ml-err',noise=/ResizeObserver loop|Script error\.?$|extension:\/\//,net=/Failed to fetch|NetworkError|Load failed|AbortError|aborted|ERR_[A-Z_]+|ChunkLoadError|timeout/i,MAX=5,q=[],S={n:0,k:[]};
+try{var s0=JSON.parse(sessionStorage.getItem('ml-err-sent')||'null');if(s0&&s0.k)S=s0;}catch(e){}
+function clean(m){return String(m||'').slice(0,600).replace(/[^\s<>"'`@]+@[^\s<>"'`@]+\.[A-Za-z]{2,}/g,'<email>').replace(/\b(?:https?|wss?|file|blob|data):[^\s"'`)]+/g,'<url>')
+  .replace(/"[^"]{4,}"/g,'<…>').replace(/'[^']{4,}'/g,'<…>').replace(/`[^`]{4,}`/g,'<…>').replace(/«[^»]{4,}»/g,'<…>').replace(/“[^”]{4,}”/g,'<…>')
+  .replace(/[A-Za-z0-9_-]{32,}/g,'<…>').replace(/\d/g,'#').slice(0,200).trim();}
+function send(m,src){try{if(S.n>=MAX||window.mlDemo||net.test(m))return;var r=window.mlErrRpc;if(!r){if(q.length<20)q.push([m,src]);return;}
+  var t=clean(m),p=String(src||'').replace(/\?[^:]*/,'').replace(/[^\w.:-]/g,'').slice(0,80),k=t+'|'+p;if(!t||S.k.indexOf(k)>=0)return;
+  S.n++;S.k.push(k);try{sessionStorage.setItem('ml-err-sent',JSON.stringify(S));}catch(e){}
+  if(navigator.onLine===false)return;
+  var sv=document.querySelector('script[src*="shim.js?v="]'),v=sv&&/[?&]v=(\w+)/.exec(sv.getAttribute('src')),l=document.documentElement.lang;try{l=localStorage.getItem('ml-lang')||l;}catch(e){}
+  var x=r({p_msg:t,p_src:p||null,p_ver:v?v[1].slice(0,20):null,p_lang:/^[a-z]{2}$/.test(l||'')?l:null});if(x&&typeof x.then==='function')x.then(null,function(){});}catch(e){}}
+window.mlErrFlush=function(){var a=q;q=[];for(var i=0;i<a.length;i++)send(a[i][0],a[i][1]);};window.mlErrClean=clean;
+function add(m,src){m=String(m||'').slice(0,240);if(!m||noise.test(m)||noise.test(src||''))return;try{var a=JSON.parse(localStorage.getItem(K)||'[]');a.push({t:new Date().toISOString().slice(0,19),m:m,s:String(src||'').replace(/^.*\//,'').slice(0,80)});localStorage.setItem(K,JSON.stringify(a.slice(-20)));}catch(e){}send(m,String(src||'').replace(/^.*\//,''));}
 addEventListener('error',function(e){if(e&&e.message)add(e.message,(e.filename||'')+':'+(e.lineno||0));},true);
 addEventListener('unhandledrejection',function(e){var r=e&&e.reason;add(r&&(r.message||r)||'отклонённое обещание','promise');});
 window.mlErrLog=function(){try{return JSON.parse(localStorage.getItem(K)||'[]');}catch(e){return [];}};window.mlErrAdd=add;})();

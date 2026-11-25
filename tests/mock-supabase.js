@@ -5,7 +5,8 @@
        otherDocs: [{col,id,data}]   — записи ДРУГОГО пользователя в той же базе (приложению не видны),
        accountDelete: true          — включить кнопку «Удалить аккаунт» (флаг из config.js),
        oauthReturn: true            — «Войти через Google» перезагружает страницу уже с сессией (нужен persist)
-       persist: true                — сохранить состояние базы при перезагрузке страницы (sessionStorage) }
+       persist: true                — сохранить состояние базы при перезагрузке страницы (sessionStorage)
+       errLogFail: 'error'|'reject'|'throw' — rpc('log_client_error') отвечает ошибкой базы / обрывом сети / исключением }
    Все записи хранятся в памяти страницы; сеть не нужна.
    rpc('delete_my_account') — как SQL-функция supabase/delete_my_account.sql: без входа — ошибка,
    иначе удаляет только записи вошедшего и его аккаунт; повторный вызов ничего не ломает.
@@ -69,6 +70,12 @@
         if (!session) return Promise.resolve({ data: null, error: { message: 'not signed in', code: '42501' } });
         rows.clear();                       /* delete from public.docs where owner = auth.uid() */
         deletedUsers.add(session.user.id);  /* delete from auth.users where id = auth.uid() — повторно: 0 строк */
+        return ok(null);
+      }
+      if (name === 'log_client_error') {   /* supabase/client_errors.sql: ничего не возвращает; errLogFail — база/сеть недоступна */
+        if (T.errLogFail === 'reject') return Promise.reject(new TypeError('mock: Failed to fetch'));
+        if (T.errLogFail === 'throw') throw new Error('mock: клиент сломан');
+        if (T.errLogFail) return Promise.resolve({ data: null, error: { message: 'mock: function public.log_client_error does not exist', code: 'PGRST202' } });
         return ok(null);
       }
       return ok(null);
