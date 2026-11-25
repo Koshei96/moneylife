@@ -302,7 +302,7 @@
   const CHUNK = 380;
   function chunks(t, max) {
     max = max || CHUNK; const out = [];
-    for (let x of String(t || '').split(/(?<=[.!?…]["»”')]*)\s+/).map(z => z.trim()).filter(Boolean)) {   /* конец предложения — только перед пробелом или концом строки: «3.5» не режем */
+    for (let x of String(t || '').replace(/([.!?…]["»”')]*)\s+/g, '$1\u0001').split('\u0001').map(z => z.trim()).filter(Boolean)) {   /* конец предложения — только перед пробелом или концом строки: «3.5» не режем; без lookbehind — старый Safari < 16.4 его не знает */
       while (x.length > max) { let k = x.lastIndexOf(' ', max); if (k < max / 2) k = max; out.push(x.slice(0, k).trim()); x = x.slice(k).trim(); }
       const L = out.length - 1; if (L >= 0 && out[L].length + 1 + x.length <= max) out[L] += ' ' + x; else if (x) out.push(x);
     }
