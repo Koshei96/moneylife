@@ -1170,7 +1170,33 @@
     const rq = String(q || '').match(ABOUT_RE_I), raw = ((rq && rq[2]) || m[2]).replace(/[\s.,!?…]+$/, '').trim(), prep = rq && rq[2] ? rq[1].toLowerCase() : m[1];
     /* слово до 4 букв — целиком; длиннее — без известного окончания («налоги» → «налог», «карту» → «карт»); «налоговую» (прилагательное на «-ов/-ев») → «налогов» + ждём у заметки тоже прилагательное;
        «золото» (оканчивается на «о») — у заметки допускаем и «о»; «решение» — существительное: «решени» + «я» */
-    return { raw, prep, stems: w.map(x => { if (x.length <= 4) return { s: x, adj: false, o: false }; const cut = e => x.length - e.length >= 3 && x.endsWith(e), ea = ABOUT_END_ADJ.find(e => cut(e) && /(ов|ев)$/.test(x.slice(0, -e.length))), e = ea || ABOUT_END_N.find(cut) || ''; return { s: x.slice(0, x.length - e.length), adj: !!ea, o: !ea && e === 'о' }; }) };
+    return { raw, prep, stems: aboutStems(w) };
+  }
+  const aboutStems = w => w.map(x => { if (x.length <= 4) return { s: x, adj: false, o: false }; const cut = e => x.length - e.length >= 3 && x.endsWith(e), ea = ABOUT_END_ADJ.find(e => cut(e) && /(ов|ев)$/.test(x.slice(0, -e.length))), e = ea || ABOUT_END_N.find(cut) || ''; return { s: x.slice(0, x.length - e.length), adj: !!ea, o: !ea && e === 'о' }; });
+  /* О.5 (25.11.2026, правило Глеба): слова после «заметку / напоминание» без связки — «удали заметку по налогам», «отмени напоминание на завтра / позвонить маме» —
+     это цель, а не «последнюю / все». Сразу ничего не снимаем: одна подходящая — называем и ждём «да», ни одной — «Не нашёл…», несколько — спрашиваем какую.
+     «все / всі / последнюю / останню» (и их формы) — не цель: команда работает как раньше. null — слов после команды нет */
+  const TAIL_OK = /^(все|всех|вси|последн\S*|останн\S*)$/;
+  function tailQ(t, q, re) {
+    const m = t.match(re); if (!m) return null;
+    const w = t.slice(m[0].length).split(WSPLIT).filter(Boolean);
+    if (!w.length || w.every(x => TAIL_OK.test(x))) return null;
+    const rq = String(q || '').match(/(?:заметк|напоминан|нотатк|нагадуван)\S*[\s,.:;!?…—-]+(.+)$/i), raw = ((rq && rq[1]) || w.join(' ')).replace(/[\s.,!?…]+$/, '').trim();
+    return { raw, prep: ABOUT_STOP.test(w[0]) ? w[0] : '', stems: aboutStems(w.filter(x => !ABOUT_STOP.test(x) && !TAIL_OK.test(x))) };
+  }
+  function tailDel(kind, list, tq) {   /* кандидаты по словам после команды; удаления здесь нет — только вопрос */
+    const N = kind === 'notes';
+    if (!tq.stems.length) { delMiss(kind); return N ? 'Про что удалить заметку?' : 'Про что отменить напоминание?'; }
+    const hit = aboutHits(list, tq); tcRaw = true;
+    if (hit.length === 1) { delMissOff(kind); return delAsk(kind, hit[0]); }
+    delMiss(kind);   /* следующая «голая» команда тоже только переспросит (О.3) */
+    if (!hit.length) {
+      if (UK) return N ? 'Не знайшов такої нотатки.' : 'Не знайшов такого нагадування.';
+      return (N ? 'Не нашёл заметку ' : 'Не нашёл напоминание ') + (tq.prep ? tq.raw : '«' + tq.raw + '»') + '.';
+    }
+    const nm = hit.slice().reverse().sort((a, b) => (+b.at || 0) - (+a.at || 0)).slice(0, 3).map(x => '«' + delName(x.t) + '»').join(', ') + (hit.length > 3 ? '…' : '');
+    if (N) return UK ? 'Підходять кілька нотаток: ' + nm + '. Яку видалити? Скажіть точніше: «видали нотатку про …».' : 'Подходят несколько заметок: ' + nm + '. Какую удалить? Скажите точнее: «удали заметку про …».';
+    return UK ? 'Підходять кілька нагадувань: ' + nm + '. Яке скасувати? Скажіть точніше: «скасуй нагадування про …».' : 'Подходят несколько напоминаний: ' + nm + '. Какое отменить? Скажите точнее: «отмени напоминание про …».';
   }
   /* Совпадение — то же слово в другой форме, а не однокоренное (ревью PR №12, круги 1–3). Запрос-существительное: хвост слова заметки после основы —
      только окончание, которое бывает у существительного и НЕ бывает у прилагательного (или ничего). Поэтому «ключи» — не «ключевые уровни», «фонд» — не «фондовый»,
@@ -1184,9 +1210,10 @@
     ABOUT_TAIL = new RegExp('^' + ABOUT_NOUN + '?$'), ABOUT_TAIL_O = new RegExp('^(?:' + ABOUT_NOUN.slice(3, -1) + '|о)?$'), ABOUT_TAIL_ADJ = new RegExp('^' + ABOUT_ADJ + '$'),
     /* формы, совпадающие с другим словом: «почти» — как «почта», «долго» — «долг», «стало» — «сталь», «банку / банка / банке» — и банк, и стеклянная банка, «поле» — не «пол», «пара» — не «пар», «дома» — и «у себя дома»: никогда не считаем совпадением */
     ABOUT_NEVER = /^(почти|долго|стало|банку|банка|банке|поле|пара|паре|дома)$/;
+  const aboutHits = (list, ab) => !ab.stems.length ? [] : list.filter(x => { const w = norm(x.t).split(WSPLIT).filter(y => !ABOUT_NEVER.test(y)); return ab.stems.every(st => w.some(y => y.indexOf(st.s) === 0 && (st.adj ? ABOUT_TAIL_ADJ : st.o ? ABOUT_TAIL_O : ABOUT_TAIL).test(y.slice(st.s.length)))); });
   function aboutPick(list, ab) {   /* подходят все основы; из подходящих — самая свежая; нет подходящих — null */
     if (!ab.stems.length) return null;
-    const hit = list.filter(x => { const w = norm(x.t).split(WSPLIT).filter(y => !ABOUT_NEVER.test(y)); return ab.stems.every(st => w.some(y => y.indexOf(st.s) === 0 && (st.adj ? ABOUT_TAIL_ADJ : st.o ? ABOUT_TAIL_O : ABOUT_TAIL).test(y.slice(st.s.length)))); });
+    const hit = aboutHits(list, ab);
     return hit.reduce((b, x) => (!b || (+x.at || 0) >= (+b.at || 0) ? x : b), null);   /* при равном времени — записанная позже */
   }
   /* «удали заметку / отмени напоминание про X» — с переспросом (24.11.2026, BACKLOG №1, решение директора после 4 кругов ревью PR №12).
@@ -1246,9 +1273,11 @@
         const x = aboutPick(TASK.notes, ab); if (!x) { delMiss('notes'); if (UK) { tcRaw = true; return /^(про|щодо|стосовно)$/.test(ab.prep) ? 'Не знайшов нотатку ' + ab.prep + ' ' + ab.raw + '.' : 'Не знайшов такої нотатки.'; } return 'Не нашёл заметку ' + ab.prep + ' ' + ab.raw + '.'; }   /* по-украински: «про/щодо/стосовно» — как сказал человек; после «о/об/насчёт» слово не повторяем (падеж) */
         delMissOff('notes'); return delAsk('notes', x);
       }
+      const tq = tailQ(t, q, /^удали\s+(последнюю\s+)?заметку/); if (tq) return tailDel('notes', TASK.notes, tq);   /* О.5: «удали заметку по налогам / купить eth» */
       if (delGuarded()) return delGuardSay();
-      if (delMissed('notes')) { delMissOff('notes'); const x = TASK.notes[TASK.notes.length - 1]; if (!x) return 'Заметок нет.'; return delAsk('notes', x); }
-      const x = TASK.notes.pop(); if (!x) return 'Заметок нет.'; taskSave('notes'); logAct('Удалил заметку: ' + x.t); return 'Удалил: ' + x.t + '.';
+      const none = () => { tcRaw = true; return UK ? 'Нотаток немає.' : 'Заметок нет.'; };   /* О.6: по-украински целиком, без «Заметок немає» */
+      if (delMissed('notes')) { delMissOff('notes'); const x = TASK.notes[TASK.notes.length - 1]; if (!x) return none(); return delAsk('notes', x); }
+      const x = TASK.notes.pop(); if (!x) return none(); taskSave('notes'); logAct('Удалил заметку: ' + x.t); return 'Удалил: ' + x.t + '.';
     }
     if (/^(какие|что)\s+(у меня\s+)?напоминани|^мои напоминани/.test(t)) {
       const L = TASK.rem.filter(x => !x.done).sort((a, b) => a.when - b.when);
@@ -1260,13 +1289,14 @@
       const x = aboutPick(TASK.rem.filter(y => !y.done), ab); if (!x) { delMiss('rem'); if (UK) { tcRaw = true; return /^(про|щодо|стосовно)$/.test(ab.prep) ? 'Не знайшов нагадування ' + ab.prep + ' ' + ab.raw + '.' : 'Не знайшов такого нагадування.'; } return 'Не нашёл напоминание ' + ab.prep + ' ' + ab.raw + '.'; }
       delMissOff('rem'); return delAsk('rem', x);
     }
+    const tr = tailQ(t, q, /^(отмени|удали|убери)\s+(все\s+)?напоминани\S*/); if (tr) return tailDel('rem', TASK.rem.filter(y => !y.done), tr);   /* О.5: «отмени напоминание на завтра / позвонить маме» */
     if (/^(отмени|удали|убери)\s+(все\s+)?напоминани/.test(t) && delGuarded()) return delGuardSay();
     if (/^(отмени|удали|убери)\s+(все\s+)?напоминани/.test(t) && delMissed('rem')) {   /* О.3: одно — называем и ждём «да»; несколько — все не снимаем */
       delMissOff('rem'); const L = TASK.rem.filter(x => !x.done); if (L.length === 1) return delAsk('rem', L[0]);
       if (!L.length) return 'Напоминаний и так нет.';
       tcRaw = true; return UK ? 'Усі нагадування не скасовую. Скажіть: «скасуй нагадування про …».' : 'Все напоминания не отменяю. Скажите: «отмени напоминание про …».';
     }
-    if (/^(отмени|удали|убери)\s+(все\s+)?напоминани/.test(t)) { const n = TASK.rem.filter(x => !x.done).length; TASK.rem = TASK.rem.filter(x => x.done); taskSave('rem'); logAct('Отменил напоминания: ' + n); return n ? 'Отменил.' : 'Напоминаний и так нет.'; }
+    if (/^(отмени|удали|убери)\s+(все\s+)?напоминани/.test(t)) { const n = TASK.rem.filter(x => !x.done).length; TASK.rem = TASK.rem.filter(x => x.done); taskSave('rem'); logAct('Отменил напоминания: ' + n); if (n) { tcRaw = true; return UK ? 'Скасував.' : 'Отменил.'; } return 'Напоминаний и так нет.'; }
     return '';
   }
   const ASK_ERR = { day_limit: 'На сегодня вопросы ко мне закончились. Завтра продолжим.', month_limit: 'Лимит вопросов на этот месяц исчерпан.' };
