@@ -101,10 +101,15 @@ async function pumpReply(rd: Rd, put: Put) {
     }
   } catch (_) { broke = true; }
   if (!why && !tName) broke = true;
-  if (broke && !tName) return { kind: 'broke', text: lim.text(), why: why || 'broken', tName, tJson };
+  if (broke && !tName) return { kind: 'broke', text: lim.text(), why: why || 'broken', tName, tJson, input: null };
+  /* Н4.2 (25.11.2026): инструмент — только целиком: поток дошёл до stop_reason «tool_use» и JSON входа разобрался в объект.
+     Обрыв посреди вызова (неполный JSON, событие error, нет stop_reason, max_tokens) — kind 'broke': действие НЕ исполняется, клиент скажет «Связь прервалась.» */
+  let input: unknown = null;
+  if (tName && !broke && why === 'tool_use') { try { const v = JSON.parse(tJson || '{}'); if (v && typeof v === 'object' && !Array.isArray(v)) input = v; } catch (_) { input = null; } }
+  if (tName && !input) return { kind: 'broke', text: lim.text(), why: 'tool-' + (why || 'broken'), tName, tJson, input: null };
   const rest = lim.end(); if (rest) put({ t: rest });
   const mm = lim.memo(); if (mm) put({ t: mm });
-  return { kind: tName ? 'act' : 'done', text: lim.text(), why, tName, tJson };
+  return { kind: tName ? 'act' : 'done', text: lim.text(), why, tName, tJson, input };
 }
 /* cut:end */
 
@@ -284,15 +289,15 @@ Deno.serve(async (req) => {
     const body = new ReadableStream({
       async start(ctl) {
         const put = (o: unknown) => { try { ctl.enqueue(enc.encode(JSON.stringify(o) + '\n')); } catch (_) { /* клиент ушёл */ } };
-        const { kind, text, why, tName, tJson } = await pumpReply(rd, put);
-        if (tName) {   /* действие: исполнит телефон; такой ответ не храним — повтор той же просьбы должен прийти заново */
-          let input = {}; try { input = JSON.parse(tJson || '{}'); } catch (_) { input = {}; }
+        const { kind, text, why, tName, input } = await pumpReply(rd, put);
+        if (kind === 'act') {   /* действие: исполнит телефон; такой ответ не храним — повтор той же просьбы должен прийти заново */
           await Promise.allSettled([writeNum(dk, dn + 1), writeNum(mk, mn + 1)]);
           put({ done: true, text, act: { name: tName, input }, sources: [] }); ctl.close(); return;
         }
         if (kind === 'broke') {   /* Н4: обрыв посреди ответа — не храним и не считаем; формат прежний: {error} */
           await store.upload('diag/' + new Date().toISOString().replace(/[:.]/g, '-') + '_broken-stream_' + why.replace(/[^A-Za-z0-9_-]+/g, '-') + '.txt', new Blob(['1'], { type: 'text/plain' }), { upsert: true }).catch(() => null);
-          put({ error: 'llm' }); ctl.close(); return;
+          if (tName) put({ error: 'cut' }); else put({ error: 'llm' });   /* 'cut' — оборвался вызов инструмента (Н4.2): телефон ничего не исполняет */
+          ctl.close(); return;
         }
         if (!text) {
           await store.upload('diag/' + new Date().toISOString().replace(/[:.]/g, '-') + '_empty-stream_' + why.replace(/[^A-Za-z0-9_-]+/g, '-') + '.txt', new Blob(['1'], { type: 'text/plain' }), { upsert: true }).catch(() => null);
@@ -307,6 +312,7 @@ Deno.serve(async (req) => {
   }
   const out = await r.json();
   const tu = (out.content || []).find((c: { type: string }) => c.type === 'tool_use');
+  if (tu && out.stop_reason !== 'tool_use') return json({ error: 'cut' }, 502);   /* Н4.2: вход инструмента оборван (max_tokens) — не исполняем */
   if (tu) { await Promise.allSettled([writeNum(dk, dn + 1), writeNum(mk, mn + 1)]); return json({ text: '', act: { name: tu.name, input: tu.input || {} }, sources: [] }); }
   const text = cutText(String((out.content || []).filter((c: { type: string }) => c.type === 'text').map((c: { text: string }) => c.text).join(' ')).replace(/[*_#`]/g, ''));
   if (!text) {   /* модель ответила без текста (например, всё ушло в размышления) — записываем почему */

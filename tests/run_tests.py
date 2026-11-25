@@ -70,6 +70,7 @@ def static_checks():
     signal_checks()
     sw_nav_checks()
     orion_cut_checks()
+    orion_tool_cut_checks()
 
 def orion_cut_checks():
     """Н4 (25.11.2026): обрезка ответа Ориона в supabase/functions/orion-ask/index.ts — кусок cut:begin…cut:end запускается в node
@@ -111,6 +112,45 @@ console.log(JSON.stringify(o));})();"""
         else: fail('orion-ask: обрыв потока Anthropic', 'нет ветки broke до save')
     except Exception as e: fail(name, str(e)[:200])
     ok('orion-ask: ключ кэша поднят до v11 (старые обрезанные ответы не отдаются)') if "sha256('v11|'" in src else fail('orion-ask: ключ кэша', 'не v11')
+
+def orion_tool_cut_checks():
+    """Н4.2 (25.11.2026, Глеб): обрыв потока посреди вызова инструмента. pumpReply из orion-ask запускается в node: действие отдаётся,
+    только если поток дошёл до stop_reason «tool_use» и JSON входа разобрался в объект; неполный JSON, обрыв сети, событие error, max_tokens — kind 'broke'
+    (раньше неполный JSON превращался в input={} и действие всё равно исполнялось). Ответ клиенту при этом — {error:'cut'}, без done."""
+    name = 'orion-ask: оборванный вызов инструмента (неполный JSON, обрыв сети, error, max_tokens) — действие не отдаётся; целый — отдаётся с разобранным входом'
+    try:
+        src = (ROOT / 'supabase' / 'functions' / 'orion-ask' / 'index.ts').read_text(encoding='utf-8')
+        m = re.search(r'/\* cut:begin \*/(.*?)/\* cut:end \*/', src, re.S)
+        if not m: fail(name, 'нет куска cut:begin…cut:end'); return
+        code = re.sub(r':\s*(?:string|number|boolean|unknown|Ev|Put|Rd)\b', '', m.group(1))
+        js = code + r"""
+const sse=(evs,fail)=>{const L=evs.map(e=>'event: x\ndata: '+JSON.stringify(e)+'\n\n');let i=0;const en=new TextEncoder();return{read:async()=>{if(i<L.length)return{done:false,value:en.encode(L[i++])};if(fail)throw new TypeError('network');return{done:true}}}};
+const run=async(evs,fail)=>{const p=[];const r=await pumpReply(sse(evs,fail),x=>p.push(x));return{r,p}};
+const st={type:'content_block_start',content_block:{type:'tool_use',name:'add_note'}},js=j=>({type:'content_block_delta',delta:{type:'input_json_delta',partial_json:j}}),
+  bs={type:'content_block_stop'},tu={type:'message_delta',delta:{stop_reason:'tool_use'}},o={};
+(async()=>{
+let x=await run([st,js('{"text":"оплатить нал')]);o.halfEnd=x.r.kind==='broke'&&!x.r.input;
+x=await run([st,js('{"text":"оплатить нал')],true);o.halfNet=x.r.kind==='broke'&&!x.r.input;
+x=await run([st,js('{"text":"оплатить нал'),{type:'error',error:{type:'overloaded_error'}}]);o.halfErr=x.r.kind==='broke';
+x=await run([st,js('{"text":"оплатить нал'),bs,{type:'message_delta',delta:{stop_reason:'max_tokens'}}]);o.maxTok=x.r.kind==='broke';
+x=await run([st,js('{"text":"x"}'),bs],true);o.noStop=x.r.kind==='broke';
+x=await run([st,js('{"text":"x"}'),bs,{type:'error',error:{type:'overloaded_error'}}]);o.errAfter=x.r.kind==='broke';
+x=await run([st,js('[1,2]'),bs,tu]);o.notObj=x.r.kind==='broke';
+x=await run([st,js('{"text":'),js('"оплатить налоги"}'),bs,tu]);o.whole=x.r.kind==='act'&&x.r.tName==='add_note'&&!!x.r.input&&x.r.input.text==='оплатить налоги';
+x=await run([st,bs,tu]);o.empty=x.r.kind==='act'&&!!x.r.input&&Object.keys(x.r.input).length===0;
+console.log(JSON.stringify(o));})();"""
+        out = subprocess.run(['node', '-e', js], capture_output=True, text=True, timeout=30)
+        got = json.loads(out.stdout.strip() or 'null')
+        if got and all(got.values()) and len(got) == 9: ok(name)
+        else: fail(name, (out.stdout + out.stderr)[:300])
+        st = src[src.index('pumpReply(rd, put)'):src.index('cache-control')]
+        bb = re.search(r"if \(kind === 'broke'\) \{(.*?)\n        \}", st, re.S)
+        if ("if (kind === 'act')" in st and 'JSON.parse' not in st and bb and "if (tName) put({ error: 'cut' })" in bb.group(1) and 'done' not in bb.group(1)
+                and st.index("kind === 'act'") < st.index("kind === 'broke'") and "if (tu && out.stop_reason !== 'tool_use') return json({ error: 'cut' }, 502);" in src
+                and src.index("out.stop_reason !== 'tool_use'") < src.index('act: { name: tu.name')):
+            ok("orion-ask: оборванный инструмент — клиенту {error:'cut'} без done (и без потока при max_tokens); вход берётся только разобранный в pumpReply")
+        else: fail('orion-ask: оборванный инструмент', "нет ветки {error:'cut'} или вход разбирается мимо pumpReply")
+    except Exception as e: fail(name, str(e)[:200])
 
 def sw_nav_checks():
     """Открытие приложения при ошибке сервера (13.11.2026). В тест-браузере service worker выключен (service_workers='block'),
@@ -1602,6 +1642,31 @@ def run_browser():
             cs35 = pg.evaluate("Mascot.debug.chunks('Цена 3.5 тысячи долларов. Дальше спокойно.')")
             if not stop_bad and cs35 == ['Цена 3.5 тысячи долларов. Дальше спокойно.']: ok('Орион: «стоп» посреди ответа — хвост и «Связь прервалась.» не звучат; «3.5» не режется на куски')
             else: fail('Орион: стоп посреди ответа', f'{stop_bad} | {cs35}')
+            # Н4.1 (25.11.2026, Глеб): нажатие на субтитр в паузу между кусками длинного ответа (~90 мс, текущей фразы нет) — следующий кусок не звучит, очередь пуста
+            pg.evaluate("document.querySelector('.or-cap') && document.querySelector('.or-cap').click()"); pg.wait_for_timeout(300)
+            PW = 'Кардано держится у прошлогодних уровней, а покупатели осторожничают перед отчётами фондов. Рипл стоит на месте третью неделю подряд. '
+            PT = (PW * 6).strip()
+            gap = pg.evaluate("t=>{const d=Mascot.debug;d.sayLong(t);const c=d.chunks(t),a=d.state().said,n=d.qTexts().length;d.next();const g=!d.state().talking;document.querySelector('.or-cap').click();return {c,a,n,g,q:d.qTexts().length}}", PT)
+            pg.wait_for_timeout(800)
+            gl = pg.evaluate("Mascot.debug.sayLog()")
+            if len(gap['c']) >= 2 and gap['a'] == gap['c'][0] and gap['n'] >= 1 and gap['g'] and gap['q'] == 0 and gap['c'][1] not in gl:
+                ok('Орион: нажатие на субтитр в паузу между кусками ответа — очередь очищена, следующий кусок не звучит')
+            else: fail('Орион: нажатие в паузу между кусками', f"{gap} | {gl[-3:]}")
+            # Н4.2 (25.11.2026, Глеб): оборвался вызов инструмента — сервер отдаёт {error:'cut'}: Орион ничего не исполняет и честно говорит «Связь прервалась.»
+            pg.evaluate("document.querySelector('.or-cap') && document.querySelector('.or-cap').click()"); pg.wait_for_timeout(300)
+            def fcut(route):
+                route.fulfill(status=200, headers={'content-type': 'application/x-ndjson; charset=utf-8', 'access-control-allow-origin': '*'}, body=json.dumps({'error': 'cut'}) + '\n')
+            pg.unroute('**/functions/v1/orion-ask'); pg.route('**/functions/v1/orion-ask', fcut)
+            c0 = pg.evaluate("[Mascot.tasks.notes().length, Mascot.tasks.rem().length, document.getElementById('actSheet').classList.contains('open'), Mascot.debug.sayLog().length]")
+            pg.evaluate("Mascot.debug.ask('Что думаешь про рынок на этой неделе?')")
+            try: pg.wait_for_function("()=>{const l=Mascot.debug.sayLog();return l[l.length-1]==='Связь прервалась.'}", polling=200, timeout=15000)
+            except Exception: pass
+            pg.wait_for_timeout(500)
+            c1 = pg.evaluate("[Mascot.tasks.notes().length, Mascot.tasks.rem().length, document.getElementById('actSheet').classList.contains('open'), Mascot.debug.sayLog()]")
+            pg.unroute('**/functions/v1/orion-ask'); pg.route('**/functions/v1/orion-ask', fs)
+            if c1[:3] == c0[:3] and c1[3] and c1[3][-1] == 'Связь прервалась.' and not any('не могу связаться' in x for x in c1[3][-3:]):
+                ok("Орион: вызов инструмента оборвался ({error:'cut'}) — действие не исполнено, звучит «Связь прервалась.»")
+            else: fail('Орион: оборванный вызов инструмента', f'{c0[:3]} → {c1[:3]} | {c1[3][-3:]}')
             # Н4 (круг 2, Вера): длинный ответ ~1400 знаков — кусками ≤ 400 знаков по целым предложениям, субтитр не вылезает за верх экрана 390×844
             pg.set_viewport_size({'width': 390, 'height': 844}); pg.wait_for_timeout(300)
             LW = 'Биткоин растёт на притоке денег в биржевые фонды, пишет Cointelegraph. Эфир держится рядом с прошлой неделей, а Солана немного отстаёт. '
@@ -1897,6 +1962,68 @@ def run_browser():
                     and len(l3['pos']) == 7 and all(v == [f"Удалить заметку «{k.split('|')[1]}»? Скажите «да» или «нет».", True, f"Удалил: «{k.split('|')[1]}».", True] for k, v in l3['pos'].items())):
                 ok('Орион: «долг» не снимает «долгий/долгая/долгое…», «газ» — «газон», «дом» — «домен», «сало» — «салон», «рис» — «риск», «сталь» — «стало»; «удали заметку про» без слова — переспрос, ничего не удалено; «газ» находит «оплатить газ»')
             else: fail('Орион: удаление по теме — окончания', str(l3))
+            # О.2 (25.11.2026, Глеб): «о налогах», «об отпуске», «насчёт банка», укр. «щодо / стосовно» — как «про»: Орион называет нужную запись и ждёт «да»;
+            # нет совпадения — ничего не удалено (раньше без «про» удалялась последняя заметка / снимались ВСЕ напоминания)
+            o2 = pg.evaluate("""(async()=>{const M=Mascot.debug,T=Mascot.tasks,said=()=>M.state().said,keep=new Set(T.notes().map(x=>x.id)),keepR=new Set(T.rem().map(x=>x.id)),out={n:{},r:{}};
+              const clean=()=>{T.notes().filter(x=>!keep.has(x.id)).forEach(x=>T.delNote(x.id)); T.rem().filter(x=>!keepR.has(x.id)).forEach(x=>T.delRem(x.id));};
+              const mine=()=>T.notes().filter(x=>!keep.has(x.id)).map(x=>x.t), act=()=>T.rem().filter(x=>!x.done).map(x=>x.t), w=h=>new Date(Date.now()+h*3600e3).toISOString().slice(0,16);
+              const NC=[['удали заметку о налогах','оплатить налоги до 15-го'],['удали заметку об отпуске','взять отпуск в марте'],['удали заметку насчёт налогов','оплатить налоги до 15-го'],['удали заметку насчет отпуска','взять отпуск в марте'],
+                ['удали заметку щодо податків','сплата податків за рік'],['удали заметку стосовно податків','сплата податків за рік'],['Удали заметку О налогах.','оплатить налоги до 15-го']];
+              for(const [q,n] of NC){for(const x of ['купить ETH в пятницу','оплатить налоги до 15-го','взять отпуск в марте','сплата податків за рік','позвонить брокеру']) await M.ask('запиши заметку: '+x);
+                const b=mine(); await M.ask(q); const a=said(), mid=mine(); await M.ask('да'); out.n[q]=[a, mid.length===b.length, said(), JSON.stringify(b.filter(x=>!mine().includes(x)))===JSON.stringify([n]) && mine().length===b.length-1]; clean();}
+              for(const x of ['купить ETH в пятницу','позвонить брокеру']) await M.ask('запиши заметку: '+x);
+              let b=mine(); await M.ask('удали заметку о машине'); out.nmiss=[said(), JSON.stringify(mine())===JSON.stringify(b), M.pendDel()];
+              b=mine(); await M.ask('удали заметку насчёт отпуска'); out.nmiss2=[said(), JSON.stringify(mine())===JSON.stringify(b)];
+              b=mine(); await M.ask('удали заметку о'); out.ncut=[said(), JSON.stringify(mine())===JSON.stringify(b)];
+              clean(); M.pendAge(200);
+              const RC=[['отмени напоминание насчёт банка','позвонить в банк насчёт карты'],['отмени напоминание о цветах','полить цветы'],['отмени напоминание щодо податків','сплата податків'],['отмени напоминание стосовно цветов','полить цветы']];
+              for(const [q,n] of RC){for(const x of ['позвонить в банк насчёт карты','полить цветы','сплата податків']) M.act('add_reminder',{text:x,when:w(5)});
+                const r=act(); await M.ask(q); const a=said(), mid=act(); await M.ask('да'); const r2=act(); out.r[q]=[a, mid.length===r.length, said(), r2.length===r.length-1 && r.filter(x=>x===n).length-r2.filter(x=>x===n).length===1]; clean();}
+              for(const x of ['позвонить в банк насчёт карты','полить цветы']) M.act('add_reminder',{text:x,when:w(5)});
+              let r=act(); await M.ask('отмени напоминание насчёт отпуска'); out.rmiss=[said(), act().length===r.length, act().length>=2, M.pendDel()];
+              r=act(); await M.ask('отмени напоминание о'); out.rcut=[said(), act().length===r.length];
+              clean(); M.pendAge(200); return out;})()""")
+            o2bad = []
+            for q, v in o2['n'].items():
+                n = 'сплата податків за рік' if ('щодо' in q or 'стосовно' in q) else ('взять отпуск в марте' if 'отпуск' in q else 'оплатить налоги до 15-го')
+                if v != [f'Удалить заметку «{n}»? Скажите «да» или «нет».', True, f'Удалил: «{n}».', True]: o2bad.append((q, v))
+            for q, v in o2['r'].items():
+                n = 'позвонить в банк насчёт карты' if 'банка' in q else ('сплата податків' if 'щодо' in q else 'полить цветы')
+                if v != [f'Отменить напоминание «{n}»? Скажите «да» или «нет».', True, f'Отменил напоминание: «{n}».', True]: o2bad.append((q, v))
+            if len(o2['n']) != 7 or len(o2['r']) != 4: o2bad.append(('число случаев', len(o2['n']), len(o2['r'])))
+            if o2['nmiss'] != ['Не нашёл заметку о машине.', True, None]: o2bad.append(('нет совпадения «о машине»', o2['nmiss']))
+            if o2['nmiss2'] != ['Не нашёл заметку насчёт отпуска.', True]: o2bad.append(('нет совпадения «насчёт отпуска»', o2['nmiss2']))
+            if o2['ncut'] != ['Про что удалить заметку?', True]: o2bad.append(('«удали заметку о» без слова', o2['ncut']))
+            if o2['rmiss'] != ['Не нашёл напоминание насчёт отпуска.', True, True, None]: o2bad.append(('напоминание «насчёт отпуска» — все целы', o2['rmiss']))
+            if o2['rcut'] != ['Про что отменить напоминание?', True]: o2bad.append(('«отмени напоминание о» без слова', o2['rcut']))
+            if not o2bad: ok('Орион: «удали заметку о налогах / об отпуске / насчёт …», «щодо / стосовно …», «отмени напоминание насчёт банка / о цветах» — как «про»: называет нужную, после «да» снята ровно она; нет совпадения — ничего не удалено, напоминания все целы')
+            else: fail('Орион: удаление по теме с «о / об / насчёт / щодо / стосовно»', str(o2bad)[:1500])
+            # О.3 (25.11.2026, Глеб): после «Не нашёл заметку про …» / «Про что…?» «голая» «удали заметку» не удаляет последнюю сразу — Орион называет её и ждёт «да»;
+            # «отмени напоминания» после «Не нашёл напоминание…» все не снимает. Защита — 2 минуты по времени; после них — как раньше
+            o3 = pg.evaluate("""(async()=>{const M=Mascot.debug,T=Mascot.tasks,said=()=>M.state().said,keep=new Set(T.notes().map(x=>x.id)),keepR=new Set(T.rem().map(x=>x.id)),out={};
+              const clean=()=>{T.notes().filter(x=>!keep.has(x.id)).forEach(x=>T.delNote(x.id)); T.rem().filter(x=>!keepR.has(x.id)).forEach(x=>T.delRem(x.id));};
+              const mine=()=>T.notes().filter(x=>!keep.has(x.id)).map(x=>x.t), act=()=>T.rem().filter(x=>!x.done).map(x=>x.t), w=h=>new Date(Date.now()+h*3600e3).toISOString().slice(0,16);
+              M.pendAge(200);
+              for(const x of ['купить ETH в пятницу','позвонить брокеру','сверить ступени','продлить домен']) await M.ask('запиши заметку: '+x);
+              let b=mine(); await M.ask('удали заметку про отпуск'); const s0=said(); await M.ask('удали заметку'); let q=said(), mid=mine(); await M.ask('да'); out.miss=[s0,q,JSON.stringify(mid)===JSON.stringify(b),said(),JSON.stringify(b.filter(x=>!mine().includes(x)))];
+              b=mine(); await M.ask('удали заметку про'); const s1=said(); await M.ask('удали заметку'); q=said(); mid=mine(); await M.ask('да'); out.empty=[s1,q,JSON.stringify(mid)===JSON.stringify(b),said(),JSON.stringify(b.filter(x=>!mine().includes(x)))];
+              b=mine(); await M.ask('удали заметку про отпуск'); await M.ask('удали последнюю заметку'); q=said(); await M.ask('нет'); out.last=[q,said(),JSON.stringify(mine())===JSON.stringify(b)];
+              M.pendAge(121);
+              b=mine(); await M.ask('удали заметку о машине'); M.pendAge(121); await M.ask('удали заметку'); out.late=[said(),JSON.stringify(b.filter(x=>!mine().includes(x)))];
+              clean(); M.pendAge(200);
+              for(const x of ['позвонить в банк насчёт карты','полить цветы']) M.act('add_reminder',{text:x,when:w(5)});
+              let r=act(); await M.ask('отмени напоминание про отпуск'); await M.ask('отмени напоминания'); out.rall=[said(),JSON.stringify(act())===JSON.stringify(r),r.length>=2];
+              r=act(); await M.ask('отмени напоминание про отпуск'); await M.ask('убери напоминание'); out.rall2=[said(),JSON.stringify(act())===JSON.stringify(r)];
+              clean(); M.pendAge(200); return out;})()""")
+            o3bad = []
+            if o3['miss'] != ['Не нашёл заметку про отпуск.', 'Удалить заметку «продлить домен»? Скажите «да» или «нет».', True, 'Удалил: «продлить домен».', '["продлить домен"]']: o3bad.append(('«Не нашёл» → «удали заметку» → переспрос → «да»', o3['miss']))
+            if o3['empty'] != ['Про что удалить заметку?', 'Удалить заметку «сверить ступени»? Скажите «да» или «нет».', True, 'Удалил: «сверить ступени».', '["сверить ступени"]']: o3bad.append(('«Про что…?» → «удали заметку» → переспрос → «да»', o3['empty']))
+            if o3['last'] != ['Удалить заметку «позвонить брокеру»? Скажите «да» или «нет».', 'Хорошо, оставил.', True]: o3bad.append(('«Не нашёл» → «удали последнюю заметку» → «нет» — цела', o3['last']))
+            if o3['late'] != ['Удалил: позвонить брокеру.', '["позвонить брокеру"]']: o3bad.append(('через 2 минуты — как раньше', o3['late']))
+            if o3['rall'] != ['Все напоминания не отменяю. Скажите: «отмени напоминание про …».', True, True]: o3bad.append(('«Не нашёл напоминание» → «отмени напоминания» — все целы', o3['rall']))
+            if o3['rall2'] != ['Все напоминания не отменяю. Скажите: «отмени напоминание про …».', True]: o3bad.append(('«Не нашёл напоминание» → «убери напоминание» — все целы', o3['rall2']))
+            if not o3bad: ok('Орион: после «Не нашёл заметку про …» / «Про что…?» «удали заметку» не удаляет последнюю сразу — называет её и ждёт «да»; «отмени напоминания» все не снимает; через 2 минуты — как раньше')
+            else: fail('Орион: защита после «Не нашёл…»', str(o3bad)[:1500])
             # ревью PR №12, круг 4 (24.11.2026; урок 19.11 — набор пар сразу): совпадение — то же слово в другой форме существительного, а не однокоренное.
             # Запрос-существительное не находит прилагательное («ключи» — не «ключевые», «фонд» — не «фондовый», «налоги» — не «налоговую»); «-ой/-ом» не берём («долгой», «дорогой»).
             # Каждая пара — отдельно: заметка записана, «удали заметку про …», заметка на месте и ответ «Не нашёл…»; затем убираем её, чтобы пары не мешали друг другу.
