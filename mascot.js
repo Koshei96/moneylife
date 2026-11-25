@@ -33,7 +33,7 @@
 .or-cap.talk i{animation:orPulse 1.1s ease-in-out infinite}
 .or-cap.listen i{animation:orPulse .6s ease-in-out infinite;box-shadow:0 0 0 6px color-mix(in srgb,var(--oc,#8b7dff) 25%,transparent),0 0 18px var(--oc,#8b7dff)}
 .or-cap b{font-size:12px;font-weight:600;letter-spacing:.02em;color:var(--mute,#a3a3ae)}
-.or-cap span{font-size:14.5px;line-height:1.45;overflow-wrap:anywhere}
+.or-cap span{font-size:14.5px;line-height:1.45;overflow-wrap:anywhere;max-height:calc(100dvh - 300px);overflow-y:auto;overscroll-behavior:contain}
 .or-cap em{grid-column:2;display:flex;flex-wrap:wrap;gap:6px;font-style:normal}.or-cap em:empty{display:none}.or-cap em u{text-decoration:none;font-size:12.5px;font-weight:700;padding:3px 9px;border-radius:999px;background:color-mix(in srgb,var(--oc,#8b7dff) 16%,transparent);color:var(--fg,#fff)}.or-cap em u.up{color:#4fd18b}.or-cap em u.dn{color:#ff7a7a}
 .or-cap:focus-visible{outline:2px solid var(--fg,#fff);outline-offset:2px}
 @keyframes orPulse{50%{transform:scale(1.12)}}
@@ -297,10 +297,26 @@
   const premiumOK = () => !!(ST.sound && A.voice && !document.hidden && navigator.onLine !== false && now() > VO.off && (ST.forcePremium || !navigator.webdriver));
   /* фраза → части (18.11.2026). Обычно до 350 знаков — целиком одним запросом, чтобы интонация не «перезапускалась»; длиннее — две половины.
      live — ответ в разговоре: по предложениям (первое отдельно), чтобы первый звук пришёл быстро — Eleven v4 озвучивает фразу 3–5 с, длинную дольше */
+  /* Н4 (25.11.2026): длинный ответ «мозга» (до 1500 знаков) — кусками по целым предложениям ≤ 380 знаков: субтитр помещается на экран,
+     голос не получает 1000+ знаков за раз. Каждый кусок — отдельная фраза в очереди продолжений; live/follow — только у последнего */
+  const CHUNK = 380;
+  function chunks(t, max) {
+    max = max || CHUNK; const out = [];
+    for (let x of (String(t || '').match(/[^.!?…]+[.!?…]+["»”')]*|[^.!?…]+$/g) || []).map(z => z.trim()).filter(Boolean)) {
+      while (x.length > max) { let k = x.lastIndexOf(' ', max); if (k < max / 2) k = max; out.push(x.slice(0, k).trim()); x = x.slice(k).trim(); }
+      const L = out.length - 1; if (L >= 0 && out[L].length + 1 + x.length <= max) out[L] += ' ' + x; else if (x) out.push(x);
+    }
+    return out;
+  }
+  function sayLong(text, o, append) {
+    const cs = chunks(text); if (!cs.length) return;
+    if (cs.length > 1) voPrefetch(cs[0], true);
+    cs.forEach((c, i) => { const last = i === cs.length - 1; speak(c, Object.assign({ pri: 2, raw: true }, last ? o : {}, { append: !!append || i > 0 })); });
+  }
   function splitParts(t, live) {
     t = String(t || '').trim();
     const ss = (t.match(/[^.!?…]+[.!?…]+["»]?|[^.!?…]+$/g) || [t]).map(z => z.trim()).filter(Boolean);
-    if (live) { const out = []; for (const x of ss) { if (out.length > 1 && (out[out.length - 1].length < 40 || out.length >= 4)) out[out.length - 1] += ' ' + x; else out.push(x); } return out.length ? out : [t]; }
+    if (live) { const out = []; for (const x of ss) { if (out.length > 1 && (out[out.length - 1].length < 40 || out.length >= 4) && out[out.length - 1].length + x.length < CHUNK) out[out.length - 1] += ' ' + x; else out.push(x); } return out.length ? out : [t]; }   /* склейка — не длиннее куска (Н4) */
     if (t.length <= 350) return [t];
     let a = '', i = 0; while (i < ss.length - 1 && (a + ' ' + ss[i]).length <= t.length / 2 + 40) a = (a ? a + ' ' : '') + ss[i++];
     if (!a) a = ss[i++];
@@ -1301,14 +1317,14 @@
       const full = sq(r.text);
       const memo = MEM.on && ms.memo && memSafe(ms.memo) && !MEM.items.some(x => String(x.t).toLowerCase() === ms.memo.toLowerCase()) ? ms.memo : '';
       if (memo) setTimeout(() => { if (gen !== ST.askGen) return; ST.pendingMemo = { t: memo, at: now() }; speak((UK ? 'Запам\u2019ятати: ' : 'Запомнить: ') + memo + '?', { pri: 2, raw: true, append: true, follow: true }); }, 0);
-      if (first && full.indexOf(first) === 0) { const rest = full.slice(first.length).trim(); if (rest) { const rf = nameFill(rest); voPrefetch(rf, true); speak(rf, { pri: 2, follow: byVoice && !memo, raw: true, append: true, live: true }); } else if (byVoice && !memo && TTS.cur && TTS.cur.text === nameFill(first)) TTS.cur.follow = true; return; }
-      if (!first) speak(nameFill(r.text), { pri: 2, follow: byVoice && !memo, raw: true, live: true });
+      if (first && full.indexOf(first) === 0) { const rest = full.slice(first.length).trim(); if (rest) { const rf = nameFill(rest); voPrefetch(chunks(rf)[0], true); sayLong(rf, { follow: byVoice && !memo, live: true }, true); } else if (byVoice && !memo && TTS.cur && TTS.cur.text === nameFill(first)) TTS.cur.follow = true; return; }
+      if (!first) sayLong(nameFill(r.text), { follow: byVoice && !memo, live: true });
       return;
     }
     /* Н4 (25.11.2026): связь оборвалась посреди ответа — договариваем пришедшие целые предложения и честно говорим, что связь прервалась */
-    const part = (sq(acc).replace(/\s*ПАМ['’ʼ]?ЯТЬ:.*$/, '').match(/^[\s\S]*[.!?…]["»]?(?=\s|$)/) || [''])[0].trim(), broke = UK ? 'Зв\u2019язок перервався.' : 'Связь прервалась.';
-    if (first) { const rest = part.indexOf(first) === 0 ? part.slice(first.length).trim() : ''; remember(q, part || first); speak(nameFill(rest ? rest + ' ' + broke : broke), { pri: 2, raw: true, append: true }); return; }
-    if (part) { remember(q, part); ST.lastBrain = now(); speak(nameFill(part) + ' ' + broke, { pri: 2, raw: true }); return; }
+    const part = (sq(acc).replace(/\s*ПАМ['’ʼ]?ЯТЬ:.*$/, '').match(/^[\s\S]*[.!?…]["»”')]*(?=\s|$)/) || [''])[0].trim(), broke = UK ? 'Зв\u2019язок перервався.' : 'Связь прервалась.';
+    if (first) { const rest = part.indexOf(first) === 0 ? part.slice(first.length).trim() : ''; remember(q, part || first); sayLong(nameFill(rest ? rest + ' ' + broke : broke), {}, true); return; }
+    if (part) { remember(q, part); ST.lastBrain = now(); sayLong(nameFill(part) + ' ' + broke, {}); return; }
     if (buyQ(t) && !(r && ASK_ERR[r.error])) { speak(doAct('record_purchase', { sym: sym || '' }) + (sym ? '' : ' Монету и цифры впишите сами.'), { pri: 2 }); return; }   /* без связи — просто открываем форму покупки */
     if (remQ(t) && !(r && ASK_ERR[r.error])) { speak('Сейчас нет связи — не могу разобрать время напоминания. Попробуйте чуть позже.', { pri: 2 }); return; }
     const msg = (r && ASK_ERR[r.error]) || (sure ? local : (sym && coinPrice(sym) ? reply(NAME_N[sym] || sym) + ' ' : '') + 'Сейчас не могу связаться с сервером — попробуйте чуть позже.');
@@ -1628,7 +1644,7 @@
       lx: t => Lx(t),
       ask: q => answer(q), lastAsk: () => ST.lastAsk || null, ctx: () => brainCtx(), hist: () => ST.hist || [],
       mood: m => { if (ST.forceHour == null) ST.forceHour = 12; ST.pct = { calm: 0, up: 3, rocket: 9, down: -3, crash: -9 }[m]; ST.go = m === 'hunter'; if (m === 'offline') { ST.offline = true; ST.offSince = now() - 120; } else ST.offline = false; ST.lastInput = now(); wake(); },
-      say: t => speak(t, { pri: 2 }), sayMore: t => speak(t, { pri: 2, raw: true, append: true }), sayLow: t => speak(t, {}), qAge: sec => { TTS.q.forEach(x => { x.at -= sec; }); return TTS.q.length; }, next: () => { if (TTS.cur) finish(TTS.cur); }, sayLog: () => ST.sayLog || [], nameFill: t => nameFill(t), memo: t => memoSplit(t), memSafe: t => memSafe(t), act: (n, x) => doAct(n, x), calm: () => calmText(), priceW: v => priceW(v), figs: t => figs(t), weekDue: () => weekDue(), headline: v => { ST.headline = v; }, lessonPick: () => lessonPick(ST.D), ceilText: o => ceilText(o), lessonOffer: v => { ST.lessonOffer = v ? { id: v, at: now() } : null; }, calmDue: () => calmDue(), brief2: o => brief(o), snapPrev: v => { ST.snapPrev = v; }, remTick: () => remTick(), remDue: (t, ago) => remAdd(t, Date.now() - (ago || 1000)), remQ: t => remQ(t), split: (t, live) => splitParts(t, live), stress: t => stressRu(t),
+      say: t => speak(t, { pri: 2 }), sayMore: t => speak(t, { pri: 2, raw: true, append: true }), sayLong: t => sayLong(t, {}), chunks: t => chunks(t), qTexts: () => TTS.q.map(x => x.text), sayLow: t => speak(t, {}), qAge: sec => { TTS.q.forEach(x => { x.at -= sec; }); return TTS.q.length; }, next: () => { if (TTS.cur) finish(TTS.cur); }, sayLog: () => ST.sayLog || [], nameFill: t => nameFill(t), memo: t => memoSplit(t), memSafe: t => memSafe(t), act: (n, x) => doAct(n, x), calm: () => calmText(), priceW: v => priceW(v), figs: t => figs(t), weekDue: () => weekDue(), headline: v => { ST.headline = v; }, lessonPick: () => lessonPick(ST.D), ceilText: o => ceilText(o), lessonOffer: v => { ST.lessonOffer = v ? { id: v, at: now() } : null; }, calmDue: () => calmDue(), brief2: o => brief(o), snapPrev: v => { ST.snapPrev = v; }, remTick: () => remTick(), remDue: (t, ago) => remAdd(t, Date.now() - (ago || 1000)), remQ: t => remQ(t), split: (t, live) => splitParts(t, live), stress: t => stressRu(t),
       tap: () => tapped(),
       brief: () => brief(),
       reply: q => reply(q),

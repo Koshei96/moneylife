@@ -41,6 +41,9 @@ const NAMES: Record<string, string[]> = {
 /* Н4 (25.11.2026): предел ответа — 1500 знаков, режем только по концу предложения (нет такого — по пробелу и «…»), не посреди слова.
    streamCut — то же для потока: куски уходят, пока далеко от предела; у предела — только целыми предложениями; лишнее не уходит;
    text() — ровно то, что ушло кусками (клиент не увидит хвоста, которого нет в text). Проверяет tests/run_tests.py (cut:begin…cut:end) */
+type Ev = { type?: string; delta?: { type?: string; text?: string; stop_reason?: string; partial_json?: string }; content_block?: { type?: string; name?: string } };
+type Put = (o: unknown) => void;
+type Rd = ReadableStreamDefaultReader<Uint8Array>;
 /* cut:begin */
 const MAXT = 1500;
 function sentEnd(s: string, lim: number, tail: boolean) {   /* конец последнего предложения, целиком лежащего в s[0..lim] */
@@ -49,11 +52,12 @@ function sentEnd(s: string, lim: number, tail: boolean) {   /* конец пос
   return k;
 }
 function streamCut(max: number = MAXT) {
-  let sent = '', hold = '', over = false;
+  let sent = '', hold = '', raw = '', over = false;
   const soft = max - 300;
   const out = (n: number, add: string = '') => { let o = hold.slice(0, n); if (add) o = o.replace(/[\s,;:—–-]+$/, '') + add; sent += o; hold = hold.slice(n); return o; };
   return {
     push(t: string) {
+      if (t) raw += t;   /* всё пришедшее — ради строки «ПАМЯТЬ:» в конце, она в предел не входит */
       if (over || !t) return '';
       hold += t;
       if (sent.length + hold.length <= soft) return out(hold.length);
@@ -66,10 +70,42 @@ function streamCut(max: number = MAXT) {
       return out(sp > 0 ? sp : 0, '…');
     },
     end() { if (over) return ''; over = true; return out(hold.length); },
+    memo() {   /* ответ обрезан пределом — строка «ПАМЯТЬ: …» из конца ответа всё равно доходит (до 80 знаков) */
+      if (!over || /ПАМ['’ʼ]?ЯТЬ:/.test(sent)) return '';
+      const m = raw.match(/ПАМ['’ʼ]?ЯТЬ:[ \t]*([^\n]{1,120}?)\s*$/); if (!m) return '';
+      const o = '\nПАМЯТЬ: ' + m[1].slice(0, 80); sent += o; return o;
+    },
     text() { return sent.replace(/\s+/g, ' ').trim(); }
   };
 }
-function cutText(s: string, max: number = MAXT) { const c = streamCut(max); c.push(s); c.end(); return c.text(); }
+function cutText(s: string, max: number = MAXT) { const c = streamCut(max); c.push(s); c.end(); c.memo(); return c.text(); }
+/* поток Anthropic (строки SSE) → куски {t} через put. Итог: kind 'done' — ответ дошёл; 'act' — инструмент; 'broke' — поток оборвался
+   (ошибка чтения, событие error или нет stop_reason): тогда остаток не досылаем, ответ не храним — клиент скажет «Связь прервалась.» */
+async function pumpReply(rd: Rd, put: Put) {
+  const dec = new TextDecoder(), lim = streamCut();
+  let buf = '', why = '', tName = '', tJson = '', broke = false;
+  try {
+    for (;;) {
+      const { done, value } = await rd.read(); if (done) break;
+      buf += dec.decode(value, { stream: true });
+      let i; while ((i = buf.indexOf('\n')) >= 0) {
+        const line = buf.slice(0, i).trim(); buf = buf.slice(i + 1);
+        if (!line.startsWith('data:')) continue;
+        let ev: Ev; try { ev = JSON.parse(line.slice(5)); } catch (_) { continue; }
+        if (ev.type === 'error') { broke = true; continue; }
+        if (ev.type === 'content_block_start' && ev.content_block && ev.content_block.type === 'tool_use' && !tName) { tName = String(ev.content_block.name || ''); continue; }
+        if (ev.type === 'content_block_delta' && ev.delta && ev.delta.type === 'input_json_delta') { if (tJson.length < 2000) tJson += String(ev.delta.partial_json || ''); continue; }
+        if (ev.type === 'content_block_delta' && ev.delta && ev.delta.type === 'text_delta') { const t = String(ev.delta.text || '').replace(/[*_#`]/g, ''); if (t) { const o = lim.push(t); if (o) put({ t: o }); } }
+        else if (ev.type === 'message_delta' && ev.delta && ev.delta.stop_reason) why = ev.delta.stop_reason;
+      }
+    }
+  } catch (_) { broke = true; }
+  if (!why && !tName) broke = true;
+  if (broke && !tName) return { kind: 'broke', text: lim.text(), why: why || 'broken', tName, tJson };
+  const rest = lim.end(); if (rest) put({ t: rest });
+  const mm = lim.memo(); if (mm) put({ t: mm });
+  return { kind: tName ? 'act' : 'done', text: lim.text(), why, tName, tJson };
+}
 /* cut:end */
 
 async function sha256(s: string) {
@@ -244,33 +280,19 @@ Deno.serve(async (req) => {
     Math.random() < 0.25 ? cleanAsk(store) : Promise.resolve()
   ]);
   if (wantStream && r.body) {   /* поток: строки JSON — {t:"кусок"} … {done:true,text,sources} или {error} */
-    const enc = new TextEncoder(), rd = r.body.getReader(), dec = new TextDecoder();
+    const enc = new TextEncoder(), rd = r.body.getReader();
     const body = new ReadableStream({
       async start(ctl) {
         const put = (o: unknown) => { try { ctl.enqueue(enc.encode(JSON.stringify(o) + '\n')); } catch (_) { /* клиент ушёл */ } };
-        let buf = '', why = '', tName = '', tJson = '';
-        const lim = streamCut();
-        try {
-          for (;;) {
-            const { done, value } = await rd.read(); if (done) break;
-            buf += dec.decode(value, { stream: true });
-            let i; while ((i = buf.indexOf('\n')) >= 0) {
-              const line = buf.slice(0, i).trim(); buf = buf.slice(i + 1);
-              if (!line.startsWith('data:')) continue;
-              let ev: { type?: string; delta?: { type?: string; text?: string; stop_reason?: string; partial_json?: string }; content_block?: { type?: string; name?: string } }; try { ev = JSON.parse(line.slice(5)); } catch (_) { continue; }
-              if (ev.type === 'content_block_start' && ev.content_block && ev.content_block.type === 'tool_use' && !tName) { tName = String(ev.content_block.name || ''); continue; }
-              if (ev.type === 'content_block_delta' && ev.delta && ev.delta.type === 'input_json_delta') { if (tJson.length < 2000) tJson += String(ev.delta.partial_json || ''); continue; }
-              if (ev.type === 'content_block_delta' && ev.delta && ev.delta.type === 'text_delta') { const t = String(ev.delta.text || '').replace(/[*_#`]/g, ''); if (t) { const o = lim.push(t); if (o) put({ t: o }); } }
-              else if (ev.type === 'message_delta' && ev.delta && ev.delta.stop_reason) why = ev.delta.stop_reason;
-            }
-          }
-        } catch (_) { /* обрыв — отдаём, что успели */ }
-        const rest = lim.end(); if (rest) put({ t: rest });
-        const text = lim.text();
+        const { kind, text, why, tName, tJson } = await pumpReply(rd, put);
         if (tName) {   /* действие: исполнит телефон; такой ответ не храним — повтор той же просьбы должен прийти заново */
           let input = {}; try { input = JSON.parse(tJson || '{}'); } catch (_) { input = {}; }
           await Promise.allSettled([writeNum(dk, dn + 1), writeNum(mk, mn + 1)]);
           put({ done: true, text, act: { name: tName, input }, sources: [] }); ctl.close(); return;
+        }
+        if (kind === 'broke') {   /* Н4: обрыв посреди ответа — не храним и не считаем; формат прежний: {error} */
+          await store.upload('diag/' + new Date().toISOString().replace(/[:.]/g, '-') + '_broken-stream_' + why.replace(/[^A-Za-z0-9_-]+/g, '-') + '.txt', new Blob(['1'], { type: 'text/plain' }), { upsert: true }).catch(() => null);
+          put({ error: 'llm' }); ctl.close(); return;
         }
         if (!text) {
           await store.upload('diag/' + new Date().toISOString().replace(/[:.]/g, '-') + '_empty-stream_' + why.replace(/[^A-Za-z0-9_-]+/g, '-') + '.txt', new Blob(['1'], { type: 'text/plain' }), { upsert: true }).catch(() => null);
