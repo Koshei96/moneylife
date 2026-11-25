@@ -1243,7 +1243,7 @@
       const ab = aboutQ(t, q);
       if (ab) {   /* «удали заметку про налоги» — самая свежая из тех, где есть эти слова, — Орион её называет и ждёт «да»; нет такой — ничего не трогаем */
         if (!ab.stems.length) { delMiss('notes'); return 'Про что удалить заметку?'; }
-        const x = aboutPick(TASK.notes, ab); if (!x) { delMiss('notes'); if (UK) { tcRaw = true; return 'Не знайшов нотатку про ' + ab.raw + '.'; } return 'Не нашёл заметку ' + ab.prep + ' ' + ab.raw + '.'; }   /* по-украински предлог всегда «про» */
+        const x = aboutPick(TASK.notes, ab); if (!x) { delMiss('notes'); if (UK) { tcRaw = true; return /^(про|щодо|стосовно)$/.test(ab.prep) ? 'Не знайшов нотатку ' + ab.prep + ' ' + ab.raw + '.' : 'Не знайшов такої нотатки.'; } return 'Не нашёл заметку ' + ab.prep + ' ' + ab.raw + '.'; }   /* по-украински: «про/щодо/стосовно» — как сказал человек; после «о/об/насчёт» слово не повторяем (падеж) */
         delMissOff('notes'); return delAsk('notes', x);
       }
       if (delGuarded()) return delGuardSay();
@@ -1257,7 +1257,7 @@
     }
     if (/^(отмени|удали|убери)\s+(все\s+)?напоминани/.test(t) && aboutQ(t, q)) {   /* «отмени напоминание про биржу» — только подходящее, самое свежее, и только после «да» */
       const ab = aboutQ(t, q); if (!ab.stems.length) { delMiss('rem'); return 'Про что отменить напоминание?'; }
-      const x = aboutPick(TASK.rem.filter(y => !y.done), ab); if (!x) { delMiss('rem'); if (UK) { tcRaw = true; return 'Не знайшов нагадування про ' + ab.raw + '.'; } return 'Не нашёл напоминание ' + ab.prep + ' ' + ab.raw + '.'; }
+      const x = aboutPick(TASK.rem.filter(y => !y.done), ab); if (!x) { delMiss('rem'); if (UK) { tcRaw = true; return /^(про|щодо|стосовно)$/.test(ab.prep) ? 'Не знайшов нагадування ' + ab.prep + ' ' + ab.raw + '.' : 'Не знайшов такого нагадування.'; } return 'Не нашёл напоминание ' + ab.prep + ' ' + ab.raw + '.'; }
       delMissOff('rem'); return delAsk('rem', x);
     }
     if (/^(отмени|удали|убери)\s+(все\s+)?напоминани/.test(t) && delGuarded()) return delGuardSay();
