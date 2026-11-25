@@ -203,7 +203,7 @@
   function silent(cur) {
     if (TTS.cur !== cur) return;
     clearInterval(TTS.sim);
-    const dur = Math.min(16, 1.4 + cur.text.split(/\s+/).length * 0.38);
+    const dur = Math.min(22, 1.4 + cur.text.split(/\s+/).length * 0.38);
     TTS.sim = setInterval(() => { TTS.beat = now(); }, 300);
     TTS.guard = setTimeout(() => finish(cur), dur * 1000);
   }
@@ -302,7 +302,7 @@
   const CHUNK = 380;
   function chunks(t, max) {
     max = max || CHUNK; const out = [];
-    for (let x of (String(t || '').match(/[^.!?…]+[.!?…]+["»”')]*|[^.!?…]+$/g) || []).map(z => z.trim()).filter(Boolean)) {
+    for (let x of String(t || '').split(/(?<=[.!?…]["»”')]*)\s+/).map(z => z.trim()).filter(Boolean)) {   /* конец предложения — только перед пробелом или концом строки: «3.5» не режем */
       while (x.length > max) { let k = x.lastIndexOf(' ', max); if (k < max / 2) k = max; out.push(x.slice(0, k).trim()); x = x.slice(k).trim(); }
       const L = out.length - 1; if (L >= 0 && out[L].length + 1 + x.length <= max) out[L] += ' ' + x; else if (x) out.push(x);
     }
@@ -1614,7 +1614,7 @@
     ui.hit.addEventListener('click', () => { if (lp) { lp = false; return; } tapped(); });
     ui.cap = document.createElement('button'); ui.cap.type = 'button'; ui.cap.className = 'or-cap'; ui.cap.setAttribute('aria-live', 'polite'); ui.cap.setAttribute('translate', 'no');   /* субтитры переводит сам Орион (ответы «мозга» уже на нужном языке) */
     ui.cap.innerHTML = '<i aria-hidden="true"></i><b>' + Lx('Орион') + '</b><span></span><em aria-hidden="true"></em>'; ui.capT = ui.cap.querySelector('span'); ui.capN = ui.cap.querySelector('em');
-    ui.cap.addEventListener('click', () => { stopVoice(); ui.cap.classList.remove('on'); });
+    ui.cap.addEventListener('click', () => { ST.askGen = (ST.askGen || 0) + 1; stopVoice(); ui.cap.classList.remove('on'); });   /* «стоп» — и хвост ответа «мозга», что ещё в пути, тоже не звучит (Н4) */
     document.body.appendChild(ui.cap);
     window.addEventListener('resize', () => { fit(); wake(); });
     if (window.IntersectionObserver) new IntersectionObserver(es => { inView = es[0].isIntersecting; if (inView) wake(); }).observe(host);
@@ -1628,7 +1628,7 @@
 
   window.Mascot = {
     init, sync, number, greet,
-    hush: () => { TTS.q = []; stopVoice(); },
+    hush: () => { ST.askGen = (ST.askGen || 0) + 1; TTS.q = []; stopVoice(); },
     tasks: { notes: () => TASK.notes.slice(), rem: () => TASK.rem.slice(), log: () => TASK.log.slice(), delNote: id => { TASK.notes = TASK.notes.filter(x => x.id !== id); taskSave('notes'); }, delRem: id => { TASK.rem = TASK.rem.filter(x => x.id !== id); taskSave('rem'); }, when: ms => whenW(ms) },
     mem: { list: () => MEM.items.slice(), del: id => memDel(id), clear: () => memClear(), on: v => { if (v != null) memSetOn(v); return MEM.on; } },   /* замолчать сразу (перед обучающим роликом) */
     ask: q => answer(q), listen: () => listen(),

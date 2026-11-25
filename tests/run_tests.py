@@ -1587,6 +1587,21 @@ def run_browser():
             if qa == 2 and q1 == 'Продолжение ответа.' and q2 == 'Продолжение ответа.': ok('Орион: продолжение ответа старше 40 с звучит; устаревшая обычная фраза — нет')
             else: fail('Орион: очередь продолжений', f'{qa} | {q1} | {q2}')
             pg.evaluate("document.querySelector('.or-cap') && document.querySelector('.or-cap').click()")
+            # Н4 (круг 3, Глеб): «стоп» нажатием на субтитр посреди ответа — ни хвост, ни «Связь прервалась.» потом не звучат (и при {text}, и при {error})
+            stop_bad = []
+            for fin in ({'text': S1 + ' Хвост ответа, который уже не нужен.', 'sources': []}, {'error': 'llm'}):
+                pg.evaluate("document.querySelector('.or-cap') && document.querySelector('.or-cap').click()")
+                pg.evaluate("s=>{window.__mlAskOrig=window.__mlAskOrig||window.mlAsk;window.mlAsk=(q,y,x,onPart)=>new Promise(res=>{window.__mlRel=res;setTimeout(()=>{onPart(s+' ');onPart('Пишет Cointele');},50);});Mascot.debug.ask('Почему растёт рынок сегодня?')}", S1)
+                try: pg.wait_for_function("t=>{const l=Mascot.debug.sayLog();return l[l.length-1]===t}", arg=S1, polling=100, timeout=8000)
+                except Exception: pass
+                pg.evaluate("document.querySelector('.or-cap').click()"); pg.wait_for_timeout(200)
+                pg.evaluate("v=>window.__mlRel&&window.__mlRel(v)", fin); pg.wait_for_timeout(1500)
+                ls_ = pg.evaluate("Mascot.debug.sayLog()")
+                if not ls_ or ls_[-1] != S1 or any('Хвост' in x for x in ls_): stop_bad.append(str(ls_[-3:]))
+            pg.evaluate("window.mlAsk=window.__mlAskOrig||window.mlAsk")
+            cs35 = pg.evaluate("Mascot.debug.chunks('Цена 3.5 тысячи долларов. Дальше спокойно.')")
+            if not stop_bad and cs35 == ['Цена 3.5 тысячи долларов. Дальше спокойно.']: ok('Орион: «стоп» посреди ответа — хвост и «Связь прервалась.» не звучат; «3.5» не режется на куски')
+            else: fail('Орион: стоп посреди ответа', f'{stop_bad} | {cs35}')
             # Н4 (круг 2, Вера): длинный ответ ~1400 знаков — кусками ≤ 400 знаков по целым предложениям, субтитр не вылезает за верх экрана 390×844
             pg.set_viewport_size({'width': 390, 'height': 844}); pg.wait_for_timeout(300)
             LW = 'Биткоин растёт на притоке денег в биржевые фонды, пишет Cointelegraph. Эфир держится рядом с прошлой неделей, а Солана немного отстаёт. '
