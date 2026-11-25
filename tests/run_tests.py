@@ -2097,6 +2097,7 @@ def run_browser():
               await step('miss2','удали заметку купить машину','да',all);
               await step('miss3','удали заметку купить машину','удали заметку',all);
               M.pendAge(200); let b=mine(); await M.ask('удали последнюю заметку'); out.last=[said(),b,mine()];
+              M.pendAge(200); b=mine(); await M.ask('удали последнюю заметку, пожалуйста'); out.plz=[said(),b,mine()];
               clean();
               for(const [x,h] of [['позвонить маме',5],['оплатить квартплату',6],['проверить ордера на бирже',7]]) M.act('add_reminder',{text:x,when:w(h)});
               await step('zav','отмени напоминание на завтра','да',acts);
@@ -2122,6 +2123,7 @@ def run_browser():
             o5chk('miss3', 'Не нашёл заметку «купить машину».', True, None, None, [])
             if not (o5['miss3'][3] or '').startswith('Удалить заметку «'): o5bad.append(('после промаха «удали заметку» — только переспрос', o5['miss3']))
             if not (o5['last'][1] and o5['last'][0] == 'Удалил: ' + o5['last'][1][-1] + '.' and o5['last'][2] == o5['last'][1][:-1]): o5bad.append(('удали последнюю заметку — как раньше', o5['last']))
+            if not (o5['plz'][1] and o5['plz'][0] == 'Удалил: ' + o5['plz'][1][-1] + '.' and o5['plz'][2] == o5['plz'][1][:-1]): o5bad.append(('«удали последнюю заметку, пожалуйста» — вежливый хвост не цель', o5['plz']))
             o5chk('zav', 'Не нашёл напоминание на завтра.', True, None, None, [])
             o5chk('zav2', 'Не нашёл напоминание на завтра.', True, None, 'Все напоминания не отменяю. Скажите: «отмени напоминание про …».', [])
             o5chk('kv', 'Отменить напоминание «оплатить квартплату»? Скажите «да» или «нет».', True, 'оплатить квартплату', 'Отменил напоминание: «оплатить квартплату».', ['оплатить квартплату'])
@@ -2390,6 +2392,7 @@ def run_browser():
               M.pendAge(200); await M.ask('скасуй нагадування'); out.all=[said(),T.rem().filter(x=>!x.done).length]; old.forEach(x=>{{x.done=false;}});
               const on=T.notes().map(x=>x.t); T.notes().forEach(x=>T.delNote(x.id)); M.pendAge(200); await M.ask('видали нотатку'); out.none=said();
               for(const x of on) M.act('add_note',{{text:x}}); out.back=JSON.stringify(T.notes().map(x=>x.t))===JSON.stringify(on);
+              M.act('add_note',{{text:'перевірка останньої'}}); M.pendAge(200); await M.ask('видали останню нотатку, будь ласка'); out.last=[said(),T.notes().some(x=>x.t==='перевірка останньої')];
               clean(); M.pendAge(200); return out;}})()""")
             u5bad = []
             def u5chk(k, a, kept, pd, s2, gone):
@@ -2402,8 +2405,9 @@ def run_browser():
             u5chk('zav', 'Не знайшов такого нагадування.', True, None, None, [])
             u5chk('kv', 'Скасувати нагадування «сплатити квартплату»? Скажіть «так» або «ні».', True, 'сплатити квартплату', 'Скасував нагадування: «сплатити квартплату».', ['сплатити квартплату'])
             u5chk('mama', 'Скасувати нагадування «зателефонувати мамі»? Скажіть «так» або «ні».', True, 'зателефонувати мамі', 'Добре, залишив.', [])
+            if u5['last'] != ['Видалив: перевірка останньої.', False]: u5bad.append(('видали останню нотатку, будь ласка', u5['last']))
             if not (u5['all'] == ['Скасував.', 0] and u5['none'] == 'Нотаток немає.' and u5['back'] is True): u5bad.append(('Скасував. / Нотаток немає.', u5['all'], u5['none'], u5['back']))
-            said5 = ''.join(str(u5[k][0]) + str(u5[k][3] or '') for k in ('nal', 'eth', 'many', 'miss', 'zav', 'kv', 'mama')) + str(u5['all'][0]) + str(u5['none'])
+            said5 = ''.join(str(u5[k][0]) + str(u5[k][3] or '') for k in ('nal', 'eth', 'many', 'miss', 'zav', 'kv', 'mama')) + str(u5['all'][0]) + str(u5['none']) + str(u5['last'][0])
             if re.search('[ыэъё]|Не нашёл|заметк|напоминан|Отменил|Удалил', said5): u5bad.append(('русские слова', said5))
             if not u5bad: ok('Орион по-украински (О.5/О.6): «видали нотатку по податках / купити eth», «скасуй нагадування на завтра / по квартплаті / зателефонувати мамі» — без «так» ничего не снято, после «так» — ровно названная; «Не знайшов…», «Підходять кілька…», «Скасував.», «Нотаток немає.» — без русских слов')
             else: fail('Орион по-украински (О.5/О.6): слова после «нотатку / нагадування»', str(u5bad)[:1500])

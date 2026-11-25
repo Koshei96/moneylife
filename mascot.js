@@ -1176,7 +1176,7 @@
   /* О.5 (25.11.2026, правило Глеба): слова после «заметку / напоминание» без связки — «удали заметку по налогам», «отмени напоминание на завтра / позвонить маме» —
      это цель, а не «последнюю / все». Сразу ничего не снимаем: одна подходящая — называем и ждём «да», ни одной — «Не нашёл…», несколько — спрашиваем какую.
      «все / всі / последнюю / останню» (и их формы) — не цель: команда работает как раньше. null — слов после команды нет */
-  const TAIL_OK = /^(все|всех|вси|последн\S*|останн\S*)$/;
+  const TAIL_OK = /^(все|всех|вси|всі|последн\S*|останн\S*|пожалуйста|будь|ласка|орион|оріон)$/;   /* вежливые хвосты — не цель (Глеб, 25.11) */
   function tailQ(t, q, re) {
     const m = t.match(re); if (!m) return null;
     const w = t.slice(m[0].length).split(WSPLIT).filter(Boolean);
@@ -1277,7 +1277,7 @@
       if (delGuarded()) return delGuardSay();
       const none = () => { tcRaw = true; return UK ? 'Нотаток немає.' : 'Заметок нет.'; };   /* О.6: по-украински целиком, без «Заметок немає» */
       if (delMissed('notes')) { delMissOff('notes'); const x = TASK.notes[TASK.notes.length - 1]; if (!x) return none(); return delAsk('notes', x); }
-      const x = TASK.notes.pop(); if (!x) return none(); taskSave('notes'); logAct('Удалил заметку: ' + x.t); return 'Удалил: ' + x.t + '.';
+      const x = TASK.notes.pop(); if (!x) return none(); taskSave('notes'); logAct('Удалил заметку: ' + x.t); tcRaw = true; return (UK ? 'Видалив: ' : 'Удалил: ') + x.t + '.';
     }
     if (/^(какие|что)\s+(у меня\s+)?напоминани|^мои напоминани/.test(t)) {
       const L = TASK.rem.filter(x => !x.done).sort((a, b) => a.when - b.when);
