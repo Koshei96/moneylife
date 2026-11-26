@@ -139,14 +139,14 @@
     return 'Свежих цен пока нет';
   }
   function openTotal() {
-    const D = derive(), priced = D.syms.filter(s => +D.prices[s] > 0), np = D.syms.filter(s => !(+D.prices[s] > 0)), gain = D.total - D.invPriced, r = rate();
+    const D = derive(), priced = D.syms.filter(s => +D.prices[s] > 0), np = D.syms.filter(s => !(+D.prices[s] > 0)), gain = D.gain, r = rate();
     const rows = D.syms.map(s => { const c = D.h[s], p = +D.prices[s] || 0, v = c.qty * p;
       return `<div class="xr">${badge(s)}<span class="xr-n"><b>${esc(s)}</b><small>${qtyS(c.qty)} × ${p ? money(p, { price: true, show: true }) : '—'}</small></span><span class="xr-v">${p ? `<b>${money(v)}</b><small>${D.total ? nf(v / D.total * 100, 1) + '%' : ''}</small>` : '<b class="warnc">нет цены</b><small>в итог не входит</small>'}</span></div>`; }).join('');
     const kv = (k, v, cl) => `<div><span>${k}</span><span class="${cl || ''}">${v}</span></div>`;
     let h = `<div class="xtot"><span class="small mute">Стоимость монет</span><b>${D.noPrice ? '—' : money(D.total)}</b><span class="small mute">${esc(srcLine())}</span></div>`;
     if (!D.syms.length) h += '<div class="empty">Монет пока нет. Запиши первую покупку — итог сложится из количества и цены каждой монеты.</div>';
     else h += `<div><div class="sec-h"><span class="label">Монеты</span><span class="small mute">посчитано ${priced.length} из ${D.syms.length}</span></div><div class="list xr-list">${rows}</div>${np.length ? `<p class="npnote" style="margin-top:10px"><b>${esc(np.slice(0, 6).join(', '))}</b> — нет цены: биржи не ответили. Количество сохранено, в итог не ${np.length > 1 ? 'входят' : 'входит'}.</p>` : ''}</div>`;
-    h += `<div><div class="sec-h"><span class="label">Как посчитано</span></div><div class="card"><div class="kv">${D.invPriced > 0 && D.inv - D.invPriced >= .01 ? kv('Вложено в монеты с ценой', money(D.invPriced)) + kv('Без цены (не в итоге)', money(D.inv - D.invPriced)) : kv('Вложено в монеты', money(D.inv))}${D.invPriced > 0 && D.total > 0 ? kv(gain >= 0 ? 'Прибыль сейчас' : 'Результат сейчас', money(gain, { sign: true }) + ' · ' + pct(gain / D.invPriced * 100), gain >= 0 ? 'pos' : 'neg') : ''}${Math.abs(D.realized) >= .01 ? kv('Зафиксировано продажами', money(D.realized, { sign: true }), D.realized >= 0 ? 'pos' : 'neg') : ''}${ladderOn() || D.reserve ? kv('Резерв USDT — отдельно', money(D.reserve)) + kv('Монеты и резерв вместе', D.noPrice ? '—' : money(D.total + D.reserve)) : ''}${r && D.total ? kv('В гривнах', (P.hide ? '••••' : uah(D.total * r)) + ' · курс ' + nf(r, 2)) : ''}</div></div>
+    h += `<div><div class="sec-h"><span class="label">Как посчитано</span></div><div class="card"><div class="kv">${D.invPriced > 0 && D.inv - D.invPriced >= .01 ? kv('Вложено в монеты с ценой', money(D.invPriced)) + kv('Без цены (не в итоге)', money(D.inv - D.invPriced)) : kv('Вложено в монеты', money(D.inv))}${D.invPriced > 0 && D.total > 0 ? kv(gain >= 0 ? 'Прибыль сейчас' : 'Результат сейчас', money(gain, { sign: true }) + ' · ' + pct(gain / D.invPriced * 100), gain >= 0 ? 'pos' : 'neg') : ''}${D.noCost.length && !D.noPrice ? kv('Без цены покупки (не в прибыли)', esc(D.noCost.join(', '))) : ''}${Math.abs(D.realized) >= .01 ? kv('Зафиксировано продажами', money(D.realized, { sign: true }), D.realized >= 0 ? 'pos' : 'neg') : ''}${ladderOn() || D.reserve ? kv('Резерв USDT — отдельно', money(D.reserve)) + kv('Монеты и резерв вместе', D.noPrice ? '—' : money(D.total + D.reserve)) : ''}${r && D.total ? kv('В гривнах', (P.hide ? '••••' : uah(D.total * r)) + ' · курс ' + nf(r, 2)) : ''}</div></div>
       <p class="hint">Итог = количество каждой монеты × её цена сейчас. Резерв в долларах в итог не входит — он ждёт докупок. Прибыль считается против того, что ты вписал в «потратил».</p></div>`;
     const foot = D.syms.length ? '<div class="btnrow"><button type="button" class="btn ghost" data-x="refresh">Обновить цены</button><button type="button" class="btn" data-x="share">Поделиться</button></div>' : '';
     xOpen('total', 'Из чего итог', h, foot);
@@ -166,7 +166,7 @@
     mark(60, 10, .34);
     const font = (w, s) => `${w} ${s}px Onest, system-ui, sans-serif`;
     g.fillStyle = '#f5f1ff'; g.font = font(800, 54); g.textBaseline = 'alphabetic'; g.fillText('MoneyLife', 250, 142);
-    const gain = D.total - D.invPriced, has = D.invPriced > 0 && D.total > 0, p = has ? gain / D.invPriced * 100 : null;
+    const gain = D.gain, has = D.invPriced > 0 && D.total > 0, p = has ? gain / D.invPriced * 100 : null;
     g.fillStyle = '#cfbaff'; g.font = font(600, 44); g.fillText(has ? 'Мой результат в крипте' : 'Мой портфель', 84, 400);
     g.fillStyle = has ? (gain >= 0 ? '#34e0a1' : '#ff7a86') : '#f5f1ff'; g.font = font(800, 230);
     g.fillText(has ? pct(p) : pl(D.syms.length, 'монета', 'монеты', 'монет'), 76, 640);
