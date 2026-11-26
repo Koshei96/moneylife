@@ -1517,6 +1517,7 @@
     else if (name === 'ach') t = pick(['Новое достижение' + nm() + ': ' + data.t + '.', 'Отмечаю достижение — «' + data.t + '». Так держать.']);
     else if (name === 'streak') t = 'Серия — ' + data.n + ' ' + plural(data.n, 'месяц', 'месяца', 'месяцев') + ' подряд с покупками' + nm() + '. Дисциплина — главный актив.';
     else if (name === 'd14') t = data && data.text ? String(data.text) : '';
+    else if (name === 'exitStep') { t = data && data.text ? String(data.text) : ''; buzz([15, 50, 15]); }   /* «План выхода» (exit.js): ступень достигнута */
     else return;
     if (t && (force || (AUTO && !isNight()))) speak(t, { pri: 1 });
     ST.lastEvent = now(); pulse(1);
