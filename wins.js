@@ -73,7 +73,7 @@
       str3: st.n >= 3, str6: st.n >= 6, str12: st.n >= 12, reserve: +D.reserve > 0, dip: tx.some(t => t && t.type === 'dip'),
       calm: ath > 0 && btc > 0 && btc <= ath * 0.8 && holds.length > 0 && !sold30, divers: holds.length >= 3,
       plan: !!(X.planGet && X.planGet()), learn5: read >= 5, learnAll: read >= total, alert: !!(x.alerts && x.alerts.length) || !!wGet().alertEver,
-      year: first > 0 && Date.now() - first > 365 * 864e5, green: +D.invPriced > 0 && !D.noPrice && D.total / D.invPriced >= 1.1
+      year: first > 0 && Date.now() - first > 365 * 864e5, green: +D.invPriced > 0 && !D.noPrice && D.valCost / D.invPriced >= 1.1
     };
   }
   /* новые достижения: праздник один раз; при первой проверке уже заслуженные отмечаются тихо, без салюта задним числом */

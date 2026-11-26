@@ -745,7 +745,7 @@
   const morningDue = () => lsGet('ms-newsDay', '') !== dayKey();
   function snapTake(D) {
     if (!D || !(D.total > 0) || D.noPrice) return;
-    const sn = lsGet('or-snap', null), k = dayKey(), pnl = D.total - (+D.invPriced || 0);
+    const sn = lsGet('or-snap', null), k = dayKey(), pnl = D.total - (+D.invPriced || 0)   /* разница двух дней — по всему портфелю (итог считается по всему количеству) */;
     if (!sn || sn.day !== k) { if (sn && sn.day) ST.snapPrev = sn; const lv = (ST.S && ST.S.live) || {}; lsSet('or-snap', { day: k, at: Date.now(), total: D.total, pnl, btc: +(lv.prices && lv.prices.BTC) || +(D.prices && D.prices.BTC) || 0 }); }
     else if (!ST.snapPrev) ST.snapPrev = lsGet('or-snapPrev', null);
     if (ST.snapPrev) lsSet('or-snapPrev', ST.snapPrev);
@@ -807,7 +807,7 @@
     const mb = morning ? morningBits(D) : [];
     if (mb.length && mb[0].indexOf('портфель') > 0) out.push(mb.shift());
     else if (D.total > 0 && !D.noPrice) {
-      const inv = +D.invPriced || 0, gp = inv > 0 ? (D.total - inv) / inv * 100 : null;
+      const inv = +D.invPriced || 0, gp = inv > 0 ? ((D.valCost != null ? +D.valCost : +D.total || 0) - inv) / inv * 100 : null;
       if (ST.hide) { if (gp != null) out.push('Суммы скрыты, поэтому только проценты: портфель ' + (gp >= 0 ? 'в плюсе' : 'в минусе') + ' на ' + pctW(gp) + '.'); }
       else out.push('Портфель — ' + moneyW(D.total) + (gp != null ? ', ' + signW(gp) + ' ' + pctW(gp) + ' к вложенному.' : '.'));
     } else if (!(S.tx || []).length) out.push('Портфель пока пуст. Начнём с первой покупки — кнопка «Купить».');
@@ -995,7 +995,7 @@
     if (has('страх', 'жадн', 'настроени')) { const f = M.fng ? M.fng() : null; return f ? 'Индекс страха и жадности — ' + f.v + ' из 100: ' + f.w + '.' : 'Индекс страха и жадности сейчас не загружен.'; }
     if (has('портфел', 'баланс', 'всего', 'денег', 'сколько у меня', 'итог')) {
       if (!(D.total > 0)) return 'Портфель пока пуст.';
-      const inv = +D.invPriced || 0, gp = inv > 0 ? (D.total - inv) / inv * 100 : null;
+      const inv = +D.invPriced || 0, gp = inv > 0 ? ((D.valCost != null ? +D.valCost : +D.total || 0) - inv) / inv * 100 : null;
       if (ST.hide) return gp != null ? 'Суммы скрыты. Портфель ' + (gp >= 0 ? 'в плюсе' : 'в минусе') + ' на ' + pctW(gp) + '.' : 'Суммы скрыты.';
       return 'Портфель — ' + moneyW(D.total) + (gp != null ? ', ' + signW(gp) + ' ' + pctW(gp) + ' к вложенному.' : '.');
     }
@@ -1020,7 +1020,7 @@
       if (tot > 0 && D.h) {
         const sh = {}; Object.keys(D.h).forEach(k => { const q = +(D.h[k] && D.h[k].qty) || 0, p = coinPrice(k); if (q > 0 && p > 0) { const v = Math.round(q * p / tot * 100); if (v >= 1) sh[k] = v; } });
         if (Object.keys(sh).length) c.shares = sh;
-        const inv = +D.invPriced || 0; if (inv > 0) c.pnl = Math.round((tot - inv) / inv * 1000) / 10;
+        const inv = +D.invPriced || 0; if (inv > 0) c.pnl = Math.round(((D.valCost != null ? +D.valCost : +D.total || 0) - inv) / inv * 1000) / 10;
         if (D.reserve > 0) c.reserve = Math.round(D.reserve / (tot + D.reserve) * 100);
       }
       const ath = +(S.cycle && S.cycle.ath) || 0, btc = coinPrice('BTC');

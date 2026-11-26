@@ -26,7 +26,7 @@ addEventListener('error',function(e){if(e&&e.message)add(e.message,(e.filename||
 addEventListener('unhandledrejection',function(e){var r=e&&e.reason;add(r&&(r.message||r)||'отклонённое обещание','promise');});
 window.mlErrLog=function(){try{return JSON.parse(localStorage.getItem(K)||'[]');}catch(e){return [];}};window.mlErrAdd=add;})();
 </script>
-<script src="i18n.js?v=20261126200000"></script>
+<script src="i18n.js?v=20261126210500"></script>
 <title>MoneyLife</title>
 <meta name="theme-color" content="#06040e">
 <script>/* тема до отрисовки: «Авто» — как в телефоне, иначе выбор из настроек */
@@ -475,6 +475,7 @@ input[type=date]::-webkit-calendar-picker-indicator{opacity:1;cursor:pointer}
 .cc-pl .cc-cell:first-child b{font-size:22px;font-weight:800;white-space:normal;line-height:1.15}
 .cc-pl b em{font-style:normal;font-size:14px;font-weight:700;margin-left:7px;display:inline-block;white-space:nowrap}
 .cc-rz{text-align:right;flex:none;max-width:44%}
+.cc-pl .cc-cell span.cc-nc{font-size:12px;margin-top:3px}
 .cc-rz b{font-size:15px}
 .cv-tools{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
 .cv-read{font-size:13px;color:var(--mute)}
@@ -1776,9 +1777,9 @@ document.querySelectorAll('nav.tabs .tab').forEach(b=>{const v=b.querySelector('
 
 <div class="toast" id="toast" role="status"><span id="toastMsg"></span><button type="button" id="toastBtn" hidden></button></div>
 
-<script src="config.js?v=20261126200000"></script>
+<script src="config.js?v=20261126210500"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="shim.js?v=20261126200000"></script>
+<script src="shim.js?v=20261126210500"></script>
 <script>
 /* ===== основа ===== */
 const $=id=>document.getElementById(id);
@@ -1807,6 +1808,9 @@ const LOGO_ID={"AAVE":"aave","ADA":"cardano","AERO":"aerodrome-finance","AIXBT":
 const coinColor=s=>COLORS[s]||LOGO_C[s]||'#b15cff';
 const CG={BTC:'bitcoin',ETH:'ethereum',XRP:'ripple',SOL:'solana',NEAR:'near',ZAMA:'zama',ONDO:'ondo-finance',FET:'fetch-ai',BNB:'binancecoin',QNT:'quant-network',AVAX:'avalanche-2',SUI:'sui',TRX:'tron',RENDER:'render-token',ARB:'arbitrum',OP:'optimism',ATOM:'cosmos',ADA:'cardano',PX:'not-pixel',POL:'polygon-ecosystem-token',MNT:'mantle',DOT:'polkadot',BLUR:'blur',CATI:'catizen',DOGS:'dogs-2',LSK:'lisk',TON:'the-open-network',DOGE:'dogecoin',LINK:'chainlink',XLM:'stellar',LTC:'litecoin',TAO:'bittensor',HYPE:'hyperliquid',ENA:'ethena',PEPE:'pepe',WLD:'worldcoin-wld',APT:'aptos',INJ:'injective-protocol',TIA:'celestia',SEI:'sei-network',JUP:'jupiter-exchange-solana',UNI:'uniswap',AAVE:'aave',NEWT:'newton-protocol',X:'x-empire',HMSTR:'hamster-kombat',MAJOR:'major',PAWS:'paws',MRSOON:'tonstation',WOOF:'woof-2',EDGEN:'edgen'};
 const BUYS=['start','buy','dca','dip','airdrop'];
+/* цена одной монеты в записи для истории и графика: без суммы покупки — цены нет (старая price после стёртой суммы не показывается);
+   у аирдропа price — цена рынка в день получения */
+const txPx=t=>{const u=t.usd==null||t.usd===''?null:+t.usd,q=+t.qty||0;if(t.type!=='airdrop'&&!(u>0))return 0;return +t.price||(u>0&&q?u/q:0);};
 const sv=(d,w)=>'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="'+(w||2)+'" stroke-linecap="round" stroke-linejoin="round">'+d+'</svg>';
 const I={
   eye:sv('<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>'),
@@ -1913,11 +1917,14 @@ function derive(){
     if(t.type==='sell'&&sym){const c=C(sym),a=c.cq?c.usd/c.cq:0,tk=Math.min(q,c.cq);c.usd-=a*tk;c.cq-=tk;c.qty-=q;const r=(u||0)-a*tk;c.realized+=r;realized+=r;}}
   const prices=Object.assign({},(S.market&&S.market.prices)||{},S.live.prices);
   const syms=Object.keys(h).filter(s=>h[s].qty>1e-12);
-  let total=0,inv=0,invPriced=0,valued=true;for(const s of syms){const p=+prices[s],c=Math.max(0,h[s].usd);if(p){total+=h[s].qty*p;invPriced+=c;}else valued=false;inv+=c;}
+  /* 26.11.2026 (охота 26.11, №1): прибыль — только по монетам с известной ценой покупки. valCost — стоимость сейчас той части, у которой
+     вписано «сколько вложено» (cq); монеты без суммы («Остаток» без цены) входят в итог, но не в прибыль — их список в noCost */
+  let total=0,inv=0,invPriced=0,valCost=0,valued=true;const noCost=[];
+  for(const s of syms){const p=+prices[s],c=Math.max(0,h[s].usd),cq=Math.min(Math.max(0,h[s].cq),h[s].qty);if(p){total+=h[s].qty*p;invPriced+=c;valCost+=cq*p;if(h[s].qty-cq>1e-12)noCost.push(s);}else valued=false;inv+=c;}
   /* noPrice — монеты есть, но ни у одной нет цены (биржи не ответили): прибыль не считаем, чтобы не показывать «−100%» */
   const noPrice=syms.length>0&&!total;
   syms.sort((a,b)=>(h[b].qty*(+prices[b]||0))-(h[a].qty*(+prices[a]||0)));
-  return {h,syms,prices,total,inv,invPriced,noPrice,valued,reserve,dcaBudget,deposited,depositedUah,hasDep,realized,earned};
+  return {h,syms,prices,total,inv,invPriced,valCost,gain:valCost-invPriced,noCost,noPrice,valued,reserve,dcaBudget,deposited,depositedUah,hasDep,realized,earned};
 }
 const split=()=>Object.assign({BTC:50,ETH:30,ALT:20},S.settings.split||{});
 const depShare=()=>{const v=(S.settings.depositSplit||{}).dca;return (v==null?50:+v)/100;};
@@ -1968,7 +1975,10 @@ function lvPlan(l,D){const btc=+D.prices.BTC||0,k1=lvKey1(l,btc),alt=altNow();
   if(l.parts){for(const k of ['BTC','ETH','ALT']){const p=l.parts[k];if(!p)continue;parts.push({k,sym:k==='ALT'?(p.sym||alt):k,usd:+p.usd||0,done:p.status==='done',spent:p.spent,doneAt:p.doneAt});}}
   else{const sp=split(),altOk=l.n<=ALT_MAX_LV&&sp.ALT>0&&altShare(D)<altCapPct()/100,be=(sp.BTC+sp.ETH)||1;
     const sh=altOk?{BTC:sp.BTC,ETH:sp.ETH,ALT:sp.ALT}:{BTC:sp.BTC+sp.ALT*sp.BTC/be,ETH:sp.ETH+sp.ALT*sp.ETH/be,ALT:0};
-    for(const k of ['BTC','ETH','ALT'])if(sh[k]>0)parts.push({k,sym:k==='ALT'?alt:k,usd:+(amt*sh[k]/100).toFixed(2),done:false});}
+    /* 26.11.2026 (охота 26.11, №3): делим в целых центах, остаток — последней части: сумма частей = бюджет ступени до цента
+       (раньше каждая часть округлялась отдельно: $5,63 + $3,38 = $9,01 при $9,00). Доли не меняются */
+    const ks=['BTC','ETH','ALT'].filter(k=>sh[k]>0),amtC=Math.round(amt*100);let left=amtC;
+    ks.forEach((k,i)=>{const c=i===ks.length-1?left:Math.min(left,Math.round(amtC*sh[k]/100));left-=c;parts.push({k,sym:k==='ALT'?alt:k,usd:c/100,done:false});});}
   for(const p of parts){if(p.done||!(p.usd>0)){p.st='done';continue;}p.k2=key2(p.sym,D);p.st=!k1?'pending':(p.k2.ok?'go':'hold');}
   return {amt,parts,k1,noAlt:!parts.some(p=>p.k==='ALT'&&p.usd>0)};}
 function lvState(l,btc,D){if(l.status==='done')return 'done';if(l.status==='skipped')return 'skip';
@@ -2130,7 +2140,7 @@ function gReadSet(t,pt){const el=$('gRead'),D=derive(),hb=$('hBal'),hero=hb&&hb.
   if(t==null){if(!S.ready){el.innerHTML='<div class="v skel">$0 000</div><div class="s">&nbsp;</div>';return;}
     if(D.noPrice){el.innerHTML=`<div class="v">—</div><div class="s">${priceWait()?'загружаю цены…':'нет актуальных цен — прибыль посчитаю, когда биржи ответят'}</div>`;return;}
     let ch=null,base=0,lbl='';
-    if(gRange==='max'){if(D.invPriced>0){ch=D.total-D.invPriced;base=D.invPriced;lbl='прибыль за всё время';}}
+    if(gRange==='max'){if(D.invPriced>0){ch=D.gain;base=D.invPriced;lbl='прибыль за всё время';}}
     else{const f=G.val[0];if(D.valued&&f&&f.v>0&&G.val.length>1){const iv0=G.inv.length?at(G.inv,f.t,'v'):0;ch=(D.total-D.inv)-(f.v-iv0);base=f.v+Math.max(0,D.inv-iv0);lbl='прибыль '+RLBL[gRange];}}
     if(ch!=null&&ch<0)lbl=lbl.replace('прибыль','результат'); /* минус — «результат», не «прибыль» */
     el.innerHTML=ch==null?`<div class="v">${money(D.total,{d:0})}</div><div class="s">стоимость сейчас${D.valued?'':' · не у всех монет есть цена'}</div>`:`<div class="v ${ch>=0?'pos':'neg'}">${money(ch,{sign:true,d:0})}<span class="pc">${pct(base?ch/base*100:0)}</span></div><div class="s">${lbl}</div>`;return;}
@@ -2164,7 +2174,7 @@ function renderHome(D){
   const btc=+D.prices.BTC||null,ath=S.cycle&&S.cycle.ath,r=rate();
   const last=D.noPrice?lastSnap():null;
   balTo(D.noPrice?(last?+last.value:null):D.syms.length?D.total:(S.ready?0:null));
-  const gain=D.total-D.invPriced;
+  const gain=D.gain;
   $('hSub').innerHTML=D.noPrice?(last?`нет актуальных цен · стоимость на ${dShort(+new Date(last.date+'T20:00:00'))}`:priceWait()?'загружаю цены…':'нет актуальных цен — суммы появятся, когда биржи ответят')
     :D.invPriced>0&&D.total>0?`<span class="${gain>=0?'pos':'neg'}">${money(gain,{sign:true,d:0})} · ${pct(gain/D.invPriced*100)}</span> ${gain>=0?'прибыль':'результат'} сейчас`:(S.ready?(D.syms.length?'Укажи цену покупки':'Начни с кнопки «Купить»'):'загружаю');
   const ch=[];let d24=0,has24=false;for(const s of D.syms){const c=S.live.change[s],p=+D.prices[s];if(c!=null&&p){has24=true;const v=D.h[s].qty*p;d24+=v-v/(1+c/100);}}
@@ -2174,6 +2184,7 @@ function renderHome(D){
   if(r&&D.total)ch.push(`<span class="chip">≈ ${P.hide?'••••':(P.cur==='UAH'?usd(D.total,0):uah(D.total*r))}</span>`);
   if(Math.abs(D.realized)>=1)ch.push(`<span class="chip ${D.realized>=0?'pos':'neg'}">зафиксировано ${money(D.realized,{sign:true,d:0})}</span>`);
   if(!D.valued&&!D.noPrice)ch.push('<span class="chip warn">не у всех монет есть цена</span>');
+  if(D.noCost.length&&!D.noPrice)ch.push(`<span class="chip warn">без цены покупки: ${esc(D.noCost.slice(0,3).join(', '))}${D.noCost.length>3?' +'+(D.noCost.length-3):''}</span>`);
   $('hChips').innerHTML=ch.join('');
   const levels=(S.cycle&&S.cycle.levels)||[];
   const act=levels.filter(l=>l.status!=='done'&&l.status!=='skipped'&&lvKey1(l,btc)).map(l=>({l,pl:lvPlan(l,D)})).filter(o=>!o.pl.parts.every(p=>p.st==='done'));
@@ -2502,15 +2513,15 @@ $('cvPos').addEventListener('click',e=>{const b=e.target.closest('button');if(b&
   b.addEventListener('pointercancel',()=>{on=false;});})();
 document.addEventListener('keydown',e=>{if(!cvSym||!$('coinSheet').classList.contains('open')||$('txSheet').classList.contains('open'))return;const t=e.target&&e.target.tagName;if(t==='INPUT'||t==='TEXTAREA'||t==='SELECT')return;if(e.key==='ArrowRight')stepCoin(1);else if(e.key==='ArrowLeft')stepCoin(-1);});
 function openCoin(sym){cvSym=sym;drawn.cv=0;setFlip(false,true);openSheet('coinSheet');renderCoinView();const b=$('coinSheet').querySelector('.sh-body');if(b)b.scrollTop=0;loadCoinChart();}
-function renderCoinView(){const sym=cvSym;if(!sym)return;const D=derive(),c=D.h[sym]||{qty:0,usd:0,cq:0,realized:0},p=+D.prices[sym]||0,v=p*c.qty,avg=c.cq?c.usd/c.cq:0,un=v&&c.usd>0?v-c.usd:null,ch=S.live.change[sym],free=c.cq>1e-12&&Math.abs(c.usd)<1e-9;
+function renderCoinView(){const sym=cvSym;if(!sym)return;const D=derive(),c=D.h[sym]||{qty:0,usd:0,cq:0,realized:0},p=+D.prices[sym]||0,v=p*c.qty,avg=c.cq?c.usd/c.cq:0,cqv=p*Math.min(Math.max(0,c.cq),c.qty),nc=c.qty-Math.max(0,c.cq),un=cqv&&c.usd>0?cqv-c.usd:null,ch=S.live.change[sym],free=c.cq>1e-12&&Math.abs(c.usd)<1e-9;
   $('cvCard').style.setProperty('--c',coinColor(sym));const bd=$('cvBadge');if(bd.dataset.sym!==sym){bd.innerHTML=badge(sym);bd.dataset.sym=sym;}
   cvPosRender();$('cvTitle').textContent=coinName(sym)+' · '+sym;$('cvName').textContent=coinName(sym);$('cvCur').textContent=sym;cvHead();
   const cell=(k,val,cl)=>`<div class="cc-cell"><span>${k}</span><b class="${cl||''}">${val}</b></div>`;
-  const plCl=un!=null?(un>=0?'pos':'neg'):free&&v?'pos':'',plVal=un!=null?`${money(un,{sign:true})}<em>${pct(un/c.usd*100)}</em>`:free&&v?`${money(v,{sign:true})}<em>аирдроп</em>`:'—';
+  const plCl=un!=null?(un>=0?'pos':'neg'):free&&cqv?'pos':'',plVal=un!=null?`${money(un,{sign:true})}<em>${pct(un/c.usd*100)}</em>`:free&&cqv?`${money(cqv,{sign:true})}<em>аирдроп</em>`:'—';
   const rz=Math.abs(c.realized||0)>=0.01?`<div class="cc-cell cc-rz"><span>Зафиксировано</span><b class="${c.realized>0?'pos':'neg'}">${money(c.realized,{sign:true})}</b></div>`:'';
-  $('cvStats').innerHTML=cell('Количество',qty(c.qty)+' '+esc(sym))+cell('Средняя цена покупки',avg?money(avg,{price:true}):free?'аирдроп':'—')+cell('Вложено',c.usd>0?money(c.usd):free?money(0):'—')+cell('Стоит сейчас',p?money(v):'нет цены')+`<div class="cc-pl"><div class="cc-cell"><span>Прибыль сейчас</span><b class="${plCl}">${plVal}</b></div>${rz}</div>`;
+  $('cvStats').innerHTML=cell('Количество',qty(c.qty)+' '+esc(sym))+cell('Средняя цена покупки',avg?money(avg,{price:true}):free?'аирдроп':'—')+cell('Вложено',c.usd>0?money(c.usd):free?money(0):'—')+cell('Стоит сейчас',p?money(v):'нет цены')+`<div class="cc-pl"><div class="cc-cell"><span>Прибыль сейчас</span><b class="${plCl}">${plVal}</b>${nc>1e-12&&(un!=null||free)?`<span class="cc-nc">без цены покупки: ${qty(nc)} ${esc(sym)}</span>`:''}</div>${rz}</div>`;
   const list=txOf(sym).reverse();$('cvCount').textContent=list.length?list.length+' шт.':'';
-  $('cvTx').innerHTML=list.length?list.map(t=>{const pr=t.price||(t.usd&&t.qty?t.usd/t.qty:null);return `<button type="button" class="row r3" data-tx="${esc(t.id)}">${icoBadge(t.type==='sell'?'ath':'deposit',t.type==='sell'?'var(--neg)':'var(--pos)')}<span class="col"><span class="nm">${t.type==='sell'?'Продажа':t.type==='airdrop'?'Аирдроп':t.type==='start'?'Остаток':t.type==='dip'?'Докупка':t.type==='dca'?'DCA':'Покупка'}${pr?' по '+money(pr,{price:true,show:true}):''}</span><span class="sub">${dLong(t.ts)}${t.type==='airdrop'&&t.price?' · тогда стоило '+money(t.qty*t.price):''}${noteOf(t)}</span></span><span class="r"><span class="val ${t.type==='sell'?'neg':'pos'}">${t.type==='sell'?'−':'+'}${qty(t.qty)}</span><span class="small mute">${t.type==='airdrop'?'бесплатно':t.usd!=null&&t.usd!==''?money(+t.usd):''}</span></span></button>`;}).join(''):'<div class="empty" style="border:0">Сделок по этой монете пока нет.</div>';
+  $('cvTx').innerHTML=list.length?list.map(t=>{const pr=txPx(t)||null;return `<button type="button" class="row r3" data-tx="${esc(t.id)}">${icoBadge(t.type==='sell'?'ath':'deposit',t.type==='sell'?'var(--neg)':'var(--pos)')}<span class="col"><span class="nm">${t.type==='sell'?'Продажа':t.type==='airdrop'?'Аирдроп':t.type==='start'?'Остаток':t.type==='dip'?'Докупка':t.type==='dca'?'DCA':'Покупка'}${pr?' по '+money(pr,{price:true,show:true}):''}</span><span class="sub">${dLong(t.ts)}${t.type==='airdrop'&&t.price?' · тогда стоило '+money(t.qty*t.price):''}${noteOf(t)}</span></span><span class="r"><span class="val ${t.type==='sell'?'neg':'pos'}">${t.type==='sell'?'−':'+'}${qty(t.qty)}</span><span class="small mute">${t.type==='airdrop'?'бесплатно':t.usd!=null&&t.usd!==''?money(+t.usd):''}</span></span></button>`;}).join(''):'<div class="empty" style="border:0">Сделок по этой монете пока нет.</div>';
   if(window.MLExit)try{MLExit.coin(sym,D);}catch(e){console.error(e);}
   if(window.MLFilter)try{MLFilter.coin(sym,D);}catch(e){console.error(e);}
   if(window.MLJournal)try{MLJournal.coin(sym,D);}catch(e){console.error(e);}
@@ -2531,7 +2542,7 @@ function renderCoinChart(){const sym=cvSym;if(!sym)return;$('cvRanges').innerHTM
   const t0=cvRange==='max'?(tx.length?+new Date(tx[0].ts)-30*864e5:now-365*864e5):now-(+cvRange)*864e5;CVT0=t0;
   const price=(s||[]).filter(q=>q.t>=t0);if(p&&price.length)price.push({t:now,v:p});
   const umax=Math.max(1,...tx.map(t=>+t.usd||0));
-  const dots=tx.map(t=>({t:+new Date(t.ts),v:+(t.price||(t.usd&&t.qty?t.usd/t.qty:0)),u:+t.usd||0,sell:t.type==='sell',air:t.type==='airdrop'})).filter(d=>d.v>0&&d.t>=t0).map(d=>({t:d.t,v:d.v,r:2.5+4*Math.sqrt(d.u/umax),fill:d.sell?'#ff5f6d':d.air?'#b15cff':'#34e0a1'}));
+  const dots=tx.map(t=>({t:+new Date(t.ts),v:txPx(t),u:+t.usd||0,sell:t.type==='sell',air:t.type==='airdrop'})).filter(d=>d.v>0&&d.t>=t0).map(d=>({t:d.t,v:d.v,r:2.5+4*Math.sqrt(d.u/umax),fill:d.sell?'#ff5f6d':d.air?'#b15cff':'#34e0a1'}));
   let cu=0,cq=0;const avg=[];for(const t of tx){const q=+t.qty||0;if(t.type==='sell'){const a=cq?cu/cq:0,tk=Math.min(q,cq);cu-=a*tk;cq-=tk;}else if(t.usd!=null&&t.usd!==''){cu+=+t.usd;cq+=q;}else continue;avg.push({t:+new Date(t.ts),v:cq?cu/cq:0});}
   const avgIn=avg.filter(q=>q.t>=t0),pv=avg.filter(q=>q.t<t0).pop();if(pv)avgIn.unshift({t:t0,v:pv.v});if(avgIn.length)avgIn.push({t:now,v:avgIn[avgIn.length-1].v});CVAVG=avg;
   const el=$('cvChart');
@@ -2854,7 +2865,9 @@ async function saveTx(){const t=S.tx.find(x=>x.id===eId);if(!t||!db){$('eErr').t
   if(!$('eUsdF').hidden){const uv=$('eUsd').value;if(uv!==''&&+uv<0&&t.type!=='reserve_adj'){$('eErr').textContent=NEG_OPT;return;}nd.usd=uv===''?null:+(+uv).toFixed(2);}
   if(t.type==='deposit'&&nd.usd){const ratio=t.usd?(+t.dcaUsd||0)/t.usd:depShare();nd.dcaUsd=+(nd.usd*ratio).toFixed(2);nd.reserveUsd=+(nd.usd-nd.dcaUsd).toFixed(2);}
   if(!$('eUahF').hidden){const g=$('eUah').value;if(g!==''&&+g<0){$('eErr').textContent=NEG_OPT;return;}nd.uah=g===''?null:+g;}
-  if(coinT&&nd.usd&&nd.qty)nd.price=+(nd.usd/nd.qty).toPrecision(8);
+  /* 26.11.2026 (охота 26.11, №2): сумму стёрли — цена покупки из неё тоже уходит, иначе в истории «DCA по $84 000» без суммы.
+     У аирдропа price — цена рынка в день получения («тогда стоило»), её не трогаем */
+  if(coinT&&nd.usd&&nd.qty)nd.price=+(nd.usd/nd.qty).toPrecision(8);else if(coinT&&t.type!=='airdrop')delete nd.price;
   const note=$('eNote').value.trim();if(note)nd.note=note;else delete nd.note;
   try{await db.doc('tx/'+eId).set(nd);if(coinT)rememberCoins(['eSym']);closeSheets();play('coin');buzz(12);toast('Запись обновлена');}catch(e){$('eErr').textContent=failMsg(e,'Не сохранилось');}}
 async function delTx(){return delTxId(eId);}
@@ -2919,7 +2932,7 @@ let obShown=false;
 function obCheck(){if(obShown||!obNeed())return;obShown=true;OB.cur=P.cur||'USD';$('ob').hidden=false;OB.dir='fwd';obDraw();introFirst();}
 /* обучающий ролик «MoneyLife за минуту» (intro.js, 17.11.2026): один раз для нового пользователя — поверх знакомства, последняя кнопка ведёт в него;
    пересмотреть — «Настройки» → «Отображение». Модуль грузится только когда нужен; отметка «показан» — ml-intro на телефоне */
-function introLoad(cb){if(window.MLIntro)return cb(window.MLIntro);const s=document.createElement('script');s.src='intro.js?v=20261126200000';s.onload=()=>cb(window.MLIntro||null);s.onerror=()=>cb(null);document.head.appendChild(s);}
+function introLoad(cb){if(window.MLIntro)return cb(window.MLIntro);const s=document.createElement('script');s.src='intro.js?v=20261126210500';s.onload=()=>cb(window.MLIntro||null);s.onerror=()=>cb(null);document.head.appendChild(s);}
 function introSeen(){try{return !!localStorage.getItem('ml-intro');}catch(e){return true;}}
 function introFirst(){if(introSeen()||window.mlDemo)return;introLoad(M=>{if(!M||$('ob').hidden||M.seen())return;M.open({mode:'first',voiceOff:P.msVoice===false,onClose:()=>{setTimeout(()=>{const b=$('obNext');if(b&&!$('ob').hidden)try{b.focus();}catch(e){}},400);}});});}
 function introReplay(){introLoad(M=>{if(!M){toast('Ролик не загрузился — проверь интернет');return;}closeSheets();try{if(window.Mascot&&Mascot.hush)Mascot.hush();}catch(e){}setTimeout(()=>M.open({mode:'replay',voiceOff:P.msVoice===false}),250);});}
@@ -3196,7 +3209,7 @@ function msLoad(){if(MSC.loading||MSC.failed)return;MSC.loading=true;
         set('oUsd',+x.usd);set('oPrice',+x.price);set('oQty',+x.qty);$('oSym').dispatchEvent(new Event('input',{bubbles:true}));}
       return{ok:true};}
   }catch(e){}return{ok:false};};
-  const boot=()=>add('mascot.js?v=20261126200000',()=>{try{if(window.Mascot&&window.Mascot.init({host:$('mascot'),app:{buzz,askName:()=>{if(window.MLX&&MLX.askName)MLX.askName();},addAlert:(y,v)=>window.MLX&&MLX.addAlert?MLX.addAlert(y,v):null,voice:(t,x)=>window.mlVoice?window.mlVoice(t,x):null,ask:(q,y,x,p)=>window.mlAsk?window.mlAsk(q,y,x,p):null,act:(k,x)=>mlVoiceAct(k,x),news:y=>window.mlNews?window.mlNews(y):null,pushOn:()=>window.MLX&&MLX.pushOn?MLX.pushOn():true,pushRefresh:()=>{try{if(window.MLX&&MLX.pushRefresh)MLX.pushRefresh();}catch(e){}},docSave:(n,v)=>{try{if(db&&window.mlUser&&!window.mlDemo)db.doc('app/'+n).set({v:1,at:Date.now(),items:v});}catch(e){}},docLoad:async n=>{try{if(!db||!window.mlUser)return null;const d=await db.doc('app/'+n).get();return d&&d.exists?((d.data()||{}).items||[]):[];}catch(e){return null;}},notify:(t,b)=>{try{if(document.hidden&&window.Notification&&Notification.permission==='granted')new Notification(t,{body:b,icon:'icon-192.png'});}catch(e){}},memSave:m=>{try{if(db&&window.mlUser&&!window.mlDemo)db.doc('app/orion-mem').set({v:1,at:Date.now(),items:m});}catch(e){}},memLoad:async()=>{try{if(!db||!window.mlUser)return null;const d=await db.doc('app/orion-mem').get();return d&&d.exists?((d.data()||{}).items||[]):[];}catch(e){return null;}}}})&&MSC.last&&$('ob').hidden&&!document.getElementById('mlAuth'))window.Mascot.sync(msPayload(MSC.last));}catch(e){}});
+  const boot=()=>add('mascot.js?v=20261126210500',()=>{try{if(window.Mascot&&window.Mascot.init({host:$('mascot'),app:{buzz,askName:()=>{if(window.MLX&&MLX.askName)MLX.askName();},addAlert:(y,v)=>window.MLX&&MLX.addAlert?MLX.addAlert(y,v):null,voice:(t,x)=>window.mlVoice?window.mlVoice(t,x):null,ask:(q,y,x,p)=>window.mlAsk?window.mlAsk(q,y,x,p):null,act:(k,x)=>mlVoiceAct(k,x),news:y=>window.mlNews?window.mlNews(y):null,pushOn:()=>window.MLX&&MLX.pushOn?MLX.pushOn():true,pushRefresh:()=>{try{if(window.MLX&&MLX.pushRefresh)MLX.pushRefresh();}catch(e){}},docSave:(n,v)=>{try{if(db&&window.mlUser&&!window.mlDemo)db.doc('app/'+n).set({v:1,at:Date.now(),items:v});}catch(e){}},docLoad:async n=>{try{if(!db||!window.mlUser)return null;const d=await db.doc('app/'+n).get();return d&&d.exists?((d.data()||{}).items||[]):[];}catch(e){return null;}},notify:(t,b)=>{try{if(document.hidden&&window.Notification&&Notification.permission==='granted')new Notification(t,{body:b,icon:'icon-192.png'});}catch(e){}},memSave:m=>{try{if(db&&window.mlUser&&!window.mlDemo)db.doc('app/orion-mem').set({v:1,at:Date.now(),items:m});}catch(e){}},memLoad:async()=>{try{if(!db||!window.mlUser)return null;const d=await db.doc('app/orion-mem').get();return d&&d.exists?((d.data()||{}).items||[]):[];}catch(e){return null;}}}})&&MSC.last&&$('ob').hidden&&!document.getElementById('mlAuth'))window.Mascot.sync(msPayload(MSC.last));}catch(e){}});
   setTimeout(boot,300);}
 function render(){const D=derive();renderHeader();renderHome(D);renderGrowth();renderCoins(D);renderStrategy(D);renderActivity();renderD14();renderInst();if(window.MLX)try{MLX.render(D);}catch(e){console.error(e);}if(window.MLExit)try{MLExit.tick(D);}catch(e){console.error(e);}if(window.MLJournal)try{MLJournal.tick(D);}catch(e){console.error(e);}earnNudge();if(cvSym&&$('coinSheet').classList.contains('open'))renderCoinView();}
 document.body.classList.add('loading');
@@ -3281,12 +3294,12 @@ render();requestAnimationFrame(inkMove);setTimeout(inkMove,600);
     sy=null;swipe=null;pull=0;armed=false;},{passive:true});
 })();
 </script>
-<script src="plus.js?v=20261126200000"></script>
-<script src="wins.js?v=20261126200000"></script>
-<script src="folds.js?v=20261126200000"></script>
-<script src="exit.js?v=20261126200000"></script>
-<script src="filter.js?v=20261126200000"></script>
-<script src="journal.js?v=20261126200000"></script>
+<script src="plus.js?v=20261126210500"></script>
+<script src="wins.js?v=20261126210500"></script>
+<script src="folds.js?v=20261126210500"></script>
+<script src="exit.js?v=20261126210500"></script>
+<script src="filter.js?v=20261126210500"></script>
+<script src="journal.js?v=20261126210500"></script>
 <script>
 /* ===== 12.11.2026: ползунок «Купить», смахнуть запись влево с «рассыпанием» монеты ===== */
 (function(){

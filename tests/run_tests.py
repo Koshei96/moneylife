@@ -3582,6 +3582,102 @@ def run_browser():
                 pg.evaluate("(document.querySelector('#xBody .kv')||document.body).scrollIntoView({block:'center'})"); pg.wait_for_timeout(300); shot(pg, f'fix-total-priced-uk-{th}')
         scenario('Итог: часть монет без цены', {'session': True, 'docs': TOTNP}, s_total_np, dsf=1)
 
+        # 26.11.2026 (охота 26.11, Г26.1): «Остаток» без суммы покупки считался чистой прибылью: +0,01 BTC без «Сколько вложено» →
+        #     Главная «+$1 250 · +156,3%» вместо +$150. Теперь прибыль и % — только по монетам с известной ценой покупки
+        #     (BTC 0,005 × $110 000 − $500 = +$50; ETH 0,1 × $4 000 − $300 = +$100; итого +$150,00 = +18,8%), итог — по всему количеству ($2 050),
+        #     а монеты без цены покупки — пометкой «без цены покупки: BTC» (Главная, шторка монеты, «Как посчитано»)
+        NOCOST = SEED + [{'col': 'tx', 'id': 'tnc', 'data': {'ts': '2026-08-05T10:00:00.000Z', 'type': 'start', 'symbol': 'BTC', 'qty': 0.01, 'usd': None}}]
+        def s_nocost(pg, n):
+            wait_app(pg); pg.wait_for_timeout(1500); bad = []
+            d = pg.evaluate("(()=>{const D=derive();return {tot:Math.round(D.total*100),inv:Math.round(D.invPriced*100),vc:Math.round(D.valCost*100),gain:Math.round(D.gain*100),nc:D.noCost}})()")
+            if d['tot'] != 205000: bad.append(f"итог {d['tot']/100} (нужно $2 050,00 — все монеты в итоге)")
+            if d['inv'] != 80000 or d['vc'] != 95000 or d['gain'] != 15000: bad.append(f"вложено {d['inv']/100}, стоимость с ценой покупки {d['vc']/100}, прибыль {d['gain']/100} (нужно 800,00 / 950,00 / +150,00)")
+            if d['nc'] != ['BTC']: bad.append(f"без цены покупки: {d['nc']}")
+            sub, chips = norm(pg.inner_text('#hSub')), norm(pg.inner_text('#hChips'))
+            if '+$150 · +18,8%' not in sub: bad.append(f'Главная: {sub!r} (нужно «+$150 · +18,8%»)')
+            if 'без цены покупки: BTC' not in chips: bad.append(f'Главная: нет пометки «без цены покупки: BTC» в {chips!r}')
+            pg.evaluate("openCoin('BTC')"); pg.wait_for_timeout(1000)
+            st = norm(pg.evaluate("document.getElementById('cvStats').innerText"))
+            if '+$50,00' not in st or '+10,0%' not in st or 'без цены покупки: 0,01 BTC' not in st: bad.append(f'шторка BTC: {st!r} (нужно «+$50,00 +10,0%», «без цены покупки: 0,01 BTC»)')
+            for th in ('dark', 'light'):
+                pg.evaluate(f"document.documentElement.setAttribute('data-theme','{th}')"); pg.wait_for_timeout(300); shot(pg, f'g26-nocost-coin-{th}')
+            pg.evaluate("closeSheets()"); pg.wait_for_timeout(500)
+            for th in ('dark', 'light'):
+                pg.evaluate(f"document.documentElement.setAttribute('data-theme','{th}')"); pg.evaluate('window.scrollTo(0,0)'); pg.wait_for_timeout(300); shot(pg, f'g26-nocost-home-{th}')
+            pg.click('#hInfo'); pg.wait_for_timeout(800)
+            kv = dict((r[0], r[1]) for r in pg.evaluate(TOT_KV) if len(r) == 2)
+            if not (kv.get('Прибыль сейчас') or '').startswith('+$150,00'): bad.append(f"«Как посчитано»: прибыль {kv.get('Прибыль сейчас')!r}")
+            if kv.get('Без цены покупки (не в прибыли)') != 'BTC': bad.append(f"«Как посчитано»: строка без цены покупки {kv.get('Без цены покупки (не в прибыли)')!r}")
+            if not bad: ok('Г26.1: «Остаток» без суммы не в прибыли — итог $2 050,00, прибыль +$150,00 · +18,8% (Главная, «Как посчитано»), BTC +$50,00 · +10,0%; пометка «без цены покупки: BTC»')
+            else: fail('Г26.1: монеты без цены покупки', '; '.join(bad))
+            # ревью Глеба 26.11: разница «со вчера» у Ориона — по всему портфелю; вчерашний снимок (та же цена, старая формула total − вложено) → без ложного «снизился»
+            mbn = pg.evaluate("""(()=>{if(!(window.Mascot&&Mascot.debug&&Mascot.debug.snapPrev))return null;const D=derive();
+              Mascot.debug.snapPrev({day:'x',at:Date.now()-20*3600e3,total:D.total,pnl:D.total-D.invPriced});
+              return Mascot.debug.brief2({morning:true,calm:false});})()""")
+            if mbn is not None and 'снизился' not in mbn and 'вырос на' not in mbn: ok('Г26.1: Орион утром без ложного «Со вчера портфель снизился» у монеты без цены покупки (цены не менялись)')
+            else: fail('Г26.1: утренняя разница Ориона', repr(mbn))
+            pg.evaluate("localStorage.setItem('ml-lang','uk'); location.reload()"); pg.wait_for_timeout(2500); wait_app(pg); pg.wait_for_timeout(1000)
+            chips = norm(pg.inner_text('#hChips')); pg.evaluate("openCoin('BTC')"); pg.wait_for_timeout(1000)
+            st = norm(pg.evaluate("document.getElementById('cvStats').innerText"))
+            if 'без ціни купівлі: BTC' in chips and 'без ціни купівлі: 0,01 BTC' in st and 'цены' not in chips + st: ok('Г26.1 (UA): «без ціни купівлі: BTC» на Головній і в шторці монети')
+            else: fail('Г26.1 (UA): пометка', f'{chips!r} | {st!r}')
+        scenario('Г26.1: монеты без цены покупки', {'session': True, 'docs': NOCOST}, s_nocost, dsf=1)
+
+        # 26.11.2026 (охота 26.11, Г26.2): стёрли сумму в правке покупки → usd: null, а старая price оставалась («DCA по $84 000» в истории).
+        #     Теперь без суммы цена не хранится и не показывается; вписали сумму снова — цена пересчитана; у аирдропа цена рынка остаётся
+        PXS = SEED + [{'col': 'tx', 'id': 'tad', 'data': {'ts': '2026-08-06T10:00:00.000Z', 'type': 'airdrop', 'symbol': 'SOL', 'qty': 1, 'usd': 0, 'price': 150}},
+                      {'col': 'tx', 'id': 'told', 'data': {'ts': '2026-08-07T10:00:00.000Z', 'type': 'dca', 'symbol': 'ETH', 'qty': 0.01, 'usd': None, 'price': 84000}}]
+        def s_px_clear(pg, n):
+            wait_app(pg); pg.wait_for_timeout(1200); bad = []
+            pg.evaluate("openTx('t2')"); pg.wait_for_timeout(600); pg.fill('#eUsd', ''); pg.evaluate("saveTx()"); pg.wait_for_timeout(900)
+            t = pg.evaluate("S.tx.find(t=>t.id==='t2')")
+            if t.get('usd') is not None or 'price' in t: bad.append(f'стёрли сумму: {t}')
+            pg.evaluate("closeSheets()"); pg.wait_for_timeout(400); pg.evaluate("openCoin('BTC')"); pg.wait_for_timeout(1000)
+            row = norm(pg.inner_text('#cvTx [data-tx="t2"]'))
+            if ' по $' in row: bad.append(f'история BTC: {row!r} — цена без суммы')
+            for th in ('dark', 'light'):
+                pg.evaluate(f"document.documentElement.setAttribute('data-theme','{th}')"); pg.evaluate("document.getElementById('cvTx').scrollIntoView({block:'center'})"); pg.wait_for_timeout(300); shot(pg, f'g26-px-clear-{th}')
+            pg.evaluate("closeSheets()"); pg.wait_for_timeout(400)
+            pg.evaluate("openTx('t2')"); pg.wait_for_timeout(600); pg.fill('#eUsd', '600'); pg.evaluate("saveTx()"); pg.wait_for_timeout(900)
+            t = pg.evaluate("S.tx.find(t=>t.id==='t2')")
+            if t.get('usd') != 600 or t.get('price') != 120000: bad.append(f'вписали $600 снова: {t} (нужно price 120000)')
+            pg.evaluate("closeSheets()"); pg.wait_for_timeout(400)
+            pg.evaluate("openTx('tad')"); pg.wait_for_timeout(600); pg.fill('#eUsd', ''); pg.evaluate("saveTx()"); pg.wait_for_timeout(900)
+            t = pg.evaluate("S.tx.find(t=>t.id==='tad')")
+            if t.get('price') != 150: bad.append(f'аирдроп потерял цену рынка: {t}')
+            pg.evaluate("closeSheets()"); pg.wait_for_timeout(400); pg.evaluate("openCoin('ETH')"); pg.wait_for_timeout(1000)
+            row = norm(pg.inner_text('#cvTx [data-tx="told"]'))
+            if ' по $' in row: bad.append(f'старая запись без суммы с price: {row!r}')
+            if not bad: ok('Г26.2: стёрли сумму — price удалена, в истории без «по $…»; сумма снова — цена $120 000; аирдроп хранит цену рынка; старые записи без суммы — без цены')
+            else: fail('Г26.2: цена после стёртой суммы', '; '.join(bad))
+        scenario('Г26.2: правка покупки без суммы', {'session': True, 'docs': PXS}, s_px_clear, dsf=1)
+
+        # 26.11.2026 (охота 26.11, Г26.3): части ступени округлялись по отдельности — $16,88 + $10,13 = $27,01 при бюджете $27,00,
+        #     всего больше резерва $90,00. Теперь делим в целых центах, остаток — последней части; доли ступеней прежние
+        LADC = SEED3 + [{'col': 'tx', 'id': 'tadj', 'data': {'ts': '2026-08-04T10:00:00.000Z', 'type': 'reserve_adj', 'usd': -110}}]
+        def s_lv_cents(pg, n):
+            wait_app(pg); pg.wait_for_timeout(1500); bad = []
+            r = pg.evaluate("""()=>{const D=derive();return {res:Math.round(D.reserve*100),lv:S.cycle.levels.map(l=>{const p=lvPlan(l,D);return {n:l.n,pct:lvPct(l),amt:Math.round(p.amt*100),parts:p.parts.map(x=>[x.k,Math.round(x.usd*100)])}})}}""")
+            if r['res'] != 9000: raise AssertionError('сценарий не воспроизводит находку: резерв ' + str(r['res']))
+            if [l['pct'] for l in r['lv']] != [10, 15, 20, 25, 30]: bad.append('доли ступеней изменились: ' + str([l['pct'] for l in r['lv']]))
+            tot = 0
+            for l in r['lv']:
+                s = sum(c for _, c in l['parts']); tot += s
+                if s != l['amt']: bad.append(f"ступень {l['n']}: части {l['parts']} = {s} ц. при бюджете {l['amt']} ц.")
+            l5 = dict(r['lv'][4]['parts'])
+            if l5 != {'BTC': 1688, 'ETH': 1012}: bad.append(f'ступень 5: {l5} (нужно BTC $16,88 + ETH $10,12 = $27,00)')
+            if tot != 9000: bad.append(f'все части вместе {tot/100} при резерве $90,00')
+            sweep = pg.evaluate("""()=>{const out=[];for(const R of [90,90.01,99.99,123.45,7.77,1000.03,0.05,33.33]){const D=Object.assign({},derive(),{reserve:R});
+                for(const l of S.cycle.levels){const p=lvPlan(l,D),c=p.parts.map(x=>Math.round(x.usd*100)),s=c.reduce((a,b)=>a+b,0);
+                  if(s!==Math.round(p.amt*100)||c.some(x=>x<0)||p.parts.some(x=>Math.abs(x.usd*100-Math.round(x.usd*100))>1e-6))out.push([R,l.n,c,p.amt]);}}return out;}""")
+            if sweep: bad.append('проверка на 8 резервах: ' + str(sweep)[:300])
+            pg.click('nav.tabs .tab[data-tab="strategy"]'); pg.wait_for_timeout(1200)
+            for th in ('dark', 'light'):
+                pg.evaluate(f"document.documentElement.setAttribute('data-theme','{th}')"); pg.wait_for_timeout(300); shot(pg, f'g26-lv-cents-{th}')
+            if not bad: ok('Г26.3: части каждой ступени = бюджет ступени до цента (ступень 5: $16,88 + $10,12 = $27,00), все части = резерв $90,00; на 8 других резервах части = бюджет ступени')
+            else: fail('Г26.3: части ступени в центах', '; '.join(bad))
+        scenario('Г26.3: части ступени в центах', {'session': True, 'docs': LADC}, s_lv_cents, dsf=1)
+
         # --- 13.11.2026 (владелец): ступени тратят долю от ВСЕГО резерва цикла (10/15/20/25/30%), а выполненная ступень
         #     снова открывается после отскока BTC на 10% выше её цены (прошлые траты копятся в spentPrev)
         def s_ladder_total(pg, n):
