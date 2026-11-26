@@ -1701,6 +1701,19 @@ def run_browser():
             if len(gap['c']) >= 2 and gap['a'] == gap['c'][0] and gap['n'] >= 1 and gap['g'] and gap['q'] == 0 and gap['c'][1] not in gl:
                 ok('Орион: нажатие на субтитр в паузу между кусками ответа — очередь очищена, следующий кусок не звучит')
             else: fail('Орион: нажатие в паузу между кусками', f"{gap} | {gl[-3:]}")
+            # О.7 (26.11.2026): нажатие на сферу и сворачивание приложения в паузу между кусками — тоже гасят очередь, следующий кусок не звучит
+            o7 = {}
+            for nm, js in [('сфера', "document.querySelector('#mascot .ms-hit').click()"), ('свернули', "Object.defineProperty(document,'hidden',{configurable:true,get:()=>true});document.dispatchEvent(new Event('visibilitychange'))")]:
+                pg.evaluate("document.querySelector('.or-cap') && document.querySelector('.or-cap').classList.contains('on') && document.querySelector('.or-cap').click()"); pg.wait_for_timeout(300)
+                g7 = pg.evaluate("([t,js])=>{const d=Mascot.debug;d.sayLong(t);const c=d.chunks(t),a=d.state().said,n=d.qTexts().length;d.next();const g=!d.state().talking;(new Function(js))();return {c,a,n,g,q:d.qTexts().length}}", [PT.replace('Рипл', 'Догикоин' if nm == 'сфера' else 'Лайткоин'), js])
+                pg.wait_for_timeout(900)
+                g7['log'] = pg.evaluate("Mascot.debug.sayLog()")
+                if nm == 'свернули': pg.evaluate("(()=>{delete document.hidden;document.dispatchEvent(new Event('visibilitychange'))})()")
+                else: pg.evaluate("document.querySelector('#mascot .ms-hit').click()"); pg.wait_for_timeout(300)   # отменить слушание
+                o7[nm] = g7
+            if all(len(g['c']) >= 2 and g['a'] == g['c'][0] and g['n'] >= 1 and g['g'] and g['q'] == 0 and g['c'][1] not in g['log'] for g in o7.values()):
+                ok('Орион (О.7): нажатие на сферу и сворачивание в паузу между кусками ответа — очередь очищена, следующий кусок не звучит')
+            else: fail('Орион (О.7): сфера / свернули в паузу между кусками', str({k: dict({x: v[x] for x in 'angq'}, log=v['log'][-2:]) for k, v in o7.items()}))
             # Н4.2 (25.11.2026, Глеб): оборвался вызов инструмента — сервер отдаёт {error:'cut'}: Орион ничего не исполняет и честно говорит «Связь прервалась.»
             pg.evaluate("document.querySelector('.or-cap') && document.querySelector('.or-cap').click()"); pg.wait_for_timeout(300)
             def fcut(route):
@@ -1725,12 +1738,12 @@ def run_browser():
               if(window.__n5)window.__n5.on=0;
               const R=window.__n5={t0:performance.now(),cap:[],snd:[],calls:[],on:1};
               if(!window.__n5vo){window.__n5vo=window.mlVoice;window.__n5ask=window.mlAsk;
-                const st=AudioBufferSourceNode.prototype.start;AudioBufferSourceNode.prototype.start=function(w){const R=window.__n5;if(R&&R.on)R.snd.push(Math.round(performance.now()-R.t0+Math.max(0,(w||0)-this.context.currentTime)*1000));return st.apply(this,arguments);};
                 const sp=document.querySelector('.or-cap span');new MutationObserver(()=>{const R=window.__n5;if(R&&R.on)R.cap.push({at:Math.round(performance.now()-R.t0),t:sp.textContent});}).observe(sp,{childList:true,characterData:true,subtree:true});}
+              if(!window.__n5st){const st=window.__n5st=AudioBufferSourceNode.prototype.start;AudioBufferSourceNode.prototype.start=function(w){const R=window.__n5;if(R&&R.on)R.snd.push(Math.round(performance.now()-R.t0+Math.max(0,(w||0)-this.context.currentTime)*1000));return st.apply(this,arguments);};}
               window.mlVoice=async t=>{const f=/^Секунду/.test(t);if(!f)R.calls.push({at:Math.round(performance.now()-R.t0),t:t.replace(/\\u0301/g,'')});await new Promise(r=>setTimeout(r,f?0:o.voice));return {audio:bin.slice(0)};};
               window.mlAsk=(q,y,x,onPart)=>new Promise(res=>{o.parts.forEach(p=>setTimeout(()=>onPart(p[1]),p[0]));setTimeout(()=>res({text:o.full,sources:[]}),o.ask);});
               d.premium(true);d.ask(o.q);}"""
-            N5_OFF = "(()=>{if(window.__n5)window.__n5.on=0;if(window.__n5vo){window.mlVoice=window.__n5vo;window.mlAsk=window.__n5ask;}const c=document.querySelector('.or-cap');if(c&&c.classList.contains('on'))c.click();})()"
+            N5_OFF = "(()=>{if(window.__n5)window.__n5.on=0;if(window.__n5vo){window.mlVoice=window.__n5vo;window.mlAsk=window.__n5ask;}if(window.__n5st){AudioBufferSourceNode.prototype.start=window.__n5st;window.__n5st=null;}const c=document.querySelector('.or-cap');if(c&&c.classList.contains('on'))c.click();})()"
             P1, P2, P3 = 'Да. Рынок сегодня спокоен.', 'По новостям, крупные фонды третий день подряд докупают биткоин, пишет Cointelegraph.', 'Рассказать, что это значит для вашего портфеля?'
             N5A = {'b64': base64.b64encode(tone).decode(), 'voice': 2700, 'ask': 900, 'q': 'Что сейчас на рынке?', 'full': P1 + ' ' + P2 + ' ' + P3,
                    'parts': [[600, P1 + ' ' + P2[:20]], [800, P2[20:] + ' '], [850, 'Рассказать, '], [880, P3[12:]]]}
@@ -1778,6 +1791,47 @@ def run_browser():
             if not [x for x in st5[0] if x > k5] and not st5[1] and st5[2] == 0 and not st5[3] and st5[4][-1] == P1 and not [x for x in hd5 if x > h5]:
                 ok('Орион (Н5а): «стоп» по субтитру до звука — субтитр гаснет, звук не начинается, остальное не звучит; свернули — живой голос не включается')
             else: fail('Орион (Н5а): стоп до звука', f'клик {k5}: {st5[:4]} {st5[4][-3:]} | свернули {h5}: {hd5}')
+            # Н5а.1 (26.11.2026): «стоп», когда в очереди ждут 3+ куска, — ни одного нового запроса к orion-voice по прежнему ответу;
+            # счётчик очереди озвучки не утекает: следующий ответ озвучивается (не больше двух запросов одновременно)
+            VQ1 = """o=>{const bin=Uint8Array.from(atob(o.b64),c=>c.charCodeAt(0)).buffer;if(!window.__vq1o)window.__vq1o=window.mlVoice;
+              const R=window.__vq1={t0:performance.now(),calls:[],n:0,max:0};
+              window.mlVoice=async t=>{R.n++;R.max=Math.max(R.max,R.n);R.calls.push({at:Math.round(performance.now()-R.t0),t:t.replace(/\\u0301/g,'')});await new Promise(r=>setTimeout(r,o.voice));R.n--;return {audio:bin.slice(0)};};
+              const d=Mascot.debug;d.premium(true);d.sayLong(o.text);}"""
+            # все предложения разные — одинаковые куски озвучиваются одним запросом и не стоят в очереди
+            QC = ['Эфир', 'Солана', 'Рипл', 'Кардано', 'Догикоин', 'Лайткоин', 'Полкадот', 'Чейнлинк', 'Монеро', 'Стеллар', 'Трон', 'Тезер']
+            QW = lambda a: ' '.join(f'{c} {a} за неделю, а покупатели снова заходят на просадках. Объёмы торгов по монете {c} ровные, без всплесков.' for c in QC)
+            CAPX = "document.querySelector('.or-cap') && document.querySelector('.or-cap').classList.contains('on') && document.querySelector('.or-cap').click()"
+            pg.evaluate(CAPX); pg.wait_for_timeout(300)
+            pg.mouse.click(5, 5); pg.evaluate(VQ1, {'b64': base64.b64encode(tone).decode(), 'voice': 1500, 'text': QW('прибавил')})
+            pg.wait_for_timeout(400)
+            q1 = pg.evaluate("(()=>{const d=Mascot.debug,b={q:d.qTexts().length,vq:d.vq(),calls:window.__vq1.calls.length};document.querySelector('.or-cap').click();b.at=Math.round(performance.now()-window.__vq1.t0);b.after=d.vq();return b})()")
+            pg.wait_for_timeout(4000)
+            q2 = pg.evaluate("({calls:window.__vq1.calls,vq:Mascot.debug.vq(),talking:Mascot.debug.state().talking})")
+            late = [c for c in q2['calls'] if c['at'] >= q1['at']]
+            if q1['q'] >= 3 and q1['vq']['w'] >= 1 and q1['after']['w'] == 0 and not late and q2['vq'] == {'n': 0, 'w': 0} and not q2['talking']:
+                ok(f"Орион (Н5а.1): «стоп» при {q1['q']} кусках в очереди — ждущие заказы озвучки ({q1['vq']['w']}) выброшены, новых запросов к orion-voice нет")
+            else: fail('Орион (Н5а.1): стоп — лишние запросы голоса', f"{q1} | после стопа: {late[:4]} | {q2['vq']}")
+            # после «стопа» следующий ответ озвучивается: и когда прежние запросы уже вернулись, и сразу, пока они ещё в пути
+            NT = 'Биткоин сегодня спокоен, рынок ждёт новостей от фондов.'
+            pg.evaluate("t=>{const R=window.__vq1;R.t0=performance.now();R.calls=[];R.max=0;Mascot.debug.say(t)}", NT)
+            try: pg.wait_for_function("()=>window.__vq1.calls.length>=1", polling=100, timeout=6000)
+            except Exception: pass
+            pg.wait_for_timeout(1800)   # озвучка 1,5 с — звук уже идёт
+            q3 = pg.evaluate("({calls:window.__vq1.calls,max:window.__vq1.max,st:Mascot.debug.state()})")
+            pg.evaluate(CAPX); pg.wait_for_timeout(300)
+            pg.evaluate(VQ1, {'b64': base64.b64encode(tone).decode(), 'voice': 1500, 'text': QW('просел')}); pg.wait_for_timeout(400)
+            pg.evaluate("t=>{const R=window.__vq1;document.querySelector('.or-cap').click();R.cut=Math.round(performance.now()-R.t0);Mascot.debug.say(t)}", NT.replace('спокоен', 'тихий'))
+            try: pg.wait_for_function("()=>window.__vq1.calls.some(c=>c.t.includes('тихий'))", polling=100, timeout=6000)
+            except Exception: pass
+            pg.wait_for_timeout(1800)
+            q4 = pg.evaluate("({calls:window.__vq1.calls,cut:window.__vq1.cut,max:window.__vq1.max,st:Mascot.debug.state()})")
+            late4 = [c['t'] for c in q4['calls'] if c['at'] >= q4['cut']]
+            pg.evaluate("window.mlVoice=window.__vq1o; window.__vq1o=null;"); pg.evaluate(CAPX); pg.wait_for_timeout(1800)
+            vq5 = pg.evaluate("Mascot.debug.vq()")
+            if [c['t'] for c in q3['calls']] == [NT] and q3['st']['engine'] == 'premium' and q3['st']['talking'] and q3['max'] <= 2 \
+               and len(late4) == 1 and 'тихий' in late4[0] and q4['st']['talking'] and q4['max'] <= 2 and vq5 == {'n': 0, 'w': 0}:
+                ok('Орион (Н5а.1): после «стопа» следующий ответ звучит живым голосом — один запрос, не больше двух одновременно, очередь не утекла')
+            else: fail('Орион (Н5а.1): ответ после стопа', f"{q3['calls']} {q3['st']['engine']} {q3['st']['talking']} max {q3['max']} | {late4} «{q4['st']['said'][:30]}» {q4['st']['talking']} | {vq5}")
             # Н4 (круг 2, Вера): длинный ответ ~1400 знаков — кусками ≤ 400 знаков по целым предложениям, субтитр не вылезает за верх экрана 390×844
             pg.set_viewport_size({'width': 390, 'height': 844}); pg.wait_for_timeout(300)
             LW = 'Биткоин растёт на притоке денег в биржевые фонды, пишет Cointelegraph. Эфир держится рядом с прошлой неделей, а Солана немного отстаёт. '

@@ -189,7 +189,7 @@
   }
   function finish(cur, quick) {
     if (TTS.cur !== cur) return; TTS.cur = null; clearInterval(TTS.sim); clearTimeout(TTS.guard); TTS.sim = 0; capDone(cur, quick); wake();
-    if (quick) { TTS.q = []; return; }   /* остановили рукой — очередь не договариваем */
+    if (quick) { TTS.q = []; vqDrop(); return; }   /* остановили рукой — очередь не договариваем, ждущие заказы озвучки не отправляем (Н5а.1) */
     if (cur.follow && AUTO && SRC && !document.hidden) { setTimeout(() => { if (!TTS.cur && !ST.rec) listen({ follow: true }); }, 450); return; }   /* разговор: после ответа слушаем следующий вопрос */
     setTimeout(() => { if (TTS.cur) return; let x; while ((x = TTS.q.shift()) && !x.fast && now() - x.at > 40) {} if (x) speak(x.text, Object.assign({}, x.o, { queue: false })); }, TTS.q[0] && TTS.q[0].fast ? 90 : 700);   /* продолжение ответа — без паузы; устаревшие (старше 40 с) выбрасываем, кроме продолжений ответа (Н4) */
   }
@@ -199,6 +199,8 @@
     if (TTS.ok) try { speechSynthesis.cancel(); } catch (e) {}
     finish(c, true);
   }
+  /* О.7 (26.11.2026): замолчать полностью — и в паузу между кусками ответа (текущей фразы нет, а очередь ещё есть): субтитр, сфера, сворачивание, Mascot.hush */
+  function shush() { TTS.q = []; vqDrop(); stopVoice(); }
   /* без голоса — субтитры держатся столько, сколько их читать; сфера «говорит» в такт */
   function silent(cur) {
     if (TTS.cur !== cur) return;
@@ -330,15 +332,17 @@
     const k = text + '|' + (ctx.prev || '') + '|' + (ctx.next || '');
     if (VO.buf.has(k)) return Promise.resolve({ audio: VO.buf.get(k) });
     if (!ctx.prev && !ctx.next && VO.buf.has(text)) return Promise.resolve({ audio: VO.buf.get(text) });
-    if (VO_PEND.has(k)) return VO_PEND.get(k);
+    const pd = VO_PEND.get(k); if (pd && (pd.sent || pd.g === VQ.gen)) return pd;   /* ждавший очереди заказ прежнего ответа отменён «стопом» (Н5а.1) — заказываем заново */
     const p = (async () => {
       const t0 = now();
-      let r = await voFetch(text, ctx);
-      if ((!r || !r.audio) && now() - t0 < 3 && !/limit|quota|auth|not_configured/.test((r && r.error) || '')) r = await voFetch(text, ctx);   /* сеть моргнула сразу — вторая попытка; долгий отказ не повторяем (18.11.2026: два ожидания подряд давали 12 с тишины) */
+      const go = () => { p.sent = true; };
+      let r = await voFetch(text, ctx, go);
+      if (r && r.cancel) return r;
+      if ((!r || !r.audio) && now() - t0 < 3 && !/limit|quota|auth|not_configured/.test((r && r.error) || '')) r = await voFetch(text, ctx, go);   /* сеть моргнула сразу — вторая попытка; долгий отказ не повторяем (18.11.2026: два ожидания подряд давали 12 с тишины) */
       if (r && r.audio) { VO.buf.set(k, r.audio); if (VO.buf.size > 60) VO.buf.delete(VO.buf.keys().next().value); }
       return r;
     })();
-    VO_PEND.set(k, p); p.finally(() => VO_PEND.delete(k));
+    p.g = VQ.gen; VO_PEND.set(k, p); p.finally(() => { if (VO_PEND.get(k) === p) VO_PEND.delete(k); });
     return p;
   }
   /* заранее заказать озвучку текста — тем же разбиением и с теми же соседями, что и premium() */
@@ -668,10 +672,17 @@
     return String(t).replace(/[А-Яа-яЁё]+/g, w => { const x = STRESS.get(w.toLowerCase()); return x ? (w[0] !== w[0].toLowerCase() ? x[0].toUpperCase() + x.slice(1) : x) : w; });
   }
   /* не больше двух запросов голоса одновременно: ElevenLabs отказывает, если их больше (12.11.2026 — из-за этого Орион переходил на голос телефона) */
-  const VQ = { n: 0, q: [] };
-  const vqTake = () => new Promise(res => { if (VQ.n < 2) { VQ.n++; res(); } else VQ.q.push(res); });
-  const vqFree = () => { const nx = VQ.q.shift(); if (nx) nx(); else VQ.n--; };
-  async function voFetch(text, ctx) { await vqTake(); try { return await A.voice(text, ctx || {}); } catch (e) { return null; } finally { vqFree(); } }
+  /* Н5а.1 (26.11.2026): «стоп» или новый вопрос (vqDrop) — ждущие своей очереди заказы прежнего ответа не уходят в ElevenLabs (лишние символы и задержка нового ответа):
+     поколение растёт, ждущие получают отказ без места в очереди, уже ушедшие — дозваниваются и освобождают своё место */
+  const VQ = { n: 0, q: [], gen: 0 };
+  const vqTake = () => new Promise(res => { if (VQ.n < 2) { VQ.n++; res(true); } else VQ.q.push(res); });
+  const vqFree = () => { const nx = VQ.q.shift(); if (nx) nx(true); else VQ.n--; };
+  function vqDrop() { VQ.gen++; const w = VQ.q; VQ.q = []; w.forEach(res => res(false)); }
+  async function voFetch(text, ctx, go) {
+    const g = VQ.gen;
+    if (!(await vqTake())) return { error: 'cancel', cancel: true };
+    try { if (g !== VQ.gen) return { error: 'cancel', cancel: true }; if (go) go(); return await A.voice(text, ctx || {}); } catch (e) { return null; } finally { vqFree(); }
+  }
   /* короткие фразы-«подхваты» заранее в памяти телефона — Орион отзывается сразу, пока думает над ответом */
   const FILL = { news: 'Секунду, смотрю новости.', think: 'Секунду.' };
   let preloaded = false;
@@ -1421,7 +1432,7 @@
   }
   function listen(lo) {
     lo = lo || {};
-    stopVoice(); voUnlock(); preloadFill();
+    shush(); voUnlock(); preloadFill();
     /* lo.tap — нажали на сферу: тишина или нет микрофона — Орион рассказывает главное; lo.barge — перебили Ориона нажатием: тишина — просто замолкает */
     if (!SRC || (lo.tap && ST.micDenied)) { if (lo.tap) { tell(false); return; } speak('Голосовые вопросы на этом телефоне недоступны. Нажмите на меня — расскажу главное за сегодня.', { pri: 2 }); return; }
     if (ST.rec) { try { ST.rec.abort(); } catch (e) {} ST.rec = null; }
@@ -1675,11 +1686,11 @@
     ui.hit.addEventListener('click', () => { if (lp) { lp = false; return; } tapped(); });
     ui.cap = document.createElement('button'); ui.cap.type = 'button'; ui.cap.className = 'or-cap'; ui.cap.setAttribute('aria-live', 'polite'); ui.cap.setAttribute('translate', 'no');   /* субтитры переводит сам Орион (ответы «мозга» уже на нужном языке) */
     ui.cap.innerHTML = '<i aria-hidden="true"></i><b>' + Lx('Орион') + '</b><span></span><em aria-hidden="true"></em>'; ui.capT = ui.cap.querySelector('span'); ui.capN = ui.cap.querySelector('em');
-    ui.cap.addEventListener('click', () => { ST.askGen = (ST.askGen || 0) + 1; TTS.q = []; stopVoice(); ui.cap.classList.remove('on'); });   /* Н4.1: и в паузу между кусками (~90 мс, TTS.cur пуст) очередь не договаривается */   /* «стоп» — и хвост ответа «мозга», что ещё в пути, тоже не звучит (Н4) */
+    ui.cap.addEventListener('click', () => { ST.askGen = (ST.askGen || 0) + 1; shush(); ui.cap.classList.remove('on'); });   /* Н4.1: и в паузу между кусками (~90 мс, TTS.cur пуст) очередь не договаривается */   /* «стоп» — и хвост ответа «мозга», что ещё в пути, тоже не звучит (Н4) */
     document.body.appendChild(ui.cap);
     window.addEventListener('resize', () => { fit(); wake(); });
     if (window.IntersectionObserver) new IntersectionObserver(es => { inView = es[0].isIntersecting; if (inView) wake(); }).observe(host);
-    document.addEventListener('visibilitychange', () => { if (document.hidden) stopVoice(); else { ST.lastInput = now(); wake(); } });
+    document.addEventListener('visibilitychange', () => { if (document.hidden) shush(); else { ST.lastInput = now(); wake(); } });
     ['pointerdown', 'keydown'].forEach(ev => document.addEventListener(ev, voUnlock, { passive: true }));
     ['pointerdown', 'keydown'].forEach(ev => document.addEventListener(ev, e => { if (!host.contains(e.target) && !(ui.cap && ui.cap.contains(e.target))) userInput(); }, { passive: true }));
     setInterval(() => { if (!raf) wake(); }, 900);
@@ -1689,7 +1700,7 @@
 
   window.Mascot = {
     init, sync, number, greet,
-    hush: () => { ST.askGen = (ST.askGen || 0) + 1; TTS.q = []; stopVoice(); },
+    hush: () => { ST.askGen = (ST.askGen || 0) + 1; shush(); },
     tasks: { notes: () => TASK.notes.slice(), rem: () => TASK.rem.slice(), log: () => TASK.log.slice(), delNote: id => { TASK.notes = TASK.notes.filter(x => x.id !== id); taskSave('notes'); }, delRem: id => { TASK.rem = TASK.rem.filter(x => x.id !== id); taskSave('rem'); }, when: ms => whenW(ms) },
     mem: { list: () => MEM.items.slice(), del: id => memDel(id), clear: () => memClear(), on: v => { if (v != null) memSetOn(v); return MEM.on; } },   /* замолчать сразу (перед обучающим роликом) */
     ask: q => answer(q), listen: () => listen(),
@@ -1705,7 +1716,7 @@
       lx: t => Lx(t),
       ask: q => answer(q), lastAsk: () => ST.lastAsk || null, ctx: () => brainCtx(), hist: () => ST.hist || [],
       mood: m => { if (ST.forceHour == null) ST.forceHour = 12; ST.pct = { calm: 0, up: 3, rocket: 9, down: -3, crash: -9 }[m]; ST.go = m === 'hunter'; if (m === 'offline') { ST.offline = true; ST.offSince = now() - 120; } else ST.offline = false; ST.lastInput = now(); wake(); },
-      say: t => speak(t, { pri: 2 }), sayMore: t => speak(t, { pri: 2, raw: true, append: true }), sayLong: t => sayLong(t, {}), chunks: t => chunks(t), qTexts: () => TTS.q.map(x => x.text), sayLow: t => speak(t, {}), qAge: sec => { TTS.q.forEach(x => { x.at -= sec; }); return TTS.q.length; }, next: () => { if (TTS.cur) finish(TTS.cur); }, sayLog: () => ST.sayLog || [], nameFill: t => nameFill(t), memo: t => memoSplit(t), memSafe: t => memSafe(t), act: (n, x) => doAct(n, x), calm: () => calmText(), priceW: v => priceW(v), figs: t => figs(t), weekDue: () => weekDue(), headline: v => { ST.headline = v; }, lessonPick: () => lessonPick(ST.D), ceilText: o => ceilText(o), lessonOffer: v => { ST.lessonOffer = v ? { id: v, at: now() } : null; }, calmDue: () => calmDue(), brief2: o => brief(o), snapPrev: v => { ST.snapPrev = v; }, remTick: () => remTick(), remDue: (t, ago) => remAdd(t, Date.now() - (ago || 1000)), remQ: t => remQ(t), split: (t, live) => splitParts(t, live), stress: t => stressRu(t),
+      say: t => speak(t, { pri: 2 }), sayMore: t => speak(t, { pri: 2, raw: true, append: true }), sayLong: t => sayLong(t, {}), chunks: t => chunks(t), qTexts: () => TTS.q.map(x => x.text), vq: () => ({ n: VQ.n, w: VQ.q.length }), sayLow: t => speak(t, {}), qAge: sec => { TTS.q.forEach(x => { x.at -= sec; }); return TTS.q.length; }, next: () => { if (TTS.cur) finish(TTS.cur); }, sayLog: () => ST.sayLog || [], nameFill: t => nameFill(t), memo: t => memoSplit(t), memSafe: t => memSafe(t), act: (n, x) => doAct(n, x), calm: () => calmText(), priceW: v => priceW(v), figs: t => figs(t), weekDue: () => weekDue(), headline: v => { ST.headline = v; }, lessonPick: () => lessonPick(ST.D), ceilText: o => ceilText(o), lessonOffer: v => { ST.lessonOffer = v ? { id: v, at: now() } : null; }, calmDue: () => calmDue(), brief2: o => brief(o), snapPrev: v => { ST.snapPrev = v; }, remTick: () => remTick(), remDue: (t, ago) => remAdd(t, Date.now() - (ago || 1000)), remQ: t => remQ(t), split: (t, live) => splitParts(t, live), stress: t => stressRu(t),
       tap: () => tapped(),
       brief: () => brief(),
       reply: q => reply(q),
