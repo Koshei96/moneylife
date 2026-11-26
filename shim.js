@@ -37,6 +37,7 @@
     saveT = setTimeout(() => { try { localStorage.setItem(lsDocs(), JSON.stringify({ at: Date.now(), rows: [...cache] })); } catch (e) {} }, 400);
   }
   function loadLocal() {
+    window.mlSynced = 0;   /* копия с телефона — ещё не данные сервера (journal.js ждёт loadAll) */
     try {
       const j = JSON.parse(localStorage.getItem(lsDocs()) || 'null');
       if (!j || !Array.isArray(j.rows) || !j.rows.length) return null;
@@ -76,6 +77,7 @@
     }
     cache.clear(); for (const [k, v] of next) cache.set(k, v);
     loaded = true; emit();
+    window.mlSynced = Date.now();   /* данные с сервера пришли и разосланы всем подпискам — модулям можно писать (journal.js: не по устаревшей копии) */
     if (chan) return;
     chan = c.channel('docs-' + uid)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'docs', filter: 'owner=eq.' + uid }, p => {
@@ -121,7 +123,7 @@
   }
   async function startDemo(o) {
     const px = await demoPrices();
-    demo = true; window.mlDemo = true; cache.clear();
+    demo = true; window.mlDemo = true; window.mlSynced = Date.now(); cache.clear();
     for (const [k, v] of demoDocs(px)) cache.set(k, v);
     loaded = true; if (o) o.remove();
     const b = document.createElement('div'); b.id = 'mlDemoBar'; b.setAttribute('role', 'status');
@@ -143,6 +145,17 @@
     if (demo) return;
     let r; try { r = await client().from('docs').upsert({ owner: uid, col: c, id, data, updated_at: new Date().toISOString() }, { onConflict: 'owner,col,id' }); } catch (e) { r = { error: e }; }
     if (r.error) { rollback(k, prev); throw r.error; }
+  }
+  /* «создать, если нет» (insert … on conflict do nothing): чужую запись с тем же id не перезаписывает.
+     Для журнала (journal.js), где записи с одним id одинаковы на всех устройствах. Возвращает false, если запись уже есть в копии */
+  async function writeCreate(c, id, data) {
+    canWrite();
+    const k = key(c, id); if (cache.has(k)) return false;
+    const mine = clone(data); cache.set(k, mine); emit();
+    if (demo) return true;
+    let r; try { r = await client().from('docs').upsert({ owner: uid, col: c, id, data, updated_at: new Date().toISOString() }, { onConflict: 'owner,col,id', ignoreDuplicates: true }); } catch (e) { r = { error: e }; }
+    if (r.error) { if (cache.get(k) === mine) rollback(k, undefined); throw r.error; }   /* откатываем только свою версию */
+    return true;
   }
   async function writeUpdate(c, id, patch) {
     canWrite();
@@ -174,6 +187,7 @@
       async get() { const d = cache.get(key(c, id)); return { id, exists: d !== undefined, data: () => clone(d) }; },
       set: d => writeSet(c, id, d),
       update: d => writeUpdate(c, id, d),
+      create: d => writeCreate(c, id, d),
       delete: () => writeDelete(c, id),
       onSnapshot(cb) {
         let last;

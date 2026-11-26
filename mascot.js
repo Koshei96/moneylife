@@ -1518,9 +1518,12 @@
     else if (name === 'streak') t = 'Серия — ' + data.n + ' ' + plural(data.n, 'месяц', 'месяца', 'месяцев') + ' подряд с покупками' + nm() + '. Дисциплина — главный актив.';
     else if (name === 'd14') t = data && data.text ? String(data.text) : '';
     else if (name === 'exitStep') { t = data && data.text ? String(data.text) : ''; buzz([15, 50, 15]); }   /* «План выхода» (exit.js): ступень достигнута */
+    else if (name === 'planMonth') t = data && data.text ? String(data.text) : '';   /* итог месяца по плану (journal.js) — без вибрации */
     else return;
-    if (t && (force || (AUTO && !isNight()))) speak(t, { pri: 1 });
+    const said = !!(t && (force || (AUTO && !isNight())));
+    if (said) speak(t, { pri: 1 });
     ST.lastEvent = now(); pulse(1);
+    return said;   /* сказано ли (journal.js: месячный итог) */
   }
   /* смена настроения рынка — коротко, без болтовни о мелочах */
   function moodLine(m) {
@@ -1706,6 +1709,7 @@
     mem: { list: () => MEM.items.slice(), del: id => memDel(id), clear: () => memClear(), on: v => { if (v != null) memSetOn(v); return MEM.on; } },   /* замолчать сразу (перед обучающим роликом) */
     ask: q => answer(q), listen: () => listen(),
     event: (name, data) => trigger(name, data),
+    awake: () => !!AUTO && !isNight(),   /* скажет ли Орион событие сейчас (не ночь и автоголос включён) */
     debug: {
       state: () => ({ engine: TTS.engine || '', err: TTS.lastErr || '', mood: ST.mood, raf: !!raf, frame: firstFrame, voice: !!TTS.voice, tts: TTS.ok, talking: speaking(), lvl: +ST.lvl.toFixed(2), said: ST.lastSay || '', name: ST.name, cap: !!(ui.cap && ui.cap.classList.contains('on')), pal: cur[0].map(Math.round) }),
       hour: h => { ST.forceHour = h; },

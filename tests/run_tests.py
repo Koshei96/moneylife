@@ -71,6 +71,7 @@ def static_checks():
     signal_checks()
     exit_checks()
     filter_checks()
+    journal_checks()
     sw_nav_checks()
     orion_cut_checks()
     orion_tool_cut_checks()
@@ -252,6 +253,36 @@ console.log(JSON.stringify(r));"""
         if got == want: ok('фильтр докупа: сила к BTC по 4 окнам, выручка 30 дней к году, итог полная/половина/без докупа, половина суммы до цента')
         else: fail('фильтр докупа (filter.js)', ('получено ' + json.dumps(got, ensure_ascii=False) + ' ' + out.stderr)[:900])
     except Exception as e: fail('фильтр докупа (filter.js)', str(e)[:200])
+
+def journal_checks():
+    """Журнал сделок (journal.js, 26.11.2026): статусы ступеней и докупов, продажи вне плана, итог месяца."""
+    js = r"""const fs=require('fs'),vm=require('vm');const ctx={window:{},document:{getElementById(){return null},addEventListener(){},createElement(){return {}},head:{appendChild(){}}}};vm.createContext(ctx);
+vm.runInContext(fs.readFileSync(process.argv[1],'utf8'),ctx);const M=ctx.window.MLJournal.math,D=86400000,r=[];
+const st={kind:'step',sym:'NEAR',target:4.4,qty:11,at:'2026-11-10T10:00:00.000Z'},t0=Date.parse(st.at);
+const tx=[{type:'sell',symbol:'NEAR',ts:'2026-11-11T10:00:00.000Z',qty:6,price:4.5},{type:'sell',symbol:'NEAR',ts:'2026-11-12T10:00:00.000Z',qty:3,usd:12.6},{type:'sell',symbol:'NEAR',ts:'2026-11-13T10:00:00.000Z',qty:5,price:2},{type:'sell',symbol:'SOL',ts:'2026-11-13T10:00:00.000Z',qty:50,price:500}];
+const a=M.statusOf(st,tx,t0+3*D);r.push(a.st,a.q,+a.p.toFixed(6));
+const b=M.statusOf(st,tx.slice(0,1),t0+3*D);r.push(b.st,b.days);
+r.push(M.statusOf(st,tx.slice(0,1),t0+15*D).st,M.statusOf(st,[],t0+13.5*D).days);
+r.push(M.statusOf(st,[{type:'sell',symbol:'NEAR',ts:'2026-11-10T09:30:00.000Z',qty:11,price:4.4}],t0).st,M.statusOf(st,[{type:'sell',symbol:'NEAR',ts:'2026-11-25T10:00:01.000Z',qty:11,price:4.4}],t0+20*D).st);
+r.push(['full','half','none',null].map(v=>M.statusOf({kind:'dip',verdict:v},[],0).st));
+const off=M.offSells(tx,'NEAR','2026-11-01T00:00:00Z',4.4);r.push(off.length,off[0].qty,off[0].price);
+const items=[st,{kind:'step',sym:'SOL',target:400,qty:1,at:'2026-11-20T10:00:00.000Z'},{kind:'dip',sym:'NEAR',verdict:'none',at:'2026-11-21T10:00:00.000Z'},{kind:'dip',sym:'NEAR',verdict:'half',at:'2026-11-22T10:00:00.000Z'},{kind:'dip',sym:'NEAR',verdict:'none',at:'2026-10-21T10:00:00.000Z'}];
+const m=M.monthSum(items,tx,'2026-11',Date.parse('2026-12-10T10:00:00Z'));r.push([m.steps,m.ok,m.miss,m.wait,m.dips,m.dev]);
+r.push(M.prevYm(Date.parse('2026-12-01T08:00:00')),M.prevYm(Date.parse('2027-01-15T08:00:00')));
+const s1={kind:'step',sym:'NEAR',since:'X',n:1,target:4.4,qty:11,at:'2026-11-10T10:00:00.000Z'},s2={kind:'step',sym:'NEAR',since:'X',n:2,target:8.8,qty:5.5,at:'2026-11-10T10:00:00.000Z'},al=[s1,s2],now2=t0+2*D;
+const one=[{type:'sell',symbol:'NEAR',ts:'2026-11-11T10:00:00.000Z',qty:11,price:9}],both=[{type:'sell',symbol:'NEAR',ts:'2026-11-11T10:00:00.000Z',qty:16.5,price:9}];
+r.push([M.statusOf(s1,one,now2,al).st,M.statusOf(s2,one,now2,al).st,M.statusOf(s1,both,now2,al).st,M.statusOf(s2,both,now2,al).st]);
+r.push(M.statusOf(st,[{type:'sell',symbol:'NEAR',ts:'2026-11-10T04:00:00.000Z',qty:11,price:4.5}],t0).st,M.statusOf(Object.assign({},st,{qty:0}),[],t0).st,M.statusOf(Object.assign({},st,{at:'плохо'}),[],t0).st);
+r.push(M.alive([{kind:'dip',txId:'a'},{kind:'dip',txId:'b'},{kind:'dip'},{kind:'step'}],[{id:'a'}]).length);
+console.log(JSON.stringify(r));"""
+    want = ['ok', 9, 4.4, 'wait', 11, 'miss', 1, 'ok', 'miss', ['ok', 'ok', 'dev', 'na'], 1, 5, 2,
+            [2, 1, 1, 0, 2, 1], '2026-11', '2026-12', ['ok', 'wait', 'ok', 'ok'], 'ok', 'na', 'na', 3]
+    try:
+        out = subprocess.run(['node', '-e', js, str(ROOT / 'journal.js')], capture_output=True, text=True, timeout=30)
+        got = json.loads(out.stdout.strip() or 'null')
+        if got == want: ok('журнал сделок: ступень «по плану» / «ждёт» / «не сделано» за 14 дней, докуп против фильтра, продажа вне плана, итог месяца')
+        else: fail('журнал сделок (journal.js)', ('получено ' + json.dumps(got, ensure_ascii=False) + ' ' + out.stderr)[:900])
+    except Exception as e: fail('журнал сделок (journal.js)', str(e)[:200])
 
 def deletion_checks():
     """Удаление аккаунта (требование Google Play): веб-страница и серверная функция."""
@@ -1494,6 +1525,51 @@ def run_browser():
             txt = pg.evaluate("document.getElementById('cvExit').innerText")
             ok('план выхода: украинский язык') if 'План виходу' in txt and 'Тримати' in txt and 'Держать' not in txt else fail('план выхода: украинский', txt[:300])
         scenario('План выхода: украинский', {'session': True, 'docs': EXIT_SEED}, s_exit_uk)
+
+        def s_journal(pg, n):
+            wait_app(pg); pg.evaluate('startLive(true)'); pg.wait_for_function("S.live.prices.SOL>0&&S.live.status==='ok'", polling=250, timeout=15000); pg.wait_for_timeout(600)
+            pg.evaluate("openCoin('SOL')"); pg.wait_for_timeout(600)
+            pg.click('#cvExit [data-ex=on]')
+            pg.wait_for_function("[...window.__mlRows.values()].some(r=>r.col==='jr'&&r.data.kind==='step'&&r.data.sym==='SOL')", polling=300, timeout=30000)
+            it = pg.evaluate("[...window.__mlRows.values()].find(r=>r.col==='jr'&&r.data.kind==='step').data")
+            ok('журнал: ступень ×2 SOL записана с целью, ценой и временем цены') if it['n'] == 1 and it['target'] == 200 and it['price'] == 200 and it['qty'] == 0.5 and it.get('priceAt') else fail('журнал: запись ступени', str(it)[:300])
+            pg.evaluate("closeSheets()"); pg.wait_for_timeout(300); pg.evaluate("openCoin('SOL')"); pg.wait_for_timeout(600)
+            t1 = pg.evaluate("document.getElementById('cvJrn').innerText")
+            ok('журнал: в карточке — «ждёт», 14 дней на продажу') if 'ждёт' in t1 and 'осталось 14 дн.' in t1 else fail('журнал: ждёт', t1[:300])
+            pg.evaluate("db.doc('tx/tx-sell-sol').set({ts:new Date().toISOString(),type:'sell',symbol:'SOL',qty:0.5,usd:100,price:200})"); pg.wait_for_timeout(900)
+            pg.evaluate("closeSheets()"); pg.wait_for_timeout(300); pg.evaluate("openCoin('SOL')"); pg.wait_for_timeout(600)
+            t2 = pg.evaluate("document.getElementById('cvJrn').innerText")
+            ok('журнал: после продажи 0,5 SOL по $200 — «по плану»') if 'по плану' in t2 and 'продано 0,5 SOL' in t2 else fail('журнал: по плану', t2[:300])
+            ok('журнал: продажа по плану не числится «вне плана»') if 'вне плана' not in t2 else fail('журнал: вне плана', t2[:300])
+            pg.evaluate("db.doc('tx/tx-dip-sol').set({ts:new Date().toISOString(),type:'dip',symbol:'SOL',qty:0.1,usd:20,price:200})")
+            pg.wait_for_function("[...window.__mlRows.values()].some(r=>r.col==='jr'&&r.data.kind==='dip')", polling=300, timeout=40000)
+            d = pg.evaluate("[...window.__mlRows.values()].find(r=>r.col==='jr'&&r.data.kind==='dip').data")
+            ok('журнал: докуп SOL с резерва записан с итогом фильтра (или «не успел проверить»)') if d['usd'] == 20 and d['price'] == 200 and d['verdict'] in ('full', 'half', 'none', None) else fail('журнал: докуп', str(d)[:300])
+            pg.evaluate("closeSheets()"); pg.wait_for_timeout(300); pg.evaluate("openCoin('SOL')"); pg.wait_for_timeout(600)
+            t4 = pg.evaluate("document.getElementById('cvJrn').innerText")
+            ok('журнал: докуп после продажи не делает прошлую продажу «вне плана» (цель — от средней на момент продажи)') if 'вне плана' not in t4 and 'по плану' in t4 else fail('журнал: переоценка задним числом', t4[:300])
+            pg.evaluate("document.querySelector('#cvJrn').scrollIntoView({block:'start'})"); pg.wait_for_timeout(300); shot(pg, 'journal-1-coin')
+            pg.evaluate("closeSheets()"); pg.wait_for_timeout(300)
+            pg.evaluate("(()=>{const d=new Date();rep=[d.getFullYear(),d.getMonth()];show('activity');setActPane('rep');})()"); pg.wait_for_timeout(900)
+            t3 = pg.evaluate("document.getElementById('repJrn').hidden?'':document.getElementById('repJrn').innerText")
+            ok('журнал: в «Отчёте» за месяц — раздел «Дисциплина плана» с итогом') if 'Дисциплина плана' in t3 and 'Ступеней: 1, по плану: 1' in t3 and 'докупов альткоинов: 1' in t3 else fail('журнал: отчёт', t3[:300])
+            pg.evaluate("document.querySelector('#repJrn').scrollIntoView({block:'start'})"); pg.wait_for_timeout(300); shot(pg, 'journal-2-report')
+        scenario('Журнал сделок', {'session': True, 'docs': EXIT_SEED}, s_journal)
+        def s_journal_keep(pg, n):
+            wait_app(pg); pg.wait_for_timeout(2500)
+            pg.evaluate("render()"); pg.wait_for_timeout(1500); pg.evaluate("render()"); pg.wait_for_timeout(1500)
+            d = pg.evaluate("window.__mlRows.get('jr/d-tx-dip-old').data")
+            ms = pg.evaluate("window.__mlRows.get('jr/meta-since').data.since")
+            ok('журнал: запись другого устройства не перезаписана (итог фильтра «half» сохранён, начало журнала прежнее)') if d.get('verdict') == 'half' and d.get('from') == 'A' and ms == '2026-11-01T00:00:00.000Z' else fail('журнал: чужая запись', f'{d} {ms}')
+            pg.evaluate("(()=>{const d=new Date();rep=[d.getFullYear(),d.getMonth()];show('activity');setActPane('rep');})()"); pg.wait_for_timeout(900)
+            t3 = pg.evaluate("document.getElementById('repJrn').innerText")
+            ok('журнал: удалённый докуп не считается, существующий — «половина суммы»') if 'фильтр: половина суммы' in t3 and 'докупов альткоинов: 1' in t3 else fail('журнал: отчёт двух устройств', t3[:300])
+        KEEP_SEED = EXIT_SEED + [
+            {'col': 'tx', 'id': 'tx-dip-old', 'data': {'ts': '2026-11-20T10:00:00.000Z', 'type': 'dip', 'symbol': 'SOL', 'qty': 0.1, 'usd': 20, 'price': 200}},
+            {'col': 'jr', 'id': 'meta-since', 'data': {'since': '2026-11-01T00:00:00.000Z'}},
+            {'col': 'jr', 'id': 'd-tx-dip-old', 'data': {'kind': 'dip', 'sym': 'SOL', 'txId': 'tx-dip-old', 'usd': 20, 'price': 200, 'verdict': 'half', 'from': 'A', 'at': '2026-11-20T10:00:00.000Z'}},
+            {'col': 'jr', 'id': 'd-tx-dip-gone', 'data': {'kind': 'dip', 'sym': 'SOL', 'txId': 'tx-dip-gone', 'usd': 30, 'price': 200, 'verdict': 'none', 'at': '2026-11-21T10:00:00.000Z'}}]
+        scenario('Журнал сделок: два устройства', {'session': True, 'docs': KEEP_SEED}, s_journal_keep)
 
         import time as _t, math as _m
         def _fchart(sol):
@@ -3215,7 +3291,8 @@ def run_browser():
         def d14_tick(pg):   # «вернулся в приложение»: как visibilitychange → visible
             pg.evaluate("document.dispatchEvent(new Event('visibilitychange'))"); pg.wait_for_timeout(200)
         def d14_rows(pg):
-            return pg.evaluate("JSON.stringify([...window.__mlRows.entries()].sort())")
+            # журнал сделок (коллекция jr, 26.11) сам отмечает начало журнала — это не запись карточек «14 дней»
+            return pg.evaluate("JSON.stringify([...window.__mlRows.entries()].filter(e=>e[1].col!=='jr').sort())")
         BAD = re.compile(r'купи\b|пора\b|вырастет|доход|подряд|серия|не пропусти', re.I)
 
         # И1. чистая функция дня: подставленные даты, без браузерных часов

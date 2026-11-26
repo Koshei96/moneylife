@@ -46,7 +46,7 @@
           }
         };
       },
-      upsert(r) { log('upsert', r); rows.set(r.col + '/' + r.id, { col: r.col, id: r.id, data: JSON.parse(JSON.stringify(r.data || {})) }); return ok(null); },
+      upsert(r, o) { log('upsert', r); if (o && o.ignoreDuplicates && rows.has(r.col + '/' + r.id)) return ok(null); rows.set(r.col + '/' + r.id, { col: r.col, id: r.id, data: JSON.parse(JSON.stringify(r.data || {})) }); return ok(null); },
       delete() { return { match(m) { log('delete', m); rows.delete(m.col + '/' + m.id); return ok(null); } }; }
     };
   }
