@@ -26,7 +26,7 @@ addEventListener('error',function(e){if(e&&e.message)add(e.message,(e.filename||
 addEventListener('unhandledrejection',function(e){var r=e&&e.reason;add(r&&(r.message||r)||'отклонённое обещание','promise');});
 window.mlErrLog=function(){try{return JSON.parse(localStorage.getItem(K)||'[]');}catch(e){return [];}};window.mlErrAdd=add;})();
 </script>
-<script src="i18n.js?v=20261126150000"></script>
+<script src="i18n.js?v=20261126180000"></script>
 <title>MoneyLife</title>
 <meta name="theme-color" content="#06040e">
 <script>/* тема до отрисовки: «Авто» — как в телефоне, иначе выбор из настроек */
@@ -1648,6 +1648,7 @@ document.querySelectorAll('nav.tabs .tab').forEach(b=>{const v=b.querySelector('
     <p class="cv-hint"><span class="tap" id="cvTap">Нажми на карточку — на обороте твои цифры по монете</span><span class="lg"><i class="dash"></i>моя средняя цена</span><span class="lg"><i style="background:var(--pos)"></i>покупка</span><span class="lg"><i style="background:var(--neg)"></i>продажа</span><span class="lg"><i style="background:#b15cff"></i>аирдроп</span></p>
     <p class="note" id="cvNote"></p>
     <div id="cvExit" hidden></div>
+    <div id="cvFlt" hidden></div>
     <button type="button" class="btn soft block" data-x="alertnew" id="cvAlert">Оповещение о цене</button>
     <div><div class="sec-h"><span class="label">История сделок</span><span class="small mute" id="cvCount"></span></div><div class="list" id="cvTx"></div></div>
   </div></div>
@@ -1773,9 +1774,9 @@ document.querySelectorAll('nav.tabs .tab').forEach(b=>{const v=b.querySelector('
 
 <div class="toast" id="toast" role="status"><span id="toastMsg"></span><button type="button" id="toastBtn" hidden></button></div>
 
-<script src="config.js?v=20261126150000"></script>
+<script src="config.js?v=20261126180000"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="shim.js?v=20261126150000"></script>
+<script src="shim.js?v=20261126180000"></script>
 <script>
 /* ===== основа ===== */
 const $=id=>document.getElementById(id);
@@ -1986,7 +1987,7 @@ function lvCoins(l,pl,D){const ps=pl.parts.filter(p=>p.usd>0||p.st==='done');if(
     else if(p.st==='go')px=+D.prices[sym]>0?usdp(+D.prices[sym]):'<span class="np">нет цены</span>';   /* 17.11 (охота, P1 #2): без цены — не зелёный «$0,000000» */
     else if(p.st==='hold')px=p.k2&&p.k2.thr?'<i>≤</i> '+usdp(p.k2.thr):'ждём цену';
     else{const t=lvTarget(p,l,D);px=t?`<i>${t.pre}</i> ${usdp(t.v)}`:'—';}
-    return `<div class="lvc-r ${p.st||''}">${sym?badge(sym):badgeTxt('?')}<b>${esc(sym||'альт')}</b><span class="px">${px}</span><span class="am">${p.st==='done'?'✓ '+usd(p.spent!=null?+p.spent:p.usd):usd(p.usd)}</span></div>`;}).join('')+'</div>';}
+    return `<div class="lvc-r ${p.st||''}">${sym?badge(sym):badgeTxt('?')}<b>${esc(sym||'альт')}</b><span class="px">${px}</span><span class="am">${p.st==='done'?'✓ '+usd(p.spent!=null?+p.spent:p.usd):usd(p.usd)}</span>${p.k==='ALT'&&p.st!=='done'&&sym&&window.MLFilter?MLFilter.chip(sym,p.usd,D):''}</div>`;}).join('')+'</div>';}
 /* «BTC на $38» — сумма покупки, а не цена монеты (владелец 05.11 принял сумму за цену BTC) */
 function partTxt(p){const s=esc(p.sym||'альткоин');
   if(p.st==='done')return `${s} куплено${p.spent!=null?' на '+usd(+p.spent):''}`;
@@ -2176,7 +2177,7 @@ function renderHome(D){
   const act=levels.filter(l=>l.status!=='done'&&l.status!=='skipped'&&lvKey1(l,btc)).map(l=>({l,pl:lvPlan(l,D)})).filter(o=>!o.pl.parts.every(p=>p.st==='done'));
   const go=act.find(o=>o.pl.parts.some(p=>p.st==='go'));
   if(go){const goP=go.pl.parts.filter(p=>p.st==='go'),sum=goP.reduce((a,p)=>a+p.usd,0),rest=go.pl.parts.filter(p=>p.st==='hold');
-    $('signal').innerHTML=`<div class="signal"><span class="chip neg" style="align-self:flex-start">Сигнал · уровень ${go.l.n} · −${go.l.drop}%</span><div class="t">Можно докупить: ${usd(sum)}</div><div class="chips">${goP.map(p=>+D.prices[p.sym]>0?`<span class="chip pos">${esc(p.sym)} на ${usd(p.usd)}</span>`:`<span class="chip np">${esc(p.sym)} на ${usd(p.usd)} · нет цены</span>`).join('')}${rest.map(p=>`<span class="chip">${partTxt(p)}</span>`).join('')}</div><button type="button" class="btn sm" data-dip="${go.l.n}" style="align-self:flex-start">Записать докупку</button></div>`;}
+    $('signal').innerHTML=`<div class="signal"><span class="chip neg" style="align-self:flex-start">Сигнал · уровень ${go.l.n} · −${go.l.drop}%</span><div class="t">Можно докупить: ${usd(sum)}</div><div class="chips">${goP.map(p=>+D.prices[p.sym]>0?`<span class="chip pos">${esc(p.sym)} на ${usd(p.usd)}${p.k==='ALT'&&window.MLFilter?esc(MLFilter.short(p.sym,p.usd,D)):''}</span>`:`<span class="chip np">${esc(p.sym)} на ${usd(p.usd)} · нет цены</span>`).join('')}${rest.map(p=>`<span class="chip">${partTxt(p)}</span>`).join('')}</div><button type="button" class="btn sm" data-dip="${go.l.n}" style="align-self:flex-start">Записать докупку</button></div>`;}
   else if(act.length){const o=act[0],k=k2Cfg();
     $('signal').innerHTML=`<div class="signal soft"><span class="chip warn" style="align-self:flex-start">Уровень ${o.l.n} · −${o.l.drop}% · ждём ключ 2</span><div class="t">Докупка ждёт цену ниже твоих покупок</div><div class="chips">${o.pl.parts.filter(p=>p.st==='hold').map(p=>`<span class="chip">${partTxt(p)}</span>`).join('')}</div><p class="small mute">Цена должна быть на ${k.pct}% ниже средней цены твоих покупок этой монеты за ${k.days} дней. Как только станет, здесь появится кнопка.</p></div>`;}
   else $('signal').innerHTML='';
@@ -2508,6 +2509,7 @@ function renderCoinView(){const sym=cvSym;if(!sym)return;const D=derive(),c=D.h[
   const list=txOf(sym).reverse();$('cvCount').textContent=list.length?list.length+' шт.':'';
   $('cvTx').innerHTML=list.length?list.map(t=>{const pr=t.price||(t.usd&&t.qty?t.usd/t.qty:null);return `<button type="button" class="row r3" data-tx="${esc(t.id)}">${icoBadge(t.type==='sell'?'ath':'deposit',t.type==='sell'?'var(--neg)':'var(--pos)')}<span class="col"><span class="nm">${t.type==='sell'?'Продажа':t.type==='airdrop'?'Аирдроп':t.type==='start'?'Остаток':t.type==='dip'?'Докупка':t.type==='dca'?'DCA':'Покупка'}${pr?' по '+money(pr,{price:true,show:true}):''}</span><span class="sub">${dLong(t.ts)}${t.type==='airdrop'&&t.price?' · тогда стоило '+money(t.qty*t.price):''}${noteOf(t)}</span></span><span class="r"><span class="val ${t.type==='sell'?'neg':'pos'}">${t.type==='sell'?'−':'+'}${qty(t.qty)}</span><span class="small mute">${t.type==='airdrop'?'бесплатно':t.usd!=null&&t.usd!==''?money(+t.usd):''}</span></span></button>`;}).join(''):'<div class="empty" style="border:0">Сделок по этой монете пока нет.</div>';
   if(window.MLExit)try{MLExit.coin(sym,D);}catch(e){console.error(e);}
+  if(window.MLFilter)try{MLFilter.coin(sym,D);}catch(e){console.error(e);}
   renderCoinChart();}
 function cvHead(){const sym=cvSym;if(!sym)return;const D=derive(),c=D.h[sym]||{qty:0},p=+D.prices[sym]||0,v=p*c.qty,ch=S.live.change[sym];
   $('cvPrice').textContent=p?money(p,{price:true,show:true}):'Нет цены';
@@ -2913,7 +2915,7 @@ let obShown=false;
 function obCheck(){if(obShown||!obNeed())return;obShown=true;OB.cur=P.cur||'USD';$('ob').hidden=false;OB.dir='fwd';obDraw();introFirst();}
 /* обучающий ролик «MoneyLife за минуту» (intro.js, 17.11.2026): один раз для нового пользователя — поверх знакомства, последняя кнопка ведёт в него;
    пересмотреть — «Настройки» → «Отображение». Модуль грузится только когда нужен; отметка «показан» — ml-intro на телефоне */
-function introLoad(cb){if(window.MLIntro)return cb(window.MLIntro);const s=document.createElement('script');s.src='intro.js?v=20261126150000';s.onload=()=>cb(window.MLIntro||null);s.onerror=()=>cb(null);document.head.appendChild(s);}
+function introLoad(cb){if(window.MLIntro)return cb(window.MLIntro);const s=document.createElement('script');s.src='intro.js?v=20261126180000';s.onload=()=>cb(window.MLIntro||null);s.onerror=()=>cb(null);document.head.appendChild(s);}
 function introSeen(){try{return !!localStorage.getItem('ml-intro');}catch(e){return true;}}
 function introFirst(){if(introSeen()||window.mlDemo)return;introLoad(M=>{if(!M||$('ob').hidden||M.seen())return;M.open({mode:'first',voiceOff:P.msVoice===false,onClose:()=>{setTimeout(()=>{const b=$('obNext');if(b&&!$('ob').hidden)try{b.focus();}catch(e){}},400);}});});}
 function introReplay(){introLoad(M=>{if(!M){toast('Ролик не загрузился — проверь интернет');return;}closeSheets();try{if(window.Mascot&&Mascot.hush)Mascot.hush();}catch(e){}setTimeout(()=>M.open({mode:'replay',voiceOff:P.msVoice===false}),250);});}
@@ -3190,7 +3192,7 @@ function msLoad(){if(MSC.loading||MSC.failed)return;MSC.loading=true;
         set('oUsd',+x.usd);set('oPrice',+x.price);set('oQty',+x.qty);$('oSym').dispatchEvent(new Event('input',{bubbles:true}));}
       return{ok:true};}
   }catch(e){}return{ok:false};};
-  const boot=()=>add('mascot.js?v=20261126150000',()=>{try{if(window.Mascot&&window.Mascot.init({host:$('mascot'),app:{buzz,askName:()=>{if(window.MLX&&MLX.askName)MLX.askName();},addAlert:(y,v)=>window.MLX&&MLX.addAlert?MLX.addAlert(y,v):null,voice:(t,x)=>window.mlVoice?window.mlVoice(t,x):null,ask:(q,y,x,p)=>window.mlAsk?window.mlAsk(q,y,x,p):null,act:(k,x)=>mlVoiceAct(k,x),news:y=>window.mlNews?window.mlNews(y):null,pushOn:()=>window.MLX&&MLX.pushOn?MLX.pushOn():true,pushRefresh:()=>{try{if(window.MLX&&MLX.pushRefresh)MLX.pushRefresh();}catch(e){}},docSave:(n,v)=>{try{if(db&&window.mlUser&&!window.mlDemo)db.doc('app/'+n).set({v:1,at:Date.now(),items:v});}catch(e){}},docLoad:async n=>{try{if(!db||!window.mlUser)return null;const d=await db.doc('app/'+n).get();return d&&d.exists?((d.data()||{}).items||[]):[];}catch(e){return null;}},notify:(t,b)=>{try{if(document.hidden&&window.Notification&&Notification.permission==='granted')new Notification(t,{body:b,icon:'icon-192.png'});}catch(e){}},memSave:m=>{try{if(db&&window.mlUser&&!window.mlDemo)db.doc('app/orion-mem').set({v:1,at:Date.now(),items:m});}catch(e){}},memLoad:async()=>{try{if(!db||!window.mlUser)return null;const d=await db.doc('app/orion-mem').get();return d&&d.exists?((d.data()||{}).items||[]):[];}catch(e){return null;}}}})&&MSC.last&&$('ob').hidden&&!document.getElementById('mlAuth'))window.Mascot.sync(msPayload(MSC.last));}catch(e){}});
+  const boot=()=>add('mascot.js?v=20261126180000',()=>{try{if(window.Mascot&&window.Mascot.init({host:$('mascot'),app:{buzz,askName:()=>{if(window.MLX&&MLX.askName)MLX.askName();},addAlert:(y,v)=>window.MLX&&MLX.addAlert?MLX.addAlert(y,v):null,voice:(t,x)=>window.mlVoice?window.mlVoice(t,x):null,ask:(q,y,x,p)=>window.mlAsk?window.mlAsk(q,y,x,p):null,act:(k,x)=>mlVoiceAct(k,x),news:y=>window.mlNews?window.mlNews(y):null,pushOn:()=>window.MLX&&MLX.pushOn?MLX.pushOn():true,pushRefresh:()=>{try{if(window.MLX&&MLX.pushRefresh)MLX.pushRefresh();}catch(e){}},docSave:(n,v)=>{try{if(db&&window.mlUser&&!window.mlDemo)db.doc('app/'+n).set({v:1,at:Date.now(),items:v});}catch(e){}},docLoad:async n=>{try{if(!db||!window.mlUser)return null;const d=await db.doc('app/'+n).get();return d&&d.exists?((d.data()||{}).items||[]):[];}catch(e){return null;}},notify:(t,b)=>{try{if(document.hidden&&window.Notification&&Notification.permission==='granted')new Notification(t,{body:b,icon:'icon-192.png'});}catch(e){}},memSave:m=>{try{if(db&&window.mlUser&&!window.mlDemo)db.doc('app/orion-mem').set({v:1,at:Date.now(),items:m});}catch(e){}},memLoad:async()=>{try{if(!db||!window.mlUser)return null;const d=await db.doc('app/orion-mem').get();return d&&d.exists?((d.data()||{}).items||[]):[];}catch(e){return null;}}}})&&MSC.last&&$('ob').hidden&&!document.getElementById('mlAuth'))window.Mascot.sync(msPayload(MSC.last));}catch(e){}});
   setTimeout(boot,300);}
 function render(){const D=derive();renderHeader();renderHome(D);renderGrowth();renderCoins(D);renderStrategy(D);renderActivity();renderD14();renderInst();if(window.MLX)try{MLX.render(D);}catch(e){console.error(e);}if(window.MLExit)try{MLExit.tick(D);}catch(e){console.error(e);}earnNudge();if(cvSym&&$('coinSheet').classList.contains('open'))renderCoinView();}
 document.body.classList.add('loading');
@@ -3275,10 +3277,11 @@ render();requestAnimationFrame(inkMove);setTimeout(inkMove,600);
     sy=null;swipe=null;pull=0;armed=false;},{passive:true});
 })();
 </script>
-<script src="plus.js?v=20261126150000"></script>
-<script src="wins.js?v=20261126150000"></script>
-<script src="folds.js?v=20261126150000"></script>
-<script src="exit.js?v=20261126150000"></script>
+<script src="plus.js?v=20261126180000"></script>
+<script src="wins.js?v=20261126180000"></script>
+<script src="folds.js?v=20261126180000"></script>
+<script src="exit.js?v=20261126180000"></script>
+<script src="filter.js?v=20261126180000"></script>
 <script>
 /* ===== 12.11.2026: ползунок «Купить», смахнуть запись влево с «рассыпанием» монеты ===== */
 (function(){
