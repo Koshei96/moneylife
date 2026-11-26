@@ -213,7 +213,7 @@
     if (UK && !o.raw) text = Lx(text);   /* ответ «мозга» уже по-украински — его не переводим */
     if (!text) return false;
     if (document.getElementById('mlIntro')) return false;   /* идёт обучающий ролик (intro.js) — Орион молчит, чтобы не перебить его голос */
-    if (o.append && TTS.cur) { const it = { text, o: Object.assign({}, o, { append: false, queue: false }), at: now(), fast: true }, k = TTS.q.findIndex(x => !x.fast); if (k < 0) TTS.q.push(it); else TTS.q.splice(k, 0, it); return true; }   /* продолжение — после других продолжений, но раньше обычной очереди */   /* продолжение ответа «мозга» — сразу после текущей фразы */
+    if (o.append && TTS.cur) { const it = { text, o: Object.assign({}, o, { append: false, queue: false }), at: now(), fast: true }, k = TTS.q.findIndex(x => !x.fast); if (k < 0) TTS.q.push(it); else TTS.q.splice(k, 0, it); voAhead(); return true; }   /* продолжение — после других продолжений, но раньше обычной очереди */   /* продолжение ответа «мозга» — сразу после текущей фразы */
     if (TTS.cur && (TTS.cur.pri || 0) > (o.pri || 0)) {   /* занят важным — скажет следом (не больше двух в очереди) */
       if (o.queue !== false && TTS.q.length < 2 && !TTS.q.some(x => x.text === text)) TTS.q.push({ text, o, at: now() });
       return false;
@@ -221,9 +221,9 @@
     stopVoice();
     const cur = { text, pri: o.pri || 0, follow: !!o.follow, live: !!o.live }; TTS.cur = cur; ST.lastSay = text; ST.sayLog = (ST.sayLog || []).concat(text).slice(-6); ST.lastEvent = now(); TTS.beat = now();
     pulse(0.6);
-    if (premiumOK()) {   /* субтитры появляются вместе со звуком, а не раньше (не дольше 4 секунд ожидания) */
-      cur.wait = true; cur.cap = () => { if (!cur.capOn && TTS.cur === cur) { cur.capOn = true; capShow(text); } }; setTimeout(cur.cap, 4000);
-      premium(cur).then(ok => { cur.wait = false; if (!ok && TTS.cur === cur) phone(cur); }); wake(); return true;
+    if (premiumOK()) {   /* Н5а (26.11.2026): субтитры — сразу, как готов текст; живой голос догоняет (раньше ждали звук до 4 с) */
+      cur.wait = true; capShow(text); cur.capOn = true;
+      premium(cur).then(ok => { cur.wait = false; if (!ok && TTS.cur === cur) phone(cur); }); voAhead(); wake(); return true;
     }
     capShow(text); cur.capOn = true;
     phone(cur);
@@ -300,6 +300,9 @@
   /* Н4 (25.11.2026): длинный ответ «мозга» (до 1500 знаков) — кусками по целым предложениям ≤ 380 знаков: субтитр помещается на экран,
      голос не получает 1000+ знаков за раз. Каждый кусок — отдельная фраза в очереди продолжений; live/follow — только у последнего */
   const CHUNK = 380;
+  /* Н5а (26.11.2026): первый кусок ответа для озвучки — первое целое предложение от 22 знаков (короткое «Да.» — вместе со следующим):
+     чем короче текст, тем быстрее голос; дальше — куски от 60 знаков, как раньше */
+  const FIRST_MIN = 22, NEXT_MIN = 60;
   function chunks(t, max) {
     max = max || CHUNK; const out = [];
     for (let x of String(t || '').replace(/([.!?…]["»”')]*)\s+/g, '$1\u0001').split('\u0001').map(z => z.trim()).filter(Boolean)) {   /* конец предложения — только перед пробелом или концом строки: «3.5» не режем; без lookbehind — старый Safari < 16.4 его не знает */
@@ -309,14 +312,13 @@
     return out;
   }
   function sayLong(text, o, append) {
-    const cs = chunks(text); if (!cs.length) return;
-    if (cs.length > 1) voPrefetch(cs[0], true);
-    cs.forEach((c, i) => { const last = i === cs.length - 1; speak(c, Object.assign({ pri: 2, raw: true }, last ? o : {}, { append: !!append || i > 0 })); });
+    const cs = chunks(text); if (!cs.length) return;   /* озвучку следующего куска заранее заказывает voAhead() (Н5а) — с тем же разбиением, что и при звучании */
+    cs.forEach((c, i) => { const last = i === cs.length - 1; speak(c, Object.assign({ pri: 2, raw: true }, last ? o : {}, { append: !!append || i > 0, live: !!o.live && (last || (i === 0 && !append)) })); });   /* Н5а: первый кусок ответа в разговоре — тоже по предложениям, чтобы первый звук пришёл быстрее */
   }
   function splitParts(t, live) {
     t = String(t || '').trim();
     const ss = (t.match(/[^.!?…]+[.!?…]+["»]?|[^.!?…]+$/g) || [t]).map(z => z.trim()).filter(Boolean);
-    if (live) { const out = []; for (const x of ss) { if (out.length > 1 && (out[out.length - 1].length < 40 || out.length >= 4) && out[out.length - 1].length + x.length < CHUNK) out[out.length - 1] += ' ' + x; else out.push(x); } return out.length ? out : [t]; }   /* склейка — не длиннее куска (Н4) */
+    if (live) { const out = []; for (const x of ss) { const L = out[out.length - 1]; if (L !== undefined && ((out.length > 1 && (L.length < 40 || out.length >= 4)) || (out.length === 1 && L.length < FIRST_MIN)) && L.length + x.length < CHUNK) out[out.length - 1] += ' ' + x; else out.push(x); } return out.length ? out : [t]; }   /* склейка — не длиннее куска (Н4); очень короткое первое («Да.») — со следующим (Н5а) */
     if (t.length <= 350) return [t];
     let a = '', i = 0; while (i < ss.length - 1 && (a + ' ' + ss[i]).length <= t.length / 2 + 40) a = (a ? a + ' ' : '') + ss[i++];
     if (!a) a = ss[i++];
@@ -345,6 +347,10 @@
     const parts = splitParts(stressRu(spoken(text)), live);
     parts.forEach((p, i) => voGet(p, parts.length > 1 ? { prev: parts[i - 1] || '', next: parts[i + 1] || '' } : {}));
   }
+  /* Н5а (26.11.2026): озвучка следующих продолжений ответа (не больше двух вперёд) заказывается, пока звучит или ещё озвучивается текущее.
+     Ключ тот же, что при звучании (текст и live из очереди), поэтому лишних запросов нет: каждый кусок озвучивается один раз;
+     одновременно в пути — не больше двух запросов (vqTake) */
+  function voAhead() { TTS.q.slice(0, 2).forEach(x => { if (x.fast && (x.o.raw || !UK)) voPrefetch(x.text, !!x.o.live); }); }
   async function premium(cur) {
     const c = voCtx(); if (!c) return false;
     if (c.state === 'suspended') { try { await c.resume(); } catch (e) {} if (c.state !== 'running') return false; }
@@ -360,7 +366,7 @@
       }
       let audio; try { audio = await c.decodeAudioData(r.audio.slice(0)); } catch (e) { if (!played) { VO.off = now() + 600; TTS.lastErr = 'decode'; return false; } continue; }
       if (TTS.cur !== cur) return true;
-      if (!played) { at = c.currentTime + 0.03; if (ST.fx) { chime(at); at += 0.22; } TTS.engine = 'premium'; if (cur.cap) cur.cap(); }
+      if (!played) { at = c.currentTime + 0.03; if (ST.fx) { chime(at); at += 0.22; } TTS.engine = 'premium'; }
       const src = c.createBufferSource(); src.buffer = audio; src.connect(VO.inp);
       const st = Math.max(at, c.currentTime + 0.01);
       src.onended = () => { if (VO.src === src) VO.src = null; };
@@ -1340,13 +1346,18 @@
     const sym = coinIn(t) || '';
     speak(sym || marketQ(t) ? FILL.news : FILL.think, { pri: 2 });
     const hist = (ST.hist || []).filter(x => now() - x.at < 900).slice(-6).map(x => ({ q: x.q, a: x.priv ? maskNums(x.a) : x.a }));
-    /* поток (18.11.2026): как только готовы первые целые предложения (от ~60 знаков) — говорим их, остальное — следом без паузы */
+    /* поток (18.11.2026): как только готово первое целое предложение — говорим его, остальное — следом без паузы.
+       Н5а (26.11.2026): первый кусок — одно предложение (от FIRST_MIN знаков), второй — следующие предложения от NEXT_MIN знаков, пока «мозг» дописывает;
+       first — всё, что уже отдано голосу (склейка кусков), lastPiece — последний отданный кусок */
     const gen = ST.askGen = (ST.askGen || 0) + 1, sq = t => String(t).replace(/[*_#`]/g, '').replace(/\s+/g, ' ').trim();
-    let acc = '', first = '';
+    let acc = '', first = '', more = 0, lastPiece = '';
+    const cutAt = (all, from, min) => { let c = ''; const re = /[^.!?…]+[.!?…]+(?=\s)/g; re.lastIndex = from; let x; while ((x = re.exec(all))) { c = all.slice(from, x.index + x[0].length).trim(); if (c.length >= min) break; } return c.length >= min || (c && all.length - from > c.length + 80) ? c : ''; };
     const onPart = t => {
-      acc += t; if (first || gen !== ST.askGen) return;
-      const all = sq(acc).replace(/\s*ПАМ['’ʼ]?ЯТЬ:.*$/, ''), m = all.match(/^.*?[.!?…](?=\s)/g), cut = (() => { let c = ''; const re = /[^.!?…]+[.!?…]+(?=\s)/g; let x; while ((x = re.exec(all))) { c = all.slice(0, x.index + x[0].length); if (c.length >= 60) break; } return c.length >= 60 || (c && all.length > c.length + 80) ? c : ''; })();
-      if (m && cut) { first = cut.trim(); ST.lastBrain = now(); speak(nameFill(first), { pri: 2, raw: true, live: true }); }
+      acc += t; if (gen !== ST.askGen || more) return;
+      const all = sq(acc).replace(/\s*ПАМ['’ʼ]?ЯТЬ:.*$/, '');
+      if (!first) { const c = cutAt(all, 0, FIRST_MIN); if (c) { first = c; lastPiece = nameFill(c); ST.lastBrain = now(); speak(lastPiece, { pri: 2, raw: true, live: true }); } return; }
+      if (all.indexOf(first) !== 0) return;
+      const c = cutAt(all, first.length, NEXT_MIN); if (c) { more = 1; first += ' ' + c; lastPiece = nameFill(c); speak(lastPiece, { pri: 2, raw: true, live: true, append: true }); }
     };
     let r = null; try { r = await A.ask(q, sym, { hist, ctx: brainCtx(), lang: UK ? 'uk' : 'ru' }, onPart); } catch (e) { r = null; }
     ST.lastAsk = r;
@@ -1361,7 +1372,12 @@
       const full = sq(r.text);
       const memo = MEM.on && ms.memo && memSafe(ms.memo) && !MEM.items.some(x => String(x.t).toLowerCase() === ms.memo.toLowerCase()) ? ms.memo : '';
       if (memo) setTimeout(() => { if (gen !== ST.askGen) return; ST.pendingMemo = { t: memo, at: now() }; speak((UK ? 'Запам\u2019ятати: ' : 'Запомнить: ') + memo + '?', { pri: 2, raw: true, append: true, follow: true }); }, 0);
-      if (first && full.indexOf(first) === 0) { const rest = full.slice(first.length).trim(); if (rest) { const rf = nameFill(rest); voPrefetch(chunks(rf)[0], true); sayLong(rf, { follow: byVoice && !memo, live: true }, true); } else if (byVoice && !memo && TTS.cur && TTS.cur.text === nameFill(first)) TTS.cur.follow = true; return; }
+      if (first && full.indexOf(first) === 0) {
+        const rest = full.slice(first.length).trim();
+        if (rest) sayLong(nameFill(rest), { follow: byVoice && !memo, live: true }, true);   /* озвучку первого куска остатка заказывает voAhead() — сразу, параллельно со звучащим */
+        else if (byVoice && !memo) { if (TTS.cur && TTS.cur.text === lastPiece) TTS.cur.follow = true; else { const it = TTS.q.find(x => x.fast && x.text === lastPiece); if (it) it.o.follow = true; } }   /* ответ кончился на отданном куске — после него слушаем */
+        return;
+      }
       if (!first) sayLong(nameFill(r.text), { follow: byVoice && !memo, live: true });
       return;
     }

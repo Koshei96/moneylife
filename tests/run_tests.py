@@ -1716,6 +1716,68 @@ def run_browser():
             if c1[:3] == c0[:3] and c1[3] and c1[3][-1] == 'Связь прервалась.' and not any('не могу связаться' in x for x in c1[3][-3:]):
                 ok("Орион: вызов инструмента оборвался ({error:'cut'}) — действие не исполнено, звучит «Связь прервалась.»")
             else: fail('Орион: оборванный вызов инструмента', f'{c0[:3]} → {c1[:3]} | {c1[3][-3:]}')
+            # Н5а (26.11.2026): «долго после „Секунду“». Имитация задержек как в логах Supabase: ответ «мозга» 0,9 с (первое предложение — на 0,6 с),
+            # озвучка каждого куска 2,7 с. Субтитр — сразу, как готов текст (звук догоняет); первый кусок для голоса — первое предложение
+            # («Да.» — вместе со следующим); озвучка следующих кусков заказывается, пока звучит текущий, без лишних запросов; «стоп» и сворачивание гасят всё
+            import base64
+            N5 = """o=>{const d=Mascot.debug,cap=document.querySelector('.or-cap');if(cap&&cap.classList.contains('on'))cap.click();
+              const bin=Uint8Array.from(atob(o.b64),c=>c.charCodeAt(0)).buffer;
+              if(window.__n5)window.__n5.on=0;
+              const R=window.__n5={t0:performance.now(),cap:[],snd:[],calls:[],on:1};
+              if(!window.__n5vo){window.__n5vo=window.mlVoice;window.__n5ask=window.mlAsk;
+                const st=AudioBufferSourceNode.prototype.start;AudioBufferSourceNode.prototype.start=function(w){const R=window.__n5;if(R&&R.on)R.snd.push(Math.round(performance.now()-R.t0+Math.max(0,(w||0)-this.context.currentTime)*1000));return st.apply(this,arguments);};
+                const sp=document.querySelector('.or-cap span');new MutationObserver(()=>{const R=window.__n5;if(R&&R.on)R.cap.push({at:Math.round(performance.now()-R.t0),t:sp.textContent});}).observe(sp,{childList:true,characterData:true,subtree:true});}
+              window.mlVoice=async t=>{const f=/^Секунду/.test(t);if(!f)R.calls.push({at:Math.round(performance.now()-R.t0),t:t.replace(/\\u0301/g,'')});await new Promise(r=>setTimeout(r,f?0:o.voice));return {audio:bin.slice(0)};};
+              window.mlAsk=(q,y,x,onPart)=>new Promise(res=>{o.parts.forEach(p=>setTimeout(()=>onPart(p[1]),p[0]));setTimeout(()=>res({text:o.full,sources:[]}),o.ask);});
+              d.premium(true);d.ask(o.q);}"""
+            N5_OFF = "(()=>{if(window.__n5)window.__n5.on=0;if(window.__n5vo){window.mlVoice=window.__n5vo;window.mlAsk=window.__n5ask;}const c=document.querySelector('.or-cap');if(c&&c.classList.contains('on'))c.click();})()"
+            P1, P2, P3 = 'Да. Рынок сегодня спокоен.', 'По новостям, крупные фонды третий день подряд докупают биткоин, пишет Cointelegraph.', 'Рассказать, что это значит для вашего портфеля?'
+            N5A = {'b64': base64.b64encode(tone).decode(), 'voice': 2700, 'ask': 900, 'q': 'Что сейчас на рынке?', 'full': P1 + ' ' + P2 + ' ' + P3,
+                   'parts': [[600, P1 + ' ' + P2[:20]], [800, P2[20:] + ' '], [850, 'Рассказать, '], [880, P3[12:]]]}
+            pg.evaluate("document.querySelector('.or-cap') && document.querySelector('.or-cap').click()"); pg.wait_for_timeout(300)
+            pg.mouse.click(5, 5); pg.evaluate(N5, N5A)
+            try: pg.wait_for_function("()=>window.__n5.snd.filter(x=>x>500).length>=3", polling=100, timeout=20000)
+            except Exception: pass
+            pg.wait_for_timeout(300)
+            r5 = pg.evaluate("window.__n5"); l5 = pg.evaluate("Mascot.debug.sayLog()")
+            c1 = next((c['at'] for c in r5['cap'] if c['t'] == P1), None); sn = sorted(x for x in r5['snd'] if x > 500); s1 = sn[0] if sn else None
+            if c1 is not None and s1 is not None and c1 <= 1000 and s1 - c1 >= 1500:
+                ok(f'Орион (Н5а): субтитр первого предложения — сразу, как готов текст ({c1/1000:.1f} с), звук догоняет ({s1/1000:.1f} с)')
+            else: fail('Орион (Н5а): субтитр до звука', f'субтитр {c1} мс, звук {s1} мс | {r5["cap"][:6]}')
+            ct = [c['t'] for c in r5['calls']]
+            if l5[-3:] == [P1, P2, P3] and ct and ct[0].startswith('Да. Рынок') and 'фонды' not in ct[0]:
+                ok('Орион (Н5а): первый кусок для голоса — первое предложение («Да.» склеено со следующим), дальше — куски как раньше')
+            else: fail('Орион (Н5а): первый кусок', f'{l5[-4:]} | {ct}')
+            ca = [c['at'] for c in r5['calls']]
+            if len(ct) == 3 and len(set(ct)) == 3 and s1 is not None and ca[1] < s1 and ca[2] <= s1 + 1700 and len(sn) >= 3 and all(b - a <= 2000 for a, b in zip(sn, sn[1:3])):
+                ok(f'Орион (Н5а): озвучка следующих кусков заказана, пока звучит текущий; запросов голоса — ровно по числу кусков ({len(ct)}), паузы между кусками нет')
+            else: fail('Орион (Н5а): заказ озвучки заранее', f'запросы {r5["calls"]} | звук {sn}')
+            pg.evaluate(N5_OFF); pg.wait_for_timeout(300)
+            # «стоп» нажатием на субтитр, пока звук ещё озвучивается: субтитр гаснет, звук не начинается, остальное не звучит
+            # (другие тексты — иначе озвучка возьмётся из памяти телефона без ожидания)
+            def n5v(p1):
+                p2, p3 = P2.replace('третий', 'второй'), P3.replace('вашего', 'нашего')
+                return dict(N5A, full=p1 + ' ' + p2 + ' ' + p3, parts=[[600, p1 + ' ' + p2[:20]], [800, p2[20:] + ' '], [850, 'Рассказать, '], [880, p3[12:]]])
+            P1 = 'Нет. Рынок сегодня шумный.'
+            pg.evaluate(N5, n5v(P1))
+            try: pg.wait_for_function("t=>window.__n5.cap.some(c=>c.t===t)", arg=P1, polling=50, timeout=8000)
+            except Exception: pass
+            k5 = pg.evaluate("(()=>{document.querySelector('.or-cap').click();return Math.round(performance.now()-window.__n5.t0)})()")
+            pg.wait_for_timeout(4500)
+            st5 = pg.evaluate("[window.__n5.snd, document.querySelector('.or-cap').classList.contains('on'), Mascot.debug.qTexts().length, Mascot.debug.state().talking, Mascot.debug.sayLog()]")
+            pg.evaluate(N5_OFF); pg.wait_for_timeout(300)
+            # сворачивание приложения, пока звук ещё озвучивается: живой голос потом не включается
+            pg.evaluate(N5, n5v('Так. Рынок сегодня тихий.'))
+            try: pg.wait_for_function("t=>window.__n5.cap.some(c=>c.t===t)", arg='Так. Рынок сегодня тихий.', polling=50, timeout=8000)
+            except Exception: pass
+            h5 = pg.evaluate("(()=>{Object.defineProperty(document,'hidden',{configurable:true,get:()=>true});document.dispatchEvent(new Event('visibilitychange'));return Math.round(performance.now()-window.__n5.t0)})()")
+            pg.wait_for_timeout(4000)
+            hd5 = pg.evaluate("window.__n5.snd")
+            pg.evaluate("(()=>{delete document.hidden;document.dispatchEvent(new Event('visibilitychange'))})()")
+            pg.evaluate(N5_OFF); pg.wait_for_timeout(300)
+            if not [x for x in st5[0] if x > k5] and not st5[1] and st5[2] == 0 and not st5[3] and st5[4][-1] == P1 and not [x for x in hd5 if x > h5]:
+                ok('Орион (Н5а): «стоп» по субтитру до звука — субтитр гаснет, звук не начинается, остальное не звучит; свернули — живой голос не включается')
+            else: fail('Орион (Н5а): стоп до звука', f'клик {k5}: {st5[:4]} {st5[4][-3:]} | свернули {h5}: {hd5}')
             # Н4 (круг 2, Вера): длинный ответ ~1400 знаков — кусками ≤ 400 знаков по целым предложениям, субтитр не вылезает за верх экрана 390×844
             pg.set_viewport_size({'width': 390, 'height': 844}); pg.wait_for_timeout(300)
             LW = 'Биткоин растёт на притоке денег в биржевые фонды, пишет Cointelegraph. Эфир держится рядом с прошлой неделей, а Солана немного отстаёт. '
