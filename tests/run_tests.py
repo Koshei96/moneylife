@@ -3661,6 +3661,15 @@ def run_browser():
                             ok(f'В25.1 ({th}, {lang}, {vw} px): количество монет не обрезано (scrollWidth ≤ clientWidth): {txt}')
                         else: fail(f'В25.1 ({th}, {lang}, {vw} px): количество монет', str(r))
                     pg.screenshot(path=str(OUT / f'v25-coins-{th}-{lang}-375.png'))
+                    # Глеб 26.11: место для количества — не за счёт цены: в гривнах на 375 и 389 px цена и сумма видны целиком
+                    pg.evaluate("()=>{S.settings.usdUah=41.5;P.cur='UAH';render();}"); pg.wait_for_timeout(600)
+                    for vw in (375, 389):
+                        pg.set_viewport_size({'width': vw, 'height': 844}); pg.wait_for_timeout(400)
+                        r = pg.evaluate("""()=>[...document.querySelectorAll('#coinList .row.cg .b, #coinList .row.cg .s')].map(e=>({t:e.textContent,sw:e.scrollWidth,cw:e.clientWidth}))""")
+                        bad = [x for x in r if x['sw'] > x['cw']]
+                        if len(r) >= 6 and any('₴' in x['t'] for x in r) and not bad:
+                            ok(f'В25.1 ({th}, {lang}, {vw} px, гривны): цена и сумма в строках монет не обрезаны')
+                        else: fail(f'В25.1 ({th}, {lang}, {vw} px, гривны): обрезано', str(bad or r)[:400])
                 scenario(f'В25.1: количество монет на узком экране ({th}, {lang})', {'session': False, 'docs': []}, s_v25_qty, dsf=1, theme=th)
         # В25.2: «Цены на 25 нояб.…» съедало время — в шапке компактно «ДД.ММ, ЧЧ:ММ», целиком на 360 и 390 px; полная фраза — в подсказке
         HDR = """()=>{S.live=Object.assign({},S.live,{status:'off'});S.market=Object.assign({},S.market,{updatedAt:'2026-11-25T08:47:00.000Z'});renderHeader();
