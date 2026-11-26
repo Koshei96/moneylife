@@ -154,8 +154,11 @@
     return { at: Date.now(), id, mk: marketOf(id), ch, bt, fe, warm: !!warm && !(ch && bt) };
   }
   function cycleStart() { const a = S.cycle && S.cycle.athDate; const t = Date.parse(a || ''); return isFinite(t) ? t : Date.now() - 365 * 86400000; }
-  function evaluate(sym, raw, D) {
-    const t = T(), h = D.h[sym] || { qty: 0, usd: 0, cq: 0 }, avg = h.cq > 1e-12 && h.usd > 0 ? h.usd / h.cq : 0, price = +D.prices[sym] || 0;
+  /* before — запись докупа: итог «на момент покупки» — позиция, доля и число докупов ДО неё, цена — цена покупки */
+  function evaluate(sym, raw, D, before) {
+    const hold = before ? replayUntil(String(before.ts)) : D.h;
+    const t = T(), h = hold[sym] || { qty: 0, usd: 0, cq: 0 }, avg = h.cq > 1e-12 && h.usd > 0 ? h.usd / h.cq : 0;
+    const bq = before ? +before.qty || 0 : 0, price = before ? (+before.price > 0 ? +before.price : (+before.usd > 0 && bq > 0 ? +before.usd / bq : 0)) : (+D.prices[sym] || 0);
     const checks = [];
     /* 1. цена */
     checks.push(!(avg > 0) || !(price > 0) ? { k: 'price', st: 'na', name: t.price, txt: avg > 0 ? t.na : t.priceNa, src: '' }
@@ -177,9 +180,10 @@
     } else checks.push({ k: 'liq', st: 'na', name: t.liq, txt: t.liqNa, src: '' });
     /* стопы */
     const stops = [], since = cycleStart();
-    const rebuys = (S.tx || []).filter(x => x && x.type === 'dip' && String(x.symbol || '').toUpperCase() === sym && Date.parse(x.ts) >= since).length;
+    const until = before ? Date.parse(before.ts) : Infinity;
+    const rebuys = (S.tx || []).filter(x => x && x !== before && x.type === 'dip' && String(x.symbol || '').toUpperCase() === sym && Date.parse(x.ts) >= since && Date.parse(x.ts) < until).length;
     if (rebuys >= LIM.rebuys) stops.push(t.stRebuy(rebuys));
-    let tot = 0; for (const s of D.syms || []) if (!NOT_ALT.has(s) || s === 'BTC' || s === 'ETH') tot += (+(D.h[s] || {}).qty || 0) * (+D.prices[s] || 0);
+    let tot = 0; for (const s of before ? Object.keys(hold) : (D.syms || [])) if (!NOT_ALT.has(s) || s === 'BTC' || s === 'ETH') tot += (+(hold[s] || {}).qty || 0) * (s === sym ? price : (+D.prices[s] || 0));
     const val = (+h.qty || 0) * price, w = tot > 0 ? val / tot * 100 : 0;
     if (w > LIM.weight) stops.push(t.stWeight(w.toLocaleString(loc(), { maximumFractionDigits: 1 })));
     if (avg > 0 && price > 0 && price <= avg * (1 - LIM.freeze / 100)) stops.push(t.stFreeze);
@@ -197,6 +201,9 @@
     return m || null;
   }
   F.state = function (sym, D) { const raw = MEM[sym]; return raw ? evaluate(sym, raw, D) : null; };
+  /* для журнала (journal.js): итог фильтра на момент докупа tx; данные фильтра должны быть не старше 3 дней от покупки */
+  F.stateBefore = function (sym, tx, D) { const raw = MEM[sym]; if (!raw || Math.abs(raw.at - Date.parse(tx.ts)) > 3 * 86400000) return null; return evaluate(sym, raw, D, tx); };
+  F.load = function (sym, cb) { if (isAlt(sym)) ensure(sym, cb || null, false, false); };
 
   /* ---------------- вид в карточке монеты ---------------- */
   const ICON = {

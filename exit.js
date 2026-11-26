@@ -127,18 +127,21 @@
     const holdPct = Math.max(0, 100 - cum);
     return { base, avg, price, steps: out, holdPct, holdQty: base * holdPct / 100, next: out.find(s => !s.done) || null };
   }
-  /* продажи «по плану»: с момента включения и по цене не ниже 90% цели первой ступени.
+  /* продажи «по плану»: с момента включения и по цене не ниже 90% цели первой ступени (цель — от средней цены НА МОМЕНТ продажи:
+     докупка после продажи меняет среднюю, но прошлую продажу задним числом не переоценивает).
      Вынужденная продажа ниже цели (нужны были деньги) ступень не закрывает — она просто уменьшает остаток. */
   function planSold(txs, sym, since, minPrice) {
     let q = 0; const s0 = String(since || '');
     for (const t of txs || []) {
       if (!t || t.type !== 'sell' || String(t.symbol || '').toUpperCase() !== sym || String(t.ts || '') < s0) continue;
-      const n = +t.qty || 0, pr = +t.price || (+t.usd > 0 && n > 0 ? +t.usd / n : 0);
-      if (n > 0 && pr > 0 && pr >= minPrice * 0.9) q += n;
+      const n = +t.qty || 0, pr = +t.price || (+t.usd > 0 && n > 0 ? +t.usd / n : 0), mp = typeof minPrice === 'function' ? minPrice(t) : minPrice;
+      if (n > 0 && pr > 0 && pr >= mp * 0.9) q += n;
     }
     return q;
   }
   E.math = { cents, splitCents, checkSteps, checkSplit, normPlan, ladder, planSold, PRESET };
+  /* для журнала (journal.js): с какого момента план и цель первой ступени */
+  E.planOf = function (sym, D) { const p = plan(), c = p.coins[sym]; if (!c) return null; D = D || derive(); const h = D.h[sym] || {}; return { since: c.since, x1: p.steps[0].x, avg: h.cq > 1e-12 && h.usd > 0 ? h.usd / h.cq : 0 }; };
 
   /* ---------------- данные ---------------- */
   let PL = null, raw = null, subbed = false, saving = false, tickAt = 0, doneRetry = 0;
@@ -158,8 +161,18 @@
   function coinCalc(sym, D) {
     const p = plan(), c = p.coins[sym]; if (!c) return null;
     const h = D.h[sym] || { qty: 0, usd: 0, cq: 0 }, avg = h.cq > 1e-12 && h.usd > 0 ? h.usd / h.cq : 0;
-    return ladder({ qty: h.qty, sold: avg > 0 ? planSold(S.tx, sym, c.since, avg * p.steps[0].x) : 0, avg, price: +D.prices[sym] || 0, steps: p.steps, split: p.split, done: c.done });
+    return ladder({ qty: h.qty, sold: avg > 0 ? planSold(S.tx, sym, c.since, minAt(sym, avg, p.steps[0].x)) : 0, avg, price: +D.prices[sym] || 0, steps: p.steps, split: p.split, done: c.done });
   }
+  /* цель первой ступени на момент продажи t: средняя цена по записям ДО продажи × рост первой ступени */
+  const AVG = { ref: null, m: new Map() };   /* средняя на момент продажи — один раз на версию записей (replayUntil сортирует все записи) */
+  function avgAt(sym, ts) {
+    if (AVG.ref !== S.tx) { AVG.ref = S.tx; AVG.m = new Map(); }
+    const k = sym + '|' + ts; if (AVG.m.has(k)) return AVG.m.get(k);
+    let a = 0; try { const h = replayUntil(ts)[sym]; a = h && h.cq > 1e-12 && h.usd > 0 ? h.usd / h.cq : 0; } catch (e) {}
+    AVG.m.set(k, a); return a;
+  }
+  function minAt(sym, avgNow, x1) { return t => (avgAt(sym, String(t.ts)) || avgNow) * x1; }
+  E.minAt = minAt;
   /* выполненные по записанным продажам ступени — запоминаем, чтобы докупка после ×2 не «открывала» ступень заново */
   function persistDone(sym, st) {
     const p = plan(), c = p.coins[sym]; if (!c || saving || window.mlDemo || Date.now() < doneRetry) return;
@@ -274,6 +287,8 @@
     for (const sym of Object.keys(PL.coins)) {
       const st = coinCalc(sym, D); if (!st || !(st.avg > 0)) continue;
       persistDone(sym, st);
+      /* журнал сделок (journal.js): все достигнутые ступени — и показанные фоном, пока приложение было закрыто; повтор отсекает id */
+      if (window.MLJournal) st.steps.filter(x => x.reached).forEach(x => { try { MLJournal.step(sym, x, PL.coins[sym].since); } catch (e) {} });
       const s = st.steps.filter(x => x.reached).pop(); if (!s) continue;   /* цена перескочила несколько ступеней — говорим о самой высокой */
       const id = stepId(sym, PL.coins[sym].since, s.n); if (seen['al:' + id]) continue;
       st.steps.filter(x => x.reached).forEach(x => seenAdd('al:' + stepId(sym, PL.coins[sym].since, x.n)));
