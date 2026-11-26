@@ -3735,7 +3735,7 @@ def run_browser():
                 scenario(f'В25.1: количество монет на узком экране ({th}, {lang})', {'session': False, 'docs': []}, s_v25_qty, dsf=1, theme=th)
         # В25.2: «Цены на 25 нояб.…» съедало время — в шапке компактно «ДД.ММ, ЧЧ:ММ», целиком на 360 и 390 px; полная фраза — в подсказке
         HDR = """()=>{S.live=Object.assign({},S.live,{status:'off'});S.market=Object.assign({},S.market,{updatedAt:'2026-11-25T08:47:00.000Z'});renderHeader();
-            return new Promise(res=>setTimeout(()=>{const e=document.querySelector('#status span');res({t:e.textContent,title:e.title,sw:e.scrollWidth,cw:e.clientWidth})},400))}"""
+            return new Promise(res=>setTimeout(()=>{const e=document.querySelector('#status span');res({t:[...e.childNodes].filter(x=>!(x.classList&&x.classList.contains('cv-h'))).map(x=>x.textContent).join(''),title:e.title,sw:e.scrollWidth,cw:e.clientWidth})},400))}"""   # t — видимый текст (без скрытого «Цены на », В25.10)
         for lang in ('ru', 'uk'):
             def s_v25_hdr(pg, n, lang=lang):
                 demo_in(pg, lang)
@@ -3784,6 +3784,70 @@ def run_browser():
                             if not bad: ok(f'В25.3 (тёмная, {lang}): «{k}» — как было: карточки без рамки на шторке')
                             else: fail(f'В25.3 (тёмная, {lang}): «{k}» изменилась', str(bad)[:400])
                 scenario(f'В25.3: кнопки в шторке видны ({th}, {lang})', {'session': False, 'docs': []}, s_v25_edge, dsf=1, theme=th)
+
+        # --- 26.11 (охота Веры 25.11, В25.5–В25.7, В25.10) — мелкий UI на демо-портфеле, обе темы
+        # контраст текста к фону с учётом прозрачности элемента и всех предков (opacity смешивает текст с фоном)
+        CR = """(e)=>{const rgb=c=>{const m=c.match(/[\\d.]+/g).map(Number);return {c:m.slice(0,3),a:m.length>3?m[3]:1}};
+              const lum=c=>c.map(v=>{v/=255;return v<=0.03928?v/12.92:Math.pow((v+0.055)/1.055,2.4)}).reduce((a,v,i)=>a+v*[.2126,.7152,.0722][i],0);
+              let bg=null,op=1;for(let p=e;p;p=p.parentElement){const cs=getComputedStyle(p);op*=+cs.opacity;const b=rgb(cs.backgroundColor);if(!bg&&b.a>0.99&&p!==e)bg=b.c;}
+              if(!bg)bg=rgb(getComputedStyle(document.body).backgroundColor).c;
+              const f=rgb(getComputedStyle(e).color),a=f.a*op,mix=f.c.map((v,i)=>v*a+bg[i]*(1-a));
+              const x=lum(mix),y=lum(bg);return +((Math.max(x,y)+0.05)/(Math.min(x,y)+0.05)).toFixed(2)}"""
+        for th in ('dark', 'light'):
+            def s_v25_small(pg, n, th=th):
+                demo_in(pg, 'ru')
+                if pg.evaluate("document.documentElement.dataset.theme") != th: raise AssertionError('тема не включилась: ' + th)
+                # В25.5: «›» на текущем месяце — выключена и выглядит выключенной; «‹» рабочая; на прошлом месяце «›» снова рабочая
+                pg.click('nav.tabs .tab[data-tab="activity"]'); pg.wait_for_timeout(800)
+                pg.evaluate("setActPane('rep')"); pg.wait_for_timeout(800)
+                NAV = """()=>['repPrev','repNext'].map(id=>{const b=document.getElementById(id),c=getComputedStyle(b);return {id,dis:b.disabled,aria:b.getAttribute('aria-disabled'),op:+c.opacity,cur:c.cursor}})"""
+                pv, nx = pg.evaluate(NAV)
+                if nx['dis'] and nx['aria'] == 'true' and nx['op'] <= 0.5 and nx['cur'] == 'default' and not pv['dis'] and pv['op'] == 1 and pv['cur'] == 'pointer':
+                    ok(f'В25.5 ({th}): «›» на текущем месяце выключена (disabled, aria-disabled, прозрачность {nx["op"]:g}, курсор по умолчанию), «‹» — рабочая')
+                else: fail(f'В25.5 ({th}): вид кнопок месяца', str([pv, nx]))
+                pg.screenshot(path=str(OUT / f'v25-report-{th}.png'))
+                pg.click('#repPrev'); pg.wait_for_timeout(500)
+                pv, nx = pg.evaluate(NAV)
+                if not nx['dis'] and nx['aria'] == 'false' and nx['op'] == 1 and nx['cur'] == 'pointer': ok(f'В25.5 ({th}): на прошлом месяце «›» снова рабочая')
+                else: fail(f'В25.5 ({th}): «›» на прошлом месяце', str(nx))
+                # В25.7: подписи и названия неполученных достижений — контраст ≥ 4,5:1; «неполученный» вид — на значке
+                pg.evaluate("MLX.openAch()"); pg.wait_for_timeout(1300)
+                r = pg.evaluate("(CR)=>{const cr=eval(CR);return [...document.querySelectorAll('.win-cell:not(.on)')].map(c=>{const b=c.querySelector('.win-b'),bs=getComputedStyle(b);"
+                                "return {t:c.querySelector('b').textContent,cb:cr(c.querySelector('b')),cs:cr(c.querySelector('small')),bop:+bs.opacity,gray:bs.filter}})}", CR)
+                got = pg.evaluate("document.querySelectorAll('.win-cell.on').length")
+                low = [x for x in r if x['cb'] < 4.5 or x['cs'] < 4.5]
+                muted = [x for x in r if x['bop'] < 1 and 'grayscale' in x['gray']]
+                if len(r) >= 3 and got >= 1 and not low and len(muted) == len(r):
+                    ok(f'В25.7 ({th}): {len(r)} неполученных — подписи от {min(x["cs"] for x in r)}:1, названия от {min(x["cb"] for x in r)}:1; значок приглушён и серый')
+                else: fail(f'В25.7 ({th}): неполученные достижения', str(low or r)[:500])
+                pg.screenshot(path=str(OUT / f'v25-ach-{th}.png'))
+            scenario(f'В25.5, В25.7: кнопка месяца и достижения ({th})', {'session': False, 'docs': []}, s_v25_small, dsf=1, theme=th)
+        # В25.10: в шапке нет aria-label на <span> (читалки озвучивают его ненадёжно) — «Цены на » спрятанным для глаз текстом
+        for lang in ('ru', 'uk'):
+            def s_v25_sr(pg, n, lang=lang):
+                demo_in(pg, lang)
+                r = pg.evaluate(HDR.replace("res({t:", "res({aria:[...document.querySelectorAll('#status span[aria-label]')].length,full:e.textContent,"
+                    "vh:[...e.querySelectorAll('.cv-h')].map(x=>{const q=x.getBoundingClientRect(),c=getComputedStyle(x);return {t:x.textContent,w:q.width,h:q.height,pos:c.position}}),t:"))
+                pre = 'Ціни на ' if lang == 'uk' else 'Цены на '
+                vh = r['vh'][0] if len(r['vh']) == 1 else None
+                if r['aria'] == 0 and vh and vh['t'] == pre and vh['w'] <= 1 and vh['h'] <= 1 and vh['pos'] == 'absolute' and r['full'] == pre + '25.11, 10:47' and r['t'] == '25.11, 10:47':
+                    ok(f'В25.10 ({lang}): в шапке нет aria-label на span, читалка слышит «{r["full"]}», видно только «{r["t"]}»')
+                else: fail(f'В25.10 ({lang}): скрытый текст в шапке', str(r))
+            scenario(f'В25.10: шапка для читалок ({lang})', {'session': False, 'docs': []}, s_v25_sr, dsf=1)
+        # В25.6: UK «Сходинки сходів» (тавтология) → «Рівні сходів»: заголовок на «Стратегии» и строка в «Настройках»
+        if 'Сходинки сходів' not in (ROOT / 'i18n.js').read_text(encoding='utf-8'): ok('В25.6: в словаре нет «Сходинки сходів»')
+        else: fail('В25.6: в словаре осталась тавтология', 'Сходинки сходів')
+        def s_v25_uk(pg, n):
+            demo_in(pg, 'uk')
+            pg.click('nav.tabs .tab[data-tab="strategy"]'); pg.wait_for_timeout(1000)
+            h = pg.evaluate("document.querySelector('#lvWrap .label').textContent")
+            body = pg.evaluate("document.body.innerText")
+            st = pg.evaluate("L('Ступени лестницы и цель BTC. В фоне проверка идёт, когда разрешит телефон')")
+            if h == 'Рівні сходів' and 'Сходинки сходів' not in body and st.startswith('Рівні сходів і ціль BTC.'):
+                ok(f'В25.6 (uk): «Стратегія» — «{h}», в «Налаштуваннях» — «{st[:24]}…»')
+            else: fail('В25.6 (uk): «Рівні сходів»', str([h, st, 'Сходинки сходів' in body]))
+            pg.screenshot(path=str(OUT / 'v25-uk-strategy.png'))
+        scenario('В25.6: «Рівні сходів» по-українськи', {'session': False, 'docs': []}, s_v25_uk, dsf=1)
 
         # --- 14.11 (разбор Льва, «12 × 14»): подсказка «На главный экран» — один раз после знакомства. Android Chrome: событие
         #     beforeinstallprompt (имитация с фиктивным prompt()), iPhone Safari: строка «Поделиться → На экран „Домой“».
