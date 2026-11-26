@@ -447,6 +447,8 @@
     }
     const { body, at } = rec;
     for (const c of body) { if (c.symbol) SYM[c.id] = String(c.symbol).toUpperCase(); if (typeof c.current_price === 'number') PRICE[c.id] = c.current_price; }
+    /* рейтинг и объём из того же ответа — для «Фильтра докупа» (filter.js), без отдельного запроса к CoinGecko */
+    const MK = (window.mlMkt = window.mlMkt || {}); for (const c of body) if (c.id && c.market_cap_rank > 0) MK[c.id] = { r: c.market_cap_rank, v: +c.total_volume || 0, at };
     const coins = body.map(c => ({
       id: c.id, symbol: c.symbol, name: c.name, image: c.image,
       currentPrice: c.current_price, marketCap: c.market_cap, marketCapRank: c.market_cap_rank,

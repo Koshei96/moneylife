@@ -70,6 +70,7 @@ def static_checks():
     client_errors_sql_checks()
     signal_checks()
     exit_checks()
+    filter_checks()
     sw_nav_checks()
     orion_cut_checks()
     orion_tool_cut_checks()
@@ -227,6 +228,30 @@ console.log(JSON.stringify(r));"""
         if got == want: ok('план выхода: лесенка ×2/×4 на примере 22 NEAR по $2,2 — ступени, раздел выручки до цента, свой план и проверка ввода')
         else: fail('план выхода (exit.js)', ('получено ' + json.dumps(got, ensure_ascii=False) + ' ' + out.stderr)[:900])
     except Exception as e: fail('план выхода (exit.js)', str(e)[:200])
+
+def filter_checks():
+    """Фильтр докупа альткоина (filter.js, 26.11.2026): сила к BTC, выручка, итог, сумма половины — до цента."""
+    js = r"""const fs=require('fs'),vm=require('vm');const ctx={window:{},document:{getElementById(){return null},addEventListener(){},createElement(){return {}},head:{appendChild(){}}}};vm.createContext(ctx);
+vm.runInContext(fs.readFileSync(process.argv[1],'utf8'),ctx);const M=ctx.window.MLFilter.math,D=86400000,now=Date.UTC(2026,10,26),r=[];
+const mk=f=>({prices:Array.from({length:181},(_,i)=>f(i)),startTs:now-180*D,endTs:now});const btc=mk(i=>100000);
+const fl=M.btcTrend(M.ratioSeries(mk(i=>100+10*Math.sin(i/5)),btc),now),fa=M.btcTrend(M.ratioSeries(mk(i=>200-i),btc),now);
+const up=M.btcTrend(M.ratioSeries(mk(i=>200-i),mk(i=>100000*(200-i)/200)),now);
+r.push(fl.falling,fa.falling,fa.lows.map(x=>+x.toFixed(6)),up.falling,M.btcTrend(M.ratioSeries({prices:[1,2,3],startTs:now-60*D,endTs:now},btc),now),M.btcTrend([],now));
+r.push(+M.feesRatio(13264379,228656756).toFixed(4),M.feesRatio(1,0),M.feesRatio(null,5),M.feesRatio(5,null),+M.feesRatio(0,120).toFixed(4));
+const c=a=>M.combine(a.map(st=>({st})),[]).v;
+r.push([c(['ok','ok','ok','na','ok']),c(['ok','na','na','na','ok']),c(['bad','ok','ok','na','ok']),c(['bad','bad','ok','na','ok']),c(['bad','bad','bad','na','ok']),M.combine([{st:'ok'},{st:'ok'},{st:'ok'}],['стоп']).v,c(['na','na','na','na','na'])]);
+r.push([M.amountC(25.55,'half'),M.amountC(25.55,'full'),M.amountC(25.55,'none'),M.amountC(0.01,'half'),M.amountC(0.1+0.2,'full')]);
+console.log(JSON.stringify(r));"""
+    want = [False, True, [0.00111, 0.00081, 0.00051, 0.00021], False, None, None,
+            0.6961, None, None, None, 0,
+            ['full', 'half', 'half', 'half', 'none', 'none', 'half'],
+            [1277, 2555, 0, 0, 30]]
+    try:
+        out = subprocess.run(['node', '-e', js, str(ROOT / 'filter.js')], capture_output=True, text=True, timeout=30)
+        got = json.loads(out.stdout.strip() or 'null')
+        if got == want: ok('фильтр докупа: сила к BTC по 4 окнам, выручка 30 дней к году, итог полная/половина/без докупа, половина суммы до цента')
+        else: fail('фильтр докупа (filter.js)', ('получено ' + json.dumps(got, ensure_ascii=False) + ' ' + out.stderr)[:900])
+    except Exception as e: fail('фильтр докупа (filter.js)', str(e)[:200])
 
 def deletion_checks():
     """Удаление аккаунта (требование Google Play): веб-страница и серверная функция."""
@@ -1469,6 +1494,50 @@ def run_browser():
             txt = pg.evaluate("document.getElementById('cvExit').innerText")
             ok('план выхода: украинский язык') if 'План виходу' in txt and 'Тримати' in txt and 'Держать' not in txt else fail('план выхода: украинский', txt[:300])
         scenario('План выхода: украинский', {'session': True, 'docs': EXIT_SEED}, s_exit_uk)
+
+        import time as _t, math as _m
+        def _fchart(sol):
+            now_ms = int(_t.time() * 1000)
+            pr = [200 + 15 * _m.sin(i / 5) for i in range(181)] if sol else [110000.0] * 181
+            return json.dumps({'prices': [[now_ms - (180 - i) * 86400000, p] for i, p in enumerate(pr)]})
+        def filter_net(r, u):
+            H = {'access-control-allow-origin': '*'}
+            if 'klines' in u: r.fulfill(status=400, content_type='application/json', headers=H, body='{"code":-1121}'); return True
+            if 'api.llama.fi' in u: r.fulfill(status=200, content_type='application/json', headers=H, body=json.dumps({'name': 'Solana', 'gecko_id': 'solana', 'total30d': 13264379, 'total1y': 228656756})); return True
+            if 'coingecko' in u and 'market_chart' in u: r.fulfill(status=200, content_type='application/json', headers=H, body=_fchart('/coins/solana/' in u)); return True
+            if 'coingecko' in u and '/coins/markets' in u: r.fulfill(status=200, content_type='application/json', headers=H, body=markets_body(u)); return True
+            if 'coingecko' in u: r.fulfill(status=200, content_type='application/json', headers=H, body='{}'); return True
+            return False
+        def s_filter(pg, n):
+            wait_app(pg); pg.evaluate('startLive(true)'); pg.wait_for_function("S.live.prices.SOL>0&&S.live.status==='ok'", polling=250, timeout=15000); pg.wait_for_timeout(600)
+            pg.evaluate("openCoin('BTC')"); pg.wait_for_timeout(400)
+            ok('фильтр докупа: у BTC блока нет') if pg.evaluate("document.getElementById('cvFlt').hidden") else fail('фильтр докупа: BTC', 'блок у BTC')
+            pg.evaluate("closeSheets()"); pg.wait_for_timeout(300)
+            pg.evaluate("openCoin('SOL')")
+            pg.wait_for_function("!!document.querySelector('#cvFlt .fl-r')", polling=250, timeout=30000); pg.wait_for_timeout(500)
+            st = pg.evaluate("[...document.querySelectorAll('#cvFlt .fl-r')].map(r=>r.className.replace('fl-r ',''))")
+            v = pg.evaluate("document.querySelector('#cvFlt .fl-v').textContent")
+            txt = pg.evaluate("document.getElementById('cvFlt').innerText")
+            if st == ['bad', 'ok', 'ok', 'na', 'ok'] and v == 'Половина суммы': ok('фильтр докупа: SOL дороже средней — 1 провал → «Половина суммы»; сила к BTC, выручка 70%, ликвидность — ✓; разлоки — «нет данных»')
+            else: fail('фильтр докупа: проверки SOL', f'{st} {v} {txt[:300]}')
+            ok('фильтр докупа: у каждой цифры источник и время') if 'DefiLlama ·' in txt and 'CoinGecko ·' in txt and '70%' in txt else fail('фильтр докупа: источники', txt[:400])
+            ch = pg.evaluate("MLFilter.chip('SOL',38.01,derive())")
+            ok('фильтр докупа: подпись в лестнице — «половина суммы · $19,00»') if 'фильтр: половина суммы · $19,00' in ch else fail('фильтр докупа: подпись в лестнице', ch)
+            ok('фильтр докупа: объём коротко — «$1 млрд»') if '$1 млрд' in txt else fail('фильтр докупа: объём', txt[:400])
+            pg.evaluate("document.querySelector('#cvFlt').scrollIntoView({block:'start'})"); pg.wait_for_timeout(300); shot(pg, 'filter-1-sol')
+        FILTER_SEED = EXIT_SEED + [{'col': 'tx', 'id': 'tx-btc2', 'data': {'ts': '2026-08-05T10:00:00.000Z', 'type': 'buy', 'symbol': 'BTC', 'qty': 0.05, 'usd': 5000, 'price': 100000}}]
+        scenario('Фильтр докупа', {'session': True, 'docs': FILTER_SEED}, s_filter, extra=filter_net)
+        def s_filter_na(pg, n):
+            wait_app(pg); pg.evaluate('startLive(true)'); pg.wait_for_function("S.live.prices.SOL>0", polling=250, timeout=15000); pg.wait_for_timeout(600)
+            pg.evaluate("openCoin('SOL')")
+            pg.wait_for_function("!!document.querySelector('#cvFlt .fl-r')", polling=250, timeout=30000); pg.wait_for_timeout(400)
+            st = pg.evaluate("[...document.querySelectorAll('#cvFlt .fl-r')].map(r=>r.className.replace('fl-r ',''))")
+            ok('фильтр докупа без сети: «нет данных», а не «зелёный»') if st.count('ok') == 0 and st[0] == 'bad' else fail('фильтр докупа без сети', str(st))
+            stop = pg.evaluate("(document.querySelector('#cvFlt .fl-stop')||{}).textContent||''")
+            v = pg.evaluate("document.querySelector('#cvFlt .fl-v').textContent")
+            ok('фильтр докупа: SOL 17,4% крипто-портфеля — стоп «лимит 10%», без докупа') if '17,4%' in stop and 'лимит 10%' in stop and v == 'Без докупа' else fail('фильтр докупа: стоп по доле', f'{stop} {v}')
+            pg.evaluate("document.querySelector('#cvFlt').scrollIntoView({block:'start'})"); pg.wait_for_timeout(300); shot(pg, 'filter-2-stop')
+        scenario('Фильтр докупа: без внешних данных', {'session': True, 'docs': EXIT_SEED}, s_filter_na)
 
         # --- Г2. шторки форм: большие, по высоте содержимого (решение владельца 2026-10-29: видна вся форма, Слиток может быть закрыт),
         #     «Сохранить» всегда видна внизу, длинная форма прокручивается; кнопки не меньше 48 px
