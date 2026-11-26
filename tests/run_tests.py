@@ -3697,6 +3697,11 @@ def run_browser():
                     pg.evaluate("openAct('menu')"); pg.wait_for_timeout(900)
                     got['новая запись'] = pg.evaluate(EDGE, '#actSheet #f-menu .mi')
                     pg.screenshot(path=str(OUT / f'v25-menu-{th}-{lang}.png'))
+                    # Вера 26.11: рамка --edge — только у кнопок; списки в шторках (.list) остаются без тёмной рамки (VISUAL_GUIDE п. 6)
+                    lst = pg.evaluate("""[...document.styleSheets].flatMap(s=>{try{return [...s.cssRules]}catch(e){return []}})
+                        .filter(r=>r.selectorText&&/\\.list\\b/.test(r.selectorText)&&/--edge/.test(r.cssText)).map(r=>r.selectorText)""")
+                    if not lst: ok(f'В25.3 ({th}, {lang}): списки в шторках без рамки --edge — только кнопки')
+                    else: fail(f'В25.3 ({th}, {lang}): рамка --edge легла на списки', str(lst)[:300])
                     for k, r in got.items():
                         if len(r) < 3: fail(f'В25.3 ({th}, {lang}): {k}', f'кнопок не найдено: {r}'); continue
                         if th == 'light':
