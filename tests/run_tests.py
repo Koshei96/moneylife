@@ -3610,6 +3610,12 @@ def run_browser():
             if kv.get('Без цены покупки (не в прибыли)') != 'BTC': bad.append(f"«Как посчитано»: строка без цены покупки {kv.get('Без цены покупки (не в прибыли)')!r}")
             if not bad: ok('Г26.1: «Остаток» без суммы не в прибыли — итог $2 050,00, прибыль +$150,00 · +18,8% (Главная, «Как посчитано»), BTC +$50,00 · +10,0%; пометка «без цены покупки: BTC»')
             else: fail('Г26.1: монеты без цены покупки', '; '.join(bad))
+            # ревью Глеба 26.11: разница «со вчера» у Ориона — по всему портфелю; вчерашний снимок (та же цена, старая формула total − вложено) → без ложного «снизился»
+            mbn = pg.evaluate("""(()=>{if(!(window.Mascot&&Mascot.debug&&Mascot.debug.snapPrev))return null;const D=derive();
+              Mascot.debug.snapPrev({day:'x',at:Date.now()-20*3600e3,total:D.total,pnl:D.total-D.invPriced});
+              return Mascot.debug.brief2({morning:true,calm:false});})()""")
+            if mbn is not None and 'снизился' not in mbn and 'вырос на' not in mbn: ok('Г26.1: Орион утром без ложного «Со вчера портфель снизился» у монеты без цены покупки (цены не менялись)')
+            else: fail('Г26.1: утренняя разница Ориона', repr(mbn))
             pg.evaluate("localStorage.setItem('ml-lang','uk'); location.reload()"); pg.wait_for_timeout(2500); wait_app(pg); pg.wait_for_timeout(1000)
             chips = norm(pg.inner_text('#hChips')); pg.evaluate("openCoin('BTC')"); pg.wait_for_timeout(1000)
             st = norm(pg.evaluate("document.getElementById('cvStats').innerText"))

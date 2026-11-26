@@ -745,7 +745,7 @@
   const morningDue = () => lsGet('ms-newsDay', '') !== dayKey();
   function snapTake(D) {
     if (!D || !(D.total > 0) || D.noPrice) return;
-    const sn = lsGet('or-snap', null), k = dayKey(), pnl = (D.valCost != null ? +D.valCost : +D.total || 0) - (+D.invPriced || 0);
+    const sn = lsGet('or-snap', null), k = dayKey(), pnl = D.total - (+D.invPriced || 0)   /* разница двух дней — по всему портфелю (итог считается по всему количеству) */;
     if (!sn || sn.day !== k) { if (sn && sn.day) ST.snapPrev = sn; const lv = (ST.S && ST.S.live) || {}; lsSet('or-snap', { day: k, at: Date.now(), total: D.total, pnl, btc: +(lv.prices && lv.prices.BTC) || +(D.prices && D.prices.BTC) || 0 }); }
     else if (!ST.snapPrev) ST.snapPrev = lsGet('or-snapPrev', null);
     if (ST.snapPrev) lsSet('or-snapPrev', ST.snapPrev);
@@ -754,7 +754,7 @@
     const out = [], M = window.MLX || {};
     const sp = ST.snapPrev;
     if (sp && sp.total > 0 && D.total > 0 && !D.noPrice) {
-      const pnl = (D.valCost != null ? +D.valCost : +D.total || 0) - (+D.invPriced || 0), dl = pnl - (+sp.pnl || 0), pc = dl / sp.total * 100, yd = Date.now() - (+sp.at || 0) < 36 * 3600e3;
+      const pnl = D.total - (+D.invPriced || 0), dl = pnl - (+sp.pnl || 0), pc = dl / sp.total * 100, yd = Date.now() - (+sp.at || 0) < 36 * 3600e3;
       const away = Math.floor((Date.now() - (+sp.at || 0)) / 864e5);   /* №7: перерыв 3+ дня — «что вы пропустили» */
       if (away >= 3) {
         const lv = (ST.S && ST.S.live) || {}, b = +(lv.prices && lv.prices.BTC) || +(D.prices && D.prices.BTC) || 0, bc = sp.btc > 0 && b > 0 ? (b / sp.btc - 1) * 100 : null;
