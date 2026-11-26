@@ -69,6 +69,7 @@ def static_checks():
     backup_sql_checks()
     client_errors_sql_checks()
     signal_checks()
+    exit_checks()
     sw_nav_checks()
     orion_cut_checks()
     orion_tool_cut_checks()
@@ -193,6 +194,39 @@ console.log(JSON.stringify([a,b,c,d,e,f,g]));"""
     except Exception as e: fail('сигналы в фоне (sw.js)', str(e)[:200])
     sw = (ROOT / 'sw.js').read_text(encoding='utf-8')
     ok('сигналы: настройки сигналов переживают обновление версии (кэш ml-cfg не стирается)') if "k!==CFGC" in sw and "const CFGC='ml-cfg'" in sw else fail('сигналы: кэш настроек', 'ml-cfg стирается при обновлении')
+
+def exit_checks():
+    """План выхода (exit.js, 26.11.2026): лесенка ×2/×4 владельца и свой план — расчёт до цента, проверка ввода."""
+    js = r"""const fs=require('fs'),vm=require('vm');const ctx={window:{},document:{getElementById(){return null},addEventListener(){},createElement(){return {}},head:{appendChild(){}}}};vm.createContext(ctx);
+vm.runInContext(fs.readFileSync(process.argv[1],'utf8'),ctx);const M=ctx.window.MLExit.math,r=[];
+const a=M.ladder({qty:22,sold:0,avg:2.2,price:3.1});r.push(a.steps.map(s=>[+s.target.toFixed(6),s.qty,s.usdC,s.parts.BTC,s.parts.ETH,s.parts.RES,s.reached,s.done]),a.holdQty);
+const b=M.ladder({qty:22,sold:0,avg:2.2,price:4.4});r.push(b.steps.map(s=>s.reached));
+const c=M.ladder({qty:11,sold:11,avg:2.2,price:9});r.push(c.steps.map(s=>[s.done,s.reached,s.usdC]));
+const d=M.ladder({qty:5.5,sold:16.5,avg:2.2,price:9});r.push(d.steps.map(s=>s.done),d.next);
+const e=M.ladder({qty:16,sold:11,avg:2.2,price:5,done:{1:1}});r.push(e.steps.map(s=>[s.done,+s.qty.toFixed(6)]));
+r.push(M.splitCents(1001,{BTC:25,ETH:25,RES:50}),M.splitCents(1,{BTC:25,ETH:25,RES:50}),M.cents(11*4.4),M.cents(0.1+0.2));
+r.push([M.checkSteps([{x:2,pct:50},{x:4,pct:25}]),M.checkSteps([{x:2,pct:60},{x:3,pct:50}]),M.checkSteps([{x:2,pct:50},{x:1.5,pct:10}]),M.checkSteps([{x:1,pct:50}]),M.checkSteps([{x:2,pct:12.5}]),M.checkSteps([]),M.checkSteps([2,3,4,5,6,7].map(x=>({x,pct:5})))]);
+r.push([M.checkSplit({BTC:25,ETH:25,RES:50}),M.checkSplit({BTC:30,ETH:30,RES:30}),M.checkSplit({BTC:-10,ETH:60,RES:50})]);
+const n=M.normPlan({preset:'custom',steps:[{x:2,pct:120}],split:{BTC:1,ETH:1,RES:1},coins:{near:{on:true,since:'2026-11-26T10:00:00Z'},sol:{on:false}}});r.push(n.preset,n.steps,n.split,Object.keys(n.coins));
+const n2=M.normPlan({preset:'custom',steps:[{x:1.5,pct:30},{x:3,pct:30}],split:{BTC:40,ETH:20,RES:40}});const f=M.ladder({qty:10,sold:0,avg:1,price:1.6,steps:n2.steps,split:n2.split});r.push(f.steps.map(s=>[s.reached,s.usdC,s.parts.BTC,s.parts.ETH,s.parts.RES]),f.holdPct);
+const tx=[{type:'sell',symbol:'NEAR',ts:'2026-12-01T10:00:00Z',qty:11,price:1.5},{type:'sell',symbol:'NEAR',ts:'2026-12-05T10:00:00Z',qty:5,usd:21},{type:'sell',symbol:'NEAR',ts:'2026-11-01T10:00:00Z',qty:3,price:5},{type:'sell',symbol:'SOL',ts:'2026-12-05T10:00:00Z',qty:9,price:500},{type:'sell',symbol:'NEAR',ts:'2026-12-06T10:00:00Z',qty:2}];r.push(M.planSold(tx,'NEAR','2026-11-26T10:00:00Z',4.4));
+console.log(JSON.stringify(r));"""
+    want = [[[4.4, 11, 4840, 1210, 1210, 2420, False, False], [8.8, 5.5, 4840, 1210, 1210, 2420, False, False]], 5.5,
+            [True, False],
+            [[True, False, 0], [False, True, 4950]],
+            [True, True], None,
+            [[True, 11], [False, 6.75]],
+            {'BTC': 250, 'ETH': 250, 'RES': 501}, {'BTC': 0, 'ETH': 0, 'RES': 1}, 4840, 30,
+            ['', 'eSum', 'eX', 'eX', 'ePct', 'eSteps', 'eSteps'],
+            ['', 'eSplit', 'eSplit'],
+            'custom', [{'x': 2, 'pct': 50}, {'x': 4, 'pct': 25}], {'BTC': 25, 'ETH': 25, 'RES': 50}, ['NEAR'],
+            [[True, 480, 192, 96, 192], [False, 900, 360, 180, 360]], 40, 5]
+    try:
+        out = subprocess.run(['node', '-e', js, str(ROOT / 'exit.js')], capture_output=True, text=True, timeout=30)
+        got = json.loads(out.stdout.strip() or 'null')
+        if got == want: ok('план выхода: лесенка ×2/×4 на примере 22 NEAR по $2,2 — ступени, раздел выручки до цента, свой план и проверка ввода')
+        else: fail('план выхода (exit.js)', ('получено ' + json.dumps(got, ensure_ascii=False) + ' ' + out.stderr)[:900])
+    except Exception as e: fail('план выхода (exit.js)', str(e)[:200])
 
 def deletion_checks():
     """Удаление аккаунта (требование Google Play): веб-страница и серверная функция."""
@@ -1370,6 +1404,71 @@ def run_browser():
             if after > before: ok('покупка SOL записана в базу')
             else: fail('запись покупки', 'новая запись tx не появилась (возможно, поменялась форма — обнови тест)')
         scenario('Покупка', {'session': True, 'docs': SEED}, s_buy)
+
+        # --- План выхода (exit.js, 26.11.2026): альткоин SOL куплен по $100, сейчас $200 — ступень ×2 достигнута
+        EXIT_SEED = SEED + [{'col': 'app', 'id': 'market', 'data': {'prices': {'BTC': 110000, 'ETH': 4000, 'SOL': 200}, 'updatedAt': NOW, 'source': 'test'}}, {'col': 'tx', 'id': 'tx-sol', 'data': {'ts': '2026-08-04T10:00:00.000Z', 'type': 'buy', 'symbol': 'SOL', 'qty': 1, 'usd': 100, 'price': 100}}]
+        def s_exit(pg, n):
+            wait_app(pg); pg.evaluate('startLive(true)'); pg.wait_for_function("S.live.prices.SOL>0&&S.live.status==='ok'", polling=250, timeout=15000); pg.wait_for_timeout(600)
+            pg.evaluate("openCoin('BTC')"); pg.wait_for_timeout(500)
+            ok('план выхода: у BTC блока нет — это «база»') if pg.evaluate("document.getElementById('cvExit').hidden") else fail('план выхода: BTC', 'блок показан у BTC')
+            pg.evaluate("closeSheets()"); pg.wait_for_timeout(400)
+            pg.evaluate("openCoin('SOL')"); pg.wait_for_timeout(700)
+            box = "document.getElementById('cvExit')"
+            if pg.evaluate(f"!{box}.hidden&&!!{box}.querySelector('[data-ex=on]')"): ok('план выхода: у альткоина — приглашение «Включить для SOL»')
+            else: raise AssertionError('нет кнопки «Включить» у SOL: ' + pg.evaluate(f"{box}.innerText")[:200])
+            pg.evaluate("document.querySelector('#cvExit').scrollIntoView()"); shot(pg, 'exit-1-off')
+            pg.click('#cvExit [data-ex=on]'); pg.wait_for_timeout(900)
+            d = pg.evaluate("(()=>{const r=window.__mlRows.get('app/exitplan');return r&&r.data})()")
+            ok('план выхода: включение записано в app/exitplan (пресет «Лесенка ×2 / ×4»)') if d and d.get('preset') == 'ladder24' and d['coins']['SOL']['on'] else fail('план выхода: запись', str(d)[:200])
+            txt = pg.evaluate(f"{box}.innerText")
+            if 'BTC $25' in txt and 'ETH $25' in txt and 'резерв $50' in txt and pg.evaluate(f"{box}.querySelectorAll('.ex-st.go').length") == 1: ok('план выхода: ступень ×2 достигнута, раздел $100 → BTC $25 · ETH $25 · резерв $50')
+            else: fail('план выхода: ступени', txt[:300])
+            ok('план выхода: держать 25% — 0,25 SOL') if 'Держать 0,25 SOL (25%)' in txt else fail('план выхода: остаток', txt[:300])
+            pg.wait_for_timeout(1300)
+            seen = pg.evaluate("(()=>{const o=JSON.parse(localStorage.getItem('ml-x:test-user-0001')||'{}');return Object.keys(o.seen||{}).filter(k=>k.startsWith('al:ex-SOL-'))})()")
+            tm = pg.evaluate("document.getElementById('toastMsg').textContent")
+            ok('план выхода: напоминание — тост и отметка «показано», без повторов') if len(seen) == 1 and 'SOL' in tm and '×2' in tm else fail('план выхода: напоминание', f'{seen} {tm}')
+            pg.evaluate(f"{box}.scrollIntoView()"); shot(pg, 'exit-2-on')
+            pg.click('#cvExit [data-ex=sell]'); pg.wait_for_timeout(700)
+            q = pg.evaluate("[document.getElementById('sSym').value,document.getElementById('sQty').value]")
+            ok('план выхода: «Записать продажу» открывает форму продажи с 0,5 SOL') if q == ['SOL', '0.5'] else fail('план выхода: форма продажи', str(q))
+            pg.evaluate("closeSheets()"); pg.wait_for_timeout(400)
+            pg.evaluate("openCoin('SOL')"); pg.wait_for_timeout(500)
+            pg.click('#cvExit [data-ex=cfg]'); pg.wait_for_timeout(600)
+            pg.click('#xBody [data-ex=mode][data-m=custom]'); pg.wait_for_timeout(300)
+            pg.fill('#xBody [data-exs="0"] [data-k=pct]', '80'); pg.fill('#xBody [data-exs="1"] [data-k=pct]', '30')
+            pg.click('#xFootIn [data-ex=save]'); pg.wait_for_timeout(400)
+            er = pg.evaluate("document.getElementById('exErr').textContent")
+            ok('план выхода: свой план больше 100% не сохраняется — понятная ошибка') if 'больше 100%' in er else fail('план выхода: проверка ввода', er)
+            shot(pg, 'exit-3-custom')
+            pg.fill('#xBody [data-exs="0"] [data-k=x]', '1,5'); pg.fill('#xBody [data-exs="0"] [data-k=pct]', '30')
+            pg.fill('#xBody [data-sp=BTC]', '40'); pg.fill('#xBody [data-sp=ETH]', '20'); pg.fill('#xBody [data-sp=RES]', '40')
+            pg.click('#xFootIn [data-ex=save]'); pg.wait_for_timeout(900)
+            d = pg.evaluate("(()=>{const r=window.__mlRows.get('app/exitplan');return r&&r.data})()")
+            if d and d.get('preset') == 'custom' and d['steps'] == [{'x': 1.5, 'pct': 30}, {'x': 4, 'pct': 30}] and d['split'] == {'BTC': 40, 'ETH': 20, 'RES': 40} and d['coins']['SOL']['on']: ok('план выхода: свой план сохранён, монета осталась включённой')
+            else: fail('план выхода: свой план', str(d)[:300])
+            pg.evaluate("openCoin('SOL')"); pg.wait_for_timeout(500)
+            pg.click('#cvExit [data-ex=off]'); pg.wait_for_timeout(800)
+            d = pg.evaluate("(()=>{const r=window.__mlRows.get('app/exitplan');return r&&r.data})()")
+            ok('план выхода: «Выключить» убирает монету из плана') if d and 'SOL' not in d['coins'] and pg.evaluate("!!document.querySelector('#cvExit [data-ex=on]')") else fail('план выхода: выключение', str(d)[:200])
+        scenario('План выхода', {'session': True, 'docs': EXIT_SEED}, s_exit)
+        for th in ('dark', 'light'):
+            def s_exit_look(pg, n, th=th):
+                wait_app(pg); pg.evaluate('startLive(true)'); pg.wait_for_function("S.live.prices.SOL>0&&S.live.status==='ok'", polling=250, timeout=15000); pg.wait_for_timeout(600)
+                pg.evaluate("openCoin('SOL')"); pg.wait_for_timeout(600)
+                pg.click('#cvExit [data-ex=on]'); pg.wait_for_timeout(900)
+                pg.evaluate("document.querySelector('#cvExit').scrollIntoView({block:'center'})"); pg.wait_for_timeout(400)
+                shot(pg, f'exit-look-{th}')
+                small = pg.evaluate("[...document.querySelectorAll('#cvExit button')].filter(b=>b.offsetParent&&b.getBoundingClientRect().height<44).length")
+                ok(f'план выхода ({th}): кнопки не меньше 44 px') if small == 0 else fail(f'план выхода ({th}): кнопки', f'{small} мелких')
+            scenario(f'План выхода: вид ({th})', {'session': True, 'docs': EXIT_SEED}, s_exit_look, theme=th)
+        def s_exit_uk(pg, n):
+            pg.evaluate("localStorage.setItem('ml-lang','uk')"); pg.reload(wait_until='load'); wait_app(pg); pg.evaluate('startLive(true)'); pg.wait_for_function("S.live.prices.SOL>0&&S.live.status==='ok'", polling=250, timeout=15000); pg.wait_for_timeout(600)
+            pg.evaluate("openCoin('SOL')"); pg.wait_for_timeout(600)
+            pg.click('#cvExit [data-ex=on]'); pg.wait_for_timeout(900)
+            txt = pg.evaluate("document.getElementById('cvExit').innerText")
+            ok('план выхода: украинский язык') if 'План виходу' in txt and 'Тримати' in txt and 'Держать' not in txt else fail('план выхода: украинский', txt[:300])
+        scenario('План выхода: украинский', {'session': True, 'docs': EXIT_SEED}, s_exit_uk)
 
         # --- Г2. шторки форм: большие, по высоте содержимого (решение владельца 2026-10-29: видна вся форма, Слиток может быть закрыт),
         #     «Сохранить» всегда видна внизу, длинная форма прокручивается; кнопки не меньше 48 px

@@ -400,9 +400,10 @@
      (Chrome на Android, установленное приложение; частоту выбирает телефон). В фоне проверяется только ключ 1 и цель. */
   const notifOn = () => !!xGet().notif && typeof Notification !== 'undefined' && Notification.permission === 'granted';
   X.notifOn = notifOn;
+  X.notify = (t, b, tag) => notify(t, b, tag);   /* для «Плана выхода» (exit.js) */
   function cfgForSw(D) {
     const ath = +(S.cycle && S.cycle.ath) || 0, btc = +D.prices.BTC || 0, lv = ladderOn() ? ((S.cycle && S.cycle.levels) || []).filter(l => !['done', 'skipped'].includes(l.status)).map(l => ({ n: l.n, drop: l.drop, price: Math.round(lvPrice(l)), r: +l.rounds || 0 })) : [];
-    return { v: 1, lang: window.mlLang ? window.mlLang() : 'ru', on: notifOn(), ath, athDate: (S.cycle && S.cycle.athDate) || '', levels: lv, goal: goalBtc(), alerts: alGet().map(a => ({ id: a.id, sym: a.sym, price: a.price, dir: a.dir })), seen: xGet().seen || {}, btc, at: Date.now() };
+    return { v: 1, lang: window.mlLang ? window.mlLang() : 'ru', on: notifOn(), ath, athDate: (S.cycle && S.cycle.athDate) || '', levels: lv, goal: goalBtc(), alerts: alGet().map(a => ({ id: a.id, sym: a.sym, price: a.price, dir: a.dir })).concat(window.MLExit && MLExit.swAlerts ? MLExit.swAlerts() : []),   /* + ступени «Плана выхода» (exit.js) */ seen: xGet().seen || {}, btc, at: Date.now() };
   }
   let cfgLast = '';
   function cfgPush(D) { if (!('caches' in window)) return; const c = cfgForSw(D), s = JSON.stringify(Object.assign({}, c, { at: 0, btc: 0 })); if (s === cfgLast) return; cfgLast = s;
