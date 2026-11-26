@@ -3699,6 +3699,92 @@ def run_browser():
                 pg.screenshot(path=str(OUT / f'fix-user-account-{th}.png'))
             scenario(f'Обычный вход — кнопки аккаунта на месте ({th})', {'session': True, 'docs': SEED}, s_user_acc, dsf=1, theme=th)
 
+        # --- 26.11 (охота Веры 25.11, В25.1–В25.3) — вёрстка на демо-портфеле, обе темы, RU и UA
+        def demo_in(pg, lang):
+            pg.wait_for_selector('#mlaDemo', state='visible', timeout=8000)
+            if lang == 'uk':
+                pg.evaluate("localStorage.setItem('ml-lang','uk')"); pg.reload(wait_until='load'); pg.wait_for_timeout(1500)
+                pg.wait_for_selector('#mlaDemo', state='visible', timeout=8000)
+            pg.click('#mlaDemo'); wait_app(pg); pg.wait_for_timeout(2000)
+        # В25.1: на узком экране количество монеты в «Активах» видно целиком (демо: BTC «0,00xxxx» — 8 знаков), без многоточия
+        QTY = """()=>[...document.querySelectorAll('#coinList .row.cg .s.q')].map(e=>({t:e.textContent,sw:e.scrollWidth,cw:e.clientWidth}))"""
+        for th in ('dark', 'light'):
+            for lang in ('ru', 'uk'):
+                def s_v25_qty(pg, n, th=th, lang=lang):
+                    demo_in(pg, lang)
+                    for vw in (360, 375):
+                        pg.set_viewport_size({'width': vw, 'height': 844}); pg.wait_for_timeout(300)
+                        pg.click('nav.tabs .tab[data-tab="coins"]'); pg.wait_for_timeout(1000)
+                        r = pg.evaluate(QTY)
+                        txt = ' '.join(x['t'] for x in r)
+                        bad = [x for x in r if x['sw'] > x['cw']]
+                        full = all(re.fullmatch(r'[\d\u00a0 ]+(,\d+)?', x['t']) for x in r)   # число целиком, без «…» и без потери знаков
+                        if len(r) >= 3 and full and max(len(x['t']) for x in r) >= 8 and not bad:
+                            ok(f'В25.1 ({th}, {lang}, {vw} px): количество монет не обрезано (scrollWidth ≤ clientWidth): {txt}')
+                        else: fail(f'В25.1 ({th}, {lang}, {vw} px): количество монет', str(r))
+                    pg.screenshot(path=str(OUT / f'v25-coins-{th}-{lang}-375.png'))
+                    # Глеб 26.11: место для количества — не за счёт цены: в гривнах на 375 и 389 px цена и сумма видны целиком
+                    pg.evaluate("()=>{S.settings.usdUah=41.5;P.cur='UAH';render();}"); pg.wait_for_timeout(600)
+                    for vw in (375, 389):
+                        pg.set_viewport_size({'width': vw, 'height': 844}); pg.wait_for_timeout(400)
+                        r = pg.evaluate("""()=>[...document.querySelectorAll('#coinList .row.cg .b, #coinList .row.cg .s')].map(e=>({t:e.textContent,sw:e.scrollWidth,cw:e.clientWidth}))""")
+                        bad = [x for x in r if x['sw'] > x['cw']]
+                        if len(r) >= 6 and any('₴' in x['t'] for x in r) and not bad:
+                            ok(f'В25.1 ({th}, {lang}, {vw} px, гривны): цена и сумма в строках монет не обрезаны')
+                        else: fail(f'В25.1 ({th}, {lang}, {vw} px, гривны): обрезано', str(bad or r)[:400])
+                scenario(f'В25.1: количество монет на узком экране ({th}, {lang})', {'session': False, 'docs': []}, s_v25_qty, dsf=1, theme=th)
+        # В25.2: «Цены на 25 нояб.…» съедало время — в шапке компактно «ДД.ММ, ЧЧ:ММ», целиком на 360 и 390 px; полная фраза — в подсказке
+        HDR = """()=>{S.live=Object.assign({},S.live,{status:'off'});S.market=Object.assign({},S.market,{updatedAt:'2026-11-25T08:47:00.000Z'});renderHeader();
+            return new Promise(res=>setTimeout(()=>{const e=document.querySelector('#status span');res({t:e.textContent,title:e.title,sw:e.scrollWidth,cw:e.clientWidth})},400))}"""
+        for lang in ('ru', 'uk'):
+            def s_v25_hdr(pg, n, lang=lang):
+                demo_in(pg, lang)
+                for vw in (360, 390):
+                    pg.set_viewport_size({'width': vw, 'height': 844}); pg.wait_for_timeout(300)
+                    r = pg.evaluate(HDR)
+                    ttl = 'Ціни на 25.11, 10:47' if lang == 'uk' else 'Цены на 25.11, 10:47'
+                    if r['t'] == '25.11, 10:47' and re.fullmatch(r'\d\d\.\d\d, \d\d:\d\d', r['t']) and r['sw'] <= r['cw'] and r['title'] == ttl:
+                        ok(f'В25.2 ({lang}, {vw} px): время цен в шапке не обрезано, формат ДД.ММ, ЧЧ:ММ — «{r["t"]}», подсказка «{r["title"]}»')
+                    else: fail(f'В25.2 ({lang}, {vw} px): время цен в шапке', str(r))
+            scenario(f'В25.2: время цен в шапке ({lang})', {'session': False, 'docs': []}, s_v25_hdr, dsf=1)
+        # В25.3: в светлой теме фон шторки = --surface (#fff) — варианты «Личного плана» и плитки «Новой записи» сливались с ней.
+        #     У них должна быть видимая граница или фон: контраст ≥ 3:1 к фону шторки. Тёмная тема — как была (карточки без рамки)
+        EDGE = """(sel)=>{const lum=c=>{const m=c.match(/[\\d.]+/g).map(Number);if(m.length>3&&m[3]===0)return null;
+              const f=v=>{v/=255;return v<=0.03928?v/12.92:Math.pow((v+0.055)/1.055,2.4)};return 0.2126*f(m[0])+0.7152*f(m[1])+0.0722*f(m[2])};
+            const cr=(a,b)=>a==null||b==null?1:(Math.max(a,b)+0.05)/(Math.min(a,b)+0.05);
+            const els=[...document.querySelectorAll(sel)].filter(e=>e.getBoundingClientRect().height>0);
+            return els.map(e=>{const sh=getComputedStyle(e.closest('.sheet')).backgroundColor,cs=getComputedStyle(e),L=lum(sh);
+              return {t:e.textContent.trim().slice(0,24),border:cs.borderTopColor,bw:parseFloat(cs.borderTopWidth),bg:cs.backgroundColor,sheet:sh,
+                cb:+cr(lum(cs.borderTopColor),L).toFixed(2),cf:+cr(lum(cs.backgroundColor),L).toFixed(2)}})}"""
+        for th in ('light', 'dark'):
+            for lang in ('ru', 'uk'):
+                def s_v25_edge(pg, n, th=th, lang=lang):
+                    demo_in(pg, lang)
+                    got = {}
+                    pg.evaluate("MLX.openPlan()"); pg.wait_for_timeout(1100)
+                    got['план'] = pg.evaluate(EDGE, '#xSheet .xq-b:not([aria-checked="true"])')
+                    pg.screenshot(path=str(OUT / f'v25-plan-{th}-{lang}.png'))
+                    pg.evaluate("closeSheets()"); pg.wait_for_timeout(500)
+                    pg.evaluate("openAct('menu')"); pg.wait_for_timeout(900)
+                    got['новая запись'] = pg.evaluate(EDGE, '#actSheet #f-menu .mi')
+                    pg.screenshot(path=str(OUT / f'v25-menu-{th}-{lang}.png'))
+                    # Вера 26.11: рамка --edge — только у кнопок; списки в шторках (.list) остаются без тёмной рамки (VISUAL_GUIDE п. 6)
+                    lst = pg.evaluate("""[...document.styleSheets].flatMap(s=>{try{return [...s.cssRules]}catch(e){return []}})
+                        .filter(r=>r.selectorText&&/\\.list\\b/.test(r.selectorText)&&/--edge/.test(r.cssText)).map(r=>r.selectorText)""")
+                    if not lst: ok(f'В25.3 ({th}, {lang}): списки в шторках без рамки --edge — только кнопки')
+                    else: fail(f'В25.3 ({th}, {lang}): рамка --edge легла на списки', str(lst)[:300])
+                    for k, r in got.items():
+                        if len(r) < 3: fail(f'В25.3 ({th}, {lang}): {k}', f'кнопок не найдено: {r}'); continue
+                        if th == 'light':
+                            bad = [x for x in r if not ((x['bw'] >= 1 and x['cb'] >= 3) or x['cf'] >= 3)]
+                            if not bad: ok(f'В25.3 (светлая, {lang}): у кнопок «{k}» в шторке видимая граница — контраст {min(x["cb"] for x in r)}:1 к фону шторки')
+                            else: fail(f'В25.3 (светлая, {lang}): «{k}» сливается со шторкой', str(bad)[:400])
+                        else:   # тёмная тема не испорчена: рамки нет, фон — --surface (#141417) на шторке --bg2 (#101013)
+                            bad = [x for x in r if x['border'] != 'rgba(0, 0, 0, 0)' or x['bg'] != 'rgb(20, 20, 23)' or x['sheet'] != 'rgb(16, 16, 19)']
+                            if not bad: ok(f'В25.3 (тёмная, {lang}): «{k}» — как было: карточки без рамки на шторке')
+                            else: fail(f'В25.3 (тёмная, {lang}): «{k}» изменилась', str(bad)[:400])
+                scenario(f'В25.3: кнопки в шторке видны ({th}, {lang})', {'session': False, 'docs': []}, s_v25_edge, dsf=1, theme=th)
+
         # --- 14.11 (разбор Льва, «12 × 14»): подсказка «На главный экран» — один раз после знакомства. Android Chrome: событие
         #     beforeinstallprompt (имитация с фиктивным prompt()), iPhone Safari: строка «Поделиться → На экран „Домой“».
         #     Закрыл/поставил — флаг ml-inst на телефоне, больше не показываем; в установленном приложении и в демо — нет
