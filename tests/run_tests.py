@@ -197,10 +197,15 @@ console.log(JSON.stringify([a,b,c,d,e,f,g]));"""
     sw = (ROOT / 'sw.js').read_text(encoding='utf-8')
     ok('сигналы: настройки сигналов переживают обновление версии (кэш ml-cfg не стирается)') if "k!==CFGC" in sw and "const CFGC='ml-cfg'" in sw else fail('сигналы: кэш настроек', 'ml-cfg стирается при обновлении')
 
+def txpx_src():
+    """Общая цена записи txPx из index.html — exit.js и journal.js берут её из приложения (Г26.13, 27.11.2026)."""
+    m = re.search(r'^const txPx=.*$', (ROOT / 'index.html').read_text(encoding='utf-8'), re.M)
+    return m.group(0) if m else ''
+
 def exit_checks():
     """План выхода (exit.js, 26.11.2026): лесенка ×2/×4 владельца и свой план — расчёт до цента, проверка ввода."""
     js = r"""const fs=require('fs'),vm=require('vm');const ctx={window:{},document:{getElementById(){return null},addEventListener(){},createElement(){return {}},head:{appendChild(){}}}};vm.createContext(ctx);
-vm.runInContext(fs.readFileSync(process.argv[1],'utf8'),ctx);const M=ctx.window.MLExit.math,r=[];
+vm.runInContext(process.argv[2]+';globalThis.txPx=txPx;',ctx);vm.runInContext(fs.readFileSync(process.argv[1],'utf8'),ctx);const M=ctx.window.MLExit.math,r=[];
 const a=M.ladder({qty:22,sold:0,avg:2.2,price:3.1});r.push(a.steps.map(s=>[+s.target.toFixed(6),s.qty,s.usdC,s.parts.BTC,s.parts.ETH,s.parts.RES,s.reached,s.done]),a.holdQty);
 const b=M.ladder({qty:22,sold:0,avg:2.2,price:4.4});r.push(b.steps.map(s=>s.reached));
 const c=M.ladder({qty:11,sold:11,avg:2.2,price:9});r.push(c.steps.map(s=>[s.done,s.reached,s.usdC]));
@@ -211,7 +216,9 @@ r.push([M.checkSteps([{x:2,pct:50},{x:4,pct:25}]),M.checkSteps([{x:2,pct:60},{x:
 r.push([M.checkSplit({BTC:25,ETH:25,RES:50}),M.checkSplit({BTC:30,ETH:30,RES:30}),M.checkSplit({BTC:-10,ETH:60,RES:50})]);
 const n=M.normPlan({preset:'custom',steps:[{x:2,pct:120}],split:{BTC:1,ETH:1,RES:1},coins:{near:{on:true,since:'2026-11-26T10:00:00Z'},sol:{on:false}}});r.push(n.preset,n.steps,n.split,Object.keys(n.coins));
 const n2=M.normPlan({preset:'custom',steps:[{x:1.5,pct:30},{x:3,pct:30}],split:{BTC:40,ETH:20,RES:40}});const f=M.ladder({qty:10,sold:0,avg:1,price:1.6,steps:n2.steps,split:n2.split});r.push(f.steps.map(s=>[s.reached,s.usdC,s.parts.BTC,s.parts.ETH,s.parts.RES]),f.holdPct);
-const tx=[{type:'sell',symbol:'NEAR',ts:'2026-12-01T10:00:00Z',qty:11,price:1.5},{type:'sell',symbol:'NEAR',ts:'2026-12-05T10:00:00Z',qty:5,usd:21},{type:'sell',symbol:'NEAR',ts:'2026-11-01T10:00:00Z',qty:3,price:5},{type:'sell',symbol:'SOL',ts:'2026-12-05T10:00:00Z',qty:9,price:500},{type:'sell',symbol:'NEAR',ts:'2026-12-06T10:00:00Z',qty:2}];r.push(M.planSold(tx,'NEAR','2026-11-26T10:00:00Z',4.4));
+const tx=[{type:'sell',symbol:'NEAR',ts:'2026-12-01T10:00:00Z',qty:11,usd:16.5,price:1.5},{type:'sell',symbol:'NEAR',ts:'2026-12-05T10:00:00Z',qty:5,usd:21},{type:'sell',symbol:'NEAR',ts:'2026-11-01T10:00:00Z',qty:3,usd:15,price:5},{type:'sell',symbol:'SOL',ts:'2026-12-05T10:00:00Z',qty:9,usd:4500,price:500},{type:'sell',symbol:'NEAR',ts:'2026-12-06T10:00:00Z',qty:2}];r.push(M.planSold(tx,'NEAR','2026-11-26T10:00:00Z',4.4));
+const nu=u=>[{type:'sell',symbol:'NEAR',ts:'2026-12-07T10:00:00Z',qty:4,usd:u,price:5}];r.push([null,'',undefined,0,20].map(u=>M.planSold(nu(u),'NEAR','2026-11-26T10:00:00Z',4.4)));
+const L0=M.ladder({qty:18,sold:M.planSold(tx.concat(nu(null)),'NEAR','2026-11-26T10:00:00Z',4.4),avg:2.2,price:3});r.push(L0.base,L0.steps.map(s=>[s.done,+s.qty.toFixed(6),s.usdC]));
 console.log(JSON.stringify(r));"""
     want = [[[4.4, 11, 4840, 1210, 1210, 2420, False, False], [8.8, 5.5, 4840, 1210, 1210, 2420, False, False]], 5.5,
             [True, False],
@@ -222,11 +229,12 @@ console.log(JSON.stringify(r));"""
             ['', 'eSum', 'eX', 'eX', 'ePct', 'eSteps', 'eSteps'],
             ['', 'eSplit', 'eSplit'],
             'custom', [{'x': 2, 'pct': 50}, {'x': 4, 'pct': 25}], {'BTC': 25, 'ETH': 25, 'RES': 50}, ['NEAR'],
-            [[True, 480, 192, 96, 192], [False, 900, 360, 180, 360]], 40, 5]
+            [[True, 480, 192, 96, 192], [False, 900, 360, 180, 360]], 40, 5,
+            [0, 0, 0, 0, 4], 23, [[False, 6.5, 2860], [False, 5.75, 5060]]]
     try:
-        out = subprocess.run(['node', '-e', js, str(ROOT / 'exit.js')], capture_output=True, text=True, timeout=30)
+        out = subprocess.run(['node', '-e', js, str(ROOT / 'exit.js'), txpx_src()], capture_output=True, text=True, timeout=30)
         got = json.loads(out.stdout.strip() or 'null')
-        if got == want: ok('план выхода: лесенка ×2/×4 на примере 22 NEAR по $2,2 — ступени, раздел выручки до цента, свой план и проверка ввода')
+        if got == want: ok('план выхода: лесенка ×2/×4 на примере 22 NEAR по $2,2 — ступени, раздел выручки до цента, свой план и проверка ввода; продажа без суммы (старая price) ступень не закрывает, только уменьшает остаток')
         else: fail('план выхода (exit.js)', ('получено ' + json.dumps(got, ensure_ascii=False) + ' ' + out.stderr)[:900])
     except Exception as e: fail('план выхода (exit.js)', str(e)[:200])
 
@@ -257,30 +265,34 @@ console.log(JSON.stringify(r));"""
 def journal_checks():
     """Журнал сделок (journal.js, 26.11.2026): статусы ступеней и докупов, продажи вне плана, итог месяца."""
     js = r"""const fs=require('fs'),vm=require('vm');const ctx={window:{},document:{getElementById(){return null},addEventListener(){},createElement(){return {}},head:{appendChild(){}}}};vm.createContext(ctx);
-vm.runInContext(fs.readFileSync(process.argv[1],'utf8'),ctx);const M=ctx.window.MLJournal.math,D=86400000,r=[];
+vm.runInContext(process.argv[2]+';globalThis.txPx=txPx;',ctx);vm.runInContext(fs.readFileSync(process.argv[1],'utf8'),ctx);const M=ctx.window.MLJournal.math,D=86400000,r=[];
 const st={kind:'step',sym:'NEAR',target:4.4,qty:11,at:'2026-11-10T10:00:00.000Z'},t0=Date.parse(st.at);
-const tx=[{type:'sell',symbol:'NEAR',ts:'2026-11-11T10:00:00.000Z',qty:6,price:4.5},{type:'sell',symbol:'NEAR',ts:'2026-11-12T10:00:00.000Z',qty:3,usd:12.6},{type:'sell',symbol:'NEAR',ts:'2026-11-13T10:00:00.000Z',qty:5,price:2},{type:'sell',symbol:'SOL',ts:'2026-11-13T10:00:00.000Z',qty:50,price:500}];
+const tx=[{type:'sell',symbol:'NEAR',ts:'2026-11-11T10:00:00.000Z',qty:6,usd:27,price:4.5},{type:'sell',symbol:'NEAR',ts:'2026-11-12T10:00:00.000Z',qty:3,usd:12.6},{type:'sell',symbol:'NEAR',ts:'2026-11-13T10:00:00.000Z',qty:5,usd:10,price:2},{type:'sell',symbol:'SOL',ts:'2026-11-13T10:00:00.000Z',qty:50,usd:25000,price:500}];
 const a=M.statusOf(st,tx,t0+3*D);r.push(a.st,a.q,+a.p.toFixed(6));
 const b=M.statusOf(st,tx.slice(0,1),t0+3*D);r.push(b.st,b.days);
 r.push(M.statusOf(st,tx.slice(0,1),t0+15*D).st,M.statusOf(st,[],t0+13.5*D).days);
-r.push(M.statusOf(st,[{type:'sell',symbol:'NEAR',ts:'2026-11-10T09:30:00.000Z',qty:11,price:4.4}],t0).st,M.statusOf(st,[{type:'sell',symbol:'NEAR',ts:'2026-11-25T10:00:01.000Z',qty:11,price:4.4}],t0+20*D).st);
+r.push(M.statusOf(st,[{type:'sell',symbol:'NEAR',ts:'2026-11-10T09:30:00.000Z',qty:11,usd:48.4,price:4.4}],t0).st,M.statusOf(st,[{type:'sell',symbol:'NEAR',ts:'2026-11-25T10:00:01.000Z',qty:11,usd:48.4,price:4.4}],t0+20*D).st);
 r.push(['full','half','none',null].map(v=>M.statusOf({kind:'dip',verdict:v},[],0).st));
 const off=M.offSells(tx,'NEAR','2026-11-01T00:00:00Z',4.4);r.push(off.length,off[0].qty,off[0].price);
 const items=[st,{kind:'step',sym:'SOL',target:400,qty:1,at:'2026-11-20T10:00:00.000Z'},{kind:'dip',sym:'NEAR',verdict:'none',at:'2026-11-21T10:00:00.000Z'},{kind:'dip',sym:'NEAR',verdict:'half',at:'2026-11-22T10:00:00.000Z'},{kind:'dip',sym:'NEAR',verdict:'none',at:'2026-10-21T10:00:00.000Z'}];
 const m=M.monthSum(items,tx,'2026-11',Date.parse('2026-12-10T10:00:00Z'));r.push([m.steps,m.ok,m.miss,m.wait,m.dips,m.dev]);
 r.push(M.prevYm(Date.parse('2026-12-01T08:00:00')),M.prevYm(Date.parse('2027-01-15T08:00:00')));
 const s1={kind:'step',sym:'NEAR',since:'X',n:1,target:4.4,qty:11,at:'2026-11-10T10:00:00.000Z'},s2={kind:'step',sym:'NEAR',since:'X',n:2,target:8.8,qty:5.5,at:'2026-11-10T10:00:00.000Z'},al=[s1,s2],now2=t0+2*D;
-const one=[{type:'sell',symbol:'NEAR',ts:'2026-11-11T10:00:00.000Z',qty:11,price:9}],both=[{type:'sell',symbol:'NEAR',ts:'2026-11-11T10:00:00.000Z',qty:16.5,price:9}];
+const one=[{type:'sell',symbol:'NEAR',ts:'2026-11-11T10:00:00.000Z',qty:11,usd:99,price:9}],both=[{type:'sell',symbol:'NEAR',ts:'2026-11-11T10:00:00.000Z',qty:16.5,usd:148.5,price:9}];
 r.push([M.statusOf(s1,one,now2,al).st,M.statusOf(s2,one,now2,al).st,M.statusOf(s1,both,now2,al).st,M.statusOf(s2,both,now2,al).st]);
-r.push(M.statusOf(st,[{type:'sell',symbol:'NEAR',ts:'2026-11-10T04:00:00.000Z',qty:11,price:4.5}],t0).st,M.statusOf(Object.assign({},st,{qty:0}),[],t0).st,M.statusOf(Object.assign({},st,{at:'плохо'}),[],t0).st);
+r.push(M.statusOf(st,[{type:'sell',symbol:'NEAR',ts:'2026-11-10T04:00:00.000Z',qty:11,usd:49.5,price:4.5}],t0).st,M.statusOf(Object.assign({},st,{qty:0}),[],t0).st,M.statusOf(Object.assign({},st,{at:'плохо'}),[],t0).st);
 r.push(M.alive([{kind:'dip',txId:'a'},{kind:'dip',txId:'b'},{kind:'dip'},{kind:'step'}],[{id:'a'}]).length);
+const ns=(u,p)=>[{type:'sell',symbol:'NEAR',ts:'2026-11-11T10:00:00.000Z',qty:11,usd:u,price:p}];
+const z1=M.statusOf(st,ns(null,4.5),t0+3*D),z2=M.statusOf(st,ns('',4.5),t0+15*D),z3=M.statusOf(st,ns(49.5,4.5),t0+3*D);r.push([z1.st,z1.q,z2.st,z2.q,z3.st,z3.q,+z3.p.toFixed(6)]);
+r.push(M.offSells(ns(null,2),'NEAR','2026-11-01T00:00:00Z',4.4).length,M.offSells(ns(22,2),'NEAR','2026-11-01T00:00:00Z',4.4).map(o=>[o.qty,o.price]));
 console.log(JSON.stringify(r));"""
     want = ['ok', 9, 4.4, 'wait', 11, 'miss', 1, 'ok', 'miss', ['ok', 'ok', 'dev', 'na'], 1, 5, 2,
-            [2, 1, 1, 0, 2, 1], '2026-11', '2026-12', ['ok', 'wait', 'ok', 'ok'], 'ok', 'na', 'na', 3]
+            [2, 1, 1, 0, 2, 1], '2026-11', '2026-12', ['ok', 'wait', 'ok', 'ok'], 'ok', 'na', 'na', 3,
+            ['wait', 0, 'miss', 0, 'ok', 11, 4.5], 0, [[11, 2]]]
     try:
-        out = subprocess.run(['node', '-e', js, str(ROOT / 'journal.js')], capture_output=True, text=True, timeout=30)
+        out = subprocess.run(['node', '-e', js, str(ROOT / 'journal.js'), txpx_src()], capture_output=True, text=True, timeout=30)
         got = json.loads(out.stdout.strip() or 'null')
-        if got == want: ok('журнал сделок: ступень «по плану» / «ждёт» / «не сделано» за 14 дней, докуп против фильтра, продажа вне плана, итог месяца')
+        if got == want: ok('журнал сделок: ступень «по плану» / «ждёт» / «не сделано» за 14 дней, докуп против фильтра, продажа вне плана, итог месяца; продажа без суммы (старая price) — не «по плану» и не «вне плана»')
         else: fail('журнал сделок (journal.js)', ('получено ' + json.dumps(got, ensure_ascii=False) + ' ' + out.stderr)[:900])
     except Exception as e: fail('журнал сделок (journal.js)', str(e)[:200])
 
@@ -3677,6 +3689,54 @@ def run_browser():
             if not bad: ok('Г26.3: части каждой ступени = бюджет ступени до цента (ступень 5: $16,88 + $10,12 = $27,00), все части = резерв $90,00; на 8 других резервах части = бюджет ступени')
             else: fail('Г26.3: части ступени в центах', '; '.join(bad))
         scenario('Г26.3: части ступени в центах', {'session': True, 'docs': LADC}, s_lv_cents, dsf=1)
+
+        # 27.11.2026 (охота 26.11, Г26.4): «Из чего итог» — «0,002702 × $110 000» при сумме $297,24 (по формуле $297,22):
+        #     количество показано округлённым. Теперь, если показанные количество × цена не дают показанную сумму до цента, — «≈»
+        #     перед количеством; где сходится (0,1 × $4 000 = $400,00) — без «≈». Итог не меняется
+        APX = [d for d in SEED if d['id'] != 't2'] + [{'col': 'tx', 'id': 't2', 'data': {'ts': '2026-08-02T10:00:00.000Z', 'type': 'buy', 'symbol': 'BTC', 'qty': 0.00270217, 'usd': 270, 'price': 99919.69}}]
+        def s_total_apx(pg, n):
+            wait_app(pg); pg.wait_for_timeout(1500); bad = []
+            tot = pg.evaluate("Math.round(derive().total*100)")
+            if tot != 69724: bad.append(f'итог {tot/100} (нужно $697,24 = 0,00270217 × $110 000 + 0,1 × $4 000)')
+            f = pg.evaluate("[xApprox(0.00270217,100000),xApprox(0.002702,100000),xApprox(0.5,100000),xApprox(0.1,4000),xApprox(1.234567,2),xApprox(1.23,2),xApprox(0,5),xApprox(5,0),qtySN(0.00270217),qtySN(1.236),qtySN(1234.6)]")
+            if f != [True, False, False, False, True, False, False, False, 0.002702, 1.24, 1235]: bad.append(f'xApprox/qtySN: {f}')
+            pg.click('#hInfo'); pg.wait_for_timeout(800)
+            rows = {r.split('\n')[0].strip(): norm(r.replace('\n', ' ')) for r in pg.evaluate("[...document.querySelectorAll('#xBody .xr')].map(e=>e.innerText)")}
+            b, e = rows.get('BTC', ''), rows.get('ETH', '')
+            if '≈0,002702 × $110 000' not in b or '$297,24' not in b: bad.append(f'строка BTC: {b!r} (нужно «≈0,002702 × $110 000» и $297,24)')
+            if '0,1 × $4 000' not in e or '≈' in e or '$400,00' not in e: bad.append(f'строка ETH: {e!r} (нужно «0,1 × $4 000» без «≈», $400,00)')
+            head = norm(pg.inner_text('#xBody .xtot b'))
+            if head != '$697,24': bad.append(f'итог в окне {head!r}')
+            for th in ('dark', 'light'):
+                pg.evaluate(f"document.documentElement.setAttribute('data-theme','{th}')"); pg.wait_for_timeout(300); shot(pg, f'g26-total-apx-{th}')
+            pg.evaluate("P.hide=true;closeSheets()"); pg.wait_for_timeout(500); pg.click('#hInfo'); pg.wait_for_timeout(800)
+            hb = norm(pg.evaluate("(document.querySelector('#xBody .xr')||{}).innerText||''").replace('\n', ' '))
+            if '≈' in hb: bad.append(f'суммы скрыты, а «≈» видно: {hb!r}')
+            pg.evaluate("P.hide=false")
+            if not bad: ok('Г26.4: «Из чего итог» — «≈0,002702 × $110 000» = $297,24 (количество округлено), «0,1 × $4 000» = $400,00 без «≈»; итог $697,24 не изменился; при скрытых суммах «≈» нет')
+            else: fail('Г26.4: формула в «Из чего итог»', '; '.join(bad))
+        scenario('Г26.4: «≈» в «Из чего итог»', {'session': True, 'docs': APX}, s_total_apx, dsf=1)
+
+        # 27.11.2026 (охота 26.11, Г26.5): по-украински цена — «за»: «Покупка за $100 000», «DCA за $86 000»; по-русски «по» остаётся.
+        #     Другие «по» («за планом», «по 14 книгам») правило не трогает
+        BYP = SEED + [{'col': 'tx', 'id': 'tdca', 'data': {'ts': '2026-08-05T10:00:00.000Z', 'type': 'dca', 'symbol': 'BTC', 'qty': 0.001, 'usd': 86, 'price': 86000}}]
+        def s_uk_za(pg, n):
+            wait_app(pg); pg.wait_for_timeout(1200); bad = []
+            pg.evaluate("openCoin('BTC')"); pg.wait_for_timeout(1000)
+            r1, r2 = norm(pg.inner_text('#cvTx [data-tx="t2"] .nm')), norm(pg.inner_text('#cvTx [data-tx="tdca"] .nm'))
+            if r1 != 'Покупка по $100 000' or r2 != 'DCA по $86 000': bad.append(f'RU: {r1!r} / {r2!r}')
+            pg.evaluate("localStorage.setItem('ml-lang','uk'); location.reload()"); pg.wait_for_timeout(2500); wait_app(pg); pg.wait_for_timeout(800)
+            pg.evaluate("openCoin('BTC')"); pg.wait_for_timeout(1000)
+            u1, u2 = norm(pg.inner_text('#cvTx [data-tx="t2"] .nm')), norm(pg.inner_text('#cvTx [data-tx="tdca"] .nm'))
+            if u1 != 'Покупка за $100 000' or u2 != 'DCA за $86 000': bad.append(f'UK: {u1!r} / {u2!r} (нужно «Покупка за $100 000», «DCA за $86 000»)')
+            lt = pg.evaluate("[L('Продажа по $4,50'),L('Остаток по 3 500 000 ₴'),L('Докупка по уровню 2'),L('по 14 книгам'),L('Покупка по плану (DCA)')]")
+            if lt != ['Продаж за $4,50', 'Залишок за 3 500 000 ₴', 'Докупівля за рівнем 2', 'по 14 книгам', 'Покупка за планом (DCA)']: bad.append(f'словарь UK: {lt}')
+            for th in ('dark', 'light'):
+                pg.evaluate(f"document.documentElement.setAttribute('data-theme','{th}')"); pg.evaluate("document.getElementById('cvTx').scrollIntoView({block:'center'})"); pg.wait_for_timeout(300); shot(pg, f'g26-uk-za-{th}')
+            pg.evaluate("localStorage.setItem('ml-lang','ru')")
+            if not bad: ok('Г26.5: по-украински «Покупка за $100 000», «DCA за $86 000», «Продаж за $4,50», «за 3 500 000 ₴»; по-русски «по $…»; «по 14 книгам» и «за планом» — как были')
+            else: fail('Г26.5: «за» перед ценой по-украински', '; '.join(bad))
+        scenario('Г26.5: UK «за» перед ценой', {'session': True, 'docs': BYP}, s_uk_za, dsf=1)
 
         # --- 13.11.2026 (владелец): ступени тратят долю от ВСЕГО резерва цикла (10/15/20/25/30%), а выполненная ступень
         #     снова открывается после отскока BTC на 10% выше её цены (прошлые траты копятся в spentPrev)

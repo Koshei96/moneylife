@@ -141,7 +141,7 @@
   function openTotal() {
     const D = derive(), priced = D.syms.filter(s => +D.prices[s] > 0), np = D.syms.filter(s => !(+D.prices[s] > 0)), gain = D.gain, r = rate();
     const rows = D.syms.map(s => { const c = D.h[s], p = +D.prices[s] || 0, v = c.qty * p;
-      return `<div class="xr">${badge(s)}<span class="xr-n"><b>${esc(s)}</b><small>${qtyS(c.qty)} × ${p ? money(p, { price: true, show: true }) : '—'}</small></span><span class="xr-v">${p ? `<b>${money(v)}</b><small>${D.total ? nf(v / D.total * 100, 1) + '%' : ''}</small>` : '<b class="warnc">нет цены</b><small>в итог не входит</small>'}</span></div>`; }).join('');
+      return `<div class="xr">${badge(s)}<span class="xr-n"><b>${esc(s)}</b><small>${p && xApprox(c.qty, p) ? '≈' : ''}${qtyS(c.qty)} × ${p ? money(p, { price: true, show: true }) : '—'}</small></span><span class="xr-v">${p ? `<b>${money(v)}</b><small>${D.total ? nf(v / D.total * 100, 1) + '%' : ''}</small>` : '<b class="warnc">нет цены</b><small>в итог не входит</small>'}</span></div>`; }).join('');
     const kv = (k, v, cl) => `<div><span>${k}</span><span class="${cl || ''}">${v}</span></div>`;
     let h = `<div class="xtot"><span class="small mute">Стоимость монет</span><b>${D.noPrice ? '—' : money(D.total)}</b><span class="small mute">${esc(srcLine())}</span></div>`;
     if (!D.syms.length) h += '<div class="empty">Монет пока нет. Запиши первую покупку — итог сложится из количества и цены каждой монеты.</div>';

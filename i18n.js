@@ -1011,6 +1011,9 @@ CoinGecko временно ограничил запросы|CoinGecko тимч�
   var RE = new RegExp(keys.map(esc).join('|'), 'g'), ISL = new RegExp('[' + LET + ']');
   /* граница слова проверяется вручную: фраза, которая начинается со знака («. Он ждёт…»), стыкуется и после буквы */
   var NUM = /(\d+(?:[.,]\d+)?)\s(доллара|процента)(?![А-Яа-яЁё])/g, NUMF = { доллара: ['долари', 'долара'], процента: ['відсотки', 'відсотка'] };
+  /* 27.11.2026 (Г26.5): цена после «по» — по-украински «за»: «DCA по $86 000» → «DCA за $86 000», «по 3 500 ₴» → «за 3 500 ₴».
+     Только перед суммой ($ или ₴), остальные «по» («по плану», «по уровню») — словарём выше */
+  var BYPX = new RegExp('(^|[^' + LET + '])по(\\s+)(?=[−-]?\\$\\d|\\d[\\d\\s.,]*₴)', 'g');
   var CYR = /[А-Яа-яЁё]/, cache = new Map(), DONE = new Set();
   function tr(s) {
     if (!s || !CYR.test(s)) return s;
@@ -1018,6 +1021,7 @@ CoinGecko временно ограничил запросы|CoinGecko тимч�
     if (DONE.has(s)) return s;   /* уже переведённый текст повторно не трогаем («24год» не станет «24рік») */
     /* «2 доллара» → «2 долари», «2,5 доллара» → «2,5 долара» */
     var out = s.replace(NUM, function (m, n, w) { var i = +String(n).replace(',', '.'), pl = /[.,]/.test(n) ? 1 : (i % 10 >= 2 && i % 10 <= 4 && (i % 100 < 12 || i % 100 > 14)) ? 0 : 1; return n + ' ' + NUMF[w][pl]; });
+    out = out.replace(BYPX, '$1за$2');
     out = out.replace(RE, function (k, off, all) {
       if (ISL.test(k.charAt(0)) && off > 0 && ISL.test(all.charAt(off - 1))) return k;
       if (ISL.test(k.charAt(k.length - 1)) && off + k.length < all.length && ISL.test(all.charAt(off + k.length))) return k;
